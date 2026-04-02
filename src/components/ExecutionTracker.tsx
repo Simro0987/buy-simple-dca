@@ -249,7 +249,7 @@ function WeeklyHistoryChart({ history, lang }: { history: WeekRecord[]; lang: La
   );
 }
 
-
+function MissedOpportunities({ history, prices, lang }: {
   history: WeekRecord[];
   prices?: Record<string, { usd: number }>;
   lang: Lang;
