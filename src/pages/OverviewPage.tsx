@@ -18,6 +18,7 @@ export function OverviewPage({ lang }: Props) {
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
   const { data: altSeason } = useAltSeason();
+  const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
 
   // Calculate total portfolio value from localStorage invested amount
   const totalInvested = parseFloat(localStorage.getItem('total-invested') || '0');
