@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Lang } from '@/lib/i18n';
 import { TOKENS } from '@/lib/crypto';
-import { CheckCircle, AlertTriangle, XCircle, Target } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Target, TrendingUp } from 'lucide-react';
 
 interface WeekRecord {
   weekId: string; // e.g. "2026-W14"
@@ -124,6 +124,9 @@ export function ExecutionTracker({ lang, prices }: Props) {
         </div>
       </div>
 
+      {/* 8-Week History Chart */}
+      <WeeklyHistoryChart history={history} lang={lang} />
+
       {/* This Week */}
       <div className="glass-card p-4 space-y-3">
         <h2 className="font-semibold text-foreground">
@@ -179,6 +182,69 @@ export function ExecutionTracker({ lang, prices }: Props) {
 
       {/* Missed Opportunities */}
       <MissedOpportunities history={history} prices={prices} lang={lang} />
+    </div>
+  );
+}
+
+function getWeekScore(week: WeekRecord): number {
+  const totalActions = 1 + week.limits.length; // 1 DCA + limits
+  const doneActions = (week.dcaExecuted ? 1 : 0) + week.limits.filter(l => l.filled).length;
+  return totalActions > 0 ? Math.round((doneActions / totalActions) * 100) : 0;
+}
+
+function WeeklyHistoryChart({ history, lang }: { history: WeekRecord[]; lang: Lang }) {
+  const sk = lang === 'sk';
+  const weeks = history.slice(-8);
+
+  if (weeks.length < 2) return null;
+
+  const data = weeks.map(w => ({
+    weekId: w.weekId.replace(/^\d{4}-/, ''),
+    score: getWeekScore(w),
+  }));
+
+  const maxScore = Math.max(...data.map(d => d.score), 1);
+
+  return (
+    <div className="glass-card p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <TrendingUp className="w-4 h-4 text-primary" />
+        <h2 className="font-semibold text-foreground text-sm">
+          {sk ? 'História (posledných 8 týždňov)' : 'History (last 8 weeks)'}
+        </h2>
+      </div>
+
+      {/* Mini bar chart */}
+      <div className="flex items-end gap-1.5 h-20">
+        {data.map((d, i) => {
+          const height = Math.max(4, (d.score / 100) * 100);
+          const color = d.score >= 75 ? 'bg-gain' : d.score >= 50 ? 'bg-warning' : d.score > 0 ? 'bg-loss' : 'bg-secondary';
+          return (
+            <div key={i} className="flex-1 flex flex-col items-center gap-1">
+              <span className="text-[8px] text-muted-foreground font-medium">
+                {d.score > 0 ? `${d.score}%` : ''}
+              </span>
+              <div
+                className={`w-full rounded-t-sm ${color} transition-all`}
+                style={{ height: `${height}%` }}
+              />
+              <span className="text-[7px] text-muted-foreground truncate w-full text-center">
+                {d.weekId}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Average */}
+      {data.length > 0 && (
+        <div className="flex items-center justify-between text-xs">
+          <span className="text-muted-foreground">{sk ? 'Priemer' : 'Average'}</span>
+          <span className="font-bold text-foreground">
+            {Math.round(data.reduce((s, d) => s + d.score, 0) / data.length)}%
+          </span>
+        </div>
+      )}
     </div>
   );
 }
