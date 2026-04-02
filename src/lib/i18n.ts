@@ -120,6 +120,14 @@ const translations = {
     lending: 'Lending',
     heatMap: 'Heat Map',
     swipeHint: 'Swipe for next token →',
+    telegramAlerts: 'Telegram Alerts',
+    chatId: 'Chat ID',
+    chatIdPlaceholder: 'Enter Telegram Chat ID',
+    testAlert: 'Send test',
+    testAlertSuccess: 'Test alert sent!',
+    testAlertError: 'Error sending alert',
+    saved: 'Saved',
+    telegramHint: 'Get your Chat ID from @userinfobot on Telegram',
   },
 } as const;
 
