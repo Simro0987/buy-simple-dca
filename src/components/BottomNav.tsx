@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, PieChart, Settings, Target, Sparkles } from 'lucide-react';
+import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'overview' | 'dca' | 'action' | 'smart' | 'execution' | 'portfolio' | 'settings';
+export type TabId = 'overview' | 'dca' | 'action' | 'checklist' | 'execution' | 'risk' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -13,9 +13,9 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'overview', labelSk: 'Prehľad', labelEn: 'Overview', icon: BarChart3 },
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
   { id: 'action', labelSk: 'Akcia', labelEn: 'Action', icon: Zap },
-  { id: 'smart', labelSk: 'Smart', labelEn: 'Smart', icon: Sparkles },
-  { id: 'execution', labelSk: 'Exekúcia', labelEn: 'Execution', icon: Target },
-  { id: 'portfolio', labelSk: 'Portfólio', labelEn: 'Portfolio', icon: PieChart },
+  { id: 'checklist', labelSk: 'Checklist', labelEn: 'Checklist', icon: ClipboardList },
+  { id: 'execution', labelSk: 'Skóre', labelEn: 'Score', icon: Target },
+  { id: 'risk', labelSk: 'Riziko', labelEn: 'Risk', icon: Shield },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
