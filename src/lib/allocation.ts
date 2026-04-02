@@ -96,7 +96,7 @@ export function computeSmartAllocation(
   return results;
 }
 
-function computeEthActions(total: number, price: number, holdings: HoldingInput, lang: Lang): TokenAllocationResult {
+function computeEthActions(total: number, price: number, holdings: HoldingInput, lang: Lang, apys?: DefiApyData): TokenAllocationResult {
   const totalUsd = total * price;
   const actions: AllocationAction[] = [];
   const sk = lang === 'sk';
