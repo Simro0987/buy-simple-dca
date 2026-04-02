@@ -1,16 +1,28 @@
-// Update this page (the content is just a fallback if you fail to update the page)
+import { useState } from 'react';
+import { BottomNav, TabId } from '@/components/BottomNav';
+import { useLanguage } from '@/hooks/useLanguage';
+import { OverviewPage } from '@/pages/OverviewPage';
+import { DCAPage } from '@/pages/DCAPage';
+import { ActionPage } from '@/pages/ActionPage';
+import { PortfolioPage } from '@/pages/PortfolioPage';
+import { SettingsPage } from '@/pages/SettingsPage';
 
-// IMPORTANT: Fully REPLACE this with your own code
-const PlaceholderIndex = () => {
-  // PLACEHOLDER: Replace this entire return statement with the user's app.
-  // The inline background color is intentionally not part of the design system.
+const Index = () => {
+  const [tab, setTab] = useState<TabId>('overview');
+  const { lang, toggleLang } = useLanguage();
+
   return (
-    <div className="flex min-h-screen items-center justify-center" style={{ backgroundColor: '#fcfbf8' }}>
-      <img data-lovable-blank-page-placeholder="REMOVE_THIS" src="/placeholder.svg" alt="Your app will live here!" />
+    <div className="min-h-screen bg-background">
+      <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
+        {tab === 'overview' && <OverviewPage lang={lang} />}
+        {tab === 'dca' && <DCAPage lang={lang} />}
+        {tab === 'action' && <ActionPage lang={lang} />}
+        {tab === 'portfolio' && <PortfolioPage lang={lang} />}
+        {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} />}
+      </main>
+      <BottomNav active={tab} onChange={setTab} lang={lang} />
     </div>
   );
 };
-
-const Index = PlaceholderIndex;
 
 export default Index;
