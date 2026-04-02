@@ -3,7 +3,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const LOVABLE_AI_URL = 'https://lovable-ai.lovable.dev/chat';
+const LOVABLE_AI_URL = 'https://connector-gateway.lovable.dev/lovable-ai/v1/chat/completions';
 
 async function translateTitles(titles: string[], lang: string, lovableApiKey: string): Promise<string[]> {
   if (lang === 'en') return titles;
