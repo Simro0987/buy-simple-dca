@@ -142,6 +142,27 @@ export function CryptoNewsFeed({ lang }: Props) {
             })}
           </div>
 
+          {/* Source filters */}
+          <div className="flex gap-1.5 flex-wrap">
+            {(['CryptoPanic', 'CoinTelegraph', 'CoinDesk'] as const).map(source => {
+              const count = news?.filter(n => n.source === source).length || 0;
+              const isActive = sourceFilter === source;
+              return (
+                <button
+                  key={source}
+                  onClick={() => setSourceFilter(isActive ? null : source)}
+                  className={`text-[9px] px-2 py-0.5 rounded-full transition-colors font-medium ${
+                    isActive
+                      ? 'bg-accent text-accent-foreground'
+                      : 'bg-secondary/60 text-muted-foreground hover:bg-secondary'
+                  }`}
+                >
+                  {source} {count > 0 && `(${count})`}
+                </button>
+              );
+            })}
+          </div>
+
           {/* Loading */}
           {isLoading && (
             <div className="space-y-2">
