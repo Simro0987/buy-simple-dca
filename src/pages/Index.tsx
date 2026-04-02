@@ -6,6 +6,7 @@ import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
 import { ActionPage } from '@/pages/ActionPage';
+import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
