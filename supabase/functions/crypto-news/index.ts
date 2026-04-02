@@ -107,7 +107,8 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
         try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch {}
       }
       const votes = item.votes || {};
-      const tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
+      let tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
+      if (tokens.length === 0) tokens = detectTokens(item.title || '');
       return {
         id: item.id || Date.now(),
         title: item.title,
