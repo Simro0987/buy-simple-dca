@@ -124,6 +124,9 @@ export function ExecutionTracker({ lang, prices }: Props) {
         </div>
       </div>
 
+      {/* 8-Week History Chart */}
+      <WeeklyHistoryChart history={history} lang={lang} />
+
       {/* This Week */}
       <div className="glass-card p-4 space-y-3">
         <h2 className="font-semibold text-foreground">
