@@ -4,6 +4,7 @@ import { useLanguage } from '@/hooks/useLanguage';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
 import { ActionPage } from '@/pages/ActionPage';
+import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { PortfolioPage } from '@/pages/PortfolioPage';
 import { WalletsPage } from '@/pages/WalletsPage';
 import { StakingPage } from '@/pages/StakingPage';
