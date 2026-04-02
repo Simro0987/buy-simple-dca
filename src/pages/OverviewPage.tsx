@@ -18,6 +18,7 @@ export function OverviewPage({ lang }: Props) {
   const { data: prices, isLoading, dataUpdatedAt, refetch, isFetching } = usePrices();
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
+  const { data: sparklines } = useSparklines();
   const { data: altSeason } = useAltSeason();
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
 
