@@ -45,6 +45,7 @@ function actionColor(type: AllocationAction['type']) {
     case 'stake': return 'text-green-400';
     case 'lend': return 'text-yellow-400';
     case 'skip': return 'text-muted-foreground';
+  }
 }
 
 function getLiveApy(pos: { label: string; protocol?: string; apy?: number; type?: string }, apys?: import('@/hooks/useDefiApys').DefiApyData | null): number | null {
