@@ -28,6 +28,12 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
   const chatId = localStorage.getItem('telegram_chat_id');
   if (!chatId) return;
 
+  // Check if high impact news alerts are enabled
+  try {
+    const toggles = JSON.parse(localStorage.getItem('telegram_alert_toggles') || '{}');
+    if (toggles.highImpactNews === false) return;
+  } catch {}
+
   const highImpact = news.filter(n => n.impact === 'high');
   if (highImpact.length === 0) return;
 
