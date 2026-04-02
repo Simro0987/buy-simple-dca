@@ -3,15 +3,15 @@ import { useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface NewsItem {
-  id: number;
+  id: number | string;
   title: string;
+  summary: string;
   url: string;
   source: string;
   publishedAt: string;
   impact: 'high' | 'medium' | 'low';
   sentiment: 'bullish' | 'bearish' | 'neutral';
   tokens: string[];
-  votes: { positive: number; negative: number; important: number };
 }
 
 async function fetchNews(currencies = 'BTC,ETH,SOL,HYPE', lang = 'sk'): Promise<NewsItem[]> {
@@ -31,10 +31,9 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
   const highImpact = news.filter(n => n.impact === 'high');
   if (highImpact.length === 0) return;
 
-  // Check which ones were already sent
   const sentKey = 'telegram_sent_news_ids';
-  const sentIds: number[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
-  const newItems = highImpact.filter(n => !sentIds.includes(n.id));
+  const sentIds: string[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
+  const newItems = highImpact.filter(n => !sentIds.includes(String(n.id)));
   if (newItems.length === 0) return;
 
   try {
@@ -43,6 +42,7 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
         chatId: chatId.trim(),
         news: newItems.map(n => ({
           title: n.title,
+          summary: n.summary,
           url: n.url,
           sentiment: n.sentiment,
           tokens: n.tokens,
@@ -50,8 +50,7 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
       },
     });
 
-    // Mark as sent (keep last 100 ids)
-    const updated = [...sentIds, ...newItems.map(n => n.id)].slice(-100);
+    const updated = [...sentIds, ...newItems.map(n => String(n.id))].slice(-100);
     localStorage.setItem(sentKey, JSON.stringify(updated));
   } catch (e) {
     console.error('Failed to send Telegram alert:', e);

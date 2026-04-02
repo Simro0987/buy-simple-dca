@@ -3,31 +3,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function translateTitles(titles: string[], lang: string): Promise<string[]> {
-  if (lang === 'en' || titles.length === 0) return titles;
+// ── Helpers ──────────────────────────────────────────────
+
+async function translateTexts(texts: string[], lang: string): Promise<string[]> {
+  if (lang === 'en' || texts.length === 0) return texts;
   try {
     return await Promise.all(
-      titles.map(async (title) => {
+      texts.map(async (t) => {
         try {
-          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(title)}`;
+          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(t)}`;
           const resp = await fetch(url);
-          if (!resp.ok) return title;
+          if (!resp.ok) return t;
           const data = await resp.json();
-          return data?.[0]?.map((s: any) => s[0]).join('') || title;
-        } catch { return title; }
+          return data?.[0]?.map((s: any) => s[0]).join('') || t;
+        } catch { return t; }
       })
     );
-  } catch { return titles; }
-}
-
-interface RawNewsItem {
-  id: string | number;
-  title: string;
-  url: string;
-  source: string;
-  publishedAt: string;
-  tokens: string[];
-  votes: { positive: number; negative: number; important: number };
+  } catch { return texts; }
 }
 
 function detectTokens(text: string): string[] {
@@ -37,14 +29,95 @@ function detectTokens(text: string): string[] {
   if (/\bETH\b/.test(upper) || /\bETHEREUM\b/.test(upper) || /\bETHER\b/.test(upper)) found.add('ETH');
   if (/\bSOL\b/.test(upper) || /\bSOLANA\b/.test(upper)) found.add('SOL');
   if (/\bHYPE\b/.test(upper) || /\bHYPERLIQUID\b/.test(upper)) found.add('HYPE');
-  // Broader crypto terms that often relate to BTC
-  if (found.size === 0) {
-    if (/\bCRYPTO\b/.test(upper) || /\bDEFI\b/.test(upper) || /\bBLOCKCHAIN\b/.test(upper)) {
-      // Don't assign a specific token - leave empty for "All" filter
-    }
-  }
   return [...found];
 }
+
+interface RawNewsItem {
+  id: string | number;
+  title: string;
+  url: string;
+  source: string;
+  publishedAt: string;
+  tokens: string[];
+  description: string;
+}
+
+// ── AI Classification ───────────────────────────────────
+
+interface ClassifiedItem {
+  impact: 'high' | 'medium' | 'low';
+  sentiment: 'bullish' | 'bearish' | 'neutral';
+  summary: string;
+}
+
+async function classifyWithAI(items: RawNewsItem[], lang: string): Promise<ClassifiedItem[]> {
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  if (!LOVABLE_API_KEY || items.length === 0) {
+    return items.map(() => ({ impact: 'low' as const, sentiment: 'neutral' as const, summary: '' }));
+  }
+
+  const numbered = items.map((item, i) => `${i + 1}. "${item.title}"`).join('\n');
+  const targetLang = lang === 'sk' ? 'Slovak' : 'English';
+
+  const prompt = `You are a crypto news analyst for a portfolio tracker (BTC, ETH, SOL, HYPE).
+
+Classify each headline and write a one-sentence summary in ${targetLang}.
+
+Impact levels:
+- "high": ETF approvals/rejections, major regulation, protocol hacks >$10M, exchange delistings, central bank crypto policy
+- "medium": partnerships, protocol upgrades, whale moves, exchange listings, stablecoin expansion
+- "low": general commentary, price speculation, minor updates
+
+Sentiment: "bullish" (positive for price/adoption), "bearish" (negative), "neutral"
+
+Headlines:
+${numbered}
+
+Return ONLY a JSON array (no markdown, no backticks) with objects: {"impact":"high|medium|low","sentiment":"bullish|bearish|neutral","summary":"one sentence in ${targetLang}"}
+
+Array must have exactly ${items.length} items in the same order.`;
+
+  try {
+    const resp = await fetch('https://lovable-ai.lovable.dev/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'google/gemini-2.5-flash-lite',
+        messages: [{ role: 'user', content: prompt }],
+        temperature: 0.1,
+      }),
+    });
+
+    if (!resp.ok) {
+      console.error(`AI classification failed [${resp.status}]`);
+      return items.map(() => ({ impact: 'low' as const, sentiment: 'neutral' as const, summary: '' }));
+    }
+
+    const data = await resp.json();
+    let content = data.choices?.[0]?.message?.content || '';
+    // Strip markdown code fences if present
+    content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const parsed = JSON.parse(content);
+
+    if (Array.isArray(parsed) && parsed.length === items.length) {
+      return parsed.map((p: any) => ({
+        impact: ['high', 'medium', 'low'].includes(p.impact) ? p.impact : 'low',
+        sentiment: ['bullish', 'bearish', 'neutral'].includes(p.sentiment) ? p.sentiment : 'neutral',
+        summary: typeof p.summary === 'string' ? p.summary : '',
+      }));
+    }
+    console.error('AI returned wrong array length:', parsed.length, 'expected:', items.length);
+  } catch (e) {
+    console.error('AI classification error:', e);
+  }
+
+  return items.map(() => ({ impact: 'low' as const, sentiment: 'neutral' as const, summary: '' }));
+}
+
+// ── RSS Parsing ─────────────────────────────────────────
 
 function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNewsItem[] {
   const items: RawNewsItem[] = [];
@@ -62,8 +135,6 @@ function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNe
     const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/category>/g;
     let catMatch;
     while ((catMatch = catRegex.exec(block)) !== null) categories.push(catMatch[1]);
-
-    // Detect tokens from title + description + categories
     const fullText = [title, desc, ...categories].join(' ');
 
     if (title) {
@@ -74,13 +145,15 @@ function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNe
         source: sourceName,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
         tokens: detectTokens(fullText),
-        votes: { positive: 0, negative: 0, important: 0 },
+        description: desc.replace(/<[^>]*>/g, '').substring(0, 200),
       });
       count++;
     }
   }
   return items;
 }
+
+// ── Data Sources ────────────────────────────────────────
 
 async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: string): Promise<RawNewsItem[]> {
   try {
@@ -106,7 +179,6 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
       if (!domainSource && itemUrl) {
         try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch {}
       }
-      const votes = item.votes || {};
       let tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
       if (tokens.length === 0) tokens = detectTokens(item.title || '');
       return {
@@ -116,7 +188,7 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
         source: domainSource || 'CryptoPanic',
         publishedAt: item.published_at,
         tokens,
-        votes: { positive: votes.positive || 0, negative: votes.negative || 0, important: votes.important || 0 },
+        description: '',
       };
     });
   } catch (e) {
@@ -137,6 +209,8 @@ async function fetchRssFeed(feedUrl: string, sourceName: string, maxItems = 8): 
   }
 }
 
+// ── Main Handler ────────────────────────────────────────
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -156,7 +230,7 @@ Deno.serve(async (req) => {
       fetchRssFeed('https://www.coindesk.com/arc/outboundfeeds/rss/', 'CoinDesk', 8),
     ]);
 
-    // Merge and deduplicate by similar title
+    // Merge and deduplicate
     const allItems = [...cpItems, ...ctItems, ...cdItems];
     const seen = new Set<string>();
     const unique = allItems.filter(item => {
@@ -166,41 +240,31 @@ Deno.serve(async (req) => {
       return true;
     });
 
-    // Sort by date (newest first)
+    // Sort by date, take top items
     unique.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    const top = unique.slice(0, 25);
+    const top = unique.slice(0, 20);
 
-    // Translate
+    // AI classification (impact, sentiment, summary) - already in target language
+    const classified = await classifyWithAI(top, targetLang);
+
+    // Translate titles (summaries already in target lang from AI)
     const originalTitles = top.map(item => item.title);
-    const translatedTitles = await translateTitles(originalTitles, targetLang);
+    const translatedTitles = await translateTexts(originalTitles, targetLang);
 
-    // Compute impact & sentiment
-    const results = top.map((item, index) => {
-      const { votes } = item;
-      const totalVotes = votes.positive + votes.negative + votes.important;
-      const isImportant = votes.important >= 2;
-      let impact: 'high' | 'medium' | 'low' = 'low';
-      if (isImportant || totalVotes >= 10) impact = 'high';
-      else if (totalVotes >= 3) impact = 'medium';
+    // Build final results
+    const results = top.map((item, i) => ({
+      id: item.id,
+      title: translatedTitles[i] || item.title,
+      summary: classified[i].summary,
+      url: item.url,
+      source: item.source,
+      publishedAt: item.publishedAt,
+      impact: classified[i].impact,
+      sentiment: classified[i].sentiment,
+      tokens: item.tokens,
+    }));
 
-      let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
-      if (votes.positive > votes.negative + 2) sentiment = 'bullish';
-      else if (votes.negative > votes.positive + 2) sentiment = 'bearish';
-
-      return {
-        id: item.id,
-        title: translatedTitles[index] || item.title,
-        url: item.url,
-        source: item.source,
-        publishedAt: item.publishedAt,
-        impact,
-        sentiment,
-        tokens: item.tokens,
-        votes,
-      };
-    });
-
-    // Sort by impact then date
+    // Sort by impact priority then date
     const impactOrder = { high: 0, medium: 1, low: 2 };
     results.sort((a, b) => {
       const imp = impactOrder[a.impact] - impactOrder[b.impact];

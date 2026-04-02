@@ -37,7 +37,8 @@ Deno.serve(async (req) => {
     const lines = news.map((item: any) => {
       const sentimentEmoji = item.sentiment === 'bullish' ? '🟢' : item.sentiment === 'bearish' ? '🔴' : '⚪';
       const tokens = item.tokens?.join(', ') || '';
-      return `${sentimentEmoji} <b>[${tokens}]</b>\n${item.title}\n<a href="${item.url}">Čítať viac →</a>`;
+      const summaryLine = item.summary ? `\n<i>${item.summary}</i>` : '';
+      return `${sentimentEmoji} <b>[${tokens}]</b>\n${item.title}${summaryLine}\n<a href="${item.url}">Čítať viac →</a>`;
     });
 
     const text = `🚨 <b>Vysoký dopad – Crypto novinky</b>\n\n${lines.join('\n\n')}`;
