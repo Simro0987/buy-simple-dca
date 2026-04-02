@@ -162,11 +162,12 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   if (needLend > 0) {
     const lendUsd = needLend * price;
     if (lendUsd >= MIN_ACTION_USD && GAS_COSTS.eth / lendUsd <= MAX_FEE_RATIO) {
+      const aaveApy = apys?.aaveEth?.toFixed(1) ?? '~1.8';
       actions.push({
         type: 'lend',
         label: sk
-          ? `Lend ${needLend.toFixed(4)} wstETH cez Aave V3`
-          : `Lend ${needLend.toFixed(4)} wstETH via Aave V3`,
+          ? `Lend ${needLend.toFixed(4)} wstETH cez Aave V3 · ${aaveApy}% APY`
+          : `Lend ${needLend.toFixed(4)} wstETH via Aave V3 · ${aaveApy}% APY`,
         amount: needLend,
         symbol: 'wstETH',
         protocol: 'Aave V3',
