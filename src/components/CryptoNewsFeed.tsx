@@ -55,7 +55,7 @@ function timeAgo(dateStr: string, sk: boolean): string {
 
 export function CryptoNewsFeed({ lang }: Props) {
   const sk = lang === 'sk';
-  const { data: news, isLoading, isError } = useCryptoNews();
+  const { data: news, isLoading, isError } = useCryptoNews(undefined, lang);
   const [expanded, setExpanded] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
 
