@@ -31,6 +31,7 @@ Deno.serve(async (req) => {
     }
 
     const data = await response.json();
+    if (data.results?.[0]) console.log('Raw item keys:', JSON.stringify(Object.keys(data.results[0])), 'source field:', JSON.stringify(data.results[0].source), 'domain:', data.results[0].domain);
     const results = (data.results || []).slice(0, 20).map((item: any) => {
       const votes = (item.votes?.positive || 0) + (item.votes?.negative || 0) + (item.votes?.important || 0);
       const isImportant = (item.votes?.important || 0) >= 2;
