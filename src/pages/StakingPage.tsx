@@ -1,8 +1,20 @@
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG, StakingPosition } from '@/lib/wallets';
-import { Lock, TrendingUp, Landmark } from 'lucide-react';
+import { Lock, TrendingUp, Landmark, Zap } from 'lucide-react';
+import { useDefiApys, DefiApyData } from '@/hooks/useDefiApys';
 
 interface Props { lang: Lang; }
+
+function getLiveApy(pos: StakingPosition, apys?: DefiApyData | null): number | null {
+  if (!apys) return pos.apy ?? null;
+  if (pos.protocol === 'Rocket Pool') return apys.rocketPool;
+  if (pos.label.includes('wstETH') && pos.type !== 'lending') return apys.lido;
+  if (pos.protocol === 'Aave V3') return apys.aaveEth;
+  if (pos.protocol === 'Jito') return apys.jito;
+  if (pos.protocol === 'Kamino') return apys.kaminoSol;
+  if (pos.label === 'Native staking') return apys.hypeStaking;
+  return pos.apy ?? null;
+}
 
 function typeIcon(type: StakingPosition['type']) {
   if (type === 'staking') return <TrendingUp className="w-3.5 h-3.5 text-gain" />;
@@ -28,6 +40,8 @@ function yieldLabel(dir: StakingPosition['yieldDirection'], lang: Lang) {
 }
 
 export function StakingPage({ lang }: Props) {
+  const { data: apys, isFetching: apyLoading } = useDefiApys();
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">
@@ -39,6 +53,14 @@ export function StakingPage({ lang }: Props) {
           ? 'Prehľad kde pracuje tvoj kapitál. Žiadne akcie – len informácie.'
           : 'Overview of where your capital works. No actions – information only.'}
       </p>
+      <div className="flex items-center gap-1.5 text-[10px]">
+        <Zap className="w-3 h-3 text-green-400" />
+        <span className={apyLoading ? 'text-muted-foreground animate-pulse' : 'text-green-400'}>
+          {apyLoading
+            ? (lang === 'sk' ? 'Načítavam APY...' : 'Loading APY...')
+            : (lang === 'sk' ? 'Live APY z DefiLlama' : 'Live APY from DefiLlama')}
+        </span>
+      </div>
 
       {STAKING_CONFIG.map(asset => (
         <div key={asset.symbol} className="glass-card p-4 space-y-3">
@@ -78,9 +100,12 @@ export function StakingPage({ lang }: Props) {
                       {pos.protocol && (
                         <span className="text-[10px] text-muted-foreground">{pos.protocol}</span>
                       )}
-                      {pos.apy != null && (
-                        <span className="text-[10px] text-gain font-medium">{pos.apy}% APY</span>
-                      )}
+                      {(() => {
+                        const liveApy = getLiveApy(pos, apys);
+                        return liveApy != null ? (
+                          <span className="text-[10px] text-gain font-medium">{liveApy.toFixed(1)}% APY</span>
+                        ) : null;
+                      })()}
                     </div>
                     {yield_ && (
                       <p className="text-[10px] text-accent mt-1">→ {yield_}</p>
