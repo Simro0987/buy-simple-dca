@@ -1,15 +1,17 @@
 import useEmblaCarousel from 'embla-carousel-react';
-import { TOKENS, formatPrice, formatUsd, type PriceData, type AthData } from '@/lib/crypto';
+import { TOKENS, formatPrice, formatUsd, type PriceData, type AthData, type SparklineData } from '@/lib/crypto';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { Lang, t } from '@/lib/i18n';
+import { Sparkline } from '@/components/Sparkline';
 
 interface Props {
   prices: PriceData | undefined;
   athData: AthData | undefined;
+  sparklines: SparklineData | undefined;
   lang: Lang;
 }
 
-export function TokenCardCarousel({ prices, athData, lang }: Props) {
+export function TokenCardCarousel({ prices, athData, sparklines, lang }: Props) {
   const [emblaRef] = useEmblaCarousel({ loop: false, align: 'center' });
 
   return (
@@ -20,6 +22,7 @@ export function TokenCardCarousel({ prices, athData, lang }: Props) {
             const price = prices?.[token.coingeckoId]?.usd ?? 0;
             const change = prices?.[token.coingeckoId]?.usd_24h_change;
             const ath = athData?.[token.coingeckoId];
+            const sparklineData = sparklines?.[token.coingeckoId];
             const stakingConfig = STAKING_CONFIG.find(s => s.symbol === token.symbol);
             const isPositive = (change ?? 0) >= 0;
 
@@ -51,6 +54,14 @@ export function TokenCardCarousel({ prices, athData, lang }: Props) {
                     )}
                   </div>
                 </div>
+
+                {/* Sparkline */}
+                {sparklineData && sparklineData.length > 1 && (
+                  <div className="px-1">
+                    <Sparkline data={sparklineData} height={48} />
+                    <p className="text-[9px] text-muted-foreground text-right mt-0.5">7d</p>
+                  </div>
+                )}
 
                 {/* ATH Distance */}
                 {ath && (
