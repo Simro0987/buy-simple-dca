@@ -49,7 +49,8 @@ function getLabel(action: AllocationAction, lang: Lang): string {
 export function computeSmartAllocation(
   holdings: HoldingInput,
   prices: PriceData,
-  lang: Lang
+  lang: Lang,
+  apys?: DefiApyData
 ): TokenAllocationResult[] {
   const amounts: Record<string, number> = {
     btc: holdings.btc,
