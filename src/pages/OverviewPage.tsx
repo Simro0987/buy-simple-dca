@@ -71,6 +71,12 @@ export function OverviewPage({ lang }: Props) {
         <TokenCardCarousel prices={prices} athData={athData} sparklines={sparklines} lang={lang} />
       )}
 
+      {/* Portfolio History Chart */}
+      <PortfolioHistoryChart lang={lang} prices={prices} />
+
+      {/* Rebalancing Recommendations */}
+      <RebalanceCard lang={lang} prices={prices} />
+
       {/* Portfolio Heat Map */}
       <PortfolioHeatMap prices={prices} lang={lang} />
 
