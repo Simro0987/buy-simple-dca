@@ -83,6 +83,14 @@ export function SmartAllocPage({ lang }: Props) {
           ? 'Zadaj držané množstvá a dostaneš smart odporúčania. Min. akcia: $200.'
           : 'Enter your holdings to get smart recommendations. Min. action: $200.'}
       </p>
+      <div className="flex items-center gap-1.5 text-[10px]">
+        <Zap className="w-3 h-3 text-green-400" />
+        <span className={apyLoading ? 'text-muted-foreground animate-pulse' : 'text-green-400'}>
+          {apyLoading
+            ? (sk ? 'Načítavam APY...' : 'Loading APY...')
+            : (sk ? 'Live APY z DefiLlama' : 'Live APY from DefiLlama')}
+        </span>
+      </div>
 
       {/* Holdings Input */}
       <Card className="border-border bg-card">
