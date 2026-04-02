@@ -1,6 +1,7 @@
 import { STAKING_CONFIG, AssetStakingConfig, StakingPosition } from './wallets';
 import { PriceData, TOKENS } from './crypto';
 import { Lang } from './i18n';
+import { DefiApyData } from '@/hooks/useDefiApys';
 
 export interface HoldingInput {
   btc: number;
@@ -48,7 +49,8 @@ function getLabel(action: AllocationAction, lang: Lang): string {
 export function computeSmartAllocation(
   holdings: HoldingInput,
   prices: PriceData,
-  lang: Lang
+  lang: Lang,
+  apys?: DefiApyData
 ): TokenAllocationResult[] {
   const amounts: Record<string, number> = {
     btc: holdings.btc,
@@ -83,18 +85,18 @@ export function computeSmartAllocation(
   });
 
   // ETH
-  results.push(computeEthActions(amounts.eth, priceMap.eth, holdings, lang));
+  results.push(computeEthActions(amounts.eth, priceMap.eth, holdings, lang, apys));
 
   // SOL
-  results.push(computeSolActions(amounts.sol, priceMap.sol, holdings, lang));
+  results.push(computeSolActions(amounts.sol, priceMap.sol, holdings, lang, apys));
 
   // HYPE
-  results.push(computeHypeActions(amounts.hype, priceMap.hype, holdings, lang));
+  results.push(computeHypeActions(amounts.hype, priceMap.hype, holdings, lang, apys));
 
   return results;
 }
 
-function computeEthActions(total: number, price: number, holdings: HoldingInput, lang: Lang): TokenAllocationResult {
+function computeEthActions(total: number, price: number, holdings: HoldingInput, lang: Lang, apys?: DefiApyData): TokenAllocationResult {
   const totalUsd = total * price;
   const actions: AllocationAction[] = [];
   const sk = lang === 'sk';
@@ -115,11 +117,12 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD && GAS_COSTS.eth / stakeUsd <= MAX_FEE_RATIO) {
+      const rpApy = apys?.rocketPool?.toFixed(1) ?? '~3.2';
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(4)} ETH cez Rocket Pool (rETH)`
-          : `Stake ${needStake.toFixed(4)} ETH via Rocket Pool (rETH)`,
+          ? `Stake ${needStake.toFixed(4)} ETH cez Rocket Pool · ${rpApy}% APY`
+          : `Stake ${needStake.toFixed(4)} ETH via Rocket Pool · ${rpApy}% APY`,
         amount: needStake,
         symbol: 'ETH',
         protocol: 'Rocket Pool',
@@ -142,11 +145,12 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   if (targetWsteth > 0) {
     const wstUsd = targetWsteth * price;
     if (wstUsd >= MIN_ACTION_USD) {
+      const lidoApy = apys?.lido?.toFixed(1) ?? '~3.4';
       actions.push({
         type: 'hold',
         label: sk
-          ? `Drž ~${targetWsteth.toFixed(4)} ETH ako wstETH`
-          : `Hold ~${targetWsteth.toFixed(4)} ETH as wstETH`,
+          ? `Drž ~${targetWsteth.toFixed(4)} ETH ako wstETH · ${lidoApy}% APY`
+          : `Hold ~${targetWsteth.toFixed(4)} ETH as wstETH · ${lidoApy}% APY`,
         amount: targetWsteth,
         symbol: 'wstETH',
         priority: 2,
@@ -158,11 +162,12 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   if (needLend > 0) {
     const lendUsd = needLend * price;
     if (lendUsd >= MIN_ACTION_USD && GAS_COSTS.eth / lendUsd <= MAX_FEE_RATIO) {
+      const aaveApy = apys?.aaveEth?.toFixed(1) ?? '~1.8';
       actions.push({
         type: 'lend',
         label: sk
-          ? `Lend ${needLend.toFixed(4)} wstETH cez Aave V3`
-          : `Lend ${needLend.toFixed(4)} wstETH via Aave V3`,
+          ? `Lend ${needLend.toFixed(4)} wstETH cez Aave V3 · ${aaveApy}% APY`
+          : `Lend ${needLend.toFixed(4)} wstETH via Aave V3 · ${aaveApy}% APY`,
         amount: needLend,
         symbol: 'wstETH',
         protocol: 'Aave V3',
@@ -195,7 +200,7 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   return { symbol: 'ETH', name: 'Ethereum', color: '#627EEA', totalValueUsd: totalUsd, actions: actions.sort((a, b) => a.priority - b.priority).slice(0, 3) };
 }
 
-function computeSolActions(total: number, price: number, holdings: HoldingInput, lang: Lang): TokenAllocationResult {
+function computeSolActions(total: number, price: number, holdings: HoldingInput, lang: Lang, apys?: DefiApyData): TokenAllocationResult {
   const totalUsd = total * price;
   const actions: AllocationAction[] = [];
   const sk = lang === 'sk';
@@ -214,11 +219,12 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD && GAS_COSTS.sol / stakeUsd <= MAX_FEE_RATIO) {
+      const jitoApy = apys?.jito?.toFixed(1) ?? '~7.5';
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(2)} SOL cez Jito`
-          : `Stake ${needStake.toFixed(2)} SOL via Jito`,
+          ? `Stake ${needStake.toFixed(2)} SOL cez Jito · ${jitoApy}% APY`
+          : `Stake ${needStake.toFixed(2)} SOL via Jito · ${jitoApy}% APY`,
         amount: needStake,
         symbol: 'SOL',
         protocol: 'Jito',
@@ -254,11 +260,12 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   if (needLend > 0) {
     const lendUsd = needLend * price;
     if (lendUsd >= MIN_ACTION_USD && GAS_COSTS.sol / lendUsd <= MAX_FEE_RATIO) {
+      const kaminoApy = apys?.kaminoSol?.toFixed(1) ?? '~4.2';
       actions.push({
         type: 'lend',
         label: sk
-          ? `Lend ${needLend.toFixed(2)} JitoSOL cez Kamino`
-          : `Lend ${needLend.toFixed(2)} JitoSOL via Kamino`,
+          ? `Lend ${needLend.toFixed(2)} JitoSOL cez Kamino · ${kaminoApy}% APY`
+          : `Lend ${needLend.toFixed(2)} JitoSOL via Kamino · ${kaminoApy}% APY`,
         amount: needLend,
         symbol: 'JitoSOL',
         protocol: 'Kamino',
@@ -290,7 +297,7 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   return { symbol: 'SOL', name: 'Solana', color: '#9945FF', totalValueUsd: totalUsd, actions: actions.sort((a, b) => a.priority - b.priority).slice(0, 3) };
 }
 
-function computeHypeActions(total: number, price: number, holdings: HoldingInput, lang: Lang): TokenAllocationResult {
+function computeHypeActions(total: number, price: number, holdings: HoldingInput, lang: Lang, apys?: DefiApyData): TokenAllocationResult {
   const totalUsd = total * price;
   const actions: AllocationAction[] = [];
   const sk = lang === 'sk';
@@ -302,11 +309,12 @@ function computeHypeActions(total: number, price: number, holdings: HoldingInput
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD) {
+      const hypeApy = apys?.hypeStaking?.toFixed(1) ?? '~12.0';
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(2)} HYPE`
-          : `Stake ${needStake.toFixed(2)} HYPE`,
+          ? `Stake ${needStake.toFixed(2)} HYPE · ${hypeApy}% APY`
+          : `Stake ${needStake.toFixed(2)} HYPE · ${hypeApy}% APY`,
         amount: needStake,
         symbol: 'HYPE',
         protocol: 'Native',

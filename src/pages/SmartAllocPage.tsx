@@ -2,9 +2,10 @@ import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, Shield, TrendingUp, Landmark, Ban, Sparkles } from 'lucide-react';
+import { ChevronDown, Shield, TrendingUp, Landmark, Ban, Sparkles, Zap } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
+import { useDefiApys } from '@/hooks/useDefiApys';
 import { computeSmartAllocation, HoldingInput, AllocationAction } from '@/lib/allocation';
 import { formatUsd } from '@/lib/crypto';
 import { STAKING_CONFIG } from '@/lib/wallets';
@@ -44,7 +45,17 @@ function actionColor(type: AllocationAction['type']) {
     case 'stake': return 'text-green-400';
     case 'lend': return 'text-yellow-400';
     case 'skip': return 'text-muted-foreground';
-  }
+}
+
+function getLiveApy(pos: { label: string; protocol?: string; apy?: number; type?: string }, apys?: import('@/hooks/useDefiApys').DefiApyData | null): number | null {
+  if (!apys) return pos.apy ?? null;
+  if (pos.protocol === 'Rocket Pool') return apys.rocketPool;
+  if (pos.label.includes('wstETH') && pos.type !== 'lending') return apys.lido;
+  if (pos.protocol === 'Aave V3') return apys.aaveEth;
+  if (pos.protocol === 'Jito') return apys.jito;
+  if (pos.protocol === 'Kamino') return apys.kaminoSol;
+  if (pos.label === 'Native staking') return apys.hypeStaking;
+  return pos.apy ?? null;
 }
 
 export function SmartAllocPage({ lang }: Props) {
@@ -52,6 +63,7 @@ export function SmartAllocPage({ lang }: Props) {
   const [holdings, setHoldings] = useState<HoldingInput>(loadHoldings);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const { data: prices } = usePrices();
+  const { data: apys, isFetching: apyLoading } = useDefiApys();
 
   const updateField = (field: keyof HoldingInput, val: string) => {
     const num = parseFloat(val) || 0;
@@ -62,8 +74,8 @@ export function SmartAllocPage({ lang }: Props) {
 
   const results = useMemo(() => {
     if (!prices) return null;
-    return computeSmartAllocation(holdings, prices, lang);
-  }, [holdings, prices, lang]);
+    return computeSmartAllocation(holdings, prices, lang, apys ?? undefined);
+  }, [holdings, prices, lang, apys]);
 
   const hasAnyHolding = holdings.btc > 0 || holdings.eth > 0 || holdings.sol > 0 || holdings.hype > 0;
 
@@ -81,6 +93,14 @@ export function SmartAllocPage({ lang }: Props) {
           ? 'Zadaj držané množstvá a dostaneš smart odporúčania. Min. akcia: $200.'
           : 'Enter your holdings to get smart recommendations. Min. action: $200.'}
       </p>
+      <div className="flex items-center gap-1.5 text-[10px]">
+        <Zap className="w-3 h-3 text-green-400" />
+        <span className={apyLoading ? 'text-muted-foreground animate-pulse' : 'text-green-400'}>
+          {apyLoading
+            ? (sk ? 'Načítavam APY...' : 'Loading APY...')
+            : (sk ? 'Live APY z DefiLlama' : 'Live APY from DefiLlama')}
+        </span>
+      </div>
 
       {/* Holdings Input */}
       <Card className="border-border bg-card">
@@ -195,12 +215,15 @@ export function SmartAllocPage({ lang }: Props) {
                 {sk ? 'Cieľová alokácia' : 'Target allocation'}
               </CollapsibleTrigger>
               <CollapsibleContent className="pt-2">
-                {STAKING_CONFIG.find(c => c.symbol === token.symbol)?.positions.map((pos, j) => (
-                  <div key={j} className="flex items-center justify-between text-[10px] text-muted-foreground py-0.5">
-                    <span>{pos.label}</span>
-                    <span>{pos.percentage}%{pos.apy ? ` · ${pos.apy}% APY` : ''}</span>
-                  </div>
-                ))}
+                {STAKING_CONFIG.find(c => c.symbol === token.symbol)?.positions.map((pos, j) => {
+                  const liveApy = getLiveApy(pos, apys);
+                  return (
+                    <div key={j} className="flex items-center justify-between text-[10px] text-muted-foreground py-0.5">
+                      <span>{pos.label}</span>
+                      <span>{pos.percentage}%{liveApy != null ? ` · ${liveApy.toFixed(1)}% APY` : ''}</span>
+                    </div>
+                  );
+                })}
               </CollapsibleContent>
             </Collapsible>
           </CardContent>
