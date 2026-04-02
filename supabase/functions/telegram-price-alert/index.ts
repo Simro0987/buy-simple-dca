@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -25,8 +27,44 @@ Deno.serve(async (req) => {
     const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
     if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
 
-    const { chatId, limitPrices } = await req.json();
+    let chatId: string | undefined;
+    let limitPrices: Record<string, number> | undefined;
+
+    // Try reading body (manual trigger from UI)
+    try {
+      const body = await req.json();
+      chatId = body.chatId;
+      limitPrices = body.limitPrices;
+    } catch {
+      // No body — cron trigger, read from DB
+    }
+
+    // If no chatId, read from telegram_config
     if (!chatId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const { data: config, error: cfgErr } = await supabase
+        .from('telegram_config')
+        .select('chat_id, limit_alert_enabled')
+        .eq('id', 1)
+        .single();
+
+      if (cfgErr || !config) {
+        return new Response(JSON.stringify({ success: false, error: 'No config found' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      if (!config.limit_alert_enabled) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'Limit alerts disabled' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      chatId = config.chat_id;
+    }
+
+    if (!chatId || chatId.trim() === '') {
       return new Response(JSON.stringify({ success: false, error: 'chatId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -45,10 +83,8 @@ Deno.serve(async (req) => {
       const currentPrice = prices[token.coingeckoId]?.usd ?? 0;
       if (currentPrice === 0) continue;
 
-      // Use custom limit prices if provided, otherwise calculate from discount
       const limitPrice = limitPrices?.[token.symbol] || (currentPrice * token.limitDiscount);
       
-      // Only alert if price is ABOVE limit (approaching from above) and within threshold
       if (currentPrice > limitPrice) {
         const distancePct = (currentPrice - limitPrice) / currentPrice;
         if (distancePct <= PROXIMITY_THRESHOLD) {
