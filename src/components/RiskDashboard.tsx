@@ -128,7 +128,7 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
                 </div>
                 <div className="bg-secondary/50 rounded-lg p-2">
                   <p className="text-[9px] text-muted-foreground">{sk ? 'ATH cena' : 'ATH Price'}</p>
-                  <p className="text-xs font-bold text-foreground">${formatPrice(athPrice)}</p>
+                  <p className="text-xs font-bold text-foreground">{formatPrice(athPrice)}</p>
                 </div>
               </div>
             </div>
