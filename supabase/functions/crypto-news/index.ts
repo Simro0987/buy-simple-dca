@@ -21,7 +21,6 @@ Deno.serve(async (req) => {
     const coinFilter = currencies || 'BTC,ETH,SOL,HYPE';
     const kindFilter = kind || 'news';
 
-    // CryptoPanic API v2 - plan can be developer, growth, or enterprise
     const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${apiKey}&currencies=${coinFilter}&kind=${kindFilter}&public=true`;
 
     const response = await fetch(url);
@@ -31,27 +30,47 @@ Deno.serve(async (req) => {
     }
 
     const data = await response.json();
-    if (data.results?.[0]) console.log('Raw item keys:', JSON.stringify(Object.keys(data.results[0])), 'source field:', JSON.stringify(data.results[0].source), 'domain:', data.results[0].domain);
-    const results = (data.results || []).slice(0, 20).map((item: any) => {
-      const votes = (item.votes?.positive || 0) + (item.votes?.negative || 0) + (item.votes?.important || 0);
-      const isImportant = (item.votes?.important || 0) >= 2;
-      let impact: 'high' | 'medium' | 'low' = 'low';
-      if (isImportant || votes >= 10) impact = 'high';
-      else if (votes >= 3) impact = 'medium';
+    const results = (data.results || []).slice(0, 20).map((item: any, index: number) => {
+      // Developer plan has limited fields: title, description, published_at, created_at, kind
+      // Growth+ plans include: source, url, id, votes, instruments, original_url
+      const hasFullData = !!item.source;
 
-      const pos = item.votes?.positive || 0;
-      const neg = item.votes?.negative || 0;
+      // Extract source name
+      const sourceName = item.source?.title || item.source?.domain || '';
+
+      // Extract URL - prefer original_url, fallback to url
+      const itemUrl = item.original_url || item.url || '';
+
+      // Extract domain from URL as fallback source
+      let domainSource = sourceName;
+      if (!domainSource && itemUrl) {
+        try {
+          domainSource = new URL(itemUrl).hostname.replace('www.', '');
+        } catch { /* ignore */ }
+      }
+
+      // Votes (only available on Growth+ plans)
+      const votes = item.votes || {};
+      const totalVotes = (votes.positive || 0) + (votes.negative || 0) + (votes.important || 0);
+      const isImportant = (votes.important || 0) >= 2;
+      let impact: 'high' | 'medium' | 'low' = 'low';
+      if (isImportant || totalVotes >= 10) impact = 'high';
+      else if (totalVotes >= 3) impact = 'medium';
+
+      const pos = votes.positive || 0;
+      const neg = votes.negative || 0;
       let sentiment: 'bullish' | 'bearish' | 'neutral' = 'neutral';
       if (pos > neg + 2) sentiment = 'bullish';
       else if (neg > pos + 2) sentiment = 'bearish';
 
-      const tokens = (item.currencies || []).map((c: any) => c.code);
+      // Tokens - instruments on v2, currencies on v1
+      const tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
 
       return {
-        id: item.id,
+        id: item.id || index + Date.now(),
         title: item.title,
-        url: item.url,
-        source: item.source?.title || 'Unknown',
+        url: itemUrl,
+        source: domainSource || 'CryptoPanic',
         publishedAt: item.published_at,
         impact,
         sentiment,
@@ -59,7 +78,7 @@ Deno.serve(async (req) => {
         votes: {
           positive: pos,
           negative: neg,
-          important: item.votes?.important || 0,
+          important: votes.important || 0,
         },
       };
     });
