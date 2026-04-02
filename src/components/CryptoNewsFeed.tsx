@@ -123,54 +123,60 @@ export function CryptoNewsFeed({ lang }: Props) {
             </p>
           )}
 
-          {filtered?.map(item => (
-            <a
-              key={item.id}
-              href={item.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block bg-secondary/30 rounded-lg px-3 py-2.5 space-y-1.5 hover:bg-secondary/50 transition-colors"
-            >
-              {/* Top row: impact + tokens + time */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  {impactBadge(item.impact, sk)}
-                  {item.tokens.slice(0, 3).map(t => (
-                    <span
-                      key={t}
-                      className="text-[9px] px-1 py-0.5 rounded font-medium"
-                      style={{
-                        backgroundColor: (TOKEN_COLORS[t] ?? '#888') + '20',
-                        color: TOKEN_COLORS[t] ?? '#888',
-                      }}
-                    >
-                      {t}
+          {filtered?.map(item => {
+            const hasUrl = !!item.url;
+            const Wrapper = hasUrl ? 'a' : 'div';
+            const wrapperProps = hasUrl
+              ? { href: item.url, target: '_blank', rel: 'noopener noreferrer' }
+              : {};
+
+            return (
+              <Wrapper
+                key={item.id}
+                {...wrapperProps}
+                className="block bg-secondary/30 rounded-lg px-3 py-2.5 space-y-1.5 hover:bg-secondary/50 transition-colors"
+              >
+                {/* Top row: impact + tokens + time */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1.5">
+                    {impactBadge(item.impact, sk)}
+                    {item.tokens.slice(0, 3).map(t => (
+                      <span
+                        key={t}
+                        className="text-[9px] px-1 py-0.5 rounded font-medium"
+                        style={{
+                          backgroundColor: (TOKEN_COLORS[t] ?? '#888') + '20',
+                          color: TOKEN_COLORS[t] ?? '#888',
+                        }}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">{timeAgo(item.publishedAt, sk)}</span>
+                </div>
+
+                {/* Title */}
+                <div className="flex items-start gap-2">
+                  <p className="text-xs text-foreground leading-relaxed flex-1">{item.title}</p>
+                  {hasUrl && <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />}
+                </div>
+
+                {/* Bottom: sentiment + source */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    {sentimentIcon(item.sentiment)}
+                    <span className={`text-[9px] font-medium ${
+                      item.sentiment === 'bullish' ? 'text-green-400' : item.sentiment === 'bearish' ? 'text-red-400' : 'text-muted-foreground'
+                    }`}>
+                      {sentimentLabel(item.sentiment, sk)}
                     </span>
-                  ))}
+                  </div>
+                  <span className="text-[9px] text-muted-foreground">{item.source}</span>
                 </div>
-                <span className="text-[9px] text-muted-foreground">{timeAgo(item.publishedAt, sk)}</span>
-              </div>
-
-              {/* Title */}
-              <div className="flex items-start gap-2">
-                <p className="text-xs text-foreground leading-relaxed flex-1">{item.title}</p>
-                <ExternalLink className="w-3 h-3 text-muted-foreground shrink-0 mt-0.5" />
-              </div>
-
-              {/* Bottom: sentiment + source */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1">
-                  {sentimentIcon(item.sentiment)}
-                  <span className={`text-[9px] font-medium ${
-                    item.sentiment === 'bullish' ? 'text-green-400' : item.sentiment === 'bearish' ? 'text-red-400' : 'text-muted-foreground'
-                  }`}>
-                    {sentimentLabel(item.sentiment, sk)}
-                  </span>
-                </div>
-                <span className="text-[9px] text-muted-foreground">{item.source}</span>
-              </div>
-            </a>
-          ))}
+              </Wrapper>
+            );
+          })}
         </CollapsibleContent>
       </div>
     </Collapsible>
