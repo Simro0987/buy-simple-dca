@@ -204,58 +204,63 @@ export function SmartAllocPage({ lang }: Props) {
       </Card>
 
       {/* Results */}
-      {!hasAnyHolding && (
-        <div className="text-center py-8 text-muted-foreground text-sm">
-          {sk ? 'Zadaj svoje držby vyššie ↑' : 'Enter your holdings above ↑'}
-        </div>
-      )}
-
-      {hasAnyHolding && results && results.map(token => (
-        <Card key={token.symbol} className="border-border bg-card overflow-hidden">
-          <div className="h-1" style={{ backgroundColor: token.color }} />
-          <CardHeader className="pb-2 pt-3 px-4">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
-                <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: token.color }} />
-                {token.symbol}
-              </CardTitle>
-              <span className="text-xs text-muted-foreground">{formatUsd(token.totalValueUsd)}</span>
+      {mode === 'exact' ? (
+        <ExactBreakdown lang={lang} holdings={holdings} />
+      ) : (
+        <>
+          {!hasAnyHolding && (
+            <div className="text-center py-8 text-muted-foreground text-sm">
+              {sk ? 'Zadaj svoje držby vyššie ↑' : 'Enter your holdings above ↑'}
             </div>
-          </CardHeader>
-          <CardContent className="px-4 pb-3 space-y-2">
-            {token.actions.map((action, i) => {
-              const Icon = actionIcon(action.type);
-              return (
-                <div key={i} className="flex items-start gap-2">
-                  <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${actionColor(action.type)}`} />
-                  <span className={`text-xs leading-relaxed ${action.type === 'skip' ? 'text-muted-foreground italic' : 'text-foreground'}`}>
-                    {action.label}
-                  </span>
-                </div>
-              );
-            })}
+          )}
 
-            {/* Expandable detail */}
-            <Collapsible>
-              <CollapsibleTrigger className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1">
-                <ChevronDown className="w-3 h-3" />
-                {sk ? 'Cieľová alokácia' : 'Target allocation'}
-              </CollapsibleTrigger>
-              <CollapsibleContent className="pt-2">
-                {STAKING_CONFIG.find(c => c.symbol === token.symbol)?.positions.map((pos, j) => {
-                  const liveApy = getLiveApy(pos, apys);
+          {hasAnyHolding && results && results.map(token => (
+            <Card key={token.symbol} className="border-border bg-card overflow-hidden">
+              <div className="h-1" style={{ backgroundColor: token.color }} />
+              <CardHeader className="pb-2 pt-3 px-4">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-sm font-semibold text-foreground flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: token.color }} />
+                    {token.symbol}
+                  </CardTitle>
+                  <span className="text-xs text-muted-foreground">{formatUsd(token.totalValueUsd)}</span>
+                </div>
+              </CardHeader>
+              <CardContent className="px-4 pb-3 space-y-2">
+                {token.actions.map((action, i) => {
+                  const Icon = actionIcon(action.type);
                   return (
-                    <div key={j} className="flex items-center justify-between text-[10px] text-muted-foreground py-0.5">
-                      <span>{pos.label}</span>
-                      <span>{pos.percentage}%{liveApy != null ? ` · ${liveApy.toFixed(1)}% APY` : ''}</span>
+                    <div key={i} className="flex items-start gap-2">
+                      <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${actionColor(action.type)}`} />
+                      <span className={`text-xs leading-relaxed ${action.type === 'skip' ? 'text-muted-foreground italic' : 'text-foreground'}`}>
+                        {action.label}
+                      </span>
                     </div>
                   );
                 })}
-              </CollapsibleContent>
-            </Collapsible>
-          </CardContent>
-        </Card>
-      ))}
+
+                <Collapsible>
+                  <CollapsibleTrigger className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 mt-1">
+                    <ChevronDown className="w-3 h-3" />
+                    {sk ? 'Cieľová alokácia' : 'Target allocation'}
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="pt-2">
+                    {STAKING_CONFIG.find(c => c.symbol === token.symbol)?.positions.map((pos, j) => {
+                      const liveApy = getLiveApy(pos, apys);
+                      return (
+                        <div key={j} className="flex items-center justify-between text-[10px] text-muted-foreground py-0.5">
+                          <span>{pos.label}</span>
+                          <span>{pos.percentage}%{liveApy != null ? ` · ${liveApy.toFixed(1)}% APY` : ''}</span>
+                        </div>
+                      );
+                    })}
+                  </CollapsibleContent>
+                </Collapsible>
+              </CardContent>
+            </Card>
+          ))}
+        </>
+      )}
     </div>
   );
 }
