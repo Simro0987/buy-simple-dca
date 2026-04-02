@@ -117,11 +117,12 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD && GAS_COSTS.eth / stakeUsd <= MAX_FEE_RATIO) {
+      const rpApy = apys?.rocketPool?.toFixed(1) ?? '~3.2';
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(4)} ETH cez Rocket Pool (rETH)`
-          : `Stake ${needStake.toFixed(4)} ETH via Rocket Pool (rETH)`,
+          ? `Stake ${needStake.toFixed(4)} ETH cez Rocket Pool · ${rpApy}% APY`
+          : `Stake ${needStake.toFixed(4)} ETH via Rocket Pool · ${rpApy}% APY`,
         amount: needStake,
         symbol: 'ETH',
         protocol: 'Rocket Pool',
