@@ -42,7 +42,41 @@ interface RawNewsItem {
   description: string;
 }
 
-// ── AI Classification ───────────────────────────────────
+// ── Keyword-based Classification (fallback) ─────────────
+
+const HIGH_IMPACT_KEYWORDS = [
+  'etf', 'sec ', 'regulation', 'ban', 'hack', 'exploit', 'breach', 'stolen',
+  'lawsuit', 'arrest', 'fraud', 'crash', 'collapse', 'bankrupt', 'insolvent',
+  'federal reserve', 'central bank', 'cbdc', 'delist', 'shutdown', 'halving',
+  'approval', 'approved', 'rejected', 'sanction', 'investigation', 'subpoena',
+];
+const MEDIUM_IMPACT_KEYWORDS = [
+  'partnership', 'upgrade', 'launch', 'listing', 'whale', 'stablecoin',
+  'integration', 'adoption', 'fund', 'investment', 'acquisition', 'merge',
+  'protocol', 'mainnet', 'testnet', 'airdrop', 'token', 'yield',
+];
+const BULLISH_KEYWORDS = [
+  'surge', 'rally', 'bullish', 'gain', 'rise', 'soar', 'boom', 'breakout',
+  'approval', 'approved', 'adoption', 'partnership', 'launch', 'upgrade',
+  'ath', 'all-time high', 'institutional', 'inflow', 'accumulate',
+];
+const BEARISH_KEYWORDS = [
+  'crash', 'drop', 'bearish', 'plunge', 'dump', 'decline', 'loss', 'sell-off',
+  'hack', 'exploit', 'stolen', 'fraud', 'ban', 'rejected', 'delist',
+  'bankrupt', 'collapse', 'outflow', 'liquidat',
+];
+
+function classifyByKeywords(title: string): { impact: 'high' | 'medium' | 'low'; sentiment: 'bullish' | 'bearish' | 'neutral' } {
+  const lower = title.toLowerCase();
+  const impact = HIGH_IMPACT_KEYWORDS.some(k => lower.includes(k)) ? 'high'
+    : MEDIUM_IMPACT_KEYWORDS.some(k => lower.includes(k)) ? 'medium' : 'low';
+  const bullScore = BULLISH_KEYWORDS.filter(k => lower.includes(k)).length;
+  const bearScore = BEARISH_KEYWORDS.filter(k => lower.includes(k)).length;
+  const sentiment = bullScore > bearScore ? 'bullish' : bearScore > bullScore ? 'bearish' : 'neutral';
+  return { impact, sentiment };
+}
+
+// ── AI Classification with keyword fallback ─────────────
 
 interface ClassifiedItem {
   impact: 'high' | 'medium' | 'low';
@@ -53,7 +87,7 @@ interface ClassifiedItem {
 async function classifyWithAI(items: RawNewsItem[], lang: string): Promise<ClassifiedItem[]> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   if (!LOVABLE_API_KEY || items.length === 0) {
-    return items.map(() => ({ impact: 'low' as const, sentiment: 'neutral' as const, summary: '' }));
+    return items.map(item => ({ ...classifyByKeywords(item.title), summary: '' }));
   }
 
   const numbered = items.map((item, i) => `${i + 1}. "${item.title}"`).join('\n');
@@ -78,6 +112,9 @@ Return ONLY a JSON array (no markdown, no backticks) with objects: {"impact":"hi
 Array must have exactly ${items.length} items in the same order.`;
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+
     const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -89,16 +126,17 @@ Array must have exactly ${items.length} items in the same order.`;
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
       }),
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
 
     if (!resp.ok) {
-      console.error(`AI classification failed [${resp.status}]`);
-      return items.map(() => ({ impact: 'low' as const, sentiment: 'neutral' as const, summary: '' }));
+      console.error(`AI gateway error [${resp.status}], falling back to keywords`);
+      return items.map(item => ({ ...classifyByKeywords(item.title), summary: '' }));
     }
 
     const data = await resp.json();
     let content = data.choices?.[0]?.message?.content || '';
-    // Strip markdown code fences if present
     content = content.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const parsed = JSON.parse(content);
 
@@ -111,10 +149,11 @@ Array must have exactly ${items.length} items in the same order.`;
     }
     console.error('AI returned wrong array length:', parsed.length, 'expected:', items.length);
   } catch (e) {
-    console.error('AI classification error:', e);
+    console.error('AI classification error, using keyword fallback:', e);
   }
 
-  return items.map(() => ({ impact: 'low' as const, sentiment: 'neutral' as const, summary: '' }));
+  // Fallback: keyword-based classification
+  return items.map(item => ({ ...classifyByKeywords(item.title), summary: '' }));
 }
 
 // ── RSS Parsing ─────────────────────────────────────────
