@@ -260,11 +260,12 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   if (needLend > 0) {
     const lendUsd = needLend * price;
     if (lendUsd >= MIN_ACTION_USD && GAS_COSTS.sol / lendUsd <= MAX_FEE_RATIO) {
+      const kaminoApy = apys?.kaminoSol?.toFixed(1) ?? '~4.2';
       actions.push({
         type: 'lend',
         label: sk
-          ? `Lend ${needLend.toFixed(2)} JitoSOL cez Kamino`
-          : `Lend ${needLend.toFixed(2)} JitoSOL via Kamino`,
+          ? `Lend ${needLend.toFixed(2)} JitoSOL cez Kamino · ${kaminoApy}% APY`
+          : `Lend ${needLend.toFixed(2)} JitoSOL via Kamino · ${kaminoApy}% APY`,
         amount: needLend,
         symbol: 'JitoSOL',
         protocol: 'Kamino',
