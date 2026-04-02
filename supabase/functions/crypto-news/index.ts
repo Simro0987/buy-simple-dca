@@ -33,10 +33,16 @@ interface RawNewsItem {
 function detectTokens(text: string): string[] {
   const upper = text.toUpperCase();
   const found = new Set<string>();
-  if (upper.includes('BTC') || upper.includes('BITCOIN')) found.add('BTC');
-  if (upper.includes('ETH') || upper.includes('ETHEREUM')) found.add('ETH');
-  if (upper.includes('SOL') || upper.includes('SOLANA')) found.add('SOL');
-  if (upper.includes('HYPE') || upper.includes('HYPERLIQUID')) found.add('HYPE');
+  if (/\bBTC\b/.test(upper) || /\bBITCOIN\b/.test(upper)) found.add('BTC');
+  if (/\bETH\b/.test(upper) || /\bETHEREUM\b/.test(upper) || /\bETHER\b/.test(upper)) found.add('ETH');
+  if (/\bSOL\b/.test(upper) || /\bSOLANA\b/.test(upper)) found.add('SOL');
+  if (/\bHYPE\b/.test(upper) || /\bHYPERLIQUID\b/.test(upper)) found.add('HYPE');
+  // Broader crypto terms that often relate to BTC
+  if (found.size === 0) {
+    if (/\bCRYPTO\b/.test(upper) || /\bDEFI\b/.test(upper) || /\bBLOCKCHAIN\b/.test(upper)) {
+      // Don't assign a specific token - leave empty for "All" filter
+    }
+  }
   return [...found];
 }
 
