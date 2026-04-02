@@ -78,7 +78,7 @@ Return ONLY a JSON array (no markdown, no backticks) with objects: {"impact":"hi
 Array must have exactly ${items.length} items in the same order.`;
 
   try {
-    const resp = await fetch('https://lovable-ai.lovable.dev/chat/completions', {
+    const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${LOVABLE_API_KEY}`,
