@@ -1,6 +1,7 @@
 import { STAKING_CONFIG, AssetStakingConfig, StakingPosition } from './wallets';
 import { PriceData, TOKENS } from './crypto';
 import { Lang } from './i18n';
+import { DefiApyData } from '@/hooks/useDefiApys';
 
 export interface HoldingInput {
   btc: number;
