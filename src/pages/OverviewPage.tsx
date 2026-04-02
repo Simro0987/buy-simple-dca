@@ -3,9 +3,11 @@ import { TokenCardCarousel } from '@/components/TokenCardCarousel';
 import { FearGreedGauge } from '@/components/FearGreedGauge';
 import { AltSeasonWidget } from '@/components/AltSeasonWidget';
 import { MarketBanner } from '@/components/MarketBanner';
+import { MarketCycleGauge } from '@/components/MarketCycleGauge';
 import { PortfolioHeatMap } from '@/components/PortfolioHeatMap';
 import { BtcAccumulationCard } from '@/components/BtcAccumulationCard';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
+import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
 import { RefreshCw } from 'lucide-react';
 
@@ -16,6 +18,7 @@ export function OverviewPage({ lang }: Props) {
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
   const { data: altSeason } = useAltSeason();
+  const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
 
   // Calculate total portfolio value from localStorage invested amount
   const totalInvested = parseFloat(localStorage.getItem('total-invested') || '0');
@@ -49,6 +52,9 @@ export function OverviewPage({ lang }: Props) {
       {fearGreed && (
         <MarketBanner fearGreedValue={fearGreed.value} lang={lang} />
       )}
+
+      {/* Market Cycle Score */}
+      {cycleResult && <MarketCycleGauge result={cycleResult} lang={lang} />}
 
       {/* Swipeable Token Cards */}
       {isLoading ? (
