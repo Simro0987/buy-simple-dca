@@ -14,9 +14,9 @@ export interface NewsItem {
   votes: { positive: number; negative: number; important: number };
 }
 
-async function fetchNews(currencies = 'BTC,ETH,SOL,HYPE'): Promise<NewsItem[]> {
+async function fetchNews(currencies = 'BTC,ETH,SOL,HYPE', lang = 'sk'): Promise<NewsItem[]> {
   const { data, error } = await supabase.functions.invoke('crypto-news', {
-    body: { currencies, kind: 'news' },
+    body: { currencies, kind: 'news', lang },
   });
 
   if (error) throw new Error(error.message);
