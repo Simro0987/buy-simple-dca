@@ -51,12 +51,16 @@ export function SettingsPage({ lang, toggleLang }: Props) {
   const saveChatId = (value: string) => {
     setChatId(value);
     localStorage.setItem('telegram_chat_id', value);
+    const budget = Number(localStorage.getItem('dca-budget') || '100');
+    syncConfigToDb(value, budget, alerts);
   };
 
   const toggleAlert = (key: keyof AlertToggles) => {
     const updated = { ...alerts, [key]: !alerts[key] };
     setAlerts(updated);
     localStorage.setItem('telegram_alert_toggles', JSON.stringify(updated));
+    const budget = Number(localStorage.getItem('dca-budget') || '100');
+    syncConfigToDb(chatId, budget, updated);
   };
 
   const sendTestAlert = async (type: 'news' | 'dca' | 'price') => {
