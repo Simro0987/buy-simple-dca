@@ -211,6 +211,8 @@ export function SettingsPage({ lang, toggleLang }: Props) {
           ))}
         </div>
       </div>
+      {/* CSV Export */}
+      <CsvExport lang={lang} />
     </div>
   );
 }
