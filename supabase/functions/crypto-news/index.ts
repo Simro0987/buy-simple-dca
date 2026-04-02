@@ -50,10 +50,19 @@ Deno.serve(async (req) => {
 
     const url = `https://cryptopanic.com/api/developer/v2/posts/?auth_token=${apiKey}&currencies=${coinFilter}&kind=${kindFilter}&public=true`;
 
-    const response = await fetch(url);
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`CryptoPanic API failed [${response.status}]: ${errorText.substring(0, 500)}`);
+    let response: Response | null = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      response = await fetch(url);
+      if (response.ok) break;
+      const body = await response.text();
+      if (response.status >= 500 && attempt < 2) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+        continue;
+      }
+      throw new Error(`CryptoPanic API failed [${response.status}]: ${body.substring(0, 200)}`);
+    }
+    if (!response || !response.ok) {
+      throw new Error('CryptoPanic API unavailable after retries');
     }
 
     const data = await response.json();
