@@ -87,6 +87,9 @@ export function OverviewPage({ lang }: Props) {
           <AltSeasonWidget value={altSeason.value} label={altSeason.label} lang={lang} />
         )}
       </div>
+
+      {/* Crypto News */}
+      <CryptoNewsFeed lang={lang} />
     </div>
   );
 }
