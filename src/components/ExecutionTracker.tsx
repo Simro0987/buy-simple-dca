@@ -1,0 +1,256 @@
+import { useState, useEffect } from 'react';
+import { Lang } from '@/lib/i18n';
+import { TOKENS } from '@/lib/crypto';
+import { CheckCircle, AlertTriangle, XCircle, Target } from 'lucide-react';
+
+interface WeekRecord {
+  weekId: string; // e.g. "2026-W14"
+  dcaExecuted: boolean;
+  limits: { symbol: string; filled: boolean; limitPrice: number; currentPrice?: number }[];
+}
+
+const STORAGE_KEY = 'execution_history';
+
+function getCurrentWeekId(): string {
+  const now = new Date();
+  const oneJan = new Date(now.getFullYear(), 0, 1);
+  const weekNum = Math.ceil(((now.getTime() - oneJan.getTime()) / 86400000 + oneJan.getDay() + 1) / 7);
+  return `${now.getFullYear()}-W${String(weekNum).padStart(2, '0')}`;
+}
+
+function getHistory(): WeekRecord[] {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+  } catch { return []; }
+}
+
+function saveHistory(records: WeekRecord[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(records.slice(-12)));
+}
+
+interface Props {
+  lang: Lang;
+  prices?: Record<string, { usd: number }>;
+}
+
+export function ExecutionTracker({ lang, prices }: Props) {
+  const [history, setHistory] = useState<WeekRecord[]>(getHistory);
+  const weekId = getCurrentWeekId();
+
+  const currentWeek = history.find(r => r.weekId === weekId) || {
+    weekId,
+    dcaExecuted: false,
+    limits: TOKENS.map(t => ({
+      symbol: t.symbol,
+      filled: false,
+      limitPrice: (prices?.[t.coingeckoId]?.usd ?? 0) * t.limitDiscount,
+    })),
+  };
+
+  const toggleDca = () => {
+    const updated = { ...currentWeek, dcaExecuted: !currentWeek.dcaExecuted };
+    const newHistory = history.filter(r => r.weekId !== weekId);
+    newHistory.push(updated);
+    setHistory(newHistory);
+    saveHistory(newHistory);
+  };
+
+  const toggleLimit = (symbol: string) => {
+    const updated = {
+      ...currentWeek,
+      limits: currentWeek.limits.map(l =>
+        l.symbol === symbol ? { ...l, filled: !l.filled } : l
+      ),
+    };
+    const newHistory = history.filter(r => r.weekId !== weekId);
+    newHistory.push(updated);
+    setHistory(newHistory);
+    saveHistory(newHistory);
+  };
+
+  // Calculate score
+  const recentWeeks = history.slice(-4);
+  const totalDca = recentWeeks.length;
+  const doneDca = recentWeeks.filter(w => w.dcaExecuted).length;
+  const totalLimits = recentWeeks.reduce((s, w) => s + w.limits.length, 0);
+  const doneLimits = recentWeeks.reduce((s, w) => s + w.limits.filter(l => l.filled).length, 0);
+  const totalActions = totalDca + totalLimits;
+  const doneActions = doneDca + doneLimits;
+  const score = totalActions > 0 ? Math.round((doneActions / totalActions) * 100) : 0;
+
+  const sk = lang === 'sk';
+
+  return (
+    <div className="space-y-4">
+      <h1 className="text-xl font-bold text-foreground">
+        {sk ? 'Exekúcia' : 'Execution'}
+      </h1>
+
+      {/* Score Card */}
+      <div className="glass-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-3">
+            <Target className="w-6 h-6 text-primary" />
+            <span className="font-bold text-foreground text-lg">
+              {sk ? 'Execution Score' : 'Execution Score'}
+            </span>
+          </div>
+          <span className={`text-3xl font-extrabold ${
+            score >= 75 ? 'text-gain' : score >= 50 ? 'text-warning' : 'text-loss'
+          }`}>
+            {score}%
+          </span>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="bg-secondary/50 rounded-lg p-3 text-center">
+            <p className="text-xs text-muted-foreground mb-1">DCA</p>
+            <p className="text-lg font-bold text-foreground">{doneDca}/{totalDca}</p>
+            {doneDca === totalDca && totalDca > 0 ? (
+              <CheckCircle className="w-4 h-4 text-gain mx-auto mt-1" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-warning mx-auto mt-1" />
+            )}
+          </div>
+          <div className="bg-secondary/50 rounded-lg p-3 text-center">
+            <p className="text-xs text-muted-foreground mb-1">Limit</p>
+            <p className="text-lg font-bold text-foreground">{doneLimits}/{totalLimits}</p>
+            {totalLimits > 0 && doneLimits / totalLimits >= 0.5 ? (
+              <CheckCircle className="w-4 h-4 text-gain mx-auto mt-1" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 text-warning mx-auto mt-1" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* This Week */}
+      <div className="glass-card p-4 space-y-3">
+        <h2 className="font-semibold text-foreground">
+          {sk ? `Tento týždeň (${weekId})` : `This Week (${weekId})`}
+        </h2>
+
+        {/* DCA toggle */}
+        <button
+          onClick={toggleDca}
+          className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+            currentWeek.dcaExecuted
+              ? 'bg-gain/10 border border-gain/30'
+              : 'bg-secondary/50 border border-border'
+          }`}
+        >
+          <span className="font-medium text-foreground">
+            {sk ? 'DCA vykonaný' : 'DCA Executed'}
+          </span>
+          {currentWeek.dcaExecuted ? (
+            <CheckCircle className="w-5 h-5 text-gain" />
+          ) : (
+            <XCircle className="w-5 h-5 text-muted-foreground" />
+          )}
+        </button>
+
+        {/* Limit toggles */}
+        {currentWeek.limits.map(limit => (
+          <button
+            key={limit.symbol}
+            onClick={() => toggleLimit(limit.symbol)}
+            className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
+              limit.filled
+                ? 'bg-gain/10 border border-gain/30'
+                : 'bg-secondary/50 border border-border'
+            }`}
+          >
+            <div className="text-left">
+              <span className="font-medium text-foreground">{limit.symbol} Limit</span>
+              {limit.limitPrice > 0 && (
+                <p className="text-xs text-muted-foreground">
+                  ${limit.limitPrice >= 1000 ? limit.limitPrice.toFixed(0) : limit.limitPrice.toFixed(2)}
+                </p>
+              )}
+            </div>
+            {limit.filled ? (
+              <CheckCircle className="w-5 h-5 text-gain" />
+            ) : (
+              <XCircle className="w-5 h-5 text-muted-foreground" />
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Missed Opportunities */}
+      <MissedOpportunities history={history} prices={prices} lang={lang} />
+    </div>
+  );
+}
+
+function MissedOpportunities({ history, prices, lang }: {
+  history: WeekRecord[];
+  prices?: Record<string, { usd: number }>;
+  lang: Lang;
+}) {
+  const sk = lang === 'sk';
+  const missed: { symbol: string; weekId: string; limitPrice: number; currentPrice: number; gainPct: number }[] = [];
+
+  for (const week of history.slice(-4)) {
+    for (const limit of week.limits) {
+      if (limit.filled) continue;
+      const token = TOKENS.find(t => t.symbol === limit.symbol);
+      if (!token) continue;
+      const currentPrice = prices?.[token.coingeckoId]?.usd ?? 0;
+      if (currentPrice > 0 && limit.limitPrice > 0 && currentPrice > limit.limitPrice) {
+        const gainPct = ((currentPrice - limit.limitPrice) / limit.limitPrice) * 100;
+        if (gainPct > 1) {
+          missed.push({
+            symbol: limit.symbol,
+            weekId: week.weekId,
+            limitPrice: limit.limitPrice,
+            currentPrice,
+            gainPct,
+          });
+        }
+      }
+    }
+  }
+
+  if (missed.length === 0) return null;
+
+  // Estimate missed gain based on budget
+  const budget = Number(localStorage.getItem('dca-budget') || '100');
+
+  return (
+    <div className="glass-card p-4 space-y-3">
+      <h2 className="font-semibold text-foreground flex items-center gap-2">
+        <AlertTriangle className="w-5 h-5 text-warning" />
+        {sk ? 'Zmeškané príležitosti' : 'Missed Opportunities'}
+      </h2>
+
+      {missed.map((m, i) => {
+        const tokenConfig = TOKENS.find(t => t.symbol === m.symbol);
+        const allocationPct = tokenConfig?.allocation ?? 0;
+        const limitUsd = budget * allocationPct * 0.4;
+        const missedGainUsd = limitUsd * (m.gainPct / 100);
+
+        return (
+          <div key={i} className="bg-loss/5 border border-loss/20 rounded-lg p-3">
+            <div className="flex items-center justify-between">
+              <span className="font-medium text-foreground">{m.symbol}</span>
+              <span className="text-xs text-muted-foreground">{m.weekId}</span>
+            </div>
+            <p className="text-sm text-muted-foreground mt-1">
+              {sk
+                ? `Limit nevyplnený → cena +${m.gainPct.toFixed(1)}%`
+                : `Limit unfilled → price +${m.gainPct.toFixed(1)}%`
+              }
+            </p>
+            <p className="text-sm font-semibold text-loss mt-0.5">
+              {sk
+                ? `Zmeškaný zisk: ~$${missedGainUsd.toFixed(0)}`
+                : `Missed gain: ~$${missedGainUsd.toFixed(0)}`
+              }
+            </p>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
