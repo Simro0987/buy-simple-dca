@@ -36,6 +36,8 @@ const translations = {
     setLimitAt: 'Nastav limit order na',
     buyNow: 'Kúp teraz za market cenu',
     usdAmount: 'USD suma',
+    wallets: 'Peňaženky',
+    staking: 'Staking & Výnosy',
   },
   en: {
     overview: 'Overview',
