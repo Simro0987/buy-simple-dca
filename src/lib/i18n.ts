@@ -137,6 +137,15 @@ const translations = {
     testAlertError: 'Error sending alert',
     saved: 'Saved',
     telegramHint: 'Get your Chat ID from @userinfobot on Telegram',
+    alertDcaReminder: 'DCA Reminder (weekly)',
+    alertLimitProximity: 'Limit Proximity Alert',
+    alertHighImpactNews: 'High Impact News',
+    alertDcaDesc: 'Weekly buy breakdown for each token',
+    alertLimitDesc: 'When price is within 2–3% of your limit',
+    alertNewsDesc: 'Only major events (ETF, regulation)',
+    sendDcaTest: 'Test DCA',
+    sendPriceTest: 'Test Limit',
+    alertSettings: 'Alert Types',
   },
 } as const;
 
