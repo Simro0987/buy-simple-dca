@@ -26,6 +26,7 @@ const Index = () => {
       <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
         {tab === 'overview' && <OverviewPage lang={lang} />}
         {tab === 'dca' && <DCAPage lang={lang} />}
+        {tab === 'smart' && <SmartAllocPage lang={lang} />}
         {tab === 'action' && <ActionPage lang={lang} />}
         {tab === 'checklist' && <WeeklyChecklist lang={lang} prices={prices} />}
         {tab === 'execution' && <ExecutionTracker lang={lang} prices={prices} />}
