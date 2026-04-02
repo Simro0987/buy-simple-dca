@@ -145,11 +145,12 @@ function computeEthActions(total: number, price: number, holdings: HoldingInput,
   if (targetWsteth > 0) {
     const wstUsd = targetWsteth * price;
     if (wstUsd >= MIN_ACTION_USD) {
+      const lidoApy = apys?.lido?.toFixed(1) ?? '~3.4';
       actions.push({
         type: 'hold',
         label: sk
-          ? `Drž ~${targetWsteth.toFixed(4)} ETH ako wstETH`
-          : `Hold ~${targetWsteth.toFixed(4)} ETH as wstETH`,
+          ? `Drž ~${targetWsteth.toFixed(4)} ETH ako wstETH · ${lidoApy}% APY`
+          : `Hold ~${targetWsteth.toFixed(4)} ETH as wstETH · ${lidoApy}% APY`,
         amount: targetWsteth,
         symbol: 'wstETH',
         priority: 2,
