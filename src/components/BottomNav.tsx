@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, PieChart, Settings, Wallet, TrendingUp } from 'lucide-react';
+import { BarChart3, Calculator, Zap, PieChart, Settings, Wallet, TrendingUp, Sparkles } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'overview' | 'dca' | 'action' | 'portfolio' | 'wallets' | 'staking' | 'settings';
+export type TabId = 'overview' | 'dca' | 'action' | 'smart' | 'portfolio' | 'wallets' | 'staking' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
