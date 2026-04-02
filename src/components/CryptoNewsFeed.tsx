@@ -70,8 +70,13 @@ export function CryptoNewsFeed({ lang }: Props) {
   const { data: news, isLoading, isError } = useCryptoNews(undefined, lang);
   const [expanded, setExpanded] = useState(true);
   const [filter, setFilter] = useState<string | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
-  const filtered = filter ? news?.filter(n => n.tokens.includes(filter)) : news;
+  const filtered = news?.filter(n => {
+    if (filter && !n.tokens.includes(filter)) return false;
+    if (sourceFilter && n.source !== sourceFilter) return false;
+    return true;
+  });
 
   // Count items per token for badge counts
   const tokenCounts = news ? {
