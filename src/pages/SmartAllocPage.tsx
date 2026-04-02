@@ -65,6 +65,7 @@ export function SmartAllocPage({ lang }: Props) {
   const sk = lang === 'sk';
   const [holdings, setHoldings] = useState<HoldingInput>(loadHoldings);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [mode, setMode] = useState<'exact' | 'smart'>('exact');
   const { data: prices } = usePrices();
   const { data: apys, isFetching: apyLoading } = useDefiApys();
 
