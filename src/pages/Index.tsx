@@ -5,6 +5,8 @@ import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
 import { ActionPage } from '@/pages/ActionPage';
 import { PortfolioPage } from '@/pages/PortfolioPage';
+import { WalletsPage } from '@/pages/WalletsPage';
+import { StakingPage } from '@/pages/StakingPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 
 const Index = () => {
@@ -17,6 +19,8 @@ const Index = () => {
         {tab === 'overview' && <OverviewPage lang={lang} />}
         {tab === 'dca' && <DCAPage lang={lang} />}
         {tab === 'action' && <ActionPage lang={lang} />}
+        {tab === 'wallets' && <WalletsPage lang={lang} />}
+        {tab === 'staking' && <StakingPage lang={lang} />}
         {tab === 'portfolio' && <PortfolioPage lang={lang} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} />}
       </main>
