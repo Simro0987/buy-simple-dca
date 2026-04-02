@@ -309,11 +309,12 @@ function computeHypeActions(total: number, price: number, holdings: HoldingInput
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD) {
+      const hypeApy = apys?.hypeStaking?.toFixed(1) ?? '~12.0';
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(2)} HYPE`
-          : `Stake ${needStake.toFixed(2)} HYPE`,
+          ? `Stake ${needStake.toFixed(2)} HYPE · ${hypeApy}% APY`
+          : `Stake ${needStake.toFixed(2)} HYPE · ${hypeApy}% APY`,
         amount: needStake,
         symbol: 'HYPE',
         protocol: 'Native',
