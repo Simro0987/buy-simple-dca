@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -23,13 +25,48 @@ Deno.serve(async (req) => {
     const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
     if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
 
-    const { chatId, budget } = await req.json();
+    let chatId: string | undefined;
+    let weeklyBudget = 100;
+
+    // Try reading body (manual trigger from UI)
+    try {
+      const body = await req.json();
+      chatId = body.chatId;
+      if (body.budget) weeklyBudget = body.budget;
+    } catch {
+      // No body — cron trigger, read from DB
+    }
+
+    // If no chatId from body, read from telegram_config table
     if (!chatId) {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
+
+      const { data: config, error: cfgErr } = await supabase
+        .from('telegram_config')
+        .select('chat_id, weekly_budget, dca_reminder_enabled')
+        .eq('id', 1)
+        .single();
+
+      if (cfgErr || !config) {
+        return new Response(JSON.stringify({ success: false, error: 'No config found' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      if (!config.dca_reminder_enabled) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'DCA reminder disabled' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      chatId = config.chat_id;
+      weeklyBudget = Number(config.weekly_budget) || 100;
+    }
+
+    if (!chatId || chatId.trim() === '') {
       return new Response(JSON.stringify({ success: false, error: 'chatId is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
-
-    const weeklyBudget = budget || 100;
 
     // Fetch live prices
     const ids = TOKENS.map(t => t.coingeckoId).join(',');
