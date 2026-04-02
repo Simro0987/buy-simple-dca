@@ -29,10 +29,60 @@ export interface PriceData {
 export async function fetchPrices(): Promise<PriceData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
   const res = await fetch(
-    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`
+    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`
   );
   if (!res.ok) throw new Error('Failed to fetch prices');
   return res.json();
+}
+
+export interface AthData {
+  [key: string]: {
+    ath: number;
+    ath_date: string;
+    ath_change_percentage: number;
+  };
+}
+
+export async function fetchAthData(): Promise<AthData> {
+  const ids = TOKENS.map(t => t.coingeckoId).join(',');
+  const res = await fetch(
+    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc`
+  );
+  if (!res.ok) throw new Error('Failed to fetch ATH data');
+  const coins: any[] = await res.json();
+  const result: AthData = {};
+  for (const coin of coins) {
+    result[coin.id] = {
+      ath: coin.ath,
+      ath_date: coin.ath_date,
+      ath_change_percentage: coin.ath_change_percentage,
+    };
+  }
+  return result;
+}
+
+export async function fetchAltSeasonIndex(): Promise<{ value: number; label: string }> {
+  try {
+    // Alt season heuristic: if >75% of top alts outperform BTC over 90 days = alt season
+    const res = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true'
+    );
+    const data = await res.json();
+    const btcChange = data.bitcoin?.usd_24h_change ?? 0;
+    const ethChange = data.ethereum?.usd_24h_change ?? 0;
+    const solChange = data.solana?.usd_24h_change ?? 0;
+    const altAvg = (ethChange + solChange) / 2;
+    const diff = altAvg - btcChange;
+    // Simple scoring: positive diff = alt season leaning
+    const score = Math.max(0, Math.min(100, 50 + diff * 5));
+    let label: string;
+    if (score >= 75) label = 'Alt Season';
+    else if (score >= 50) label = 'Neutral';
+    else label = 'BTC Season';
+    return { value: Math.round(score), label };
+  } catch {
+    return { value: 50, label: 'Neutral' };
+  }
 }
 
 export async function fetchFearGreed(): Promise<{ value: number; classification: string }> {
