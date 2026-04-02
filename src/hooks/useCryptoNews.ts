@@ -58,12 +58,12 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
   }
 }
 
-export function useCryptoNews(currencies?: string) {
+export function useCryptoNews(currencies?: string, lang = 'sk') {
   const sentForDataRef = useRef<number>(0);
 
   const query = useQuery({
-    queryKey: ['crypto-news', currencies],
-    queryFn: () => fetchNews(currencies),
+    queryKey: ['crypto-news', currencies, lang],
+    queryFn: () => fetchNews(currencies, lang),
     staleTime: 2 * 60 * 1000,
     refetchInterval: 5 * 60 * 1000,
   });
