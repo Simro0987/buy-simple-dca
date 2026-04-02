@@ -16,7 +16,7 @@ export interface NewsItem {
 
 async function fetchNews(currencies = 'BTC,ETH,SOL,HYPE'): Promise<NewsItem[]> {
   const { data, error } = await supabase.functions.invoke('crypto-news', {
-    body: { currencies, filter: 'news' },
+    body: { currencies, kind: 'news' },
   });
 
   if (error) throw new Error(error.message);
