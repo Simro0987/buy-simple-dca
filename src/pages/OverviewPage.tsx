@@ -6,6 +6,7 @@ import { MarketBanner } from '@/components/MarketBanner';
 import { MarketCycleGauge } from '@/components/MarketCycleGauge';
 import { PortfolioHeatMap } from '@/components/PortfolioHeatMap';
 import { BtcAccumulationCard } from '@/components/BtcAccumulationCard';
+import { CryptoNewsFeed } from '@/components/CryptoNewsFeed';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
