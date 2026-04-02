@@ -100,9 +100,12 @@ export function StakingPage({ lang }: Props) {
                       {pos.protocol && (
                         <span className="text-[10px] text-muted-foreground">{pos.protocol}</span>
                       )}
-                      {pos.apy != null && (
-                        <span className="text-[10px] text-gain font-medium">{pos.apy}% APY</span>
-                      )}
+                      {(() => {
+                        const liveApy = getLiveApy(pos, apys);
+                        return liveApy != null ? (
+                          <span className="text-[10px] text-gain font-medium">{liveApy.toFixed(1)}% APY</span>
+                        ) : null;
+                      })()}
                     </div>
                     {yield_ && (
                       <p className="text-[10px] text-accent mt-1">→ {yield_}</p>
