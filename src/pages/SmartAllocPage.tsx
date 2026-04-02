@@ -199,7 +199,7 @@ export function SmartAllocPage({ lang }: Props) {
                 </div>
               </div>
             </CollapsibleContent>
-          </Collapsible>
+          </Collapsible>}
         </CardContent>
       </Card>
 
