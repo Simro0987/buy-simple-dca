@@ -40,6 +40,8 @@ function yieldLabel(dir: StakingPosition['yieldDirection'], lang: Lang) {
 }
 
 export function StakingPage({ lang }: Props) {
+  const { data: apys, isFetching: apyLoading } = useDefiApys();
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">
@@ -51,6 +53,14 @@ export function StakingPage({ lang }: Props) {
           ? 'Prehľad kde pracuje tvoj kapitál. Žiadne akcie – len informácie.'
           : 'Overview of where your capital works. No actions – information only.'}
       </p>
+      <div className="flex items-center gap-1.5 text-[10px]">
+        <Zap className="w-3 h-3 text-green-400" />
+        <span className={apyLoading ? 'text-muted-foreground animate-pulse' : 'text-green-400'}>
+          {apyLoading
+            ? (lang === 'sk' ? 'Načítavam APY...' : 'Loading APY...')
+            : (lang === 'sk' ? 'Live APY z DefiLlama' : 'Live APY from DefiLlama')}
+        </span>
+      </div>
 
       {STAKING_CONFIG.map(asset => (
         <div key={asset.symbol} className="glass-card p-4 space-y-3">
