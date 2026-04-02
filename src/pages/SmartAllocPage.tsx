@@ -205,12 +205,15 @@ export function SmartAllocPage({ lang }: Props) {
                 {sk ? 'Cieľová alokácia' : 'Target allocation'}
               </CollapsibleTrigger>
               <CollapsibleContent className="pt-2">
-                {STAKING_CONFIG.find(c => c.symbol === token.symbol)?.positions.map((pos, j) => (
-                  <div key={j} className="flex items-center justify-between text-[10px] text-muted-foreground py-0.5">
-                    <span>{pos.label}</span>
-                    <span>{pos.percentage}%{pos.apy ? ` · ${pos.apy}% APY` : ''}</span>
-                  </div>
-                ))}
+                {STAKING_CONFIG.find(c => c.symbol === token.symbol)?.positions.map((pos, j) => {
+                  const liveApy = getLiveApy(pos, apys);
+                  return (
+                    <div key={j} className="flex items-center justify-between text-[10px] text-muted-foreground py-0.5">
+                      <span>{pos.label}</span>
+                      <span>{pos.percentage}%{liveApy != null ? ` · ${liveApy.toFixed(1)}% APY` : ''}</span>
+                    </div>
+                  );
+                })}
               </CollapsibleContent>
             </Collapsible>
           </CardContent>
