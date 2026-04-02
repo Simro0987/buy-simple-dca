@@ -43,6 +43,8 @@ export interface AthData {
   };
 }
 
+export type SparklineData = Record<string, number[]>;
+
 export async function fetchAthData(): Promise<AthData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
   const res = await fetch(
@@ -57,6 +59,27 @@ export async function fetchAthData(): Promise<AthData> {
       ath_date: coin.ath_date,
       ath_change_percentage: coin.ath_change_percentage,
     };
+  }
+  return result;
+}
+
+export async function fetchSparklines(days = 7): Promise<SparklineData> {
+  const ids = TOKENS.map(t => t.coingeckoId).join(',');
+  const res = await fetch(
+    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=true&price_change_percentage=7d`
+  );
+  if (!res.ok) throw new Error('Failed to fetch sparklines');
+  const coins: any[] = await res.json();
+  const result: SparklineData = {};
+  for (const coin of coins) {
+    const prices: number[] = coin.sparkline_in_7d?.price || [];
+    // Downsample to ~48 points for clean rendering
+    if (prices.length > 48) {
+      const step = Math.floor(prices.length / 48);
+      result[coin.id] = prices.filter((_: number, i: number) => i % step === 0);
+    } else {
+      result[coin.id] = prices;
+    }
   }
   return result;
 }

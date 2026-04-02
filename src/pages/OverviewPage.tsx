@@ -7,7 +7,7 @@ import { MarketCycleGauge } from '@/components/MarketCycleGauge';
 import { PortfolioHeatMap } from '@/components/PortfolioHeatMap';
 import { BtcAccumulationCard } from '@/components/BtcAccumulationCard';
 import { CryptoNewsFeed } from '@/components/CryptoNewsFeed';
-import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
+import { usePrices, useFearGreed, useAthData, useAltSeason, useSparklines } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
 import { RefreshCw } from 'lucide-react';
@@ -18,6 +18,7 @@ export function OverviewPage({ lang }: Props) {
   const { data: prices, isLoading, dataUpdatedAt, refetch, isFetching } = usePrices();
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
+  const { data: sparklines } = useSparklines();
   const { data: altSeason } = useAltSeason();
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
 
@@ -65,7 +66,7 @@ export function OverviewPage({ lang }: Props) {
           ))}
         </div>
       ) : (
-        <TokenCardCarousel prices={prices} athData={athData} lang={lang} />
+        <TokenCardCarousel prices={prices} athData={athData} sparklines={sparklines} lang={lang} />
       )}
 
       {/* Portfolio Heat Map */}

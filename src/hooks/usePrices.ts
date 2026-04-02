@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { fetchPrices, fetchFearGreed, fetchAthData, fetchAltSeasonIndex } from '@/lib/crypto';
+import { fetchPrices, fetchFearGreed, fetchAthData, fetchAltSeasonIndex, fetchSparklines } from '@/lib/crypto';
 
 export function usePrices() {
   return useQuery({
@@ -32,6 +32,15 @@ export function useAltSeason() {
   return useQuery({
     queryKey: ['alt-season'],
     queryFn: fetchAltSeasonIndex,
+    refetchInterval: 300000,
+    staleTime: 120000,
+  });
+}
+
+export function useSparklines() {
+  return useQuery({
+    queryKey: ['sparklines'],
+    queryFn: () => fetchSparklines(7),
     refetchInterval: 300000,
     staleTime: 120000,
   });
