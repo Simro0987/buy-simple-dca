@@ -66,7 +66,7 @@ export function OverviewPage({ lang }: Props) {
           ))}
         </div>
       ) : (
-        <TokenCardCarousel prices={prices} athData={athData} lang={lang} />
+        <TokenCardCarousel prices={prices} athData={athData} sparklines={sparklines} lang={lang} />
       )}
 
       {/* Portfolio Heat Map */}
