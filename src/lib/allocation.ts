@@ -297,7 +297,7 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   return { symbol: 'SOL', name: 'Solana', color: '#9945FF', totalValueUsd: totalUsd, actions: actions.sort((a, b) => a.priority - b.priority).slice(0, 3) };
 }
 
-function computeHypeActions(total: number, price: number, holdings: HoldingInput, lang: Lang): TokenAllocationResult {
+function computeHypeActions(total: number, price: number, holdings: HoldingInput, lang: Lang, apys?: DefiApyData): TokenAllocationResult {
   const totalUsd = total * price;
   const actions: AllocationAction[] = [];
   const sk = lang === 'sk';
