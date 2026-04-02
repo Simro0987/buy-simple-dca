@@ -17,11 +17,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { currencies, filter } = await req.json();
+    const { currencies } = await req.json();
     const coinFilter = currencies || 'BTC,ETH,SOL,HYPE';
-    const kindFilter = filter || 'news';
 
-    const url = `https://cryptopanic.com/api/v1/posts/?auth_token=${apiKey}&currencies=${coinFilter}&kind=${kindFilter}&public=true`;
+    const url = `https://cryptopanic.com/api/free/v1/posts/?auth_token=${apiKey}&currencies=${coinFilter}&public=true`;
 
     const response = await fetch(url);
     if (!response.ok) {
