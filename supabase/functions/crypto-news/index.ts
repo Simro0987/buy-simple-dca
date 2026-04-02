@@ -33,10 +33,16 @@ interface RawNewsItem {
 function detectTokens(text: string): string[] {
   const upper = text.toUpperCase();
   const found = new Set<string>();
-  if (upper.includes('BTC') || upper.includes('BITCOIN')) found.add('BTC');
-  if (upper.includes('ETH') || upper.includes('ETHEREUM')) found.add('ETH');
-  if (upper.includes('SOL') || upper.includes('SOLANA')) found.add('SOL');
-  if (upper.includes('HYPE') || upper.includes('HYPERLIQUID')) found.add('HYPE');
+  if (/\bBTC\b/.test(upper) || /\bBITCOIN\b/.test(upper)) found.add('BTC');
+  if (/\bETH\b/.test(upper) || /\bETHEREUM\b/.test(upper) || /\bETHER\b/.test(upper)) found.add('ETH');
+  if (/\bSOL\b/.test(upper) || /\bSOLANA\b/.test(upper)) found.add('SOL');
+  if (/\bHYPE\b/.test(upper) || /\bHYPERLIQUID\b/.test(upper)) found.add('HYPE');
+  // Broader crypto terms that often relate to BTC
+  if (found.size === 0) {
+    if (/\bCRYPTO\b/.test(upper) || /\bDEFI\b/.test(upper) || /\bBLOCKCHAIN\b/.test(upper)) {
+      // Don't assign a specific token - leave empty for "All" filter
+    }
+  }
   return [...found];
 }
 
@@ -51,6 +57,14 @@ function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNe
     const link = block.match(/<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/link>/)?.[1] ||
                  block.match(/<guid[^>]*>(.*?)<\/guid>/)?.[1] || '';
     const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '';
+    const desc = block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1] || '';
+    const categories: string[] = [];
+    const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/category>/g;
+    let catMatch;
+    while ((catMatch = catRegex.exec(block)) !== null) categories.push(catMatch[1]);
+
+    // Detect tokens from title + description + categories
+    const fullText = [title, desc, ...categories].join(' ');
 
     if (title) {
       items.push({
@@ -59,7 +73,7 @@ function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNe
         url: link.trim(),
         source: sourceName,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
-        tokens: detectTokens(title),
+        tokens: detectTokens(fullText),
         votes: { positive: 0, negative: 0, important: 0 },
       });
       count++;
@@ -93,7 +107,8 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
         try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch {}
       }
       const votes = item.votes || {};
-      const tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
+      let tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
+      if (tokens.length === 0) tokens = detectTokens(item.title || '');
       return {
         id: item.id || Date.now(),
         title: item.title,
