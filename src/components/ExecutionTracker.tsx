@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { Lang } from '@/lib/i18n';
 import { TOKENS } from '@/lib/crypto';
-import { CheckCircle, AlertTriangle, XCircle, Target } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Target, TrendingUp } from 'lucide-react';
 
 interface WeekRecord {
   weekId: string; // e.g. "2026-W14"
