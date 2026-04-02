@@ -64,8 +64,8 @@ export function SmartAllocPage({ lang }: Props) {
 
   const results = useMemo(() => {
     if (!prices) return null;
-    return computeSmartAllocation(holdings, prices, lang);
-  }, [holdings, prices, lang]);
+    return computeSmartAllocation(holdings, prices, lang, apys ?? undefined);
+  }, [holdings, prices, lang, apys]);
 
   const hasAnyHolding = holdings.btc > 0 || holdings.eth > 0 || holdings.sol > 0 || holdings.hype > 0;
 
