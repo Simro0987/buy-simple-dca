@@ -30,8 +30,6 @@ interface RawNewsItem {
   votes: { positive: number; negative: number; important: number };
 }
 
-const TRACKED_TOKENS = ['BTC', 'ETH', 'SOL', 'HYPE', 'BITCOIN', 'ETHEREUM', 'SOLANA', 'HYPERLIQUID'];
-
 function detectTokens(text: string): string[] {
   const upper = text.toUpperCase();
   const found = new Set<string>();
@@ -40,6 +38,34 @@ function detectTokens(text: string): string[] {
   if (upper.includes('SOL') || upper.includes('SOLANA')) found.add('SOL');
   if (upper.includes('HYPE') || upper.includes('HYPERLIQUID')) found.add('HYPE');
   return [...found];
+}
+
+function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNewsItem[] {
+  const items: RawNewsItem[] = [];
+  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  let match;
+  let count = 0;
+  while ((match = itemRegex.exec(xml)) !== null && count < maxItems) {
+    const block = match[1];
+    const title = block.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/)?.[1] || '';
+    const link = block.match(/<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/link>/)?.[1] ||
+                 block.match(/<guid[^>]*>(.*?)<\/guid>/)?.[1] || '';
+    const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '';
+
+    if (title) {
+      items.push({
+        id: `${sourceName.toLowerCase().replace(/\s/g, '')}-${count}-${Date.now()}`,
+        title: title.trim(),
+        url: link.trim(),
+        source: sourceName,
+        publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
+        tokens: detectTokens(title),
+        votes: { positive: 0, negative: 0, important: 0 },
+      });
+      count++;
+    }
+  }
+  return items;
 }
 
 async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: string): Promise<RawNewsItem[]> {
@@ -59,7 +85,7 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
     if (!response?.ok) return [];
 
     const data = await response.json();
-    return (data.results || []).slice(0, 15).map((item: any) => {
+    return (data.results || []).slice(0, 12).map((item: any) => {
       const sourceName = item.source?.title || item.source?.domain || '';
       const itemUrl = item.original_url || item.url || '';
       let domainSource = sourceName;
@@ -84,46 +110,14 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
   }
 }
 
-async function fetchCryptoCompare(): Promise<RawNewsItem[]> {
+async function fetchRssFeed(feedUrl: string, sourceName: string, maxItems = 8): Promise<RawNewsItem[]> {
   try {
-    const url = 'https://min-api.cryptocompare.com/data/v2/news/?lang=EN&sortOrder=latest';
-    const resp = await fetch(url);
+    const resp = await fetch(feedUrl);
     if (!resp.ok) return [];
-    const data = await resp.json();
-    return (data.Data || []).slice(0, 10).map((item: any) => ({
-      id: `cc-${item.id}`,
-      title: item.title,
-      url: item.url || item.guid || '',
-      source: item.source_info?.name || item.source || 'CryptoCompare',
-      publishedAt: new Date((item.published_on || 0) * 1000).toISOString(),
-      tokens: detectTokens(item.title + ' ' + (item.categories || '')),
-      votes: { positive: 0, negative: 0, important: 0 },
-    }));
+    const xml = await resp.text();
+    return parseRssItems(xml, sourceName, maxItems);
   } catch (e) {
-    console.error('CryptoCompare error:', e);
-    return [];
-  }
-}
-
-async function fetchCoinGeckoNews(): Promise<RawNewsItem[]> {
-  try {
-    const url = 'https://api.coingecko.com/api/v3/news';
-    const resp = await fetch(url);
-    if (!resp.ok) return [];
-    const data = await resp.json();
-    const items = (data.data || data || []);
-    if (!Array.isArray(items)) return [];
-    return items.slice(0, 10).map((item: any, i: number) => ({
-      id: `cg-${item.id || i}`,
-      title: item.title || item.description || '',
-      url: item.url || '',
-      source: item.author || item.news_site || 'CoinGecko',
-      publishedAt: item.created_at || item.updated_at || new Date().toISOString(),
-      tokens: detectTokens(item.title || ''),
-      votes: { positive: 0, negative: 0, important: 0 },
-    }));
-  } catch (e) {
-    console.error('CoinGecko News error:', e);
+    console.error(`${sourceName} RSS error:`, e);
     return [];
   }
 }
@@ -141,17 +135,17 @@ Deno.serve(async (req) => {
     const apiKey = Deno.env.get('CRYPTOPANIC_API_KEY');
 
     // Fetch from all sources in parallel
-    const [cpItems, ccItems, cgItems] = await Promise.all([
+    const [cpItems, ctItems, cdItems] = await Promise.all([
       apiKey ? fetchCryptoPanic(apiKey, coinFilter, kindFilter) : Promise.resolve([]),
-      fetchCryptoCompare(),
-      fetchCoinGeckoNews(),
+      fetchRssFeed('https://cointelegraph.com/rss', 'CoinTelegraph', 8),
+      fetchRssFeed('https://www.coindesk.com/arc/outboundfeeds/rss/', 'CoinDesk', 8),
     ]);
 
     // Merge and deduplicate by similar title
-    const allItems = [...cpItems, ...ccItems, ...cgItems];
+    const allItems = [...cpItems, ...ctItems, ...cdItems];
     const seen = new Set<string>();
     const unique = allItems.filter(item => {
-      const key = item.title.toLowerCase().substring(0, 50);
+      const key = item.title.toLowerCase().substring(0, 40);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
