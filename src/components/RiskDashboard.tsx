@@ -85,7 +85,7 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
                   </div>
                   <div>
                     <span className="font-bold text-foreground">{token.symbol}</span>
-                    <p className="text-xs text-muted-foreground">${formatPrice(price)}</p>
+                    <p className="text-xs text-muted-foreground">{formatPrice(price)}</p>
                   </div>
                 </div>
                 <span className={`text-sm font-medium ${change24h >= 0 ? 'text-gain' : 'text-loss'}`}>
@@ -128,7 +128,7 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
                 </div>
                 <div className="bg-secondary/50 rounded-lg p-2">
                   <p className="text-[9px] text-muted-foreground">{sk ? 'ATH cena' : 'ATH Price'}</p>
-                  <p className="text-xs font-bold text-foreground">${formatPrice(athPrice)}</p>
+                  <p className="text-xs font-bold text-foreground">{formatPrice(athPrice)}</p>
                 </div>
               </div>
             </div>
