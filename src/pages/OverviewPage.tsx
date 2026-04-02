@@ -7,6 +7,8 @@ import { MarketCycleGauge } from '@/components/MarketCycleGauge';
 import { PortfolioHeatMap } from '@/components/PortfolioHeatMap';
 import { BtcAccumulationCard } from '@/components/BtcAccumulationCard';
 import { CryptoNewsFeed } from '@/components/CryptoNewsFeed';
+import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
+import { RebalanceCard } from '@/components/RebalanceCard';
 import { usePrices, useFearGreed, useAthData, useAltSeason, useSparklines } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
@@ -68,6 +70,12 @@ export function OverviewPage({ lang }: Props) {
       ) : (
         <TokenCardCarousel prices={prices} athData={athData} sparklines={sparklines} lang={lang} />
       )}
+
+      {/* Portfolio History Chart */}
+      <PortfolioHistoryChart lang={lang} prices={prices} />
+
+      {/* Rebalancing Recommendations */}
+      <RebalanceCard lang={lang} prices={prices} />
 
       {/* Portfolio Heat Map */}
       <PortfolioHeatMap prices={prices} lang={lang} />
