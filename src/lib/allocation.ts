@@ -219,11 +219,12 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD && GAS_COSTS.sol / stakeUsd <= MAX_FEE_RATIO) {
+      const jitoApy = apys?.jito?.toFixed(1) ?? '~7.5';
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(2)} SOL cez Jito`
-          : `Stake ${needStake.toFixed(2)} SOL via Jito`,
+          ? `Stake ${needStake.toFixed(2)} SOL cez Jito · ${jitoApy}% APY`
+          : `Stake ${needStake.toFixed(2)} SOL via Jito · ${jitoApy}% APY`,
         amount: needStake,
         symbol: 'SOL',
         protocol: 'Jito',
