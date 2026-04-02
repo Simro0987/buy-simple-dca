@@ -45,7 +45,18 @@ function actionColor(type: AllocationAction['type']) {
     case 'stake': return 'text-green-400';
     case 'lend': return 'text-yellow-400';
     case 'skip': return 'text-muted-foreground';
-  }
+}
+
+function getLiveApy(pos: { label: string; protocol?: string; apy?: number }, apys?: import('@/hooks/useDefiApys').DefiApyData | null): number | null {
+  if (!apys) return pos.apy ?? null;
+  if (pos.protocol === 'Rocket Pool') return apys.rocketPool;
+  if (pos.label.includes('wstETH') && pos.type !== 'lending') return apys.lido;
+  if (pos.protocol === 'Aave V3') return apys.aaveEth;
+  if (pos.protocol === 'Jito') return apys.jito;
+  if (pos.protocol === 'Kamino') return apys.kaminoSol;
+  if (pos.label === 'Native staking') return apys.hypeStaking;
+  return pos.apy ?? null;
+}
 }
 
 export function SmartAllocPage({ lang }: Props) {
