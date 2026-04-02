@@ -105,9 +105,9 @@ export function WeeklyChecklist({ lang, prices }: Props) {
         </div>
 
         {results.map(r => (
-          <div key={r.symbol} className="bg-secondary/30 rounded-lg p-2.5 flex items-center justify-between">
+          <div key={r.token.symbol} className="bg-secondary/30 rounded-lg p-2.5 flex items-center justify-between">
             <div>
-              <span className="font-medium text-foreground text-sm">{r.symbol}</span>
+              <span className="font-medium text-foreground text-sm">{r.token.symbol}</span>
               <span className="text-xs text-muted-foreground ml-2">
                 {formatUsd(r.totalUsd)}
               </span>
