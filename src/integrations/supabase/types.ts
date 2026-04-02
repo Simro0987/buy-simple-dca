@@ -14,7 +14,36 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      telegram_config: {
+        Row: {
+          chat_id: string
+          dca_reminder_enabled: boolean
+          id: number
+          limit_alert_enabled: boolean
+          news_alert_enabled: boolean
+          updated_at: string
+          weekly_budget: number
+        }
+        Insert: {
+          chat_id?: string
+          dca_reminder_enabled?: boolean
+          id: number
+          limit_alert_enabled?: boolean
+          news_alert_enabled?: boolean
+          updated_at?: string
+          weekly_budget?: number
+        }
+        Update: {
+          chat_id?: string
+          dca_reminder_enabled?: boolean
+          id?: number
+          limit_alert_enabled?: boolean
+          news_alert_enabled?: boolean
+          updated_at?: string
+          weekly_budget?: number
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
