@@ -53,6 +53,9 @@ export function OverviewPage({ lang }: Props) {
         <MarketBanner fearGreedValue={fearGreed.value} lang={lang} />
       )}
 
+      {/* Market Cycle Score */}
+      {cycleResult && <MarketCycleGauge result={cycleResult} lang={lang} />}
+
       {/* Swipeable Token Cards */}
       {isLoading ? (
         <div className="space-y-3">
