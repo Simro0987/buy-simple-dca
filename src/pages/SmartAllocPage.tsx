@@ -1,14 +1,16 @@
 import { useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { ChevronDown, Shield, TrendingUp, Landmark, Ban, Sparkles, Zap } from 'lucide-react';
+import { ChevronDown, Shield, TrendingUp, Landmark, Ban, Sparkles, Zap, Calculator } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { useDefiApys } from '@/hooks/useDefiApys';
 import { computeSmartAllocation, HoldingInput, AllocationAction } from '@/lib/allocation';
 import { formatUsd } from '@/lib/crypto';
 import { STAKING_CONFIG } from '@/lib/wallets';
+import { ExactBreakdown } from '@/components/ExactBreakdown';
 
 interface Props {
   lang: Lang;
