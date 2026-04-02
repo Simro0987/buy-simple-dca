@@ -74,6 +74,8 @@ const translations = {
     setLimitAt: 'Set limit order at',
     buyNow: 'Buy now at market price',
     usdAmount: 'USD amount',
+    wallets: 'Wallets',
+    staking: 'Staking & Yields',
   },
 } as const;
 
