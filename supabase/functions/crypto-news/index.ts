@@ -57,6 +57,14 @@ function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNe
     const link = block.match(/<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/link>/)?.[1] ||
                  block.match(/<guid[^>]*>(.*?)<\/guid>/)?.[1] || '';
     const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '';
+    const desc = block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1] || '';
+    const categories: string[] = [];
+    const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/category>/g;
+    let catMatch;
+    while ((catMatch = catRegex.exec(block)) !== null) categories.push(catMatch[1]);
+
+    // Detect tokens from title + description + categories
+    const fullText = [title, desc, ...categories].join(' ');
 
     if (title) {
       items.push({
@@ -65,7 +73,7 @@ function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNe
         url: link.trim(),
         source: sourceName,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
-        tokens: detectTokens(title),
+        tokens: detectTokens(fullText),
         votes: { positive: 0, negative: 0, important: 0 },
       });
       count++;
