@@ -53,6 +53,7 @@ export function SmartAllocPage({ lang }: Props) {
   const [holdings, setHoldings] = useState<HoldingInput>(loadHoldings);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const { data: prices } = usePrices();
+  const { data: apys, isFetching: apyLoading } = useDefiApys();
 
   const updateField = (field: keyof HoldingInput, val: string) => {
     const num = parseFloat(val) || 0;
