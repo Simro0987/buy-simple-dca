@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, PieChart, Settings, Wallet, TrendingUp } from 'lucide-react';
+import { BarChart3, Calculator, Zap, PieChart, Settings, Wallet, TrendingUp, Sparkles } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'overview' | 'dca' | 'action' | 'portfolio' | 'wallets' | 'staking' | 'settings';
+export type TabId = 'overview' | 'dca' | 'action' | 'smart' | 'portfolio' | 'wallets' | 'staking' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -11,6 +11,7 @@ interface BottomNavProps {
 
 const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart3 }[] = [
   { id: 'overview', labelSk: 'Prehľad', labelEn: 'Overview', icon: BarChart3 },
+  { id: 'smart', labelSk: 'Smart', labelEn: 'Smart', icon: Sparkles },
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
   { id: 'action', labelSk: 'Akcia', labelEn: 'Action', icon: Zap },
   { id: 'wallets', labelSk: 'Peňaženky', labelEn: 'Wallets', icon: Wallet },
