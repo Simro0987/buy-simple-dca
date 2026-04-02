@@ -1,8 +1,23 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
 import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const syncConfigToDb = async (chatId: string, budget: number, alerts: { dcaReminder: boolean; limitProximity: boolean; highImpactNews: boolean }) => {
+  try {
+    await supabase.from('telegram_config').update({
+      chat_id: chatId,
+      weekly_budget: budget,
+      dca_reminder_enabled: alerts.dcaReminder,
+      limit_alert_enabled: alerts.limitProximity,
+      news_alert_enabled: alerts.highImpactNews,
+      updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+  } catch (e) {
+    console.error('Failed to sync config to DB:', e);
+  }
+};
 
 interface Props {
   lang: Lang;
