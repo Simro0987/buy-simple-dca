@@ -89,14 +89,37 @@ export function SmartAllocPage({ lang }: Props) {
       <div className="flex items-center gap-2">
         <Sparkles className="w-5 h-5 text-primary" />
         <h1 className="text-xl font-bold text-foreground">
-          {sk ? 'Čo spraviť teraz' : 'What to do now'}
+          {sk ? (mode === 'exact' ? 'Presný rozpis' : 'Čo spraviť teraz') : (mode === 'exact' ? 'Exact Breakdown' : 'What to do now')}
         </h1>
       </div>
       <p className="text-xs text-muted-foreground">
-        {sk
-          ? 'Zadaj držané množstvá a dostaneš smart odporúčania. Min. akcia: $200.'
-          : 'Enter your holdings to get smart recommendations. Min. action: $200.'}
+        {mode === 'exact'
+          ? (sk ? 'Zadaj držané množstvá a uvidíš presné rozdelenie podľa alokácie.' : 'Enter your holdings to see exact allocation breakdown.')
+          : (sk ? 'Smart odporúčania s ohľadom na poplatky a efektivitu. Min. akcia: $200.' : 'Smart recommendations considering fees and efficiency. Min. action: $200.')}
       </p>
+
+      {/* Mode toggle */}
+      <div className="flex items-center justify-between bg-secondary/40 rounded-lg px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Calculator className="w-3.5 h-3.5 text-muted-foreground" />
+          <span className="text-xs text-foreground">
+            {sk ? 'Presný rozpis' : 'Exact breakdown'}
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <Switch
+            checked={mode === 'smart'}
+            onCheckedChange={(checked) => setMode(checked ? 'smart' : 'exact')}
+          />
+          <div className="flex items-center gap-1">
+            <Sparkles className="w-3.5 h-3.5 text-muted-foreground" />
+            <span className="text-xs text-foreground">
+              {sk ? 'Smart kroky' : 'Smart steps'}
+            </span>
+          </div>
+        </div>
+      </div>
+
       <div className="flex items-center gap-1.5 text-[10px]">
         <Zap className="w-3 h-3 text-green-400" />
         <span className={apyLoading ? 'text-muted-foreground animate-pulse' : 'text-green-400'}>
