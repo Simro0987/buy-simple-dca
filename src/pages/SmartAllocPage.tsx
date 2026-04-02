@@ -154,8 +154,8 @@ export function SmartAllocPage({ lang }: Props) {
             ))}
           </div>
 
-          {/* Advanced: staked/lent amounts */}
-          <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
+          {/* Advanced: staked/lent amounts (smart mode only) */}
+          {mode === 'smart' && <Collapsible open={showAdvanced} onOpenChange={setShowAdvanced}>
             <CollapsibleTrigger className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors">
               <ChevronDown className={`w-3 h-3 transition-transform ${showAdvanced ? 'rotate-180' : ''}`} />
               {sk ? 'Už staknuté / požičané' : 'Already staked / lent'}
