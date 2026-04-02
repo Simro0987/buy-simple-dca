@@ -3,42 +3,26 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const LOVABLE_AI_URL = 'https://lovable-ai.lovable.dev/chat';
-
-async function translateTitles(titles: string[], lang: string, lovableApiKey: string): Promise<string[]> {
-  if (lang === 'en') return titles;
+async function translateTitles(titles: string[], lang: string): Promise<string[]> {
+  if (lang === 'en' || titles.length === 0) return titles;
 
   try {
-    const prompt = `Translate these crypto news headlines to Slovak. Return ONLY a JSON array of translated strings, nothing else. Keep crypto terms (BTC, ETH, Bitcoin, etc.) in English. Keep it concise.\n\n${JSON.stringify(titles)}`;
-
-    const response = await fetch(LOVABLE_AI_URL, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      console.error('Translation API failed:', response.status);
-      return titles;
-    }
-
-    const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || '';
-    // Extract JSON array from response
-    const match = content.match(/\[[\s\S]*\]/);
-    if (match) {
-      const translated = JSON.parse(match[0]);
-      if (Array.isArray(translated) && translated.length === titles.length) {
-        return translated;
-      }
-    }
-    return titles;
+    // Use Google Translate free endpoint
+    const translated = await Promise.all(
+      titles.map(async (title) => {
+        try {
+          const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=${lang}&dt=t&q=${encodeURIComponent(title)}`;
+          const resp = await fetch(url);
+          if (!resp.ok) return title;
+          const data = await resp.json();
+          // Response format: [[["translated text","original text",null,null,10]],null,"en"]
+          return data?.[0]?.map((s: any) => s[0]).join('') || title;
+        } catch {
+          return title;
+        }
+      })
+    );
+    return translated;
   } catch (e) {
     console.error('Translation error:', e);
     return titles;
@@ -75,12 +59,9 @@ Deno.serve(async (req) => {
     const data = await response.json();
     const items = (data.results || []).slice(0, 20);
 
-    // Translate titles if not English
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
+    // Translate titles
     const originalTitles = items.map((item: any) => item.title);
-    const translatedTitles = (lovableApiKey && targetLang !== 'en')
-      ? await translateTitles(originalTitles, targetLang, lovableApiKey)
-      : originalTitles;
+    const translatedTitles = await translateTitles(originalTitles, targetLang);
 
     const results = items.map((item: any, index: number) => {
       const sourceName = item.source?.title || item.source?.domain || '';
