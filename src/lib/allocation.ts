@@ -85,13 +85,13 @@ export function computeSmartAllocation(
   });
 
   // ETH
-  results.push(computeEthActions(amounts.eth, priceMap.eth, holdings, lang));
+  results.push(computeEthActions(amounts.eth, priceMap.eth, holdings, lang, apys));
 
   // SOL
-  results.push(computeSolActions(amounts.sol, priceMap.sol, holdings, lang));
+  results.push(computeSolActions(amounts.sol, priceMap.sol, holdings, lang, apys));
 
   // HYPE
-  results.push(computeHypeActions(amounts.hype, priceMap.hype, holdings, lang));
+  results.push(computeHypeActions(amounts.hype, priceMap.hype, holdings, lang, apys));
 
   return results;
 }
