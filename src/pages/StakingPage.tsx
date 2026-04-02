@@ -1,8 +1,20 @@
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG, StakingPosition } from '@/lib/wallets';
-import { Lock, TrendingUp, Landmark } from 'lucide-react';
+import { Lock, TrendingUp, Landmark, Zap } from 'lucide-react';
+import { useDefiApys, DefiApyData } from '@/hooks/useDefiApys';
 
 interface Props { lang: Lang; }
+
+function getLiveApy(pos: StakingPosition, apys?: DefiApyData | null): number | null {
+  if (!apys) return pos.apy ?? null;
+  if (pos.protocol === 'Rocket Pool') return apys.rocketPool;
+  if (pos.label.includes('wstETH') && pos.type !== 'lending') return apys.lido;
+  if (pos.protocol === 'Aave V3') return apys.aaveEth;
+  if (pos.protocol === 'Jito') return apys.jito;
+  if (pos.protocol === 'Kamino') return apys.kaminoSol;
+  if (pos.label === 'Native staking') return apys.hypeStaking;
+  return pos.apy ?? null;
+}
 
 function typeIcon(type: StakingPosition['type']) {
   if (type === 'staking') return <TrendingUp className="w-3.5 h-3.5 text-gain" />;
