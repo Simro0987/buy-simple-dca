@@ -21,7 +21,7 @@ Deno.serve(async (req) => {
     const coinFilter = currencies || 'BTC,ETH,SOL,HYPE';
     const kindFilter = filter || 'news';
 
-    const url = `https://cryptopanic.com/api/v1/posts/?auth_token=${apiKey}&currencies=${coinFilter}&filter=${kindFilter}&public=true&kind=news`;
+    const url = `https://cryptopanic.com/api/v1/posts/?auth_token=${apiKey}&currencies=${coinFilter}&kind=${kindFilter}&public=true`;
 
     const response = await fetch(url);
     if (!response.ok) {
