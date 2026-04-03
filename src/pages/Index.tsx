@@ -12,6 +12,7 @@ import { AnalysisPage } from '@/pages/AnalysisPage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
+import { usePriceAlerts } from '@/hooks/usePriceAlerts';
 
 const Index = () => {
   const [tab, setTab] = useState<TabId>('overview');
@@ -21,6 +22,7 @@ const Index = () => {
   const { data: athData } = useAthData();
   const { data: altSeason } = useAltSeason();
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
+  usePriceAlerts(prices, lang);
 
   return (
     <div className="min-h-screen bg-background">
