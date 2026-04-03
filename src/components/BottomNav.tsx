@@ -17,6 +17,7 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'checklist', labelSk: 'Checklist', labelEn: 'Checklist', icon: ClipboardList },
   { id: 'execution', labelSk: 'Skóre', labelEn: 'Score', icon: Target },
   { id: 'risk', labelSk: 'Riziko', labelEn: 'Risk', icon: Shield },
+  { id: 'analysis', labelSk: 'Analýza', labelEn: 'Analysis', icon: Activity },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
