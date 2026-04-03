@@ -53,6 +53,9 @@ export function OverviewPage({ lang }: Props) {
         </p>
       )}
 
+      {/* High Impact News Banner */}
+      <HighImpactNewsBanner lang={lang} />
+
       {/* Bull/Bear Banner */}
       {fearGreed && (
         <MarketBanner fearGreedValue={fearGreed.value} lang={lang} />
