@@ -8,6 +8,7 @@ import { DCAPage } from '@/pages/DCAPage';
 import { ActionPage } from '@/pages/ActionPage';
 import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { AnalysisPage } from '@/pages/AnalysisPage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
