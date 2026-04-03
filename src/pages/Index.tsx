@@ -8,6 +8,7 @@ import { DCAPage } from '@/pages/DCAPage';
 import { ActionPage } from '@/pages/ActionPage';
 import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { SettingsPage } from '@/pages/SettingsPage';
+import { AnalysisPage } from '@/pages/AnalysisPage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
@@ -31,6 +32,7 @@ const Index = () => {
         {tab === 'checklist' && <WeeklyChecklist lang={lang} prices={prices} />}
         {tab === 'execution' && <ExecutionTracker lang={lang} prices={prices} />}
         {tab === 'risk' && <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />}
+        {tab === 'analysis' && <AnalysisPage lang={lang} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} />}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} />
