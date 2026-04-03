@@ -32,6 +32,7 @@ const Index = () => {
         {tab === 'checklist' && <WeeklyChecklist lang={lang} prices={prices} />}
         {tab === 'execution' && <ExecutionTracker lang={lang} prices={prices} />}
         {tab === 'risk' && <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />}
+        {tab === 'analysis' && <AnalysisPage lang={lang} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} />}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} />
