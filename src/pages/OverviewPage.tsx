@@ -8,6 +8,7 @@ import { PortfolioHeatMap } from '@/components/PortfolioHeatMap';
 import { BtcAccumulationCard } from '@/components/BtcAccumulationCard';
 import { CryptoNewsFeed } from '@/components/CryptoNewsFeed';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
+import { HighImpactNewsBanner } from '@/components/HighImpactNewsBanner';
 import { RebalanceCard } from '@/components/RebalanceCard';
 import { usePrices, useFearGreed, useAthData, useAltSeason, useSparklines } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
@@ -51,6 +52,9 @@ export function OverviewPage({ lang }: Props) {
           {t('lastUpdate', lang)}: {new Date(dataUpdatedAt).toLocaleTimeString()}
         </p>
       )}
+
+      {/* High Impact News Banner */}
+      <HighImpactNewsBanner lang={lang} />
 
       {/* Bull/Bear Banner */}
       {fearGreed && (
