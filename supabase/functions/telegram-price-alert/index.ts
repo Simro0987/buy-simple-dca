@@ -77,15 +77,24 @@ Deno.serve(async (req) => {
     if (!priceRes.ok) throw new Error('Failed to fetch prices');
     const prices = await priceRes.json();
 
-    // Check proximity for each token
+    // Check proximity and breaches for each token
     const alerts: string[] = [];
     for (const token of TOKENS) {
       const currentPrice = prices[token.coingeckoId]?.usd ?? 0;
       if (currentPrice === 0) continue;
 
       const limitPrice = limitPrices?.[token.symbol] || (currentPrice * token.limitDiscount);
-      
-      if (currentPrice > limitPrice) {
+
+      if (currentPrice <= limitPrice) {
+        // Price dropped BELOW limit → strong alert
+        const pctBelow = ((limitPrice - currentPrice) / limitPrice * 100).toFixed(1);
+        alerts.push(
+          `🚨 <b>${token.symbol}</b> klesol POD limit cenu!\n` +
+          `   Aktuálna: $${formatPrice(currentPrice)}\n` +
+          `   Limit: $${formatPrice(limitPrice)}\n` +
+          `   📉 ${pctBelow}% pod limitom — <b>NAKÚP TERAZ!</b>`
+        );
+      } else {
         const distancePct = (currentPrice - limitPrice) / currentPrice;
         if (distancePct <= PROXIMITY_THRESHOLD) {
           const pctStr = (distancePct * 100).toFixed(1);
@@ -100,12 +109,12 @@ Deno.serve(async (req) => {
 
     if (alerts.length === 0) {
       return new Response(
-        JSON.stringify({ success: true, sent: 0, message: 'No tokens near limit prices' }),
+        JSON.stringify({ success: true, sent: 0, message: 'No tokens near or below limit prices' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const text = `🎯 <b>Limit Proximity Alert</b>\n\n${alerts.join('\n\n')}\n\n<i>Cena sa blíži k tvojmu limit orderu!</i>`;
+    const text = `🎯 <b>Cenový Alert</b>\n\n${alerts.join('\n\n')}\n\n<i>Skontroluj svoje limitné objednávky!</i>`;
 
     const response = await fetch(`${GATEWAY_URL}/sendMessage`, {
       method: 'POST',
