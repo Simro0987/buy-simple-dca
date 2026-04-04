@@ -29,6 +29,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
         {tab === 'overview' && <OverviewPage lang={lang} />}
+        {tab === 'portfolio' && <PortfolioPage lang={lang} />}
         {tab === 'dca' && <DCAPage lang={lang} />}
         {tab === 'smart' && <SmartAllocPage lang={lang} />}
         {tab === 'action' && <ActionPage lang={lang} />}
