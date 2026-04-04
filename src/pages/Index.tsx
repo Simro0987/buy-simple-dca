@@ -5,6 +5,7 @@ import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePr
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
+import { PortfolioPage } from '@/pages/PortfolioPage';
 import { ActionPage } from '@/pages/ActionPage';
 import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { SettingsPage } from '@/pages/SettingsPage';
@@ -28,6 +29,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
         {tab === 'overview' && <OverviewPage lang={lang} />}
+        {tab === 'portfolio' && <PortfolioPage lang={lang} />}
         {tab === 'dca' && <DCAPage lang={lang} />}
         {tab === 'smart' && <SmartAllocPage lang={lang} />}
         {tab === 'action' && <ActionPage lang={lang} />}
