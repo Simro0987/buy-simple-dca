@@ -5,6 +5,7 @@ import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePr
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
+import { PortfolioPage } from '@/pages/PortfolioPage';
 import { ActionPage } from '@/pages/ActionPage';
 import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { SettingsPage } from '@/pages/SettingsPage';

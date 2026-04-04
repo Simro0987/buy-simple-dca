@@ -11,6 +11,7 @@ interface BottomNavProps {
 
 const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart3 }[] = [
   { id: 'overview', labelSk: 'Prehľad', labelEn: 'Overview', icon: BarChart3 },
+  { id: 'portfolio', labelSk: 'Portfólio', labelEn: 'Portfolio', icon: PieChart },
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
   { id: 'smart', labelSk: 'Smart', labelEn: 'Smart', icon: Sparkles },
   { id: 'action', labelSk: 'Akcia', labelEn: 'Action', icon: Zap },
