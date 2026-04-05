@@ -86,25 +86,10 @@ export function ExecutionTracker({ lang, prices }: Props) {
     const key = `low_score_notified_${weekId}`;
     if (localStorage.getItem(key)) return;
     localStorage.setItem(key, '1');
-    toast.warning(sk ? `⚠️ Execution Score klesol na ${score}% — zlepši disciplínu!` : `⚠️ Execution Score dropped to ${score}% — improve your discipline!`);
-
-    // Send Telegram notification if configured
-    const chatId = localStorage.getItem('telegram_chat_id')?.trim();
-    if (chatId) {
-      supabase.functions.invoke('telegram-missed-opportunity', {
-        body: {
-          chatId,
-          missedItems: [{
-            symbol: 'SCORE',
-            weekId,
-            limitPrice: 0,
-            currentPrice: 0,
-            gainPct: 0,
-            missedGainUsd: 0,
-          }],
-        },
-      }).catch(() => {});
-    }
+    toast.warning(
+      sk ? `⚠️ Execution Score klesol na ${score}% — zlepši disciplínu!` : `⚠️ Execution Score dropped to ${score}% — improve your discipline!`,
+      { duration: 8000 }
+    );
   }, [score, weekId]);
 
   const sk = lang === 'sk';
