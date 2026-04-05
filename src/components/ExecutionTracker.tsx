@@ -1,7 +1,9 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Lang } from '@/lib/i18n';
 import { TOKENS } from '@/lib/crypto';
-import { CheckCircle, AlertTriangle, XCircle, Target, TrendingUp } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Target, TrendingUp, Send } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface WeekRecord {
   weekId: string; // e.g. "2026-W14"
