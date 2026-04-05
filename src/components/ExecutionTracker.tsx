@@ -257,7 +257,10 @@ function MissedOpportunities({ history, prices, lang }: {
   lang: Lang;
 }) {
   const sk = lang === 'sk';
-  const missed: { symbol: string; weekId: string; limitPrice: number; currentPrice: number; gainPct: number }[] = [];
+  const notifiedRef = useRef<string | null>(null);
+  const budget = Number(localStorage.getItem('dca-budget') || '100');
+
+  const missed: { symbol: string; weekId: string; limitPrice: number; currentPrice: number; gainPct: number; missedGainUsd: number }[] = [];
 
   for (const week of history.slice(-4)) {
     for (const limit of week.limits) {
@@ -268,57 +271,88 @@ function MissedOpportunities({ history, prices, lang }: {
       if (currentPrice > 0 && limit.limitPrice > 0 && currentPrice > limit.limitPrice) {
         const gainPct = ((currentPrice - limit.limitPrice) / limit.limitPrice) * 100;
         if (gainPct > 1) {
-          missed.push({
-            symbol: limit.symbol,
-            weekId: week.weekId,
-            limitPrice: limit.limitPrice,
-            currentPrice,
-            gainPct,
-          });
+          const allocationPct = token.allocation;
+          const limitUsd = budget * allocationPct * 0.4;
+          const missedGainUsd = limitUsd * (gainPct / 100);
+          missed.push({ symbol: limit.symbol, weekId: week.weekId, limitPrice: limit.limitPrice, currentPrice, gainPct, missedGainUsd });
         }
       }
     }
   }
 
-  if (missed.length === 0) return null;
+  const totalMissedGain = missed.reduce((s, m) => s + m.missedGainUsd, 0);
 
-  // Estimate missed gain based on budget
-  const budget = Number(localStorage.getItem('dca-budget') || '100');
+  // Auto-send Telegram notification when total missed gain > $50
+  useEffect(() => {
+    if (totalMissedGain < 50 || missed.length === 0) return;
+
+    const chatId = localStorage.getItem('telegram_chat_id')?.trim();
+    if (!chatId) return;
+
+    // Deduplicate: only notify once per unique set of missed items
+    const key = missed.map(m => `${m.symbol}-${m.weekId}`).sort().join('|');
+    const lastNotified = localStorage.getItem('missed_opp_notified_key');
+    if (lastNotified === key || notifiedRef.current === key) return;
+
+    notifiedRef.current = key;
+
+    supabase.functions.invoke('telegram-missed-opportunity', {
+      body: { chatId, missedItems: missed },
+    }).then(({ error }) => {
+      if (error) {
+        console.error('Failed to send missed opp alert:', error);
+      } else {
+        localStorage.setItem('missed_opp_notified_key', key);
+        toast.success(sk ? 'Telegram notifikácia o zmeškanom zisku odoslaná' : 'Missed opportunity alert sent to Telegram');
+      }
+    });
+  }, [totalMissedGain, missed.length]);
+
+  if (missed.length === 0) return null;
 
   return (
     <div className="glass-card p-4 space-y-3">
-      <h2 className="font-semibold text-foreground flex items-center gap-2">
-        <AlertTriangle className="w-5 h-5 text-warning" />
-        {sk ? 'Zmeškané príležitosti' : 'Missed Opportunities'}
-      </h2>
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold text-foreground flex items-center gap-2">
+          <AlertTriangle className="w-5 h-5 text-warning" />
+          {sk ? 'Zmeškané príležitosti' : 'Missed Opportunities'}
+        </h2>
+        {totalMissedGain >= 50 && (
+          <span className="flex items-center gap-1 text-xs text-primary">
+            <Send className="w-3 h-3" />
+            {sk ? 'Notifikácia odoslaná' : 'Alert sent'}
+          </span>
+        )}
+      </div>
 
-      {missed.map((m, i) => {
-        const tokenConfig = TOKENS.find(t => t.symbol === m.symbol);
-        const allocationPct = tokenConfig?.allocation ?? 0;
-        const limitUsd = budget * allocationPct * 0.4;
-        const missedGainUsd = limitUsd * (m.gainPct / 100);
-
-        return (
-          <div key={i} className="bg-loss/5 border border-loss/20 rounded-lg p-3">
-            <div className="flex items-center justify-between">
-              <span className="font-medium text-foreground">{m.symbol}</span>
-              <span className="text-xs text-muted-foreground">{m.weekId}</span>
-            </div>
-            <p className="text-sm text-muted-foreground mt-1">
-              {sk
-                ? `Limit nevyplnený → cena +${m.gainPct.toFixed(1)}%`
-                : `Limit unfilled → price +${m.gainPct.toFixed(1)}%`
-              }
-            </p>
-            <p className="text-sm font-semibold text-loss mt-0.5">
-              {sk
-                ? `Zmeškaný zisk: ~$${missedGainUsd.toFixed(0)}`
-                : `Missed gain: ~$${missedGainUsd.toFixed(0)}`
-              }
-            </p>
+      {missed.map((m, i) => (
+        <div key={i} className="bg-loss/5 border border-loss/20 rounded-lg p-3">
+          <div className="flex items-center justify-between">
+            <span className="font-medium text-foreground">{m.symbol}</span>
+            <span className="text-xs text-muted-foreground">{m.weekId}</span>
           </div>
-        );
-      })}
+          <p className="text-sm text-muted-foreground mt-1">
+            {sk
+              ? `Limit nevyplnený → cena +${m.gainPct.toFixed(1)}%`
+              : `Limit unfilled → price +${m.gainPct.toFixed(1)}%`
+            }
+          </p>
+          <p className="text-sm font-semibold text-loss mt-0.5">
+            {sk
+              ? `Zmeškaný zisk: ~$${m.missedGainUsd.toFixed(0)}`
+              : `Missed gain: ~$${m.missedGainUsd.toFixed(0)}`
+            }
+          </p>
+        </div>
+      ))}
+
+      {totalMissedGain >= 50 && (
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-3 text-center">
+          <p className="text-sm font-bold text-warning">
+            {sk ? `Celkový zmeškaný zisk: ~$${totalMissedGain.toFixed(0)}` : `Total missed gain: ~$${totalMissedGain.toFixed(0)}`}
+          </p>
+        </div>
+      )}
     </div>
   );
 }
