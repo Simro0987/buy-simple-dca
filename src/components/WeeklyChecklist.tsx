@@ -190,7 +190,7 @@ export function WeeklyChecklist({ lang, prices }: Props) {
                   </span>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {sk ? 'Aktuálna' : 'Current'}: ${formatPrice(price)} → Limit: ${formatPrice(limitPrice)}
+                  {sk ? 'Aktuálna' : 'Current'}: {formatPrice(price)} → Limit: {formatPrice(limitPrice)}
                 </p>
               </div>
               <CheckItem
