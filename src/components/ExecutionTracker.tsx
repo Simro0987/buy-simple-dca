@@ -80,6 +80,18 @@ export function ExecutionTracker({ lang, prices }: Props) {
   const doneActions = doneDca + doneLimits;
   const score = totalActions > 0 ? Math.round((doneActions / totalActions) * 100) : 0;
 
+  // Notify when score drops below 50%
+  useEffect(() => {
+    if (totalActions === 0 || score >= 50) return;
+    const key = `low_score_notified_${weekId}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    toast.warning(
+      sk ? `⚠️ Execution Score klesol na ${score}% — zlepši disciplínu!` : `⚠️ Execution Score dropped to ${score}% — improve your discipline!`,
+      { duration: 8000 }
+    );
+  }, [score, weekId]);
+
   const sk = lang === 'sk';
 
   return (
