@@ -80,6 +80,33 @@ export function ExecutionTracker({ lang, prices }: Props) {
   const doneActions = doneDca + doneLimits;
   const score = totalActions > 0 ? Math.round((doneActions / totalActions) * 100) : 0;
 
+  // Notify when score drops below 50%
+  useEffect(() => {
+    if (totalActions === 0 || score >= 50) return;
+    const key = `low_score_notified_${weekId}`;
+    if (localStorage.getItem(key)) return;
+    localStorage.setItem(key, '1');
+    toast.warning(sk ? `⚠️ Execution Score klesol na ${score}% — zlepši disciplínu!` : `⚠️ Execution Score dropped to ${score}% — improve your discipline!`);
+
+    // Send Telegram notification if configured
+    const chatId = localStorage.getItem('telegram_chat_id')?.trim();
+    if (chatId) {
+      supabase.functions.invoke('telegram-missed-opportunity', {
+        body: {
+          chatId,
+          missedItems: [{
+            symbol: 'SCORE',
+            weekId,
+            limitPrice: 0,
+            currentPrice: 0,
+            gainPct: 0,
+            missedGainUsd: 0,
+          }],
+        },
+      }).catch(() => {});
+    }
+  }, [score, weekId]);
+
   const sk = lang === 'sk';
 
   return (
