@@ -144,6 +144,9 @@ export function PortfolioPage({ lang }: Props) {
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} />
 
+      {/* Rebalancing suggestions */}
+      <RebalanceCard lang={lang} prices={prices} />
+
       {/* Per-token cards */}
       {tokenData.map(t => {
         const isExpanded = expandedToken === t.symbol;
