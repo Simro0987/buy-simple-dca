@@ -6,6 +6,7 @@ import { useDefiApys } from '@/hooks/useDefiApys';
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
+import { RebalanceCard } from '@/components/RebalanceCard';
 import { Card, CardContent } from '@/components/ui/card';
 
 interface Props { lang: Lang; }
