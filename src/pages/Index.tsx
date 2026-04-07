@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useTheme } from '@/hooks/useTheme';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { OverviewPage } from '@/pages/OverviewPage';
