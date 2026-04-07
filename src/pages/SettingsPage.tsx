@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
-import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar } from 'lucide-react';
+import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
 import { toast } from 'sonner';
+import type { Theme } from '@/hooks/useTheme';
 
 const syncConfigToDb = async (chatId: string, budget: number, alerts: { dcaReminder: boolean; limitProximity: boolean; highImpactNews: boolean }) => {
   try {
