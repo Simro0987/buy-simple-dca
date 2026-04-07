@@ -40,7 +40,15 @@ export function HighImpactNewsBanner({ lang }: Props) {
       (n) => n.impact === 'high' && !dismissed.includes(String(n.id))
     );
     if (highImpact.length > 0) {
-      setVisible(highImpact[0]);
+      const newItem = highImpact[0];
+      const isNew = !visible || String(visible.id) !== String(newItem.id);
+      setVisible(newItem);
+      if (isNew) {
+        // Vibrate on supported devices (mobile)
+        if (navigator.vibrate) {
+          navigator.vibrate([100, 50, 100]);
+        }
+      }
     } else {
       setVisible(null);
     }
