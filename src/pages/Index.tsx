@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { useLanguage } from '@/hooks/useLanguage';
+import { useTheme } from '@/hooks/useTheme';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { OverviewPage } from '@/pages/OverviewPage';
@@ -18,6 +19,7 @@ import { usePriceAlerts } from '@/hooks/usePriceAlerts';
 const Index = () => {
   const [tab, setTab] = useState<TabId>('overview');
   const { lang, toggleLang } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const { data: prices } = usePrices();
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
@@ -37,7 +39,7 @@ const Index = () => {
         {tab === 'execution' && <ExecutionTracker lang={lang} prices={prices} />}
         {tab === 'risk' && <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />}
         {tab === 'analysis' && <AnalysisPage lang={lang} />}
-        {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} />}
+        {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} />
     </div>

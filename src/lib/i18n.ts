@@ -72,6 +72,10 @@ const translations = {
     alertNewsDesc: 'Len dôležité udalosti (ETF, regulácie)',
     sendDcaTest: 'Test DCA',
     sendPriceTest: 'Test Limit',
+    theme: 'Motív',
+    themeDark: 'Tmavý',
+    themeLight: 'Svetlý',
+    themeSystem: 'Systém',
     alertSettings: 'Typy alertov',
   },
   en: {
@@ -146,6 +150,10 @@ const translations = {
     sendDcaTest: 'Test DCA',
     sendPriceTest: 'Test Limit',
     alertSettings: 'Alert Types',
+    theme: 'Theme',
+    themeDark: 'Dark',
+    themeLight: 'Light',
+    themeSystem: 'System',
   },
 } as const;
 
