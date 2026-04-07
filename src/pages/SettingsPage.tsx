@@ -152,6 +152,36 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
         </div>
       </div>
 
+      {/* Theme */}
+      <div className="glass-card p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Sun className="w-5 h-5 text-muted-foreground" />
+            <span className="font-medium text-foreground">{t('theme', lang)}</span>
+          </div>
+          <div className="flex rounded-lg bg-secondary overflow-hidden">
+            {([
+              { value: 'light' as Theme, icon: Sun, label: t('themeLight', lang) },
+              { value: 'dark' as Theme, icon: Moon, label: t('themeDark', lang) },
+              { value: 'system' as Theme, icon: Monitor, label: t('themeSystem', lang) },
+            ]).map(({ value, icon: Icon, label }) => (
+              <button
+                key={value}
+                onClick={() => setTheme(value)}
+                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-medium transition-colors ${
+                  theme === value
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
       {/* Telegram Chat ID */}
       <div className="glass-card p-4 space-y-3">
         <div className="flex items-center gap-3">

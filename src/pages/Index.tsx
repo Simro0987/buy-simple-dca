@@ -39,7 +39,7 @@ const Index = () => {
         {tab === 'execution' && <ExecutionTracker lang={lang} prices={prices} />}
         {tab === 'risk' && <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />}
         {tab === 'analysis' && <AnalysisPage lang={lang} />}
-        {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} />}
+        {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} />
     </div>
