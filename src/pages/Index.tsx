@@ -19,6 +19,7 @@ import { usePriceAlerts } from '@/hooks/usePriceAlerts';
 const Index = () => {
   const [tab, setTab] = useState<TabId>('overview');
   const { lang, toggleLang } = useLanguage();
+  const { theme, setTheme } = useTheme();
   const { data: prices } = usePrices();
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
