@@ -24,6 +24,8 @@ const syncConfigToDb = async (chatId: string, budget: number, alerts: { dcaRemin
 interface Props {
   lang: Lang;
   toggleLang: () => void;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
 }
 
 interface AlertToggles {
