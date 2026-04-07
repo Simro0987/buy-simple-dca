@@ -150,6 +150,10 @@ const translations = {
     sendDcaTest: 'Test DCA',
     sendPriceTest: 'Test Limit',
     alertSettings: 'Alert Types',
+    theme: 'Theme',
+    themeDark: 'Dark',
+    themeLight: 'Light',
+    themeSystem: 'System',
   },
 } as const;
 
