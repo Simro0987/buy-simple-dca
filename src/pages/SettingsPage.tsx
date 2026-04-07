@@ -34,7 +34,7 @@ interface AlertToggles {
   highImpactNews: boolean;
 }
 
-export function SettingsPage({ lang, toggleLang }: Props) {
+export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
   const [chatId, setChatId] = useState('');
   const [sending, setSending] = useState<string | null>(null);
   const [alerts, setAlerts] = useState<AlertToggles>({
