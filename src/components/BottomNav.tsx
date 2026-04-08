@@ -7,6 +7,7 @@ interface BottomNavProps {
   active: TabId;
   onChange: (tab: TabId) => void;
   lang: Lang;
+  unreadNewsCount?: number;
 }
 
 const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart3 }[] = [
