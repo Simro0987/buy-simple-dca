@@ -15,6 +15,7 @@ import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
 import { usePriceAlerts } from '@/hooks/usePriceAlerts';
+import { useUnreadHighImpact } from '@/hooks/useUnreadHighImpact';
 
 const Index = () => {
   const [tab, setTab] = useState<TabId>('overview');

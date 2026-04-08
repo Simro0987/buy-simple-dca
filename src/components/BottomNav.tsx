@@ -23,21 +23,29 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
-export function BottomNav({ active, onChange, lang }: BottomNavProps) {
+export function BottomNav({ active, onChange, lang, unreadNewsCount = 0 }: BottomNavProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-nav-bg border-t border-border nav-safe-bottom z-50">
       <div className="flex items-center justify-around h-14 max-w-lg mx-auto">
         {tabs.map(({ id, labelSk, labelEn, icon: Icon }) => {
           const isActive = active === id;
+          const showBadge = id === 'overview' && unreadNewsCount > 0;
           return (
             <button
               key={id}
               onClick={() => onChange(id)}
-              className={`flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
                 isActive ? 'text-nav-active' : 'text-nav-inactive'
               }`}
             >
-              <Icon className="w-4 h-4" strokeWidth={isActive ? 2.5 : 2} />
+              <div className="relative">
+                <Icon className="w-4 h-4" strokeWidth={isActive ? 2.5 : 2} />
+                {showBadge && (
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold px-1 animate-in zoom-in-50 duration-200">
+                    {unreadNewsCount > 9 ? '9+' : unreadNewsCount}
+                  </span>
+                )}
+              </div>
               <span className="text-[9px] font-medium leading-tight">{lang === 'sk' ? labelSk : labelEn}</span>
             </button>
           );
