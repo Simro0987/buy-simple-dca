@@ -27,6 +27,7 @@ const Index = () => {
   const { data: altSeason } = useAltSeason();
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
   usePriceAlerts(prices, lang);
+  const unreadNewsCount = useUnreadHighImpact(lang);
 
   return (
     <div className="min-h-screen bg-background">
