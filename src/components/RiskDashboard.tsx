@@ -2,6 +2,7 @@ import { Lang } from '@/lib/i18n';
 import { TOKENS, PriceData, AthData, formatPrice } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { Shield, TrendingDown, TrendingUp, AlertTriangle, ArrowDown, ArrowUp } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   lang: Lang;
