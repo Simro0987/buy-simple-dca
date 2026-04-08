@@ -206,6 +206,8 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
           ))}
         </div>
       )}
+      </>
+      )}
     </div>
   );
 }
