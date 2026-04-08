@@ -2,6 +2,7 @@ import { Lang } from '@/lib/i18n';
 import { TOKENS, PriceData, AthData, formatPrice } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { Shield, TrendingDown, TrendingUp, AlertTriangle, ArrowDown, ArrowUp } from 'lucide-react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   lang: Lang;
@@ -33,12 +34,59 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
   const sk = lang === 'sk';
   const signal = cycleResult ? getSignal(cycleResult.score, sk) : null;
 
+  const isLoading = !prices || Object.keys(prices).length === 0;
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">
         <Shield className="w-5 h-5 inline mr-2" />
         {sk ? 'Riziko & Cyklus' : 'Risk & Cycle'}
       </h1>
+
+      {isLoading ? (
+        <div className="space-y-4">
+          {/* Signal skeleton */}
+          <div className="glass-card p-5 space-y-3">
+            <Skeleton className="h-3 w-24 mx-auto" />
+            <Skeleton className="h-9 w-48 mx-auto" />
+            <Skeleton className="h-4 w-64 mx-auto" />
+            <Skeleton className="h-4 w-40 mx-auto" />
+          </div>
+
+          {/* Token skeletons */}
+          <Skeleton className="h-4 w-32" />
+          {TOKENS.map(token => (
+            <div key={token.symbol} className="glass-card p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="w-8 h-8 rounded-full" />
+                  <div className="space-y-1">
+                    <Skeleton className="h-4 w-12" />
+                    <Skeleton className="h-3 w-16" />
+                  </div>
+                </div>
+                <Skeleton className="h-4 w-14" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex justify-between">
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="h-3 w-10" />
+                </div>
+                <Skeleton className="h-2 w-full rounded-full" />
+              </div>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 2, 3].map(i => (
+                  <div key={i} className="bg-secondary/50 rounded-lg p-2 flex flex-col items-center gap-1">
+                    <Skeleton className="h-2 w-10" />
+                    <Skeleton className="h-4 w-12" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <>
 
       {/* Main Signal */}
       {signal && cycleResult && (
@@ -157,6 +205,8 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
             </div>
           ))}
         </div>
+      )}
+      </>
       )}
     </div>
   );
