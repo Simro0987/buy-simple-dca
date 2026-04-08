@@ -71,6 +71,9 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
         setAlerted(token.symbol, now);
 
         const pctBelow = ((limitPrice - currentPrice) / limitPrice * 100).toFixed(1);
+        playAlertSound();
+        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+
         toast.warning(
           sk
             ? `🚨 ${token.symbol} klesol pod limit cenu!`
