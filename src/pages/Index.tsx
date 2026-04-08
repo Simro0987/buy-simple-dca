@@ -43,7 +43,7 @@ const Index = () => {
         {tab === 'analysis' && <AnalysisPage lang={lang} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />}
       </main>
-      <BottomNav active={tab} onChange={setTab} lang={lang} />
+      <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
     </div>
   );
 };
