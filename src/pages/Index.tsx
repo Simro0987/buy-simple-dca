@@ -15,6 +15,7 @@ import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
 import { usePriceAlerts } from '@/hooks/usePriceAlerts';
+import { useUnreadHighImpact } from '@/hooks/useUnreadHighImpact';
 
 const Index = () => {
   const [tab, setTab] = useState<TabId>('overview');
@@ -26,6 +27,7 @@ const Index = () => {
   const { data: altSeason } = useAltSeason();
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
   usePriceAlerts(prices, lang);
+  const unreadNewsCount = useUnreadHighImpact(lang);
 
   return (
     <div className="min-h-screen bg-background">
@@ -41,7 +43,7 @@ const Index = () => {
         {tab === 'analysis' && <AnalysisPage lang={lang} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />}
       </main>
-      <BottomNav active={tab} onChange={setTab} lang={lang} />
+      <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
     </div>
   );
 };
