@@ -213,6 +213,13 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
           })}
         </div>
       )}
+
+      {/* Info text */}
+      <p className="text-[10px] text-muted-foreground text-center">
+        {sk
+          ? `📊 Dáta sa zbierajú denne · ${filtered.length} ${filtered.length === 1 ? 'záznam' : filtered.length < 5 ? 'záznamy' : 'záznamov'}`
+          : `📊 Data collected daily · ${filtered.length} ${filtered.length === 1 ? 'record' : 'records'}`}
+      </p>
     </div>
   );
 }
