@@ -73,8 +73,15 @@ const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown per token
 
 export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
   const checkedRef = useRef(0);
+  const permissionRequested = useRef(false);
 
+  // Request permission once
   useEffect(() => {
+    if (!permissionRequested.current) {
+      permissionRequested.current = true;
+      requestNotificationPermission();
+    }
+  }, []);
     if (!prices) return;
     const now = Date.now();
     if (now - checkedRef.current < 30_000) return; // check max every 30s
