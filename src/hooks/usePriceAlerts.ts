@@ -3,6 +3,30 @@ import { PriceData, TOKENS } from '@/lib/crypto';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
 
+/** Request notification permission on first use */
+async function requestNotificationPermission(): Promise<boolean> {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+function showBrowserNotification(title: string, body: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    new Notification(title, {
+      body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: 'price-alert',
+      renotify: true,
+    });
+  } catch {
+    // Notification API not available
+  }
+}
+
 function playAlertSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
