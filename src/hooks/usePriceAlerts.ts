@@ -3,6 +3,31 @@ import { PriceData, TOKENS } from '@/lib/crypto';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
 
+/** Request notification permission on first use */
+async function requestNotificationPermission(): Promise<boolean> {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+function showBrowserNotification(title: string, body: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const options: NotificationOptions & Record<string, unknown> = {
+      body,
+      icon: '/pwa-192x192.png',
+      badge: '/pwa-192x192.png',
+      tag: 'price-alert',
+    };
+    (options as any).renotify = true;
+    new Notification(title, options);
+  } catch {
+    // Notification API not available
+  }
+}
+
 function playAlertSound() {
   try {
     const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
@@ -48,11 +73,24 @@ const COOLDOWN_MS = 60 * 60 * 1000; // 1 hour cooldown per token
 
 export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
   const checkedRef = useRef(0);
+  const permissionRequested = useRef(false);
+
+  // Request permission once
+  useEffect(() => {
+    if (!permissionRequested.current) {
+      permissionRequested.current = true;
+      requestNotificationPermission();
+    }
+  }, []);
+    if (!prices) return;
+    const now = Date.now();
+    if (now - checkedRef.current < 30_000) return; // check max every 30s
+    checkedRef.current = now;
 
   useEffect(() => {
     if (!prices) return;
     const now = Date.now();
-    if (now - checkedRef.current < 30_000) return; // check max every 30s
+    if (now - checkedRef.current < 30_000) return;
     checkedRef.current = now;
 
     const alerted = getAlerted();
@@ -74,17 +112,18 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
         playAlertSound();
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
-        toast.warning(
-          sk
-            ? `🚨 ${token.symbol} klesol pod limit cenu!`
-            : `🚨 ${token.symbol} dropped below limit price!`,
-          {
-            description: sk
-              ? `Aktuálna: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% pod limitom`
-              : `Current: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% below`,
-            duration: 10000,
-          }
-        );
+        const title = sk
+          ? `🚨 ${token.symbol} klesol pod limit cenu!`
+          : `🚨 ${token.symbol} dropped below limit price!`;
+        const description = sk
+          ? `Aktuálna: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% pod limitom`
+          : `Current: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% below`;
+
+        // Browser notification
+        showBrowserNotification(title, description);
+
+        // In-app toast
+        toast.warning(title, { description, duration: 10000 });
       }
     }
   }, [prices, lang]);
