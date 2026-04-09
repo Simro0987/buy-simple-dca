@@ -88,7 +88,8 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
 
   const filtered = useMemo(() => history.slice(-range), [history, range]);
 
-  if (filtered.length < 2) return null;
+  if (filtered.length < 1) return null;
+  const hasMultiple = filtered.length >= 2;
 
   const values = filtered.map(p => p.value);
   const latest = values[values.length - 1];
@@ -116,14 +117,19 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
             {sk ? 'Vývoj portfólia' : 'Portfolio History'}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <span className={`text-sm font-bold ${changePct >= 0 ? 'text-gain' : 'text-loss'}`}>
-            {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
-          </span>
-          <span className={`text-xs ${changeUsd >= 0 ? 'text-gain' : 'text-loss'}`}>
-            ({changeUsd >= 0 ? '+' : ''}{formatUsd(changeUsd)})
-          </span>
-        </div>
+        {hasMultiple && (
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-bold ${changePct >= 0 ? 'text-gain' : 'text-loss'}`}>
+              {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
+            </span>
+            <span className={`text-xs ${changeUsd >= 0 ? 'text-gain' : 'text-loss'}`}>
+              ({changeUsd >= 0 ? '+' : ''}{formatUsd(changeUsd)})
+            </span>
+          </div>
+        )}
+        {!hasMultiple && (
+          <span className="text-sm font-bold text-foreground">{formatUsd(latest)}</span>
+        )}
       </div>
 
       {/* Range toggle */}
@@ -207,6 +213,13 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
           })}
         </div>
       )}
+
+      {/* Info text */}
+      <p className="text-[10px] text-muted-foreground text-center">
+        {sk
+          ? `📊 Dáta sa zbierajú denne · ${filtered.length} ${filtered.length === 1 ? 'záznam' : filtered.length < 5 ? 'záznamy' : 'záznamov'}`
+          : `📊 Data collected daily · ${filtered.length} ${filtered.length === 1 ? 'record' : 'records'}`}
+      </p>
     </div>
   );
 }
