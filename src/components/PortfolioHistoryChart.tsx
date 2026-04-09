@@ -88,7 +88,8 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
 
   const filtered = useMemo(() => history.slice(-range), [history, range]);
 
-  if (filtered.length < 2) return null;
+  if (filtered.length < 1) return null;
+  const hasMultiple = filtered.length >= 2;
 
   const values = filtered.map(p => p.value);
   const latest = values[values.length - 1];
