@@ -15,13 +15,14 @@ async function requestNotificationPermission(): Promise<boolean> {
 function showBrowserNotification(title: string, body: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
   try {
-    new Notification(title, {
+    const options: NotificationOptions & Record<string, unknown> = {
       body,
       icon: '/pwa-192x192.png',
       badge: '/pwa-192x192.png',
       tag: 'price-alert',
-      renotify: true,
-    });
+    };
+    (options as any).renotify = true;
+    new Notification(title, options);
   } catch {
     // Notification API not available
   }
