@@ -87,6 +87,12 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
     if (now - checkedRef.current < 30_000) return; // check max every 30s
     checkedRef.current = now;
 
+  useEffect(() => {
+    if (!prices) return;
+    const now = Date.now();
+    if (now - checkedRef.current < 30_000) return;
+    checkedRef.current = now;
+
     const alerted = getAlerted();
     const sk = lang === 'sk';
 
@@ -106,17 +112,18 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
         playAlertSound();
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
-        toast.warning(
-          sk
-            ? `🚨 ${token.symbol} klesol pod limit cenu!`
-            : `🚨 ${token.symbol} dropped below limit price!`,
-          {
-            description: sk
-              ? `Aktuálna: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% pod limitom`
-              : `Current: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% below`,
-            duration: 10000,
-          }
-        );
+        const title = sk
+          ? `🚨 ${token.symbol} klesol pod limit cenu!`
+          : `🚨 ${token.symbol} dropped below limit price!`;
+        const description = sk
+          ? `Aktuálna: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% pod limitom`
+          : `Current: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% below`;
+
+        // Browser notification
+        showBrowserNotification(title, description);
+
+        // In-app toast
+        toast.warning(title, { description, duration: 10000 });
       }
     }
   }, [prices, lang]);
