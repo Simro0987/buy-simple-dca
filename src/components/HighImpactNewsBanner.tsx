@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useCryptoNews, NewsItem } from '@/hooks/useCryptoNews';
 import { Lang, t } from '@/lib/i18n';
 import { AlertTriangle, X, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
@@ -33,6 +33,8 @@ export function HighImpactNewsBanner({ lang }: Props) {
   const { data: news } = useCryptoNews(undefined, lang);
   const [visible, setVisible] = useState<NewsItem | null>(null);
   const [dismissed, setDismissed] = useState<string[]>(getDismissedIds);
+  const [exiting, setExiting] = useState(false);
+  const bannerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!news) return;
@@ -43,8 +45,8 @@ export function HighImpactNewsBanner({ lang }: Props) {
       const newItem = highImpact[0];
       const isNew = !visible || String(visible.id) !== String(newItem.id);
       setVisible(newItem);
+      setExiting(false);
       if (isNew) {
-        // Vibrate on supported devices (mobile)
         if (navigator.vibrate) {
           navigator.vibrate([100, 50, 100]);
         }
@@ -55,11 +57,15 @@ export function HighImpactNewsBanner({ lang }: Props) {
   }, [news, dismissed]);
 
   const handleDismiss = useCallback(() => {
-    if (!visible) return;
-    const id = String(visible.id);
-    dismissId(id);
-    setDismissed((prev) => [...prev, id]);
-  }, [visible]);
+    if (!visible || exiting) return;
+    setExiting(true);
+    setTimeout(() => {
+      const id = String(visible.id);
+      dismissId(id);
+      setDismissed((prev) => [...prev, id]);
+      setExiting(false);
+    }, 300);
+  }, [visible, exiting]);
 
   const handleOpen = useCallback(() => {
     if (!visible?.url) return;
@@ -73,7 +79,7 @@ export function HighImpactNewsBanner({ lang }: Props) {
   const sentimentClass = sentimentConfig[visible.sentiment]?.class || 'text-muted-foreground';
 
   return (
-    <div className="relative rounded-lg border border-warning/30 bg-warning/10 p-3 animate-in slide-in-from-top-2 duration-300">
+    <div className={`relative rounded-lg border border-warning/30 bg-warning/10 p-3 animate-in slide-in-from-top-2 duration-300 transition-all ease-out ${exiting ? 'opacity-0 scale-95 max-h-0 !p-0 !mt-0 overflow-hidden !border-0' : 'opacity-100 scale-100 max-h-40'}`}>
       <button
         onClick={handleDismiss}
         className="absolute top-2 right-2 p-1 rounded-full hover:bg-warning/20 transition-colors"
