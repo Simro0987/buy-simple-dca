@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { PriceData, TOKENS } from '@/lib/crypto';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
+import { getNotificationPrefs } from '@/lib/notificationPrefs';
 
 /** Request notification permission on first use */
 async function requestNotificationPermission(): Promise<boolean> {
@@ -95,6 +96,7 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
 
     const alerted = getAlerted();
     const sk = lang === 'sk';
+    const prefs = getNotificationPrefs();
 
     for (const token of TOKENS) {
       const currentPrice = prices[token.coingeckoId]?.usd;
@@ -109,7 +111,7 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
         setAlerted(token.symbol, now);
 
         const pctBelow = ((limitPrice - currentPrice) / limitPrice * 100).toFixed(1);
-        playAlertSound();
+        if (prefs.soundAlerts) playAlertSound();
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
 
         const title = sk
@@ -120,7 +122,9 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
           : `Current: $${currentPrice.toLocaleString()} · Limit: $${limitPrice.toLocaleString()} · ${pctBelow}% below`;
 
         // Browser notification
-        showBrowserNotification(title, description);
+        if (prefs.browserNotifications) {
+          showBrowserNotification(title, description);
+        }
 
         // In-app toast
         toast.warning(title, { description, duration: 10000 });
