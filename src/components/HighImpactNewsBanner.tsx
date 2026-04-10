@@ -79,7 +79,7 @@ export function HighImpactNewsBanner({ lang }: Props) {
   const sentimentClass = sentimentConfig[visible.sentiment]?.class || 'text-muted-foreground';
 
   return (
-    <div className="relative rounded-lg border border-warning/30 bg-warning/10 p-3 animate-in slide-in-from-top-2 duration-300">
+    <div className={`relative rounded-lg border border-warning/30 bg-warning/10 p-3 animate-in slide-in-from-top-2 duration-300 transition-all ease-out ${exiting ? 'opacity-0 scale-95 max-h-0 !p-0 !mt-0 overflow-hidden !border-0' : 'opacity-100 scale-100 max-h-40'}`}>
       <button
         onClick={handleDismiss}
         className="absolute top-2 right-2 p-1 rounded-full hover:bg-warning/20 transition-colors"
