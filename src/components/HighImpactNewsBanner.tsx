@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useCryptoNews, NewsItem } from '@/hooks/useCryptoNews';
 import { Lang, t } from '@/lib/i18n';
 import { AlertTriangle, X, ChevronRight, TrendingUp, TrendingDown, Minus } from 'lucide-react';
