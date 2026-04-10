@@ -1,10 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
-import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor } from 'lucide-react';
+import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
+import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
 
 const syncConfigToDb = async (chatId: string, budget: number, alerts: { dcaReminder: boolean; limitProximity: boolean; highImpactNews: boolean }) => {
   try {
@@ -42,6 +43,7 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     limitProximity: true,
     highImpactNews: true,
   });
+  const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(getNotificationPrefs);
 
   useEffect(() => {
     const saved = localStorage.getItem('telegram_chat_id');
@@ -51,6 +53,15 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
       try { setAlerts(JSON.parse(savedAlerts)); } catch {}
     }
   }, []);
+
+  const toggleNotifPref = (key: keyof NotificationPrefs) => {
+    const updated = { ...notifPrefs, [key]: !notifPrefs[key] };
+    setNotifPrefs(updated);
+    setNotificationPrefs(updated);
+    if (key === 'browserNotifications' && updated.browserNotifications && 'Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission();
+    }
+  };
 
   const saveChatId = (value: string) => {
     setChatId(value);
@@ -244,6 +255,55 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
           ))}
         </div>
       </div>
+      {/* In-App Notification Preferences */}
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <BellRing className="w-5 h-5 text-muted-foreground" />
+          <span className="font-medium text-foreground">
+            {lang === 'sk' ? 'Notifikácie v aplikácii' : 'In-App Notifications'}
+          </span>
+        </div>
+
+        <div className="space-y-3">
+          {([
+            {
+              key: 'browserNotifications' as const,
+              icon: Bell,
+              label: lang === 'sk' ? 'Browser notifikácie' : 'Browser notifications',
+              desc: lang === 'sk' ? 'Systémové push notifikácie pri cenových alertoch' : 'System push notifications for price alerts',
+            },
+            {
+              key: 'soundAlerts' as const,
+              icon: Volume2,
+              label: lang === 'sk' ? 'Zvukové alerty' : 'Sound alerts',
+              desc: lang === 'sk' ? 'Zvukový signál pri cenových alertoch' : 'Audio beep on price alerts',
+            },
+          ]).map(({ key, icon: Icon, label, desc }) => (
+            <div key={key} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/50">
+              <Icon className="w-5 h-5 text-muted-foreground mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-foreground text-sm">{label}</span>
+                  <button
+                    onClick={() => toggleNotifPref(key)}
+                    className={`relative w-10 h-5 rounded-full transition-colors flex-shrink-0 ${
+                      notifPrefs[key] ? 'bg-primary' : 'bg-muted'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 w-4 h-4 rounded-full bg-primary-foreground transition-transform ${
+                        notifPrefs[key] ? 'left-5' : 'left-0.5'
+                      }`}
+                    />
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground mt-0.5">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
       {/* CSV Export */}
       <CsvExport lang={lang} />
     </div>
