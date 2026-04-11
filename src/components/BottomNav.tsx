@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart } from 'lucide-react';
+import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'settings';
+export type TabId = 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -21,6 +21,7 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'risk', labelSk: 'Riziko', labelEn: 'Risk', icon: Shield },
   { id: 'analysis', labelSk: 'Analýza', labelEn: 'Analysis', icon: Activity },
   { id: 'market', labelSk: 'Trh', labelEn: 'Market', icon: BarChart3 },
+  { id: 'profit', labelSk: 'Zisky', labelEn: 'Profit', icon: DollarSign },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
