@@ -195,7 +195,7 @@ function TokenCard({ token, sk }: { token: TokenAnalysis; sk: boolean }) {
 }
 
 export function AnalysisPage({ lang }: Props) {
-  const { data, isLoading } = useTokenAnalysis();
+  const { data, isLoading, error } = useTokenAnalysis();
   const sk = lang === 'sk';
 
   return (
@@ -214,9 +214,19 @@ export function AnalysisPage({ lang }: Props) {
             <div key={i} className="glass-card p-4 h-20 animate-pulse" />
           ))}
         </div>
+      ) : error || !data || data.length === 0 ? (
+        <div className="glass-card p-6 text-center space-y-2">
+          <AlertTriangle className="w-8 h-8 text-warning mx-auto" />
+          <p className="text-sm font-medium text-foreground">
+            {sk ? 'Dáta momentálne nedostupné' : 'Data currently unavailable'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            {sk ? 'Skúste to znova o chvíľu. API môže byť dočasne nedostupné.' : 'Try again in a moment. API may be temporarily unavailable.'}
+          </p>
+        </div>
       ) : (
         <div className="space-y-3">
-          {data?.map((token) => (
+          {data.map((token) => (
             <TokenCard key={token.id} token={token} sk={sk} />
           ))}
         </div>
