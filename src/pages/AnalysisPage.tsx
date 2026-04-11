@@ -5,7 +5,7 @@ import { formatPrice, formatUsd } from '@/lib/crypto';
 import { Sparkline } from '@/components/Sparkline';
 import {
   TrendingUp, TrendingDown, Minus, Activity, ChevronDown, ChevronUp,
-  BarChart3, Shield, Layers, Zap,
+  BarChart3, Shield, Layers, Zap, AlertTriangle,
 } from 'lucide-react';
 
 interface Props { lang: Lang; }
