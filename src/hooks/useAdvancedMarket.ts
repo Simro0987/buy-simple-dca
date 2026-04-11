@@ -178,9 +178,11 @@ async function fetchAdvancedMarket(): Promise<AdvancedMarketData> {
   ];
 
   // Institutional flow (simulated)
-  const institutionalFlow = [
-    { label: 'MicroStrategy', trend: btcChange > 0 ? 'buying' : 'neutral' as const },
-    { label: 'BTC ETF', trend: btcChange > 1 ? 'buying' : btcChange < -1 ? 'selling' : 'neutral' as const },
+  const msFlow: 'buying' | 'neutral' | 'selling' = btcChange > 0 ? 'buying' : 'neutral';
+  const etfFlow: 'buying' | 'neutral' | 'selling' = btcChange > 1 ? 'buying' : btcChange < -1 ? 'selling' : 'neutral';
+  const institutionalFlow: { label: string; trend: 'buying' | 'selling' | 'neutral' }[] = [
+    { label: 'MicroStrategy', trend: msFlow },
+    { label: 'BTC ETF', trend: etfFlow },
   ];
 
   const { signal, score, explanation } = computeSignal(fearGreedValue, btcChange, dominanceTrend, fundingRate);
