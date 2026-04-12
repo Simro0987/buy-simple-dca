@@ -1,7 +1,10 @@
+import { useState } from 'react';
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG, StakingPosition } from '@/lib/wallets';
-import { Lock, TrendingUp, Landmark, Zap } from 'lucide-react';
+import { Lock, TrendingUp, Landmark, Zap, Send } from 'lucide-react';
 import { useDefiApys, DefiApyData } from '@/hooks/useDefiApys';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Props { lang: Lang; }
 
@@ -41,12 +44,66 @@ function yieldLabel(dir: StakingPosition['yieldDirection'], lang: Lang) {
 
 export function StakingPage({ lang }: Props) {
   const { data: apys, isFetching: apyLoading } = useDefiApys();
+  const [sending, setSending] = useState(false);
+
+  const handleSendMaturityAlert = async () => {
+    const chatId = localStorage.getItem('telegram_chat_id')?.trim();
+    if (!chatId) {
+      toast.error(lang === 'sk' ? 'Nastav Telegram Chat ID v nastaveniach' : 'Set Telegram Chat ID in settings');
+      return;
+    }
+
+    setSending(true);
+    try {
+      // Collect all staking/lending positions with yield directions
+      const maturityItems: any[] = [];
+      for (const asset of STAKING_CONFIG) {
+        for (const pos of asset.positions) {
+          if (pos.type === 'hold') continue;
+          const liveApy = getLiveApy(pos, apys);
+          maturityItems.push({
+            symbol: asset.symbol,
+            protocol: pos.protocol || pos.label,
+            type: pos.type,
+            apy: liveApy,
+            action: pos.yieldDirection === 'btc'
+              ? `Konvertuj výnos do BTC (APY: ${liveApy?.toFixed(1) ?? '?'}%)`
+              : pos.yieldDirection === 'compound'
+              ? `Auto-compound aktívny (APY: ${liveApy?.toFixed(1) ?? '?'}%)`
+              : `Skontroluj pozíciu (APY: ${liveApy?.toFixed(1) ?? '?'}%)`,
+          });
+        }
+      }
+
+      const { error } = await supabase.functions.invoke('telegram-staking-maturity', {
+        body: { chatId, maturityItems },
+      });
+
+      if (error) throw error;
+      toast.success(lang === 'sk' ? 'Staking alert odoslaný na Telegram ✓' : 'Staking alert sent to Telegram ✓');
+    } catch (err) {
+      console.error('Staking maturity alert error:', err);
+      toast.error(lang === 'sk' ? 'Nepodarilo sa odoslať alert' : 'Failed to send alert');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-foreground">
-        {lang === 'sk' ? 'Staking & Výnosy' : 'Staking & Yields'}
-      </h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold text-foreground">
+          {lang === 'sk' ? 'Staking & Výnosy' : 'Staking & Yields'}
+        </h1>
+        <button
+          onClick={handleSendMaturityAlert}
+          disabled={sending}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium border border-primary/20 active:bg-primary/20 disabled:opacity-50"
+        >
+          <Send className={`w-3.5 h-3.5 ${sending ? 'animate-pulse' : ''}`} />
+          {lang === 'sk' ? 'Telegram' : 'Telegram'}
+        </button>
+      </div>
 
       <p className="text-xs text-muted-foreground">
         {lang === 'sk'

@@ -1,6 +1,9 @@
+import { useState } from 'react';
 import { Lang } from '@/lib/i18n';
 import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
-import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle } from 'lucide-react';
+import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 interface Props {
   lang: Lang;
@@ -8,8 +11,8 @@ interface Props {
 }
 
 const TARGET: Record<string, number> = { BTC: 59, ETH: 25, SOL: 11, HYPE: 5 };
-const DRIFT_THRESHOLD = 3; // lowered from 5 to show earlier warnings
-const ACTION_THRESHOLD = 5; // show specific actions at 5%+
+const DRIFT_THRESHOLD = 3;
+const ACTION_THRESHOLD = 5;
 
 function getHoldings(): Record<string, number> {
   try {
@@ -32,6 +35,7 @@ interface Drift {
 export function RebalanceCard({ lang, prices }: Props) {
   const sk = lang === 'sk';
   const holdings = getHoldings();
+  const [sending, setSending] = useState(false);
 
   if (!prices) return null;
 
@@ -72,7 +76,6 @@ export function RebalanceCard({ lang, prices }: Props) {
 
   if (drifts.length === 0) return null;
 
-  // Sort by absolute drift (biggest first)
   drifts.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 
   const hasActionable = drifts.some(d => Math.abs(d.diff) >= ACTION_THRESHOLD);
@@ -82,14 +85,14 @@ export function RebalanceCard({ lang, prices }: Props) {
   // Generate specific rebalancing actions
   const actions: { from: string; to: string; amount: number; fromColor: string; toColor: string }[] = [];
   if (hasActionable && overweighted.length > 0 && underweighted.length > 0) {
-    let sellPool = overweighted.map(d => ({ ...d, remaining: d.adjustUsd }));
-    let buyPool = underweighted.map(d => ({ ...d, remaining: Math.abs(d.adjustUsd) }));
+    const sellPool = overweighted.map(d => ({ ...d, remaining: d.adjustUsd }));
+    const buyPool = underweighted.map(d => ({ ...d, remaining: Math.abs(d.adjustUsd) }));
 
     for (const sell of sellPool) {
       for (const buy of buyPool) {
         if (sell.remaining <= 0 || buy.remaining <= 0) continue;
         const transfer = Math.min(sell.remaining, buy.remaining);
-        if (transfer >= 10) { // min $10
+        if (transfer >= 10) {
           actions.push({
             from: sell.symbol,
             to: buy.symbol,
@@ -106,7 +109,6 @@ export function RebalanceCard({ lang, prices }: Props) {
 
   const budget = Number(localStorage.getItem('dca-budget') || '100');
 
-  // DCA adjustment suggestion
   const dcaAdjustments = underweighted
     .filter(d => Math.abs(d.diff) >= ACTION_THRESHOLD)
     .map(d => {
@@ -115,6 +117,34 @@ export function RebalanceCard({ lang, prices }: Props) {
       const suggestedBoost = Math.min(10, Math.abs(d.diff));
       return { symbol: d.symbol, currentDcaPct, suggestedBoost, color: d.color };
     });
+
+  const handleSendRebalanceAlert = async () => {
+    const chatId = localStorage.getItem('telegram_chat_id')?.trim();
+    if (!chatId) {
+      toast.error(sk ? 'Nastav Telegram Chat ID v nastaveniach' : 'Set Telegram Chat ID in settings');
+      return;
+    }
+
+    setSending(true);
+    try {
+      const { error } = await supabase.functions.invoke('telegram-rebalance-alert', {
+        body: {
+          chatId,
+          drifts: drifts.map(d => ({ symbol: d.symbol, current: d.current, target: d.target, diff: d.diff, adjustUsd: d.adjustUsd })),
+          actions: actions.map(a => ({ from: a.from, to: a.to, amount: a.amount })),
+          totalValue,
+        },
+      });
+
+      if (error) throw error;
+      toast.success(sk ? 'Rebalancing alert odoslaný na Telegram ✓' : 'Rebalancing alert sent to Telegram ✓');
+    } catch (err) {
+      console.error('Rebalance alert error:', err);
+      toast.error(sk ? 'Nepodarilo sa odoslať alert' : 'Failed to send alert');
+    } finally {
+      setSending(false);
+    }
+  };
 
   return (
     <div className="glass-card p-4 space-y-4">
@@ -216,6 +246,16 @@ export function RebalanceCard({ lang, prices }: Props) {
           ))}
         </div>
       )}
+
+      {/* Telegram alert button */}
+      <button
+        onClick={handleSendRebalanceAlert}
+        disabled={sending}
+        className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-primary/10 text-primary text-xs font-medium border border-primary/20 active:bg-primary/20 disabled:opacity-50"
+      >
+        <Send className={`w-3.5 h-3.5 ${sending ? 'animate-pulse' : ''}`} />
+        {sk ? 'Pošli na Telegram' : 'Send to Telegram'}
+      </button>
 
       <p className="text-[10px] text-muted-foreground">
         {sk
