@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData } from '@/lib/crypto';
@@ -6,12 +6,13 @@ import {
   PROFIT_CONFIGS, TokenProfitConfig, ProfitLevel,
   getExecutedLevels, markLevelExecuted, isLevelExecuted,
   getAvgCostBasis, setAvgCostBasis, computeProfitPct, getTotalSoldPct,
+  getDcaPurchases, addDcaPurchase, recalcAllAvgCosts, importFromExecutionHistory, DcaPurchase,
 } from '@/lib/profitTaking';
 import { CopyButton } from '@/components/CopyButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   TrendingUp, TrendingDown, ChevronDown, AlertTriangle, CheckCircle2,
-  DollarSign, ShieldAlert, ExternalLink, Edit3, Lock,
+  DollarSign, ShieldAlert, ExternalLink, Edit3, Lock, Plus, BarChart3, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -29,7 +30,22 @@ export function ProfitTakingPage({ lang }: Props) {
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [, forceUpdate] = useState(0);
+  const [showPL, setShowPL] = useState(true);
+  const [showAddPurchase, setShowAddPurchase] = useState<string | null>(null);
+  const [purchasePrice, setPurchasePrice] = useState('');
+  const [purchaseQty, setPurchaseQty] = useState('');
+  const [purchaseType, setPurchaseType] = useState<'market' | 'limit'>('market');
   const holdings = loadHoldings();
+
+  // Auto-import from execution history on first load
+  useEffect(() => {
+    if (!prices) return;
+    const imported = importFromExecutionHistory(prices);
+    if (imported > 0) {
+      setAvgCosts(getAvgCostBasis());
+      toast.success(`Importovaných ${imported} nákupov z DCA histórie`);
+    }
+  }, [prices]);
 
   const saveAvgCost = (tokenId: string) => {
     const val = parseFloat(editValue);
@@ -44,12 +60,59 @@ export function ProfitTakingPage({ lang }: Props) {
     toast.success('Priemerná cena uložená ✓');
   };
 
+  const handleAddPurchase = (tokenId: string) => {
+    const price = parseFloat(purchasePrice);
+    const qty = parseFloat(purchaseQty);
+    if (isNaN(price) || price <= 0 || isNaN(qty) || qty <= 0) {
+      toast.error('Zadaj platnú cenu a množstvo');
+      return;
+    }
+    addDcaPurchase({ tokenId, quantity: qty, priceUsd: price, totalUsd: price * qty, type: purchaseType });
+    setAvgCosts(getAvgCostBasis());
+    setShowAddPurchase(null);
+    setPurchasePrice('');
+    setPurchaseQty('');
+    toast.success('Nákup zaznamenaný ✓');
+    forceUpdate(n => n + 1);
+  };
+
   const handleExecuteLevel = (tokenId: string, profitPct: number) => {
     if (isLevelExecuted(tokenId, profitPct)) return;
     markLevelExecuted(tokenId, profitPct);
     forceUpdate(n => n + 1);
     toast.success(`Level +${profitPct}% označený ako vykonaný ✓`);
   };
+
+  // P/L calculations
+  const plData = useMemo(() => {
+    if (!prices) return [];
+    return TOKENS.map(token => {
+      const avgCost = avgCosts[token.id] ?? 0;
+      const currentPrice = prices[token.coingeckoId]?.usd ?? 0;
+      const holdingQty = holdings[token.id] ?? 0;
+      const profitPct = computeProfitPct(currentPrice, avgCost);
+      const investedUsd = avgCost * holdingQty;
+      const currentUsd = currentPrice * holdingQty;
+      const plUsd = currentUsd - investedUsd;
+      const purchases = getDcaPurchases().filter(p => p.tokenId === token.id);
+      return {
+        token,
+        avgCost,
+        currentPrice,
+        holdingQty,
+        profitPct,
+        investedUsd,
+        currentUsd,
+        plUsd,
+        purchaseCount: purchases.length,
+      };
+    });
+  }, [prices, avgCosts, holdings]);
+
+  const totalInvested = plData.reduce((s, d) => s + d.investedUsd, 0);
+  const totalCurrent = plData.reduce((s, d) => s + d.currentUsd, 0);
+  const totalPL = totalCurrent - totalInvested;
+  const totalPLPct = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
   return (
     <div className="space-y-4">
@@ -60,6 +123,77 @@ export function ProfitTakingPage({ lang }: Props) {
       <p className="text-xs text-muted-foreground">
         Automatická stratégia postupného predaja. Zisky → 70-80% BTC / 20-30% stablecoin.
       </p>
+
+      {/* P/L Report Card */}
+      <div className="glass-card overflow-hidden">
+        <button onClick={() => setShowPL(!showPL)} className="w-full p-4 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-5 h-5 text-primary" />
+            <span className="font-bold text-foreground">P/L Report</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className={`text-lg font-bold ${totalPL >= 0 ? 'text-gain' : 'text-loss'}`}>
+              {totalPL >= 0 ? '+' : ''}{formatUsd(totalPL)}
+            </span>
+            <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${showPL ? 'rotate-180' : ''}`} />
+          </div>
+        </button>
+
+        {showPL && (
+          <div className="px-4 pb-4 space-y-3">
+            {/* Total summary */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              <div className="bg-secondary/50 rounded-lg p-2">
+                <p className="text-[9px] text-muted-foreground">Investované</p>
+                <p className="text-sm font-bold text-foreground">{formatUsd(totalInvested)}</p>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-2">
+                <p className="text-[9px] text-muted-foreground">Aktuálna hodnota</p>
+                <p className="text-sm font-bold text-foreground">{formatUsd(totalCurrent)}</p>
+              </div>
+              <div className="bg-secondary/50 rounded-lg p-2">
+                <p className="text-[9px] text-muted-foreground">P/L %</p>
+                <p className={`text-sm font-bold ${totalPLPct >= 0 ? 'text-gain' : 'text-loss'}`}>
+                  {totalPLPct >= 0 ? '+' : ''}{totalPLPct.toFixed(1)}%
+                </p>
+              </div>
+            </div>
+
+            {/* Per-token P/L */}
+            <div className="space-y-2">
+              {plData.map(d => {
+                if (d.holdingQty <= 0 && d.avgCost <= 0) return null;
+                return (
+                  <div key={d.token.id} className="flex items-center gap-3 bg-secondary/30 rounded-lg p-3">
+                    <div
+                      className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                      style={{ backgroundColor: d.token.color + '20', color: d.token.color }}
+                    >
+                      {d.token.symbol.slice(0, 2)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-medium text-foreground">{d.token.symbol}</span>
+                        <span className={`text-sm font-bold ${d.plUsd >= 0 ? 'text-gain' : 'text-loss'}`}>
+                          {d.plUsd >= 0 ? '+' : ''}{formatUsd(d.plUsd)}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                        <span>
+                          Avg: {d.avgCost > 0 ? formatPrice(d.avgCost) : '—'} · {d.purchaseCount} nákupov
+                        </span>
+                        <span className={d.profitPct >= 0 ? 'text-gain' : 'text-loss'}>
+                          {d.avgCost > 0 ? `${d.profitPct >= 0 ? '+' : ''}${d.profitPct.toFixed(1)}%` : '—'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Discipline Warning */}
       <div className="glass-card p-3 flex gap-2 border-warning/20 bg-warning/5">
@@ -98,6 +232,15 @@ export function ProfitTakingPage({ lang }: Props) {
             onSaveEdit={() => saveAvgCost(config.id)}
             onCancelEdit={() => setEditingToken(null)}
             onExecuteLevel={(pct) => handleExecuteLevel(config.id, pct)}
+            showAddPurchase={showAddPurchase === config.id}
+            onToggleAddPurchase={() => setShowAddPurchase(showAddPurchase === config.id ? null : config.id)}
+            purchasePrice={purchasePrice}
+            purchaseQty={purchaseQty}
+            purchaseType={purchaseType}
+            onPurchasePriceChange={setPurchasePrice}
+            onPurchaseQtyChange={setPurchaseQty}
+            onPurchaseTypeChange={setPurchaseType}
+            onAddPurchase={() => handleAddPurchase(config.id)}
             prices={prices}
           />
         );
@@ -120,7 +263,10 @@ export function ProfitTakingPage({ lang }: Props) {
 
 function TokenProfitCard({
   config, currentPrice, avgCost, profitPct, holdingQty, totalSold, remaining,
-  editing, editValue, onStartEdit, onEditChange, onSaveEdit, onCancelEdit, onExecuteLevel, prices,
+  editing, editValue, onStartEdit, onEditChange, onSaveEdit, onCancelEdit, onExecuteLevel,
+  showAddPurchase, onToggleAddPurchase, purchasePrice, purchaseQty, purchaseType,
+  onPurchasePriceChange, onPurchaseQtyChange, onPurchaseTypeChange, onAddPurchase,
+  prices,
 }: {
   config: TokenProfitConfig;
   currentPrice: number;
@@ -136,16 +282,24 @@ function TokenProfitCard({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onExecuteLevel: (pct: number) => void;
+  showAddPurchase: boolean;
+  onToggleAddPurchase: () => void;
+  purchasePrice: string;
+  purchaseQty: string;
+  purchaseType: 'market' | 'limit';
+  onPurchasePriceChange: (v: string) => void;
+  onPurchaseQtyChange: (v: string) => void;
+  onPurchaseTypeChange: (v: 'market' | 'limit') => void;
+  onAddPurchase: () => void;
   prices?: PriceData;
 }) {
   const [open, setOpen] = useState(false);
   const hasAvgCost = avgCost > 0;
+  const purchases = getDcaPurchases().filter(p => p.tokenId === config.id);
 
-  // Find next active level
   const nextLevel = config.levels.find(l => !isLevelExecuted(config.id, l.profitPct));
   const nextLevelReached = nextLevel && profitPct >= nextLevel.profitPct;
 
-  // Progress: how many levels completed
   const completedCount = config.levels.filter(l => isLevelExecuted(config.id, l.profitPct)).length;
   const progressPct = (completedCount / config.levels.length) * 100;
 
@@ -175,6 +329,9 @@ function TokenProfitCard({
             ) : (
               <span className="text-muted-foreground">Zadaj priemernú cenu →</span>
             )}
+            {purchases.length > 0 && (
+              <span className="text-muted-foreground">· {purchases.length} nákupov</span>
+            )}
           </div>
         </div>
         <div className="text-right flex-shrink-0">
@@ -185,15 +342,20 @@ function TokenProfitCard({
 
       {open && (
         <div className="px-4 pb-4 space-y-3">
-          {/* Avg Cost Input */}
+          {/* Avg Cost + Add Purchase */}
           <div className="bg-secondary/50 rounded-lg p-3 space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-xs text-muted-foreground">Priemerná nákupná cena</span>
-              {!editing && (
-                <button onClick={onStartEdit} className="text-primary text-xs flex items-center gap-1">
-                  <Edit3 className="w-3 h-3" /> Upraviť
+              <div className="flex items-center gap-2">
+                <button onClick={onToggleAddPurchase} className="text-primary text-xs flex items-center gap-1">
+                  <Plus className="w-3 h-3" /> Nákup
                 </button>
-              )}
+                {!editing && (
+                  <button onClick={onStartEdit} className="text-primary text-xs flex items-center gap-1">
+                    <Edit3 className="w-3 h-3" /> Upraviť
+                  </button>
+                )}
+              </div>
             </div>
             {editing ? (
               <div className="flex gap-2">
@@ -215,9 +377,70 @@ function TokenProfitCard({
             ) : (
               <p className="text-sm font-bold text-foreground">
                 {hasAvgCost ? formatPrice(avgCost) : '—'}
+                {purchases.length > 0 && (
+                  <span className="text-[10px] text-muted-foreground font-normal ml-2">
+                    (auto z {purchases.length} nákupov)
+                  </span>
+                )}
               </p>
             )}
           </div>
+
+          {/* Add Purchase Form */}
+          {showAddPurchase && (
+            <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 space-y-2">
+              <p className="text-xs font-bold text-foreground flex items-center gap-1">
+                <Plus className="w-3 h-3" /> Zaznamenať nákup {config.symbol}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => onPurchaseTypeChange('market')}
+                  className={`flex-1 py-1.5 rounded text-xs font-medium ${purchaseType === 'market' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+                >
+                  Market
+                </button>
+                <button
+                  onClick={() => onPurchaseTypeChange('limit')}
+                  className={`flex-1 py-1.5 rounded text-xs font-medium ${purchaseType === 'limit' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'}`}
+                >
+                  Limit
+                </button>
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className="text-[10px] text-muted-foreground">Cena (USD)</label>
+                  <input
+                    type="number"
+                    value={purchasePrice}
+                    onChange={e => onPurchasePriceChange(e.target.value)}
+                    placeholder={currentPrice > 0 ? currentPrice.toFixed(0) : '0'}
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] text-muted-foreground">Množstvo</label>
+                  <input
+                    type="number"
+                    value={purchaseQty}
+                    onChange={e => onPurchaseQtyChange(e.target.value)}
+                    placeholder="0.001"
+                    className="w-full bg-background border border-border rounded px-2 py-1.5 text-sm text-foreground"
+                  />
+                </div>
+              </div>
+              {purchasePrice && purchaseQty && (
+                <p className="text-[10px] text-muted-foreground">
+                  Celkom: {formatUsd(parseFloat(purchasePrice) * parseFloat(purchaseQty))}
+                </p>
+              )}
+              <button
+                onClick={onAddPurchase}
+                className="w-full py-2 rounded-lg text-xs font-medium bg-primary text-primary-foreground"
+              >
+                Zaznamenať nákup
+              </button>
+            </div>
+          )}
 
           {/* Profit Summary */}
           {hasAvgCost && (
@@ -256,6 +479,29 @@ function TokenProfitCard({
             </div>
           </div>
 
+          {/* Purchase History */}
+          {purchases.length > 0 && (
+            <Collapsible>
+              <CollapsibleTrigger className="flex items-center gap-1 text-xs text-primary w-full">
+                <History className="w-3 h-3" />
+                História nákupov ({purchases.length})
+                <ChevronDown className="w-3 h-3 ml-auto" />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="mt-2 space-y-1">
+                {purchases.slice(-10).reverse().map((p, i) => (
+                  <div key={i} className="flex items-center justify-between text-[10px] bg-secondary/30 rounded px-2 py-1.5">
+                    <span className="text-muted-foreground">
+                      {new Date(p.date).toLocaleDateString('sk')} · {p.type === 'market' ? 'Market' : 'Limit'}
+                    </span>
+                    <span className="text-foreground font-medium">
+                      {formatQuantity(p.quantity, config.symbol)} @ {formatPrice(p.priceUsd)}
+                    </span>
+                  </div>
+                ))}
+              </CollapsibleContent>
+            </Collapsible>
+          )}
+
           {/* Profit Levels */}
           <div className="space-y-1.5">
             {config.levels.map((level, idx) => {
@@ -265,7 +511,6 @@ function TokenProfitCard({
               const prevExecuted = idx === 0 || isLevelExecuted(config.id, config.levels[idx - 1].profitPct);
               const canExecute = reached && !executed && prevExecuted;
 
-              // Compute exact amounts
               const sellQty = holdingQty * (level.sellPct / 100);
               const sellUsd = sellQty * currentPrice;
               const toBtc = sellUsd * (level.btcPct / 100);
@@ -303,7 +548,6 @@ function TokenProfitCard({
                     </span>
                   </div>
 
-                  {/* Details when reached or executed */}
                   {(reached || executed) && hasAvgCost && holdingQty > 0 && (
                     <div className="mt-2 space-y-1 text-[10px] text-muted-foreground">
                       <p>Predaj: <strong className="text-foreground">{formatQuantity(sellQty, config.symbol)} {config.symbol}</strong> ({formatUsd(sellUsd)})</p>
@@ -316,7 +560,6 @@ function TokenProfitCard({
                     </div>
                   )}
 
-                  {/* Action buttons */}
                   {canExecute && (
                     <div className="flex gap-2 mt-2">
                       <button
