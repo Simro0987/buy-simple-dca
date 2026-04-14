@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData } from '@/lib/crypto';
@@ -12,9 +12,55 @@ import { CopyButton } from '@/components/CopyButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   TrendingUp, TrendingDown, ChevronDown, AlertTriangle, CheckCircle2,
-  DollarSign, ShieldAlert, ExternalLink, Edit3, Lock, Plus, BarChart3, History,
+  DollarSign, ShieldAlert, ExternalLink, Edit3, Lock, Plus, BarChart3, History, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+
+const PROFIT_ALERT_KEY = 'profit-alert-sent';
+
+function getAlertedLevels(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(PROFIT_ALERT_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function markAlertSent(tokenId: string, profitPct: number) {
+  const alerted = getAlertedLevels();
+  alerted[`${tokenId}_${profitPct}`] = Date.now();
+  localStorage.setItem(PROFIT_ALERT_KEY, JSON.stringify(alerted));
+}
+
+function wasAlertSent(tokenId: string, profitPct: number): boolean {
+  const alerted = getAlertedLevels();
+  const ts = alerted[`${tokenId}_${profitPct}`];
+  if (!ts) return false;
+  // Cool down: 24 hours
+  return Date.now() - ts < 24 * 60 * 60 * 1000;
+}
+
+async function sendProfitAlert(params: {
+  chatId: string;
+  token: string;
+  profitPct: number;
+  sellPct: number;
+  currentPrice: number;
+  avgCost: number;
+  sellUsd: number;
+  toBtcUsd: number;
+  toStableUsd: number;
+  btcPct: number;
+}): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke('telegram-profit-alert', {
+      body: params,
+    });
+    if (error) throw error;
+    return data?.success === true;
+  } catch (e) {
+    console.error('Failed to send profit alert:', e);
+    return false;
+  }
+}
 
 interface Props { lang: Lang; }
 
@@ -82,6 +128,97 @@ export function ProfitTakingPage({ lang }: Props) {
     forceUpdate(n => n + 1);
     toast.success(`Level +${profitPct}% označený ako vykonaný ✓`);
   };
+
+  // Auto-send Telegram alerts when profit levels are reached
+  const alertCheckRef = useRef(false);
+  useEffect(() => {
+    if (!prices || alertCheckRef.current) return;
+    alertCheckRef.current = true;
+
+    const chatId = localStorage.getItem('telegram-chat-id') || '';
+    if (!chatId) return;
+
+    for (const config of PROFIT_CONFIGS) {
+      const token = TOKENS.find(t => t.id === config.id)!;
+      const avgCost = avgCosts[config.id] ?? 0;
+      if (avgCost <= 0) continue;
+
+      const currentPrice = prices[token.coingeckoId]?.usd ?? 0;
+      if (currentPrice <= 0) continue;
+
+      const pPct = computeProfitPct(currentPrice, avgCost);
+      const holdingQty = holdings[config.id] ?? 0;
+
+      for (let idx = 0; idx < config.levels.length; idx++) {
+        const level = config.levels[idx];
+        const executed = isLevelExecuted(config.id, level.profitPct);
+        const prevExecuted = idx === 0 || isLevelExecuted(config.id, config.levels[idx - 1].profitPct);
+        const reached = pPct >= level.profitPct;
+
+        if (reached && !executed && prevExecuted && !wasAlertSent(config.id, level.profitPct)) {
+          const sellQty = holdingQty * (level.sellPct / 100);
+          const sellUsd = sellQty * currentPrice;
+          const toBtcUsd = sellUsd * (level.btcPct / 100);
+          const toStableUsd = sellUsd * ((100 - level.btcPct) / 100);
+
+          sendProfitAlert({
+            chatId,
+            token: config.symbol,
+            profitPct: pPct,
+            sellPct: level.sellPct,
+            currentPrice,
+            avgCost,
+            sellUsd,
+            toBtcUsd,
+            toStableUsd,
+            btcPct: level.btcPct,
+          }).then(sent => {
+            if (sent) {
+              markAlertSent(config.id, level.profitPct);
+              toast.info(`📬 Telegram alert odoslaný: ${config.symbol} +${level.profitPct}%`);
+            }
+          });
+          break; // only alert next unexecuted level per token
+        }
+      }
+    }
+  }, [prices, avgCosts]);
+
+  // Manual send handler
+  const handleManualAlert = useCallback(async (config: TokenProfitConfig, level: ProfitLevel, currentPrice: number, avgCost: number) => {
+    const chatId = localStorage.getItem('telegram-chat-id') || '';
+    if (!chatId) {
+      toast.error('Nastav Telegram Chat ID v Nastaveniach');
+      return;
+    }
+    const holdingQty = holdings[config.id] ?? 0;
+    const sellQty = holdingQty * (level.sellPct / 100);
+    const sellUsd = sellQty * currentPrice;
+    const toBtcUsd = sellUsd * (level.btcPct / 100);
+    const toStableUsd = sellUsd * ((100 - level.btcPct) / 100);
+    const pPct = computeProfitPct(currentPrice, avgCost);
+
+    toast.loading('Odosielam Telegram alert...');
+    const sent = await sendProfitAlert({
+      chatId,
+      token: config.symbol,
+      profitPct: pPct,
+      sellPct: level.sellPct,
+      currentPrice,
+      avgCost,
+      sellUsd,
+      toBtcUsd,
+      toStableUsd,
+      btcPct: level.btcPct,
+    });
+    toast.dismiss();
+    if (sent) {
+      markAlertSent(config.id, level.profitPct);
+      toast.success('Telegram alert odoslaný ✓');
+    } else {
+      toast.error('Nepodarilo sa odoslať alert');
+    }
+  }, [holdings]);
 
   // P/L calculations
   const plData = useMemo(() => {
@@ -232,6 +369,7 @@ export function ProfitTakingPage({ lang }: Props) {
             onSaveEdit={() => saveAvgCost(config.id)}
             onCancelEdit={() => setEditingToken(null)}
             onExecuteLevel={(pct) => handleExecuteLevel(config.id, pct)}
+            onSendAlert={(level) => handleManualAlert(config, level, currentPrice, avgCost)}
             showAddPurchase={showAddPurchase === config.id}
             onToggleAddPurchase={() => setShowAddPurchase(showAddPurchase === config.id ? null : config.id)}
             purchasePrice={purchasePrice}
@@ -264,6 +402,7 @@ export function ProfitTakingPage({ lang }: Props) {
 function TokenProfitCard({
   config, currentPrice, avgCost, profitPct, holdingQty, totalSold, remaining,
   editing, editValue, onStartEdit, onEditChange, onSaveEdit, onCancelEdit, onExecuteLevel,
+  onSendAlert,
   showAddPurchase, onToggleAddPurchase, purchasePrice, purchaseQty, purchaseType,
   onPurchasePriceChange, onPurchaseQtyChange, onPurchaseTypeChange, onAddPurchase,
   prices,
@@ -282,6 +421,7 @@ function TokenProfitCard({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onExecuteLevel: (pct: number) => void;
+  onSendAlert: (level: ProfitLevel) => void;
   showAddPurchase: boolean;
   onToggleAddPurchase: () => void;
   purchasePrice: string;
@@ -568,6 +708,13 @@ function TokenProfitCard({
                       >
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Označ vykonané
+                      </button>
+                      <button
+                        onClick={() => onSendAlert(level)}
+                        className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30 active:bg-blue-500/20"
+                        title="Pošli Telegram alert"
+                      >
+                        <Send className="w-3.5 h-3.5" />
                       </button>
                       <a
                         href={`https://app.hyperliquid.xyz/trade/${config.symbol}`}
