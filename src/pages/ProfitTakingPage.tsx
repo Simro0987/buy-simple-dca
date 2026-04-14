@@ -129,6 +129,97 @@ export function ProfitTakingPage({ lang }: Props) {
     toast.success(`Level +${profitPct}% označený ako vykonaný ✓`);
   };
 
+  // Auto-send Telegram alerts when profit levels are reached
+  const alertCheckRef = useRef(false);
+  useEffect(() => {
+    if (!prices || alertCheckRef.current) return;
+    alertCheckRef.current = true;
+
+    const chatId = localStorage.getItem('telegram-chat-id') || '';
+    if (!chatId) return;
+
+    for (const config of PROFIT_CONFIGS) {
+      const token = TOKENS.find(t => t.id === config.id)!;
+      const avgCost = avgCosts[config.id] ?? 0;
+      if (avgCost <= 0) continue;
+
+      const currentPrice = prices[token.coingeckoId]?.usd ?? 0;
+      if (currentPrice <= 0) continue;
+
+      const pPct = computeProfitPct(currentPrice, avgCost);
+      const holdingQty = holdings[config.id] ?? 0;
+
+      for (let idx = 0; idx < config.levels.length; idx++) {
+        const level = config.levels[idx];
+        const executed = isLevelExecuted(config.id, level.profitPct);
+        const prevExecuted = idx === 0 || isLevelExecuted(config.id, config.levels[idx - 1].profitPct);
+        const reached = pPct >= level.profitPct;
+
+        if (reached && !executed && prevExecuted && !wasAlertSent(config.id, level.profitPct)) {
+          const sellQty = holdingQty * (level.sellPct / 100);
+          const sellUsd = sellQty * currentPrice;
+          const toBtcUsd = sellUsd * (level.btcPct / 100);
+          const toStableUsd = sellUsd * ((100 - level.btcPct) / 100);
+
+          sendProfitAlert({
+            chatId,
+            token: config.symbol,
+            profitPct: pPct,
+            sellPct: level.sellPct,
+            currentPrice,
+            avgCost,
+            sellUsd,
+            toBtcUsd,
+            toStableUsd,
+            btcPct: level.btcPct,
+          }).then(sent => {
+            if (sent) {
+              markAlertSent(config.id, level.profitPct);
+              toast.info(`📬 Telegram alert odoslaný: ${config.symbol} +${level.profitPct}%`);
+            }
+          });
+          break; // only alert next unexecuted level per token
+        }
+      }
+    }
+  }, [prices, avgCosts]);
+
+  // Manual send handler
+  const handleManualAlert = useCallback(async (config: TokenProfitConfig, level: ProfitLevel, currentPrice: number, avgCost: number) => {
+    const chatId = localStorage.getItem('telegram-chat-id') || '';
+    if (!chatId) {
+      toast.error('Nastav Telegram Chat ID v Nastaveniach');
+      return;
+    }
+    const holdingQty = holdings[config.id] ?? 0;
+    const sellQty = holdingQty * (level.sellPct / 100);
+    const sellUsd = sellQty * currentPrice;
+    const toBtcUsd = sellUsd * (level.btcPct / 100);
+    const toStableUsd = sellUsd * ((100 - level.btcPct) / 100);
+    const pPct = computeProfitPct(currentPrice, avgCost);
+
+    toast.loading('Odosielam Telegram alert...');
+    const sent = await sendProfitAlert({
+      chatId,
+      token: config.symbol,
+      profitPct: pPct,
+      sellPct: level.sellPct,
+      currentPrice,
+      avgCost,
+      sellUsd,
+      toBtcUsd,
+      toStableUsd,
+      btcPct: level.btcPct,
+    });
+    toast.dismiss();
+    if (sent) {
+      markAlertSent(config.id, level.profitPct);
+      toast.success('Telegram alert odoslaný ✓');
+    } else {
+      toast.error('Nepodarilo sa odoslať alert');
+    }
+  }, [holdings]);
+
   // P/L calculations
   const plData = useMemo(() => {
     if (!prices) return [];
