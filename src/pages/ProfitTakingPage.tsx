@@ -369,6 +369,7 @@ export function ProfitTakingPage({ lang }: Props) {
             onSaveEdit={() => saveAvgCost(config.id)}
             onCancelEdit={() => setEditingToken(null)}
             onExecuteLevel={(pct) => handleExecuteLevel(config.id, pct)}
+            onSendAlert={(level) => handleManualAlert(config, level, currentPrice, avgCost)}
             showAddPurchase={showAddPurchase === config.id}
             onToggleAddPurchase={() => setShowAddPurchase(showAddPurchase === config.id ? null : config.id)}
             purchasePrice={purchasePrice}
