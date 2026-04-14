@@ -402,6 +402,7 @@ export function ProfitTakingPage({ lang }: Props) {
 function TokenProfitCard({
   config, currentPrice, avgCost, profitPct, holdingQty, totalSold, remaining,
   editing, editValue, onStartEdit, onEditChange, onSaveEdit, onCancelEdit, onExecuteLevel,
+  onSendAlert,
   showAddPurchase, onToggleAddPurchase, purchasePrice, purchaseQty, purchaseType,
   onPurchasePriceChange, onPurchaseQtyChange, onPurchaseTypeChange, onAddPurchase,
   prices,
@@ -420,6 +421,7 @@ function TokenProfitCard({
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   onExecuteLevel: (pct: number) => void;
+  onSendAlert: (level: ProfitLevel) => void;
   showAddPurchase: boolean;
   onToggleAddPurchase: () => void;
   purchasePrice: string;
