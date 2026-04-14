@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData } from '@/lib/crypto';
@@ -12,9 +12,55 @@ import { CopyButton } from '@/components/CopyButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   TrendingUp, TrendingDown, ChevronDown, AlertTriangle, CheckCircle2,
-  DollarSign, ShieldAlert, ExternalLink, Edit3, Lock, Plus, BarChart3, History,
+  DollarSign, ShieldAlert, ExternalLink, Edit3, Lock, Plus, BarChart3, History, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
+
+const PROFIT_ALERT_KEY = 'profit-alert-sent';
+
+function getAlertedLevels(): Record<string, number> {
+  try { return JSON.parse(localStorage.getItem(PROFIT_ALERT_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function markAlertSent(tokenId: string, profitPct: number) {
+  const alerted = getAlertedLevels();
+  alerted[`${tokenId}_${profitPct}`] = Date.now();
+  localStorage.setItem(PROFIT_ALERT_KEY, JSON.stringify(alerted));
+}
+
+function wasAlertSent(tokenId: string, profitPct: number): boolean {
+  const alerted = getAlertedLevels();
+  const ts = alerted[`${tokenId}_${profitPct}`];
+  if (!ts) return false;
+  // Cool down: 24 hours
+  return Date.now() - ts < 24 * 60 * 60 * 1000;
+}
+
+async function sendProfitAlert(params: {
+  chatId: string;
+  token: string;
+  profitPct: number;
+  sellPct: number;
+  currentPrice: number;
+  avgCost: number;
+  sellUsd: number;
+  toBtcUsd: number;
+  toStableUsd: number;
+  btcPct: number;
+}): Promise<boolean> {
+  try {
+    const { data, error } = await supabase.functions.invoke('telegram-profit-alert', {
+      body: params,
+    });
+    if (error) throw error;
+    return data?.success === true;
+  } catch (e) {
+    console.error('Failed to send profit alert:', e);
+    return false;
+  }
+}
 
 interface Props { lang: Lang; }
 
