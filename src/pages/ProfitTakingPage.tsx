@@ -709,6 +709,13 @@ function TokenProfitCard({
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Označ vykonané
                       </button>
+                      <button
+                        onClick={() => onSendAlert(level)}
+                        className="flex items-center justify-center gap-1 px-3 py-2 rounded-lg text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/30 active:bg-blue-500/20"
+                        title="Pošli Telegram alert"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
                       <a
                         href={`https://app.hyperliquid.xyz/trade/${config.symbol}`}
                         target="_blank"
