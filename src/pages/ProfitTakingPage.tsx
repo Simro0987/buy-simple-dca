@@ -130,6 +130,7 @@ export function ProfitTakingPage({ lang }: Props) {
     const updated = { ...avgCosts, [tokenId]: val };
     setAvgCosts(updated);
     setAvgCostBasis(updated);
+    setCostSource(prev => ({ ...prev, [tokenId]: 'manual' }));
     setEditingToken(null);
     toast.success('Priemerná cena uložená ✓');
   };
