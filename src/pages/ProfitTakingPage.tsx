@@ -434,7 +434,7 @@ function TokenProfitCard({
   onSendAlert,
   showAddPurchase, onToggleAddPurchase, purchasePrice, purchaseQty, purchaseType,
   onPurchasePriceChange, onPurchaseQtyChange, onPurchaseTypeChange, onAddPurchase,
-  prices,
+  prices, costSource,
 }: {
   config: TokenProfitConfig;
   currentPrice: number;
@@ -461,6 +461,7 @@ function TokenProfitCard({
   onPurchaseTypeChange: (v: 'market' | 'limit') => void;
   onAddPurchase: () => void;
   prices?: PriceData;
+  costSource?: 'auto' | 'manual';
 }) {
   const [open, setOpen] = useState(false);
   const hasAvgCost = avgCost > 0;
