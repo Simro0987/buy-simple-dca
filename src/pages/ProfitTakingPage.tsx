@@ -81,6 +81,7 @@ export function ProfitTakingPage({ lang }: Props) {
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseQty, setPurchaseQty] = useState('');
   const [purchaseType, setPurchaseType] = useState<'market' | 'limit'>('market');
+  const [costSource, setCostSource] = useState<Record<string, 'auto' | 'manual'>>({});
   const holdings = loadHoldings();
 
   // Auto-import from execution history on first load
@@ -88,9 +89,36 @@ export function ProfitTakingPage({ lang }: Props) {
     if (!prices) return;
     const imported = importFromExecutionHistory(prices);
     if (imported > 0) {
-      setAvgCosts(getAvgCostBasis());
       toast.success(`Importovaných ${imported} nákupov z DCA histórie`);
     }
+  }, [prices]);
+
+  // Auto-recalculate avg costs from DCA purchases + wallet sync on every price update
+  useEffect(() => {
+    if (!prices) return;
+    const purchases = getDcaPurchases();
+    const sources: Record<string, 'auto' | 'manual'> = {};
+    const newBasis: Record<string, number> = { ...getAvgCostBasis() };
+
+    for (const token of TOKENS) {
+      const tokenPurchases = purchases.filter(p => p.tokenId === token.id);
+      if (tokenPurchases.length > 0) {
+        // Auto-calculate from purchase history
+        const totalQty = tokenPurchases.reduce((s, p) => s + p.quantity, 0);
+        const totalCost = tokenPurchases.reduce((s, p) => s + p.totalUsd, 0);
+        if (totalQty > 0) {
+          newBasis[token.id] = totalCost / totalQty;
+          sources[token.id] = 'auto';
+        }
+      } else if (newBasis[token.id] && newBasis[token.id] > 0) {
+        // Keep manual value
+        sources[token.id] = 'manual';
+      }
+    }
+
+    setAvgCostBasis(newBasis);
+    setAvgCosts(newBasis);
+    setCostSource(sources);
   }, [prices]);
 
   const saveAvgCost = (tokenId: string) => {
@@ -102,6 +130,7 @@ export function ProfitTakingPage({ lang }: Props) {
     const updated = { ...avgCosts, [tokenId]: val };
     setAvgCosts(updated);
     setAvgCostBasis(updated);
+    setCostSource(prev => ({ ...prev, [tokenId]: 'manual' }));
     setEditingToken(null);
     toast.success('Priemerná cena uložená ✓');
   };
@@ -380,6 +409,7 @@ export function ProfitTakingPage({ lang }: Props) {
             onPurchaseTypeChange={setPurchaseType}
             onAddPurchase={() => handleAddPurchase(config.id)}
             prices={prices}
+            costSource={costSource[config.id]}
           />
         );
       })}
@@ -405,7 +435,7 @@ function TokenProfitCard({
   onSendAlert,
   showAddPurchase, onToggleAddPurchase, purchasePrice, purchaseQty, purchaseType,
   onPurchasePriceChange, onPurchaseQtyChange, onPurchaseTypeChange, onAddPurchase,
-  prices,
+  prices, costSource,
 }: {
   config: TokenProfitConfig;
   currentPrice: number;
@@ -432,6 +462,7 @@ function TokenProfitCard({
   onPurchaseTypeChange: (v: 'market' | 'limit') => void;
   onAddPurchase: () => void;
   prices?: PriceData;
+  costSource?: 'auto' | 'manual';
 }) {
   const [open, setOpen] = useState(false);
   const hasAvgCost = avgCost > 0;
@@ -485,7 +516,15 @@ function TokenProfitCard({
           {/* Avg Cost + Add Purchase */}
           <div className="bg-secondary/50 rounded-lg p-3 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Priemerná nákupná cena</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                Priemerná nákupná cena
+                {costSource === 'auto' && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">AUTO</span>
+                )}
+                {costSource === 'manual' && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">MANUÁLNE</span>
+                )}
+              </span>
               <div className="flex items-center gap-2">
                 <button onClick={onToggleAddPurchase} className="text-primary text-xs flex items-center gap-1">
                   <Plus className="w-3 h-3" /> Nákup
