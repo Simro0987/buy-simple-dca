@@ -81,6 +81,7 @@ export function ProfitTakingPage({ lang }: Props) {
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseQty, setPurchaseQty] = useState('');
   const [purchaseType, setPurchaseType] = useState<'market' | 'limit'>('market');
+  const [costSource, setCostSource] = useState<Record<string, 'auto' | 'manual'>>({});
   const holdings = loadHoldings();
 
   // Auto-import from execution history on first load
@@ -88,9 +89,36 @@ export function ProfitTakingPage({ lang }: Props) {
     if (!prices) return;
     const imported = importFromExecutionHistory(prices);
     if (imported > 0) {
-      setAvgCosts(getAvgCostBasis());
       toast.success(`Importovaných ${imported} nákupov z DCA histórie`);
     }
+  }, [prices]);
+
+  // Auto-recalculate avg costs from DCA purchases + wallet sync on every price update
+  useEffect(() => {
+    if (!prices) return;
+    const purchases = getDcaPurchases();
+    const sources: Record<string, 'auto' | 'manual'> = {};
+    const newBasis: Record<string, number> = { ...getAvgCostBasis() };
+
+    for (const token of TOKENS) {
+      const tokenPurchases = purchases.filter(p => p.tokenId === token.id);
+      if (tokenPurchases.length > 0) {
+        // Auto-calculate from purchase history
+        const totalQty = tokenPurchases.reduce((s, p) => s + p.quantity, 0);
+        const totalCost = tokenPurchases.reduce((s, p) => s + p.totalUsd, 0);
+        if (totalQty > 0) {
+          newBasis[token.id] = totalCost / totalQty;
+          sources[token.id] = 'auto';
+        }
+      } else if (newBasis[token.id] && newBasis[token.id] > 0) {
+        // Keep manual value
+        sources[token.id] = 'manual';
+      }
+    }
+
+    setAvgCostBasis(newBasis);
+    setAvgCosts(newBasis);
+    setCostSource(sources);
   }, [prices]);
 
   const saveAvgCost = (tokenId: string) => {
