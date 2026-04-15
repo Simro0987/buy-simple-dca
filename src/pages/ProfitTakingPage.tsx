@@ -408,6 +408,7 @@ export function ProfitTakingPage({ lang }: Props) {
             onPurchaseTypeChange={setPurchaseType}
             onAddPurchase={() => handleAddPurchase(config.id)}
             prices={prices}
+            costSource={costSource[config.id]}
           />
         );
       })}
