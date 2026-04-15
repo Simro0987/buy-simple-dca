@@ -515,7 +515,15 @@ function TokenProfitCard({
           {/* Avg Cost + Add Purchase */}
           <div className="bg-secondary/50 rounded-lg p-3 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Priemerná nákupná cena</span>
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                Priemerná nákupná cena
+                {costSource === 'auto' && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/15 text-primary font-medium">AUTO</span>
+                )}
+                {costSource === 'manual' && (
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">MANUÁLNE</span>
+                )}
+              </span>
               <div className="flex items-center gap-2">
                 <button onClick={onToggleAddPurchase} className="text-primary text-xs flex items-center gap-1">
                   <Plus className="w-3 h-3" /> Nákup
