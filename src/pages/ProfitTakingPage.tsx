@@ -164,7 +164,7 @@ export function ProfitTakingPage({ lang }: Props) {
     if (!prices || alertCheckRef.current) return;
     alertCheckRef.current = true;
 
-    const chatId = localStorage.getItem('telegram-chat-id') || '';
+    const chatId = localStorage.getItem('telegram_chat_id') || '';
     if (!chatId) return;
 
     for (const config of PROFIT_CONFIGS) {
@@ -215,7 +215,7 @@ export function ProfitTakingPage({ lang }: Props) {
 
   // Manual send handler
   const handleManualAlert = useCallback(async (config: TokenProfitConfig, level: ProfitLevel, currentPrice: number, avgCost: number) => {
-    const chatId = localStorage.getItem('telegram-chat-id') || '';
+    const chatId = localStorage.getItem('telegram_chat_id') || '';
     if (!chatId) {
       toast.error('Nastav Telegram Chat ID v Nastaveniach');
       return;
