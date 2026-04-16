@@ -12,6 +12,7 @@ import { SmartAllocPage } from '@/pages/SmartAllocPage';
 import { SettingsPage } from '@/pages/SettingsPage';
 import { AnalysisPage } from '@/pages/AnalysisPage';
 import { AdvancedMarketPage } from '@/pages/AdvancedMarketPage';
+import { useAdvancedMarket } from '@/hooks/useAdvancedMarket';
 import { ProfitTakingPage } from '@/pages/ProfitTakingPage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
@@ -36,6 +37,7 @@ const Index = () => {
   const { data: athData } = useAthData();
   const { data: altSeason } = useAltSeason();
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
+  const { data: advancedMarketData } = useAdvancedMarket();
   usePriceAlerts(prices, lang);
   const unreadNewsCount = useUnreadHighImpact(lang);
 
@@ -93,7 +95,7 @@ const Index = () => {
         {tab === 'risk' && <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />}
         {tab === 'analysis' && <AnalysisPage lang={lang} />}
         {tab === 'market' && <AdvancedMarketPage lang={lang} />}
-        {tab === 'profit' && <ProfitTakingPage lang={lang} />}
+        {tab === 'profit' && <ProfitTakingPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedData={advancedMarketData} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
