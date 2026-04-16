@@ -128,6 +128,17 @@ Deno.serve(async (req) => {
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Vykonaj nákup', callback_data: 'price_buy' },
+              { text: '⏸️ Odlož', callback_data: 'price_postpone' },
+            ],
+            [
+              { text: '❌ Ignoruj', callback_data: 'price_ignore' },
+            ],
+          ],
+        },
       }),
     });
 

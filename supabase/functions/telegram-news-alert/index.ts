@@ -148,6 +148,17 @@ Deno.serve(async (req) => {
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '📊 Analyzuj dopad', callback_data: 'news_analyze' },
+              { text: '🔕 Stíšiť', callback_data: 'news_mute' },
+            ],
+            [
+              { text: '❌ Ignoruj', callback_data: 'news_ignore' },
+            ],
+          ],
+        },
       }),
     });
 
