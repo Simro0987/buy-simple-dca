@@ -421,6 +421,9 @@ export function ProfitTakingPage({ lang }: Props) {
         )}
       </div>
 
+      {/* P/L History Chart */}
+      <PLHistoryChart data={plHistory} />
+
       {/* Discipline Warning */}
       <div className="glass-card p-3 flex gap-2 border-warning/20 bg-warning/5">
         <ShieldAlert className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
