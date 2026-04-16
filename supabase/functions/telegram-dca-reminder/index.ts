@@ -112,6 +112,17 @@ Deno.serve(async (req) => {
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Vykonaj DCA', callback_data: 'dca_execute' },
+              { text: '⏸️ Odlož', callback_data: 'dca_postpone' },
+            ],
+            [
+              { text: '❌ Ignoruj tento týždeň', callback_data: 'dca_ignore' },
+            ],
+          ],
+        },
       }),
     });
 

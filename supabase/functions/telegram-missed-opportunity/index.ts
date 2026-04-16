@@ -47,6 +47,17 @@ Deno.serve(async (req) => {
         text,
         parse_mode: 'HTML',
         disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '📈 Zvýš rozpočet', callback_data: 'missed_increase_budget' },
+              { text: '🎯 Uprav limity', callback_data: 'missed_adjust_limits' },
+            ],
+            [
+              { text: '❌ Ignoruj', callback_data: 'missed_ignore' },
+            ],
+          ],
+        },
       }),
     });
 
