@@ -213,6 +213,43 @@ export function ProfitTakingPage({ lang }: Props) {
     }
   }, [prices, avgCosts]);
 
+  // Realtime: listen for callback responses from Telegram inline buttons
+  useEffect(() => {
+    const channel = supabase
+      .channel('profit-callbacks')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'telegram_callback_log',
+          filter: 'action_type=in.(profit_sell,profit_postpone,profit_ignore)',
+        },
+        (payload: any) => {
+          const { action_type, token, profit_pct } = payload.new;
+          const tokenConfig = PROFIT_CONFIGS.find(c => c.symbol === token);
+          if (!tokenConfig) return;
+
+          if (action_type === 'profit_sell') {
+            // Auto-mark level as executed
+            const level = tokenConfig.levels.find(l => Math.abs(l.profitPct - profit_pct) < 0.5);
+            if (level && !isLevelExecuted(tokenConfig.id, level.profitPct)) {
+              markLevelExecuted(tokenConfig.id, level.profitPct);
+              forceUpdate(n => n + 1);
+              toast.success(`✅ ${token} +${profit_pct}% označený cez Telegram`);
+            }
+          } else if (action_type === 'profit_postpone') {
+            toast.info(`⏸️ ${token} +${profit_pct}% odložený cez Telegram`);
+          } else if (action_type === 'profit_ignore') {
+            toast.info(`❌ ${token} +${profit_pct}% ignorovaný cez Telegram`);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
+
   // Manual send handler
   const handleManualAlert = useCallback(async (config: TokenProfitConfig, level: ProfitLevel, currentPrice: number, avgCost: number) => {
     const chatId = localStorage.getItem('telegram_chat_id') || '';
