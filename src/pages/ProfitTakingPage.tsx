@@ -318,6 +318,28 @@ export function ProfitTakingPage({ lang }: Props) {
   const totalPL = totalCurrent - totalInvested;
   const totalPLPct = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
+  // Save daily P/L snapshot
+  const [plHistory, setPlHistory] = useState<PLSnapshot[]>(getPLHistory);
+  useEffect(() => {
+    if (totalInvested <= 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const btcD = plData.find(d => d.token.id === 'bitcoin');
+    const ethD = plData.find(d => d.token.id === 'ethereum');
+    const solD = plData.find(d => d.token.id === 'solana');
+    const hypeD = plData.find(d => d.token.id === 'hyperliquid');
+    const snapshot: PLSnapshot = {
+      date: today,
+      totalPL,
+      totalPLPct,
+      btcPL: btcD?.plUsd ?? 0,
+      ethPL: ethD?.plUsd ?? 0,
+      solPL: solD?.plUsd ?? 0,
+      hypePL: hypeD?.plUsd ?? 0,
+    };
+    savePLSnapshot(snapshot);
+    setPlHistory(getPLHistory());
+  }, [totalPL, totalInvested, plData]);
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
