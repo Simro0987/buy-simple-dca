@@ -14,6 +14,60 @@ export type Database = {
   }
   public: {
     Tables: {
+      telegram_bot_state: {
+        Row: {
+          id: number
+          update_offset: number
+          updated_at: string
+        }
+        Insert: {
+          id: number
+          update_offset?: number
+          updated_at?: string
+        }
+        Update: {
+          id?: number
+          update_offset?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      telegram_callback_log: {
+        Row: {
+          action_type: string
+          callback_data: string
+          chat_id: number
+          created_at: string
+          id: string
+          message_id: number | null
+          profit_pct: number | null
+          status: string
+          token: string | null
+        }
+        Insert: {
+          action_type: string
+          callback_data: string
+          chat_id: number
+          created_at?: string
+          id?: string
+          message_id?: number | null
+          profit_pct?: number | null
+          status?: string
+          token?: string | null
+        }
+        Update: {
+          action_type?: string
+          callback_data?: string
+          chat_id?: number
+          created_at?: string
+          id?: string
+          message_id?: number | null
+          profit_pct?: number | null
+          status?: string
+          token?: string | null
+        }
+        Relationships: []
+      }
       telegram_config: {
         Row: {
           chat_id: string
