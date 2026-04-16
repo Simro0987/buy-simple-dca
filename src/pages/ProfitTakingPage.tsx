@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import { PLHistoryChart, PLSnapshot, savePLSnapshot, getPLHistory } from '@/components/PLHistoryChart';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData } from '@/lib/crypto';
@@ -317,6 +318,28 @@ export function ProfitTakingPage({ lang }: Props) {
   const totalPL = totalCurrent - totalInvested;
   const totalPLPct = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
+  // Save daily P/L snapshot
+  const [plHistory, setPlHistory] = useState<PLSnapshot[]>(getPLHistory);
+  useEffect(() => {
+    if (totalInvested <= 0) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const btcD = plData.find(d => d.token.id === 'bitcoin');
+    const ethD = plData.find(d => d.token.id === 'ethereum');
+    const solD = plData.find(d => d.token.id === 'solana');
+    const hypeD = plData.find(d => d.token.id === 'hyperliquid');
+    const snapshot: PLSnapshot = {
+      date: today,
+      totalPL,
+      totalPLPct,
+      btcPL: btcD?.plUsd ?? 0,
+      ethPL: ethD?.plUsd ?? 0,
+      solPL: solD?.plUsd ?? 0,
+      hypePL: hypeD?.plUsd ?? 0,
+    };
+    savePLSnapshot(snapshot);
+    setPlHistory(getPLHistory());
+  }, [totalPL, totalInvested, plData]);
+
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
@@ -397,6 +420,9 @@ export function ProfitTakingPage({ lang }: Props) {
           </div>
         )}
       </div>
+
+      {/* P/L History Chart */}
+      <PLHistoryChart data={plHistory} />
 
       {/* Discipline Warning */}
       <div className="glass-card p-3 flex gap-2 border-warning/20 bg-warning/5">
