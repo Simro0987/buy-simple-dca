@@ -2,7 +2,10 @@ import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { PLHistoryChart, PLSnapshot, savePLSnapshot, getPLHistory } from '@/components/PLHistoryChart';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
-import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData } from '@/lib/crypto';
+import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData, AthData } from '@/lib/crypto';
+import { MarketCycleResult } from '@/hooks/useMarketCycle';
+import { AdvancedMarketData } from '@/hooks/useAdvancedMarket';
+import { CycleTriggerDashboard } from '@/components/CycleTriggerDashboard';
 import {
   PROFIT_CONFIGS, TokenProfitConfig, ProfitLevel,
   getExecutedLevels, markLevelExecuted, isLevelExecuted,
@@ -63,7 +66,13 @@ async function sendProfitAlert(params: {
   }
 }
 
-interface Props { lang: Lang; }
+interface Props {
+  lang: Lang;
+  prices?: PriceData;
+  athData?: AthData;
+  cycleResult?: MarketCycleResult | null;
+  advancedData?: AdvancedMarketData | null;
+}
 
 function loadHoldings(): Record<string, number> {
   try {
@@ -71,8 +80,9 @@ function loadHoldings(): Record<string, number> {
   } catch { return {}; }
 }
 
-export function ProfitTakingPage({ lang }: Props) {
-  const { data: prices } = usePrices();
+export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResult, advancedData }: Props) {
+  const { data: hookPrices } = usePrices();
+  const prices = propPrices || hookPrices;
   const [avgCosts, setAvgCosts] = useState<Record<string, number>>(getAvgCostBasis);
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
