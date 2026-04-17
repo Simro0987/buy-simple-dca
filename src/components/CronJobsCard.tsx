@@ -55,7 +55,7 @@ export function CronJobsCard({ lang }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await (supabase.rpc as (fn: string) => Promise<{ data: unknown; error: { message: string } | null }>)('get_cron_jobs_status');
+      const { data, error: rpcError } = await supabase.rpc('get_cron_jobs_status');
       if (rpcError) throw rpcError;
       setJobs((data ?? []) as CronJob[]);
     } catch (e) {
