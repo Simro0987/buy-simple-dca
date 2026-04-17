@@ -4,6 +4,7 @@ import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monito
 import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
 import { CronJobsCard } from '@/components/CronJobsCard';
+import { CallbackHistoryCard } from '@/components/CallbackHistoryCard';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
 import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
@@ -307,6 +308,9 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
 
       {/* Cron jobs overview */}
       <CronJobsCard lang={lang} />
+
+      {/* Telegram callback history */}
+      <CallbackHistoryCard lang={lang} />
 
       {/* CSV Export */}
       <CsvExport lang={lang} />
