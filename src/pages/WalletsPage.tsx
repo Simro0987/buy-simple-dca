@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 
 interface Props { lang: Lang; }
 
-const CHAINS: WalletEntry['chain'][] = ['btc', 'eth', 'sol', 'hype'];
+const CHAINS: WalletEntry['chain'][] = ['btc', 'eth', 'sol'];
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);

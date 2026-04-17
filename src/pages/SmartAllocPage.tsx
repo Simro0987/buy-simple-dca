@@ -21,9 +21,9 @@ const STORAGE_KEY = 'smart-alloc-holdings';
 function loadHoldings(): HoldingInput {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : { btc: 0, eth: 0, sol: 0, hype: 0 };
+    return raw ? JSON.parse(raw) : { btc: 0, eth: 0, sol: 0 };
   } catch {
-    return { btc: 0, eth: 0, sol: 0, hype: 0 };
+    return { btc: 0, eth: 0, sol: 0 };
   }
 }
 
@@ -57,7 +57,6 @@ function getLiveApy(pos: { label: string; protocol?: string; apy?: number; type?
   if (pos.protocol === 'Aave V3') return apys.aaveEth;
   if (pos.protocol === 'Jito') return apys.jito;
   if (pos.protocol === 'Kamino') return apys.kaminoSol;
-  if (pos.label === 'Native staking') return apys.hypeStaking;
   return pos.apy ?? null;
 }
 
@@ -81,7 +80,7 @@ export function SmartAllocPage({ lang }: Props) {
     return computeSmartAllocation(holdings, prices, lang, apys ?? undefined);
   }, [holdings, prices, lang, apys]);
 
-  const hasAnyHolding = holdings.btc > 0 || holdings.eth > 0 || holdings.sol > 0 || holdings.hype > 0;
+  const hasAnyHolding = holdings.btc > 0 || holdings.eth > 0 || holdings.sol > 0;
 
   return (
     <div className="space-y-4">
@@ -137,8 +136,8 @@ export function SmartAllocPage({ lang }: Props) {
           </CardTitle>
         </CardHeader>
         <CardContent className="px-4 pb-4 space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            {(['btc', 'eth', 'sol', 'hype'] as const).map(key => (
+          <div className="grid grid-cols-3 gap-3">
+            {(['btc', 'eth', 'sol'] as const).map(key => (
               <div key={key} className="space-y-1">
                 <label className="text-xs font-medium text-muted-foreground uppercase">{key}</label>
                 <Input
@@ -189,14 +188,7 @@ export function SmartAllocPage({ lang }: Props) {
                     value={holdings.lentSol || ''}
                     onChange={e => updateField('lentSol', e.target.value)}
                     className="h-8 text-xs bg-background border-border" />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] text-muted-foreground">HYPE staked</label>
-                  <Input type="number" step="any" min="0" placeholder="0"
-                    value={holdings.stakedHype || ''}
-                    onChange={e => updateField('stakedHype', e.target.value)}
-                    className="h-8 text-xs bg-background border-border" />
-                </div>
+              </div>
               </div>
             </CollapsibleContent>
           </Collapsible>}
