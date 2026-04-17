@@ -116,7 +116,7 @@ function computeFibLevels(high: number, low: number): { level: string; price: nu
 }
 
 const STAKING_PCTS: Record<string, number> = {
-  bitcoin: 0, ethereum: 28, solana: 67, hyperliquid: 45,
+  bitcoin: 0, ethereum: 28, solana: 67,
 };
 
 async function fetchTokenAnalysis(): Promise<TokenAnalysis[]> {

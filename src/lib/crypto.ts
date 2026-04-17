@@ -9,10 +9,9 @@ export interface TokenConfig {
 }
 
 export const TOKENS: TokenConfig[] = [
-  { id: 'btc', symbol: 'BTC', name: 'Bitcoin', allocation: 0.59, limitDiscount: 0.97, color: '#F7931A', coingeckoId: 'bitcoin' },
+  { id: 'btc', symbol: 'BTC', name: 'Bitcoin', allocation: 0.64, limitDiscount: 0.97, color: '#F7931A', coingeckoId: 'bitcoin' },
   { id: 'eth', symbol: 'ETH', name: 'Ethereum', allocation: 0.25, limitDiscount: 0.96, color: '#627EEA', coingeckoId: 'ethereum' },
   { id: 'sol', symbol: 'SOL', name: 'Solana', allocation: 0.11, limitDiscount: 0.95, color: '#9945FF', coingeckoId: 'solana' },
-  { id: 'hype', symbol: 'HYPE', name: 'Hyperliquid', allocation: 0.05, limitDiscount: 0.90, color: '#00D4AA', coingeckoId: 'hyperliquid' },
 ];
 
 export const MARKET_SPLIT = 0.60;

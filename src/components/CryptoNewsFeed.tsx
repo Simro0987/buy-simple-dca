@@ -13,7 +13,6 @@ const TOKEN_COLORS: Record<string, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',
-  HYPE: '#00D4AA',
 };
 
 function ImpactIcon({ impact }: { impact: NewsItem['impact'] }) {
@@ -83,7 +82,6 @@ export function CryptoNewsFeed({ lang }: Props) {
     BTC: news.filter(n => n.tokens.includes('BTC')).length,
     ETH: news.filter(n => n.tokens.includes('ETH')).length,
     SOL: news.filter(n => n.tokens.includes('SOL')).length,
-    HYPE: news.filter(n => n.tokens.includes('HYPE')).length,
   } : {};
 
   // Count high-impact items
@@ -119,7 +117,7 @@ export function CryptoNewsFeed({ lang }: Props) {
             >
               {sk ? 'Všetky' : 'All'} {news ? `(${news.length})` : ''}
             </button>
-            {(['BTC', 'ETH', 'SOL', 'HYPE'] as const).map(token => {
+            {(['BTC', 'ETH', 'SOL'] as const).map(token => {
               const count = tokenCounts[token] || 0;
               return (
                 <button

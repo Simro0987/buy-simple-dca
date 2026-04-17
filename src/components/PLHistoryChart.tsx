@@ -21,7 +21,6 @@ export interface PLSnapshot {
   btcPL: number;
   ethPL: number;
   solPL: number;
-  hypePL: number;
 }
 
 export function getPLHistory(): PLSnapshot[] {
@@ -70,12 +69,11 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         {d.totalPL >= 0 ? '+' : ''}${Math.abs(d.totalPL).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
         {' '}({d.totalPLPct >= 0 ? '+' : ''}{d.totalPLPct.toFixed(1)}%)
       </p>
-      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 pt-1 border-t border-border/50">
+      <div className="grid grid-cols-3 gap-x-3 gap-y-0.5 pt-1 border-t border-border/50">
         {[
           { label: 'BTC', value: d.btcPL, color: '#F7931A' },
           { label: 'ETH', value: d.ethPL, color: '#627EEA' },
           { label: 'SOL', value: d.solPL, color: '#00FFA3' },
-          { label: 'HYPE', value: d.hypePL, color: '#E040FB' },
         ].map(t => (
           <div key={t.label} className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: t.color }} />

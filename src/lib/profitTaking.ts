@@ -44,16 +44,6 @@ export const PROFIT_CONFIGS: TokenProfitConfig[] = [
       { profitPct: 100, sellPct: 12, btcPct: 70 },
     ],
   },
-  {
-    id: 'hype', symbol: 'HYPE', color: '#00D4AA',
-    levels: [
-      { profitPct: 15,  sellPct: 10, btcPct: 70 },
-      { profitPct: 25,  sellPct: 12, btcPct: 70 },
-      { profitPct: 40,  sellPct: 15, btcPct: 70 },
-      { profitPct: 60,  sellPct: 15, btcPct: 70 },
-      { profitPct: 100, sellPct: 20, btcPct: 70 },
-    ],
-  },
 ];
 
 const EXECUTED_KEY = 'profit-levels-executed';

@@ -14,7 +14,7 @@ export interface NewsItem {
   tokens: string[];
 }
 
-async function fetchNews(currencies = 'BTC,ETH,SOL,HYPE', lang = 'sk'): Promise<NewsItem[]> {
+async function fetchNews(currencies = 'BTC,ETH,SOL', lang = 'sk'): Promise<NewsItem[]> {
   const { data, error } = await supabase.functions.invoke('crypto-news', {
     body: { currencies, kind: 'news', lang },
   });

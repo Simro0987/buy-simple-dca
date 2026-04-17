@@ -7,7 +7,7 @@ const corsHeaders = {
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
 
-const PORTFOLIO_TOKENS = ['BTC', 'ETH', 'SOL', 'HYPE'];
+const PORTFOLIO_TOKENS = ['BTC', 'ETH', 'SOL'];
 
 const HIGH_IMPACT_KEYWORDS = [
   'hack', 'exploit', 'breach', 'sec', 'etf', 'ban', 'regulation', 'crash',
@@ -21,7 +21,6 @@ function detectTokens(text: string): string[] {
   if (/\bBTC\b/.test(upper) || /\bBITCOIN\b/.test(upper)) found.push('BTC');
   if (/\bETH\b/.test(upper) || /\bETHEREUM\b/.test(upper)) found.push('ETH');
   if (/\bSOL\b/.test(upper) || /\bSOLANA\b/.test(upper)) found.push('SOL');
-  if (/\bHYPE\b/.test(upper) || /\bHYPERLIQUID\b/.test(upper)) found.push('HYPE');
   return found;
 }
 

@@ -228,7 +228,6 @@ export function PortfolioPage({ lang }: Props) {
                           else if (pos.protocol === 'Aave V3') liveApy = apys.aaveEth;
                           else if (pos.protocol === 'Jito') liveApy = apys.jito;
                           else if (pos.protocol === 'Kamino') liveApy = apys.kaminoSol;
-                          else if (pos.label === 'Native staking') liveApy = apys.hypeStaking;
                         }
 
                         return (

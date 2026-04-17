@@ -175,7 +175,6 @@ export function useMarketCycleScore(input: ComputeInput): MarketCycleResult | nu
       { symbol: 'BTC', color: '#F7931A', athDistance: athData?.bitcoin?.ath_change_percentage ?? 0, strength24h: 0 },
       { symbol: 'ETH', color: '#627EEA', athDistance: athData?.ethereum?.ath_change_percentage ?? 0, strength24h: (prices?.ethereum?.usd_24h_change ?? 0) - (prices?.bitcoin?.usd_24h_change ?? 0) },
       { symbol: 'SOL', color: '#9945FF', athDistance: athData?.solana?.ath_change_percentage ?? 0, strength24h: (prices?.solana?.usd_24h_change ?? 0) - (prices?.bitcoin?.usd_24h_change ?? 0) },
-      { symbol: 'HYPE', color: '#00D4AA', athDistance: athData?.hyperliquid?.ath_change_percentage ?? 0, strength24h: (prices?.hyperliquid?.usd_24h_change ?? 0) - (prices?.bitcoin?.usd_24h_change ?? 0) },
     ];
 
     return {

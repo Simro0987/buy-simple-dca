@@ -7,12 +7,10 @@ export interface HoldingInput {
   btc: number;
   eth: number;
   sol: number;
-  hype: number;
   stakedEth?: number;
   lentEth?: number;
   stakedSol?: number;
   lentSol?: number;
-  stakedHype?: number;
 }
 
 export interface AllocationAction {
@@ -38,7 +36,6 @@ const GAS_COSTS: Record<string, number> = {
   btc: 2,
   eth: 15,
   sol: 0.01,
-  hype: 0.5,
 };
 const MAX_FEE_RATIO = 0.03; // skip if fees > 3% of action value
 
@@ -56,7 +53,6 @@ export function computeSmartAllocation(
     btc: holdings.btc,
     eth: holdings.eth,
     sol: holdings.sol,
-    hype: holdings.hype,
   };
 
   const priceMap: Record<string, number> = {};
@@ -89,9 +85,6 @@ export function computeSmartAllocation(
 
   // SOL
   results.push(computeSolActions(amounts.sol, priceMap.sol, holdings, lang, apys));
-
-  // HYPE
-  results.push(computeHypeActions(amounts.hype, priceMap.hype, holdings, lang, apys));
 
   return results;
 }
@@ -297,65 +290,3 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   return { symbol: 'SOL', name: 'Solana', color: '#9945FF', totalValueUsd: totalUsd, actions: actions.sort((a, b) => a.priority - b.priority).slice(0, 3) };
 }
 
-function computeHypeActions(total: number, price: number, holdings: HoldingInput, lang: Lang, apys?: DefiApyData): TokenAllocationResult {
-  const totalUsd = total * price;
-  const actions: AllocationAction[] = [];
-  const sk = lang === 'sk';
-
-  const alreadyStaked = holdings.stakedHype ?? 0;
-  const targetStake = total * 0.80;
-  const needStake = Math.max(0, targetStake - alreadyStaked);
-
-  if (needStake > 0) {
-    const stakeUsd = needStake * price;
-    if (stakeUsd >= MIN_ACTION_USD) {
-      const hypeApy = apys?.hypeStaking?.toFixed(1) ?? '~12.0';
-      actions.push({
-        type: 'stake',
-        label: sk
-          ? `Stake ${needStake.toFixed(2)} HYPE · ${hypeApy}% APY`
-          : `Stake ${needStake.toFixed(2)} HYPE · ${hypeApy}% APY`,
-        amount: needStake,
-        symbol: 'HYPE',
-        protocol: 'Native',
-        priority: 1,
-      });
-    } else {
-      actions.push({
-        type: 'skip',
-        label: sk
-          ? `HYPE staking sa neoplatí (nízka suma)`
-          : `HYPE staking not worth it (low amount)`,
-        amount: needStake,
-        symbol: 'HYPE',
-        priority: 3,
-      });
-    }
-  }
-
-  // Always hold 20%
-  const holdAmount = total * 0.20;
-  if (holdAmount > 0) {
-    actions.push({
-      type: 'hold',
-      label: sk
-        ? `Drž ${holdAmount.toFixed(2)} HYPE pre exit likviditu`
-        : `Hold ${holdAmount.toFixed(2)} HYPE for exit liquidity`,
-      amount: holdAmount,
-      symbol: 'HYPE',
-      priority: 2,
-    });
-  }
-
-  if (actions.length === 0) {
-    actions.push({
-      type: 'hold',
-      label: sk ? 'Nechaj bez zmeny' : 'Keep unchanged',
-      amount: total,
-      symbol: 'HYPE',
-      priority: 3,
-    });
-  }
-
-  return { symbol: 'HYPE', name: 'Hyperliquid', color: '#00D4AA', totalValueUsd: totalUsd, actions: actions.sort((a, b) => a.priority - b.priority).slice(0, 2) };
-}

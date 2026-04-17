@@ -19,7 +19,7 @@ interface BreakdownRow {
   apy?: number | null;
 }
 
-const COLORS = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF', HYPE: '#00D4AA' };
+const COLORS: Record<string, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
 
 function getApy(protocol: string | undefined, label: string, type: string, apys?: DefiApyData | null): number | null {
   if (!apys) return null;
@@ -28,7 +28,6 @@ function getApy(protocol: string | undefined, label: string, type: string, apys?
   if (protocol === 'Aave V3') return apys.aaveEth;
   if (protocol === 'Jito') return apys.jito;
   if (protocol === 'Kamino') return apys.kaminoSol;
-  if (label === 'Native staking') return apys.hypeStaking;
   return null;
 }
 
@@ -94,7 +93,6 @@ export function ExactBreakdown({ lang, holdings }: Props) {
     { key: 'btc' as const, symbol: 'BTC', name: 'Bitcoin', total: holdings.btc },
     { key: 'eth' as const, symbol: 'ETH', name: 'Ethereum', total: holdings.eth },
     { key: 'sol' as const, symbol: 'SOL', name: 'Solana', total: holdings.sol },
-    { key: 'hype' as const, symbol: 'HYPE', name: 'Hyperliquid', total: holdings.hype },
   ].filter(t => t.total > 0);
 
   if (tokens.length === 0) {

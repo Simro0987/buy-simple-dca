@@ -8,10 +8,9 @@ const corsHeaders = {
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
 
 const TOKENS = [
-  { symbol: 'BTC', allocation: 0.59, limitDiscount: 0.97, coingeckoId: 'bitcoin' },
+  { symbol: 'BTC', allocation: 0.64, limitDiscount: 0.97, coingeckoId: 'bitcoin' },
   { symbol: 'ETH', allocation: 0.25, limitDiscount: 0.96, coingeckoId: 'ethereum' },
   { symbol: 'SOL', allocation: 0.11, limitDiscount: 0.95, coingeckoId: 'solana' },
-  { symbol: 'HYPE', allocation: 0.05, limitDiscount: 0.90, coingeckoId: 'hyperliquid' },
 ];
 
 Deno.serve(async (req) => {

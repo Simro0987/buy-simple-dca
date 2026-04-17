@@ -10,7 +10,7 @@ interface Props {
   prices?: PriceData;
 }
 
-const TARGET: Record<string, number> = { BTC: 59, ETH: 25, SOL: 11, HYPE: 5 };
+const TARGET: Record<string, number> = { BTC: 64, ETH: 25, SOL: 11 };
 const DRIFT_THRESHOLD = 3;
 const ACTION_THRESHOLD = 5;
 

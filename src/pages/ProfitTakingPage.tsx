@@ -336,7 +336,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     const btcD = plData.find(d => d.token.id === 'bitcoin');
     const ethD = plData.find(d => d.token.id === 'ethereum');
     const solD = plData.find(d => d.token.id === 'solana');
-    const hypeD = plData.find(d => d.token.id === 'hyperliquid');
     const snapshot: PLSnapshot = {
       date: today,
       totalPL,
@@ -344,7 +343,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
       btcPL: btcD?.plUsd ?? 0,
       ethPL: ethD?.plUsd ?? 0,
       solPL: solD?.plUsd ?? 0,
-      hypePL: hypeD?.plUsd ?? 0,
     };
     savePLSnapshot(snapshot);
     setPlHistory(getPLHistory());
@@ -504,7 +502,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
         <div className="space-y-1 text-xs text-muted-foreground">
           <p>📅 <strong>Mesačne:</strong> Ak odchýlka &gt; 5% → navrhni rebalancing</p>
           <p>📅 <strong>Kvartálne:</strong> Plný rebalancing na cieľovú alokáciu</p>
-          <p>🎯 Cieľ: BTC 59% / ETH 25% / SOL 11% / HYPE 5%</p>
+          <p>🎯 Cieľ: BTC 64% / ETH 25% / SOL 11%</p>
         </div>
       </div>
     </div>

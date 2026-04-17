@@ -32,7 +32,7 @@ function exportPortfolio() {
 
 function exportExecutionHistory() {
   const history = JSON.parse(localStorage.getItem('execution_history') || '[]');
-  const rows = [['Týždeň', 'DCA', 'BTC Limit', 'ETH Limit', 'SOL Limit', 'HYPE Limit'].join(',')];
+  const rows = [['Týždeň', 'DCA', 'BTC Limit', 'ETH Limit', 'SOL Limit'].join(',')];
   for (const week of history) {
     const limits = TOKENS.map(t => {
       const l = week.limits?.find((li: any) => li.symbol === t.symbol);
