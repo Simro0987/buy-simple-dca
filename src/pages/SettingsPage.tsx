@@ -3,6 +3,7 @@ import { Lang, t } from '@/lib/i18n';
 import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
+import { CronJobsCard } from '@/components/CronJobsCard';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
 import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
@@ -303,6 +304,9 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
           ))}
         </div>
       </div>
+
+      {/* Cron jobs overview */}
+      <CronJobsCard lang={lang} />
 
       {/* CSV Export */}
       <CsvExport lang={lang} />
