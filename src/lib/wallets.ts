@@ -1,6 +1,6 @@
 export interface WalletEntry {
   id: string;
-  chain: 'btc' | 'eth' | 'sol' | 'hype';
+  chain: 'btc' | 'eth' | 'sol';
   label: string;
   address: string;
 }
@@ -28,7 +28,7 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     symbol: 'BTC',
     name: 'Bitcoin',
     color: '#F7931A',
-    allocation: 59,
+    allocation: 64,
     positions: [
       { label: 'Cold Storage (HODL)', type: 'hold', percentage: 100, yieldDirection: 'none' },
     ],
@@ -57,16 +57,6 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
       { label: 'JitoSOL lending', type: 'lending', percentage: 19, protocol: 'Kamino', apy: 4.2, yieldDirection: 'btc' },
     ],
   },
-  {
-    symbol: 'HYPE',
-    name: 'Hyperliquid',
-    color: '#00D4AA',
-    allocation: 5,
-    positions: [
-      { label: 'HYPE hold', type: 'hold', percentage: 20, yieldDirection: 'none' },
-      { label: 'Native staking', type: 'staking', percentage: 80, apy: 12.0, yieldDirection: 'restake' },
-    ],
-  },
 ];
 
 const WALLET_STORAGE_KEY = 'crypto-wallets';
@@ -89,7 +79,6 @@ export function getChainLabel(chain: WalletEntry['chain']): string {
     btc: 'BTC (Trezor)',
     eth: 'ETH (Ledger)',
     sol: 'SOL (Ledger)',
-    hype: 'HYPE (Hyperliquid)',
   };
   return labels[chain] || chain.toUpperCase();
 }
@@ -99,7 +88,6 @@ export function getChainColor(chain: WalletEntry['chain']): string {
     btc: '#F7931A',
     eth: '#627EEA',
     sol: '#9945FF',
-    hype: '#00D4AA',
   };
   return colors[chain] || '#888';
 }

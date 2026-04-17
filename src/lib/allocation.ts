@@ -7,12 +7,10 @@ export interface HoldingInput {
   btc: number;
   eth: number;
   sol: number;
-  hype: number;
   stakedEth?: number;
   lentEth?: number;
   stakedSol?: number;
   lentSol?: number;
-  stakedHype?: number;
 }
 
 export interface AllocationAction {
@@ -38,7 +36,6 @@ const GAS_COSTS: Record<string, number> = {
   btc: 2,
   eth: 15,
   sol: 0.01,
-  hype: 0.5,
 };
 const MAX_FEE_RATIO = 0.03; // skip if fees > 3% of action value
 
@@ -56,7 +53,6 @@ export function computeSmartAllocation(
     btc: holdings.btc,
     eth: holdings.eth,
     sol: holdings.sol,
-    hype: holdings.hype,
   };
 
   const priceMap: Record<string, number> = {};
@@ -89,9 +85,6 @@ export function computeSmartAllocation(
 
   // SOL
   results.push(computeSolActions(amounts.sol, priceMap.sol, holdings, lang, apys));
-
-  // HYPE
-  results.push(computeHypeActions(amounts.hype, priceMap.hype, holdings, lang, apys));
 
   return results;
 }
