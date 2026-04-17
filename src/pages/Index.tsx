@@ -97,7 +97,7 @@ const Index = () => {
         {tab === 'analysis' && <AnalysisPage lang={lang} />}
         {tab === 'market' && <AdvancedMarketPage lang={lang} />}
         {tab === 'profit' && <ProfitTakingPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedData={advancedMarketData} />}
-        {tab === 'staking' && <StakingPage lang={lang} prices={prices} />}
+        {tab === 'staking' && <StakingPage lang={lang} />}
         {tab === 'settings' && <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
