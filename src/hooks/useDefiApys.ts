@@ -6,7 +6,6 @@ export interface DefiApyData {
   aaveEth: number;      // Aave V3 ETH supply
   jito: number;         // JitoSOL
   kaminoSol: number;    // Kamino SOL lending
-  hypeStaking: number;  // Hyperliquid native
 }
 
 const FALLBACK: DefiApyData = {
@@ -15,7 +14,6 @@ const FALLBACK: DefiApyData = {
   aaveEth: 1.8,
   jito: 7.5,
   kaminoSol: 4.2,
-  hypeStaking: 12.0,
 };
 
 // DefiLlama pool UUIDs (stable identifiers)
@@ -48,7 +46,6 @@ async function fetchDefiApys(): Promise<DefiApyData> {
     aaveEth: poolMap.get(POOL_IDS.aaveEth) ?? FALLBACK.aaveEth,
     jito: poolMap.get(POOL_IDS.jito) ?? FALLBACK.jito,
     kaminoSol: poolMap.get(POOL_IDS.kaminoSol) ?? FALLBACK.kaminoSol,
-    hypeStaking: FALLBACK.hypeStaking, // No DefiLlama pool yet
   };
 }
 

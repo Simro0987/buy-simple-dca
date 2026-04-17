@@ -15,7 +15,6 @@ function getLiveApy(pos: StakingPosition, apys?: DefiApyData | null): number | n
   if (pos.protocol === 'Aave V3') return apys.aaveEth;
   if (pos.protocol === 'Jito') return apys.jito;
   if (pos.protocol === 'Kamino') return apys.kaminoSol;
-  if (pos.label === 'Native staking') return apys.hypeStaking;
   return pos.apy ?? null;
 }
 
@@ -197,9 +196,6 @@ export function StakingPage({ lang }: Props) {
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">
             • ETH + SOL {lang === 'sk' ? 'výnosy' : 'yields'} → BTC ({lang === 'sk' ? '15. deň' : 'Day 15'})
-          </p>
-          <p className="text-xs text-muted-foreground">
-            • HYPE → Re-stake ({lang === 'sk' ? 'automaticky' : 'auto'})
           </p>
           <p className="text-xs text-muted-foreground">
             • BTC → {lang === 'sk' ? 'bez výnosu (cold storage)' : 'No yield (cold storage)'}
