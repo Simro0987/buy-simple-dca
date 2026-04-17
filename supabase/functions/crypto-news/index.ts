@@ -28,7 +28,6 @@ function detectTokens(text: string): string[] {
   if (/\bBTC\b/.test(upper) || /\bBITCOIN\b/.test(upper)) found.add('BTC');
   if (/\bETH\b/.test(upper) || /\bETHEREUM\b/.test(upper) || /\bETHER\b/.test(upper)) found.add('ETH');
   if (/\bSOL\b/.test(upper) || /\bSOLANA\b/.test(upper)) found.add('SOL');
-  if (/\bHYPE\b/.test(upper) || /\bHYPERLIQUID\b/.test(upper)) found.add('HYPE');
   return [...found];
 }
 
@@ -93,7 +92,7 @@ async function classifyWithAI(items: RawNewsItem[], lang: string): Promise<Class
   const numbered = items.map((item, i) => `${i + 1}. "${item.title}"`).join('\n');
   const targetLang = lang === 'sk' ? 'Slovak' : 'English';
 
-  const prompt = `You are a crypto news analyst for a portfolio tracker (BTC, ETH, SOL, HYPE).
+  const prompt = `You are a crypto news analyst for a portfolio tracker (BTC, ETH, SOL).
 
 Classify each headline and write a one-sentence summary in ${targetLang}.
 
@@ -257,7 +256,7 @@ Deno.serve(async (req) => {
 
   try {
     const { currencies, kind, lang } = await req.json();
-    const coinFilter = currencies || 'BTC,ETH,SOL,HYPE';
+    const coinFilter = currencies || 'BTC,ETH,SOL';
     const kindFilter = kind || 'news';
     const targetLang = lang || 'sk';
     const apiKey = Deno.env.get('CRYPTOPANIC_API_KEY');

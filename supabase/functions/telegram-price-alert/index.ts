@@ -11,7 +11,6 @@ const TOKENS = [
   { symbol: 'BTC', limitDiscount: 0.97, coingeckoId: 'bitcoin' },
   { symbol: 'ETH', limitDiscount: 0.96, coingeckoId: 'ethereum' },
   { symbol: 'SOL', limitDiscount: 0.95, coingeckoId: 'solana' },
-  { symbol: 'HYPE', limitDiscount: 0.90, coingeckoId: 'hyperliquid' },
 ];
 
 const PROXIMITY_THRESHOLD = 0.03; // 3%

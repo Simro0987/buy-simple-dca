@@ -14,7 +14,6 @@ const YIELD_SCHEDULE = [
   { symbol: 'ETH', protocol: 'Aave V3', type: 'lending', yieldDay: 15, yieldDirection: 'BTC' },
   { symbol: 'SOL', protocol: 'Jito', type: 'staking', yieldDay: 15, yieldDirection: 'BTC' },
   { symbol: 'SOL', protocol: 'Kamino', type: 'lending', yieldDay: 15, yieldDirection: 'BTC' },
-  { symbol: 'HYPE', protocol: 'Native staking', type: 'staking', yieldDay: 0, yieldDirection: 'compound' },
 ];
 
 Deno.serve(async (req) => {
@@ -79,15 +78,7 @@ Deno.serve(async (req) => {
     } else {
       // Auto/cron: check which yields are due
       for (const pos of YIELD_SCHEDULE) {
-        if (pos.yieldDirection === 'compound') {
-          // HYPE auto-compounds, just notify on 1st of month
-          if (dayOfMonth === 1) {
-            alerts.push(
-              `📌 <b>${pos.symbol}</b> — ${pos.protocol}\n` +
-              `   🔄 Auto-compound aktívny — skontroluj zostatok`
-            );
-          }
-        } else if (pos.yieldDay > 0) {
+        if (pos.yieldDay > 0) {
           // Notify 1 day before and on the day
           if (dayOfMonth === pos.yieldDay - 1) {
             alerts.push(
