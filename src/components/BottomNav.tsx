@@ -22,6 +22,7 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'analysis', labelSk: 'Analýza', labelEn: 'Analysis', icon: Activity },
   { id: 'market', labelSk: 'Trh', labelEn: 'Market', icon: BarChart3 },
   { id: 'profit', labelSk: 'Zisky', labelEn: 'Profit', icon: DollarSign },
+  { id: 'staking', labelSk: 'Staking', labelEn: 'Staking', icon: Coins },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
