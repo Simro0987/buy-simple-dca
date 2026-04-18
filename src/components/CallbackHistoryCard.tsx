@@ -1,5 +1,6 @@
-import { useEffect, useState, useCallback } from 'react';
-import { History, RefreshCw, CheckCircle2, PauseCircle, XCircle } from 'lucide-react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { History, RefreshCw, CheckCircle2, PauseCircle, XCircle, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Lang } from '@/lib/i18n';
 
