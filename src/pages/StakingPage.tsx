@@ -100,7 +100,7 @@ export function StakingPage({ lang }: Props) {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary/10 text-primary text-xs font-medium border border-primary/20 active:bg-primary/20 disabled:opacity-50"
         >
           <Send className={`w-3.5 h-3.5 ${sending ? 'animate-pulse' : ''}`} />
-          {lang === 'sk' ? 'Telegram' : 'Telegram'}
+          {lang === 'sk' ? 'Test maturity alert' : 'Test maturity alert'}
         </button>
       </div>
 
