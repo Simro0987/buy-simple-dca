@@ -59,10 +59,23 @@ function getStatusIcon(status: string) {
   return { Icon: XCircle, color: 'text-muted-foreground' };
 }
 
+type FilterKey = 'all' | 'profit' | 'dca' | 'news' | 'price' | 'other';
+
+const FILTERS: { key: FilterKey; sk: string; en: string; prefix?: string[] }[] = [
+  { key: 'all', sk: 'Všetky', en: 'All' },
+  { key: 'profit', sk: 'Zisk', en: 'Profit', prefix: ['profit_'] },
+  { key: 'dca', sk: 'DCA', en: 'DCA', prefix: ['dca_'] },
+  { key: 'news', sk: 'Noviny', en: 'News', prefix: ['news_'] },
+  { key: 'price', sk: 'Cena', en: 'Price', prefix: ['price_'] },
+  { key: 'other', sk: 'Iné', en: 'Other', prefix: ['rebalance_', 'staking_', 'missed_'] },
+];
+
 export function CallbackHistoryCard({ lang }: Props) {
   const [entries, setEntries] = useState<CallbackEntry[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [cleaning, setCleaning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -72,7 +85,7 @@ export function CallbackHistoryCard({ lang }: Props) {
         .from('telegram_callback_log')
         .select('id, created_at, callback_data, action_type, token, profit_pct, status')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(50);
       if (dbError) throw dbError;
       setEntries(data ?? []);
     } catch (e) {
@@ -84,17 +97,49 @@ export function CallbackHistoryCard({ lang }: Props) {
 
   useEffect(() => {
     load();
-    // Subscribe to live inserts
     const channel = supabase
       .channel('callback-log-changes')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'telegram_callback_log' },
+        { event: '*', schema: 'public', table: 'telegram_callback_log' },
         () => { load(); }
       )
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [load]);
+
+  const filtered = useMemo(() => {
+    if (!entries) return null;
+    if (filter === 'all') return entries;
+    const f = FILTERS.find(x => x.key === filter);
+    if (!f?.prefix) return entries;
+    return entries.filter(e => f.prefix!.some(p => e.action_type.startsWith(p)));
+  }, [entries, filter]);
+
+  const handleCleanup = async () => {
+    const confirmMsg = lang === 'sk'
+      ? 'Vymazať záznamy staršie ako 7 dní?'
+      : 'Delete entries older than 7 days?';
+    if (!confirm(confirmMsg)) return;
+    setCleaning(true);
+    try {
+      const { data, error: fnError } = await supabase.functions.invoke(
+        'telegram-callback-cleanup',
+        { body: { olderThanDays: 7 } }
+      );
+      if (fnError) throw fnError;
+      const deleted = (data as { deleted?: number } | null)?.deleted ?? 0;
+      toast.success(
+        lang === 'sk' ? `Vymazaných ${deleted} záznamov` : `Deleted ${deleted} entries`
+      );
+      load();
+    } catch (e) {
+      toast.error(lang === 'sk' ? 'Mazanie zlyhalo' : 'Cleanup failed');
+      console.error('Cleanup error:', e);
+    } finally {
+      setCleaning(false);
+    }
+  };
 
   return (
     <div className="bg-card border border-border rounded-xl p-4">
@@ -105,13 +150,42 @@ export function CallbackHistoryCard({ lang }: Props) {
             {lang === 'sk' ? 'História Telegram akcií' : 'Telegram action history'}
           </h3>
         </div>
-        <button
-          onClick={load}
-          disabled={loading}
-          className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleCleanup}
+            disabled={cleaning || !entries || entries.length === 0}
+            title={lang === 'sk' ? 'Vymazať staršie ako 7 dní' : 'Delete older than 7 days'}
+            className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+          >
+            <Trash2 className={`w-3.5 h-3.5 ${cleaning ? 'animate-pulse' : ''}`} />
+          </button>
+          <button
+            onClick={load}
+            disabled={loading}
+            className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
+
+      <div className="flex gap-1.5 mb-3 overflow-x-auto pb-1">
+        {FILTERS.map(f => {
+          const active = filter === f.key;
+          return (
+            <button
+              key={f.key}
+              onClick={() => setFilter(f.key)}
+              className={`px-2.5 py-1 rounded-full text-[10px] font-medium whitespace-nowrap transition-colors ${
+                active
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-secondary text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {f[lang]}
+            </button>
+          );
+        })}
       </div>
 
       {error && (
@@ -122,17 +196,19 @@ export function CallbackHistoryCard({ lang }: Props) {
         <p className="text-xs text-muted-foreground">{lang === 'sk' ? 'Načítavam…' : 'Loading…'}</p>
       )}
 
-      {entries && entries.length === 0 && (
+      {filtered && filtered.length === 0 && (
         <p className="text-xs text-muted-foreground">
-          {lang === 'sk'
-            ? 'Žiadne akcie. Klikni v Telegrame na inline tlačidlo a tu sa zobrazí záznam.'
-            : 'No actions yet. Tap an inline button in Telegram and the entry will appear here.'}
+          {filter === 'all'
+            ? (lang === 'sk'
+                ? 'Žiadne akcie. Klikni v Telegrame na inline tlačidlo a tu sa zobrazí záznam.'
+                : 'No actions yet. Tap an inline button in Telegram and the entry will appear here.')
+            : (lang === 'sk' ? 'Žiadne záznamy v tomto filtri.' : 'No entries in this filter.')}
         </p>
       )}
 
-      {entries && entries.length > 0 && (
+      {filtered && filtered.length > 0 && (
         <div className="space-y-1.5 max-h-80 overflow-y-auto">
-          {entries.map(entry => {
+          {filtered.map(entry => {
             const meta = ACTION_LABELS[entry.action_type] ?? {
               sk: entry.action_type,
               en: entry.action_type,
