@@ -218,12 +218,40 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
 
       {/* War Chest Status */}
       {warChest && (
-        <div className="glass-card p-3 flex items-start gap-3">
-          <Wallet className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-bold text-foreground">{warChest.label}</p>
-            <p className="text-[10px] text-muted-foreground">{warChest.description}</p>
+        <div className="glass-card p-3 space-y-2">
+          <div className="flex items-start gap-3">
+            <Wallet className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-foreground">{warChest.label}</p>
+              <p className="text-[10px] text-muted-foreground">{warChest.description}</p>
+            </div>
           </div>
+          {totalPortfolioUsd > 0 && (
+            <div className="rounded-lg bg-secondary/50 p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">Aktuálne stables</span>
+                <span className="text-foreground font-medium">
+                  {formatUsd(warChest.currentStableUsd)} ({totalPortfolioUsd > 0 ? ((warChest.currentStableUsd / totalPortfolioUsd) * 100).toFixed(0) : 0}%)
+                </span>
+              </div>
+              {warChest.stablePctTarget > 0 && (
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-muted-foreground">Cieľ ({warChest.stablePctTarget}%)</span>
+                  <span className="text-foreground font-medium">{formatUsd(warChest.targetStableUsd)}</span>
+                </div>
+              )}
+              <div className={`text-[11px] font-bold pt-1 border-t border-border ${
+                warChest.recommendedMoveUsd > 0 ? 'text-warning' : 'text-gain'
+              }`}>
+                {warChest.recommendedMoveUsd > 0 ? '⚠️ ' : '✓ '}{warChest.actionLabel}
+              </div>
+            </div>
+          )}
+          {totalPortfolioUsd === 0 && (
+            <p className="text-[10px] text-muted-foreground italic">
+              Pridaj holdings v Smart Alokácii pre konkrétne USD odporúčanie.
+            </p>
+          )}
         </div>
       )}
 
