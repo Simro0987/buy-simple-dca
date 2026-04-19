@@ -91,7 +91,177 @@ const CustomTooltip = ({ active, payload, label }: any) => {
   );
 };
 
-export function PLHistoryChart({ data }: Props) {
+interface AddEntryDialogProps {
+  trigger: React.ReactNode;
+  existingDates: string[];
+  onSaved: () => void;
+}
+
+function AddManualEntryDialog({ trigger, existingDates, onSaved }: AddEntryDialogProps) {
+  const [open, setOpen] = useState(false);
+  const [date, setDate] = useState<Date>(new Date());
+  const [totalPL, setTotalPL] = useState('');
+  const [totalPLPct, setTotalPLPct] = useState('');
+  const [btcPL, setBtcPL] = useState('');
+  const [ethPL, setEthPL] = useState('');
+  const [solPL, setSolPL] = useState('');
+
+  const reset = () => {
+    setDate(new Date());
+    setTotalPL(''); setTotalPLPct('');
+    setBtcPL(''); setEthPL(''); setSolPL('');
+  };
+
+  const handleSave = () => {
+    const total = parseFloat(totalPL);
+    if (Number.isNaN(total)) {
+      toast.error('Zadaj platný Total P/L v USD');
+      return;
+    }
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const pct = parseFloat(totalPLPct);
+    const btc = parseFloat(btcPL);
+    const eth = parseFloat(ethPL);
+    const sol = parseFloat(solPL);
+
+    savePLSnapshot({
+      date: dateStr,
+      totalPL: total,
+      totalPLPct: Number.isNaN(pct) ? 0 : pct,
+      btcPL: Number.isNaN(btc) ? 0 : btc,
+      ethPL: Number.isNaN(eth) ? 0 : eth,
+      solPL: Number.isNaN(sol) ? 0 : sol,
+    });
+
+    const wasUpdate = existingDates.includes(dateStr);
+    toast.success(wasUpdate ? `Záznam ${dateStr} aktualizovaný` : `Záznam ${dateStr} pridaný`);
+    reset();
+    setOpen(false);
+    onSaved();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}>
+      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">Pridať historický P/L záznam</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <Label className="text-xs">Dátum</Label>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  className={cn('w-full justify-start text-left font-normal h-9', !date && 'text-muted-foreground')}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {format(date, 'dd.MM.yyyy')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="start">
+                <Calendar
+                  mode="single"
+                  selected={date}
+                  onSelect={(d) => d && setDate(d)}
+                  disabled={(d) => d > new Date()}
+                  initialFocus
+                  className={cn('p-3 pointer-events-auto')}
+                />
+              </PopoverContent>
+            </Popover>
+            {existingDates.includes(format(date, 'yyyy-MM-dd')) && (
+              <p className="text-[10px] text-warning">⚠️ Záznam pre tento dátum existuje a bude prepísaný</p>
+            )}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="space-y-1.5">
+              <Label className="text-xs">Total P/L (USD) *</Label>
+              <Input type="number" inputMode="decimal" placeholder="napr. 1250" value={totalPL} onChange={(e) => setTotalPL(e.target.value)} className="h-9" />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Total P/L (%)</Label>
+              <Input type="number" inputMode="decimal" placeholder="napr. 12.5" value={totalPLPct} onChange={(e) => setTotalPLPct(e.target.value)} className="h-9" />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-[10px] text-muted-foreground">Voliteľne — rozpis na tokeny (USD)</Label>
+            <div className="grid grid-cols-3 gap-2">
+              <Input type="number" inputMode="decimal" placeholder="BTC" value={btcPL} onChange={(e) => setBtcPL(e.target.value)} className="h-9" />
+              <Input type="number" inputMode="decimal" placeholder="ETH" value={ethPL} onChange={(e) => setEthPL(e.target.value)} className="h-9" />
+              <Input type="number" inputMode="decimal" placeholder="SOL" value={solPL} onChange={(e) => setSolPL(e.target.value)} className="h-9" />
+            </div>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Zrušiť</Button>
+          <Button onClick={handleSave}>Uložiť</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface ManageDialogProps {
+  data: PLSnapshot[];
+  onChange: () => void;
+}
+
+function ManageEntriesDialog({ data, onChange }: ManageDialogProps) {
+  const [open, setOpen] = useState(false);
+  const sorted = [...data].sort((a, b) => b.date.localeCompare(a.date));
+
+  const handleDelete = (date: string) => {
+    deletePLSnapshot(date);
+    toast.success(`Záznam ${date} vymazaný`);
+    onChange();
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <button className="text-[10px] text-muted-foreground hover:text-foreground underline">
+          spravovať
+        </button>
+      </DialogTrigger>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="text-base">Spravovať záznamy ({data.length})</DialogTitle>
+        </DialogHeader>
+        <div className="max-h-80 overflow-y-auto space-y-1.5">
+          {sorted.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">Žiadne záznamy</p>
+          )}
+          {sorted.map((s) => (
+            <div key={s.date} className="flex items-center justify-between rounded-lg bg-secondary/50 p-2">
+              <div className="flex flex-col">
+                <span className="text-xs font-medium text-foreground">{s.date}</span>
+                <span className={`text-[10px] font-bold ${s.totalPL >= 0 ? 'text-gain' : 'text-loss'}`}>
+                  {s.totalPL >= 0 ? '+' : ''}${s.totalPL.toFixed(2)} ({s.totalPLPct >= 0 ? '+' : ''}{s.totalPLPct.toFixed(1)}%)
+                </span>
+              </div>
+              <Button size="sm" variant="ghost" onClick={() => handleDelete(s.date)} aria-label={`Vymazať ${s.date}`}>
+                <Trash2 className="w-3.5 h-3.5 text-loss" />
+              </Button>
+            </div>
+          ))}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+export function PLHistoryChart({ data, onChange }: Props) {
+  const [version, setVersion] = useState(0);
+  const handleChanged = () => {
+    setVersion(v => v + 1);
+    onChange?.();
+  };
+  const existingDates = useMemo(() => data.map(d => d.date), [data, version]);
+
   const chartData = useMemo(() => {
     return data.map(d => ({
       ...d,
