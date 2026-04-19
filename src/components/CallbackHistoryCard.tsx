@@ -3,6 +3,11 @@ import { History, RefreshCw, CheckCircle2, PauseCircle, XCircle, Trash2 } from '
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Lang } from '@/lib/i18n';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface CallbackEntry {
   id: string;
@@ -116,11 +121,10 @@ export function CallbackHistoryCard({ lang }: Props) {
     return entries.filter(e => f.prefix!.some(p => e.action_type.startsWith(p)));
   }, [entries, filter]);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   const handleCleanup = async () => {
-    const confirmMsg = lang === 'sk'
-      ? 'Vymazať záznamy staršie ako 7 dní?'
-      : 'Delete entries older than 7 days?';
-    if (!confirm(confirmMsg)) return;
+    setConfirmOpen(false);
     setCleaning(true);
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
@@ -151,14 +155,38 @@ export function CallbackHistoryCard({ lang }: Props) {
           </h3>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleCleanup}
-            disabled={cleaning || !entries || entries.length === 0}
-            title={lang === 'sk' ? 'Vymazať staršie ako 7 dní' : 'Delete older than 7 days'}
-            className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-          >
-            <Trash2 className={`w-3.5 h-3.5 ${cleaning ? 'animate-pulse' : ''}`} />
-          </button>
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <AlertDialogTrigger asChild>
+              <button
+                disabled={cleaning || !entries || entries.length === 0}
+                title={lang === 'sk' ? 'Vymazať staršie ako 7 dní' : 'Delete older than 7 days'}
+                className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+              >
+                <Trash2 className={`w-3.5 h-3.5 ${cleaning ? 'animate-pulse' : ''}`} />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {lang === 'sk' ? 'Vymazať staré záznamy?' : 'Delete old entries?'}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {lang === 'sk'
+                    ? 'Vymažú sa všetky záznamy staršie ako 7 dní. Túto akciu nemožno vrátiť späť.'
+                    : 'All entries older than 7 days will be permanently deleted. This action cannot be undone.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{lang === 'sk' ? 'Zrušiť' : 'Cancel'}</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleCleanup}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {lang === 'sk' ? 'Vymazať' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <button
             onClick={load}
             disabled={loading}
