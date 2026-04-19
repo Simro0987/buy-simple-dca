@@ -275,13 +275,31 @@ export function PLHistoryChart({ data, onChange }: Props) {
   if (chartData.length < 2) {
     return (
       <div className="glass-card p-4">
-        <div className="flex items-center gap-2 mb-2">
-          <TrendingUp className="w-4 h-4 text-primary" />
-          <span className="text-sm font-bold text-foreground">P/L História</span>
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <TrendingUp className="w-4 h-4 text-primary" />
+            <span className="text-sm font-bold text-foreground">P/L História</span>
+          </div>
+          <AddManualEntryDialog
+            existingDates={existingDates}
+            onSaved={handleChanged}
+            trigger={
+              <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1">
+                <Plus className="w-3 h-3" /> Pridať záznam
+              </Button>
+            }
+          />
         </div>
-        <p className="text-xs text-muted-foreground text-center py-6">
-          Minimálne 2 dni dát potrebné pre graf. Dáta sa ukladajú automaticky.
+        <p className="text-xs text-muted-foreground text-center py-4">
+          {chartData.length === 0
+            ? 'Žiadne dáta. Pridaj historický záznam manuálne pre okamžité naplnenie grafu.'
+            : 'Minimálne 2 dni dát potrebné pre graf. Pridaj ďalší záznam manuálne alebo počkaj.'}
         </p>
+        {chartData.length === 1 && (
+          <div className="flex justify-center">
+            <ManageEntriesDialog data={data} onChange={handleChanged} />
+          </div>
+        )}
       </div>
     );
   }
@@ -297,9 +315,19 @@ export function PLHistoryChart({ data, onChange }: Props) {
           <TrendingUp className="w-4 h-4 text-primary" />
           <span className="text-sm font-bold text-foreground">P/L História</span>
         </div>
-        <span className="text-[10px] text-muted-foreground">
-          {chartData.length} dní
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-muted-foreground">{chartData.length} dní</span>
+          <ManageEntriesDialog data={data} onChange={handleChanged} />
+          <AddManualEntryDialog
+            existingDates={existingDates}
+            onSaved={handleChanged}
+            trigger={
+              <Button size="sm" variant="outline" className="h-7 text-[10px] gap-1">
+                <Plus className="w-3 h-3" /> Pridať
+              </Button>
+            }
+          />
+        </div>
       </div>
 
       <div className="h-40">
