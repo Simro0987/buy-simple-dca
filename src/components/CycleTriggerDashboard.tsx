@@ -69,8 +69,18 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
     ? computeReEntry(cycleResult?.score ?? 50, fearGreedValue, btcDrawdown, advancedData)
     : null;
 
-  // War chest mode
-  const warChest = cyclePhase ? getWarChestMode(cyclePhase.phase) : null;
+  // Portfolio totals for war chest USD recommendation
+  const stableHoldings = holdings['usdc'] ?? holdings['usdt'] ?? holdings['stable'] ?? 0;
+  const currentStableUsd = stableHoldings; // stablecoins ≈ 1 USD
+  let riskAssetsUsd = 0;
+  for (const t of TOKENS) {
+    riskAssetsUsd += (holdings[t.id] ?? 0) * (priceMap[t.id] ?? 0);
+  }
+  const totalPortfolioUsd = riskAssetsUsd + currentStableUsd;
+
+  const warChest = cyclePhase
+    ? getWarChestMode(cyclePhase.phase, totalPortfolioUsd, currentStableUsd)
+    : null;
 
   // Send Telegram alert
   const handleSendCycleAlert = async () => {
