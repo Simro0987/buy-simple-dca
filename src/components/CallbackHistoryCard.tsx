@@ -3,6 +3,11 @@ import { History, RefreshCw, CheckCircle2, PauseCircle, XCircle, Trash2 } from '
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Lang } from '@/lib/i18n';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 interface CallbackEntry {
   id: string;
@@ -116,11 +121,10 @@ export function CallbackHistoryCard({ lang }: Props) {
     return entries.filter(e => f.prefix!.some(p => e.action_type.startsWith(p)));
   }, [entries, filter]);
 
+  const [confirmOpen, setConfirmOpen] = useState(false);
+
   const handleCleanup = async () => {
-    const confirmMsg = lang === 'sk'
-      ? 'Vymazať záznamy staršie ako 7 dní?'
-      : 'Delete entries older than 7 days?';
-    if (!confirm(confirmMsg)) return;
+    setConfirmOpen(false);
     setCleaning(true);
     try {
       const { data, error: fnError } = await supabase.functions.invoke(
