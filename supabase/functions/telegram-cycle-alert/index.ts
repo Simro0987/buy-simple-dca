@@ -73,6 +73,14 @@ Deno.serve(async (req) => {
     // War Chest
     if (warChest) {
       lines.push(`${warChest.label}`);
+      if (warChest.actionLabel) {
+        const prefix = warChest.recommendedMoveUsd > 0 ? '⚠️' : '✓';
+        lines.push(`   ${prefix} <b>${warChest.actionLabel}</b>`);
+      }
+      if (typeof warChest.currentStableUsd === 'number' && typeof warChest.targetStableUsd === 'number' && warChest.stablePctTarget > 0) {
+        lines.push(`   Stables: $${warChest.currentStableUsd.toFixed(0)} → cieľ $${warChest.targetStableUsd.toFixed(0)} (${warChest.stablePctTarget}%)`);
+      }
+      lines.push('');
     }
 
     if (lines.length === 0) {

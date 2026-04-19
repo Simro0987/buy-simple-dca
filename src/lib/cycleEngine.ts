@@ -263,38 +263,94 @@ export interface WarChestStatus {
   label: string;
   stablePctTarget: number; // target % of profits to stables
   description: string;
+  /** Recommended USD amount to move into stablecoins right now (0 if not applicable) */
+  recommendedMoveUsd: number;
+  /** Current stablecoin balance in USD */
+  currentStableUsd: number;
+  /** Target stablecoin balance in USD based on portfolio + phase */
+  targetStableUsd: number;
+  /** Human readable action line (Slovak) */
+  actionLabel: string;
 }
 
-export function getWarChestMode(phase: CyclePhase): WarChestStatus {
+/**
+ * Calculate concrete USD amount to shift into stablecoins on phase transition.
+ * @param phase Current cycle phase
+ * @param totalPortfolioUsd Total portfolio value (risk assets + stables) in USD
+ * @param currentStableUsd Current stablecoin balance in USD
+ */
+export function getWarChestMode(
+  phase: CyclePhase,
+  totalPortfolioUsd: number = 0,
+  currentStableUsd: number = 0,
+): WarChestStatus {
+  const computeMove = (targetPct: number): { target: number; move: number } => {
+    const target = (totalPortfolioUsd * targetPct) / 100;
+    const move = Math.max(0, target - currentStableUsd);
+    return { target, move };
+  };
+
   switch (phase) {
-    case 'distribution':
+    case 'distribution': {
+      const { target, move } = computeMove(50);
       return {
         mode: 'accumulate',
-        label: '🛡️ War Chest: Akumuluj',
+        label: '🛡️ War Chest: Akumuluj (Top Risk)',
         stablePctTarget: 50,
         description: 'Top Risk → 50% BTC / 50% Stablecoins. Buduj rezervu na re-entry.',
+        recommendedMoveUsd: move,
+        currentStableUsd,
+        targetStableUsd: target,
+        actionLabel: move > 0
+          ? `Presuň ~${move.toFixed(0)} USD do stablecoinov (cieľ: ${target.toFixed(0)} USD = 50%)`
+          : `Cieľ splnený: ${currentStableUsd.toFixed(0)} USD ≥ 50% portfólia`,
       };
-    case 'late_bull':
+    }
+    case 'late_bull': {
+      const { target, move } = computeMove(40);
       return {
         mode: 'accumulate',
-        label: '🟠 War Chest: Zvyšuj',
+        label: '🟠 War Chest: Zvyšuj (Profit zóna)',
         stablePctTarget: 40,
         description: 'Neskorý rast → zvýš podiel stablecoinov v profitoch.',
+        recommendedMoveUsd: move,
+        currentStableUsd,
+        targetStableUsd: target,
+        actionLabel: move > 0
+          ? `Presuň ~${move.toFixed(0)} USD do stablecoinov (cieľ: ${target.toFixed(0)} USD = 40%)`
+          : `Cieľ splnený: ${currentStableUsd.toFixed(0)} USD ≥ 40% portfólia`,
       };
+    }
     case 'bear_capitulation':
-    case 'early_accumulation':
+    case 'early_accumulation': {
+      const tranche = currentStableUsd * 0.25;
       return {
         mode: 'deploy',
         label: '🟢 War Chest: Nasadzuj',
         stablePctTarget: 0,
         description: 'Buy zóna → nasaď stablecoiny na nákup. Staged re-entry (25% kroky).',
+        recommendedMoveUsd: 0,
+        currentStableUsd,
+        targetStableUsd: 0,
+        actionLabel: currentStableUsd > 0
+          ? `Nasaď ~${tranche.toFixed(0)} USD zo stablecoinov (1 tranža = 25% z ${currentStableUsd.toFixed(0)} USD)`
+          : 'Žiadne stablecoiny na nasadenie',
       };
-    default:
+    }
+    default: {
+      const { target, move } = computeMove(30);
       return {
         mode: 'hold',
         label: '🟡 War Chest: Drž',
         stablePctTarget: 30,
         description: 'Neutrálny trh → drž existujúce stablecoiny, štandardné rozdelenie ziskov.',
+        recommendedMoveUsd: move,
+        currentStableUsd,
+        targetStableUsd: target,
+        actionLabel: move > 0
+          ? `Voliteľné: presuň ~${move.toFixed(0)} USD do stablecoinov (cieľ: 30%)`
+          : `Drž súčasných ${currentStableUsd.toFixed(0)} USD v stablecoinoch`,
       };
+    }
   }
 }

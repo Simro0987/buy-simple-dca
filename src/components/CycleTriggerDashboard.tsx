@@ -69,8 +69,18 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
     ? computeReEntry(cycleResult?.score ?? 50, fearGreedValue, btcDrawdown, advancedData)
     : null;
 
-  // War chest mode
-  const warChest = cyclePhase ? getWarChestMode(cyclePhase.phase) : null;
+  // Portfolio totals for war chest USD recommendation
+  const stableHoldings = holdings['usdc'] ?? holdings['usdt'] ?? holdings['stable'] ?? 0;
+  const currentStableUsd = stableHoldings; // stablecoins ≈ 1 USD
+  let riskAssetsUsd = 0;
+  for (const t of TOKENS) {
+    riskAssetsUsd += (holdings[t.id] ?? 0) * (priceMap[t.id] ?? 0);
+  }
+  const totalPortfolioUsd = riskAssetsUsd + currentStableUsd;
+
+  const warChest = cyclePhase
+    ? getWarChestMode(cyclePhase.phase, totalPortfolioUsd, currentStableUsd)
+    : null;
 
   // Send Telegram alert
   const handleSendCycleAlert = async () => {
@@ -88,7 +98,15 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
           cyclePhase: cyclePhase ? { phase: cyclePhase.phase, label: cyclePhase.label, confidence: cyclePhase.confidence } : null,
           smartSells: smartSells.slice(0, 4),
           reEntry: reEntry?.active ? reEntry : null,
-          warChest: warChest ? { mode: warChest.mode, label: warChest.label } : null,
+          warChest: warChest ? {
+            mode: warChest.mode,
+            label: warChest.label,
+            actionLabel: warChest.actionLabel,
+            recommendedMoveUsd: warChest.recommendedMoveUsd,
+            currentStableUsd: warChest.currentStableUsd,
+            targetStableUsd: warChest.targetStableUsd,
+            stablePctTarget: warChest.stablePctTarget,
+          } : null,
           cycleScore: cycleResult?.score ?? 0,
         },
       });
@@ -208,12 +226,40 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
 
       {/* War Chest Status */}
       {warChest && (
-        <div className="glass-card p-3 flex items-start gap-3">
-          <Wallet className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="text-xs font-bold text-foreground">{warChest.label}</p>
-            <p className="text-[10px] text-muted-foreground">{warChest.description}</p>
+        <div className="glass-card p-3 space-y-2">
+          <div className="flex items-start gap-3">
+            <Wallet className="w-5 h-5 text-primary flex-shrink-0 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-bold text-foreground">{warChest.label}</p>
+              <p className="text-[10px] text-muted-foreground">{warChest.description}</p>
+            </div>
           </div>
+          {totalPortfolioUsd > 0 && (
+            <div className="rounded-lg bg-secondary/50 p-2.5 space-y-1.5">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground">Aktuálne stables</span>
+                <span className="text-foreground font-medium">
+                  {formatUsd(warChest.currentStableUsd)} ({totalPortfolioUsd > 0 ? ((warChest.currentStableUsd / totalPortfolioUsd) * 100).toFixed(0) : 0}%)
+                </span>
+              </div>
+              {warChest.stablePctTarget > 0 && (
+                <div className="flex items-center justify-between text-[10px]">
+                  <span className="text-muted-foreground">Cieľ ({warChest.stablePctTarget}%)</span>
+                  <span className="text-foreground font-medium">{formatUsd(warChest.targetStableUsd)}</span>
+                </div>
+              )}
+              <div className={`text-[11px] font-bold pt-1 border-t border-border ${
+                warChest.recommendedMoveUsd > 0 ? 'text-warning' : 'text-gain'
+              }`}>
+                {warChest.recommendedMoveUsd > 0 ? '⚠️ ' : '✓ '}{warChest.actionLabel}
+              </div>
+            </div>
+          )}
+          {totalPortfolioUsd === 0 && (
+            <p className="text-[10px] text-muted-foreground italic">
+              Pridaj holdings v Smart Alokácii pre konkrétne USD odporúčanie.
+            </p>
+          )}
         </div>
       )}
 
