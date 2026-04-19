@@ -430,7 +430,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
       </div>
 
       {/* P/L History Chart */}
-      <PLHistoryChart data={plHistory} />
+      <PLHistoryChart data={plHistory} onChange={() => setPlHistory(getPLHistory())} />
 
       {/* Cycle-Trigger Profit Engine */}
       <CycleTriggerDashboard
