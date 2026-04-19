@@ -1,18 +1,22 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  AreaChart,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  ReferenceLine,
+  AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, Plus, Trash2, CalendarIcon } from 'lucide-react';
+import { format } from 'date-fns';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Calendar } from '@/components/ui/calendar';
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter,
+} from '@/components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { cn } from '@/lib/utils';
+import { toast } from 'sonner';
 
 const PL_HISTORY_KEY = 'pl-history-v2';
-const MAX_POINTS = 90; // 90 days
+const MAX_POINTS = 90;
 
 export interface PLSnapshot {
   date: string; // YYYY-MM-DD
@@ -33,23 +37,22 @@ export function getPLHistory(): PLSnapshot[] {
 
 export function savePLSnapshot(snapshot: PLSnapshot) {
   const history = getPLHistory();
-  const today = snapshot.date;
-
-  // Replace today's entry or append
-  const idx = history.findIndex(h => h.date === today);
-  if (idx >= 0) {
-    history[idx] = snapshot;
-  } else {
-    history.push(snapshot);
-  }
-
-  // Keep last N points
+  const idx = history.findIndex(h => h.date === snapshot.date);
+  if (idx >= 0) history[idx] = snapshot;
+  else history.push(snapshot);
+  history.sort((a, b) => a.date.localeCompare(b.date));
   const trimmed = history.slice(-MAX_POINTS);
   localStorage.setItem(PL_HISTORY_KEY, JSON.stringify(trimmed));
 }
 
+export function deletePLSnapshot(date: string) {
+  const history = getPLHistory().filter(h => h.date !== date);
+  localStorage.setItem(PL_HISTORY_KEY, JSON.stringify(history));
+}
+
 interface Props {
   data: PLSnapshot[];
+  onChange?: () => void;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
