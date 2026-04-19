@@ -1,6 +1,6 @@
 import { ComponentType } from 'react';
 import { TabId } from '@/components/BottomNav';
-import { Language } from '@/lib/i18n';
+import { Lang } from '@/lib/i18n';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
 import { PortfolioPage } from '@/pages/PortfolioPage';
@@ -16,7 +16,7 @@ import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
 
 export interface TabContext {
-  lang: Language;
+  lang: Lang;
   prices: any;
   athData: any;
   cycleResult: any;
