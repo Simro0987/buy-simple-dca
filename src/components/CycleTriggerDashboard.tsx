@@ -98,7 +98,15 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
           cyclePhase: cyclePhase ? { phase: cyclePhase.phase, label: cyclePhase.label, confidence: cyclePhase.confidence } : null,
           smartSells: smartSells.slice(0, 4),
           reEntry: reEntry?.active ? reEntry : null,
-          warChest: warChest ? { mode: warChest.mode, label: warChest.label } : null,
+          warChest: warChest ? {
+            mode: warChest.mode,
+            label: warChest.label,
+            actionLabel: warChest.actionLabel,
+            recommendedMoveUsd: warChest.recommendedMoveUsd,
+            currentStableUsd: warChest.currentStableUsd,
+            targetStableUsd: warChest.targetStableUsd,
+            stablePctTarget: warChest.stablePctTarget,
+          } : null,
           cycleScore: cycleResult?.score ?? 0,
         },
       });
