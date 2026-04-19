@@ -155,14 +155,38 @@ export function CallbackHistoryCard({ lang }: Props) {
           </h3>
         </div>
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={handleCleanup}
-            disabled={cleaning || !entries || entries.length === 0}
-            title={lang === 'sk' ? 'Vymazať staršie ako 7 dní' : 'Delete older than 7 days'}
-            className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
-          >
-            <Trash2 className={`w-3.5 h-3.5 ${cleaning ? 'animate-pulse' : ''}`} />
-          </button>
+          <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+            <AlertDialogTrigger asChild>
+              <button
+                disabled={cleaning || !entries || entries.length === 0}
+                title={lang === 'sk' ? 'Vymazať staršie ako 7 dní' : 'Delete older than 7 days'}
+                className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+              >
+                <Trash2 className={`w-3.5 h-3.5 ${cleaning ? 'animate-pulse' : ''}`} />
+              </button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {lang === 'sk' ? 'Vymazať staré záznamy?' : 'Delete old entries?'}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {lang === 'sk'
+                    ? 'Vymažú sa všetky záznamy staršie ako 7 dní. Túto akciu nemožno vrátiť späť.'
+                    : 'All entries older than 7 days will be permanently deleted. This action cannot be undone.'}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{lang === 'sk' ? 'Zrušiť' : 'Cancel'}</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleCleanup}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {lang === 'sk' ? 'Vymazať' : 'Delete'}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
           <button
             onClick={load}
             disabled={loading}
