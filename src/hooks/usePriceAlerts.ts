@@ -83,10 +83,6 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
       requestNotificationPermission();
     }
   }, []);
-    if (!prices) return;
-    const now = Date.now();
-    if (now - checkedRef.current < 30_000) return; // check max every 30s
-    checkedRef.current = now;
 
   useEffect(() => {
     if (!prices) return;
