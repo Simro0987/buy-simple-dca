@@ -346,7 +346,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     };
     savePLSnapshot(snapshot);
     setPlHistory(getPLHistory());
-  }, [totalPL, totalInvested, plData]);
+  }, [totalPL, totalPLPct, totalInvested, plData]);
 
   return (
     <div className="space-y-4">
