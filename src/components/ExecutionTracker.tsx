@@ -80,6 +80,8 @@ export function ExecutionTracker({ lang, prices }: Props) {
   const doneActions = doneDca + doneLimits;
   const score = totalActions > 0 ? Math.round((doneActions / totalActions) * 100) : 0;
 
+  const sk = lang === 'sk';
+
   // Notify when score drops below 50%
   useEffect(() => {
     if (totalActions === 0 || score >= 50) return;
@@ -90,9 +92,7 @@ export function ExecutionTracker({ lang, prices }: Props) {
       sk ? `⚠️ Execution Score klesol na ${score}% — zlepši disciplínu!` : `⚠️ Execution Score dropped to ${score}% — improve your discipline!`,
       { duration: 8000 }
     );
-  }, [score, weekId]);
-
-  const sk = lang === 'sk';
+  }, [score, weekId, totalActions, sk]);
 
   return (
     <div className="space-y-4">
