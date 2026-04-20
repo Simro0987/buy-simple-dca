@@ -272,25 +272,27 @@ function MissedOpportunities({ history, prices, lang }: {
   const notifiedRef = useRef<string | null>(null);
   const budget = Number(localStorage.getItem('dca-budget') || '100');
 
-  const missed: { symbol: string; weekId: string; limitPrice: number; currentPrice: number; gainPct: number; missedGainUsd: number }[] = [];
-
-  for (const week of history.slice(-4)) {
-    for (const limit of week.limits) {
-      if (limit.filled) continue;
-      const token = TOKENS.find(t => t.symbol === limit.symbol);
-      if (!token) continue;
-      const currentPrice = prices?.[token.coingeckoId]?.usd ?? 0;
-      if (currentPrice > 0 && limit.limitPrice > 0 && currentPrice > limit.limitPrice) {
-        const gainPct = ((currentPrice - limit.limitPrice) / limit.limitPrice) * 100;
-        if (gainPct > 1) {
-          const allocationPct = token.allocation;
-          const limitUsd = budget * allocationPct * 0.4;
-          const missedGainUsd = limitUsd * (gainPct / 100);
-          missed.push({ symbol: limit.symbol, weekId: week.weekId, limitPrice: limit.limitPrice, currentPrice, gainPct, missedGainUsd });
+  const missed = useMemo(() => {
+    const result: { symbol: string; weekId: string; limitPrice: number; currentPrice: number; gainPct: number; missedGainUsd: number }[] = [];
+    for (const week of history.slice(-4)) {
+      for (const limit of week.limits) {
+        if (limit.filled) continue;
+        const token = TOKENS.find(t => t.symbol === limit.symbol);
+        if (!token) continue;
+        const currentPrice = prices?.[token.coingeckoId]?.usd ?? 0;
+        if (currentPrice > 0 && limit.limitPrice > 0 && currentPrice > limit.limitPrice) {
+          const gainPct = ((currentPrice - limit.limitPrice) / limit.limitPrice) * 100;
+          if (gainPct > 1) {
+            const allocationPct = token.allocation;
+            const limitUsd = budget * allocationPct * 0.4;
+            const missedGainUsd = limitUsd * (gainPct / 100);
+            result.push({ symbol: limit.symbol, weekId: week.weekId, limitPrice: limit.limitPrice, currentPrice, gainPct, missedGainUsd });
+          }
         }
       }
     }
-  }
+    return result;
+  }, [history, prices, budget]);
 
   const totalMissedGain = missed.reduce((s, m) => s + m.missedGainUsd, 0);
 
