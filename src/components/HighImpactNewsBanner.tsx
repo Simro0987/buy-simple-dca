@@ -43,14 +43,14 @@ export function HighImpactNewsBanner({ lang }: Props) {
     );
     if (highImpact.length > 0) {
       const newItem = highImpact[0];
-      const isNew = !visible || String(visible.id) !== String(newItem.id);
-      setVisible(newItem);
-      setExiting(false);
-      if (isNew) {
-        if (navigator.vibrate) {
+      setVisible((prev) => {
+        const isNew = !prev || String(prev.id) !== String(newItem.id);
+        if (isNew && navigator.vibrate) {
           navigator.vibrate([100, 50, 100]);
         }
-      }
+        return newItem;
+      });
+      setExiting(false);
     } else {
       setVisible(null);
     }
