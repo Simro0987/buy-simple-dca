@@ -62,6 +62,7 @@ export function CronJobsCard({ lang }: Props) {
   const [jobs, setJobs] = useState<CronJob[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -78,6 +79,31 @@ export function CronJobsCard({ lang }: Props) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const runJob = useCallback(async (jobname: string | null) => {
+    if (!jobname) return;
+    const mapping = JOB_TO_FUNCTION[jobname];
+    if (!mapping) {
+      toast.error(lang === 'sk' ? 'Pre tento job nie je definovaná funkcia' : 'No function mapped for this job');
+      return;
+    }
+    setRunning(jobname);
+    try {
+      const { error: invokeError } = await supabase.functions.invoke(mapping.fn, {
+        body: mapping.body ?? {},
+      });
+      if (invokeError) throw invokeError;
+      toast.success(lang === 'sk' ? `Spustené: ${jobname}` : `Triggered: ${jobname}`);
+      // Refresh after short delay so cron metadata catches up if applicable
+      setTimeout(load, 1500);
+    } catch (e) {
+      toast.error(
+        lang === 'sk' ? `Spustenie zlyhalo: ${e instanceof Error ? e.message : ''}` : `Trigger failed: ${e instanceof Error ? e.message : ''}`
+      );
+    } finally {
+      setRunning(null);
+    }
+  }, [lang, load]);
 
   return (
     <div className="bg-card border border-border rounded-xl p-4">
