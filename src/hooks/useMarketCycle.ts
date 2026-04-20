@@ -109,8 +109,8 @@ function getGuidance(zone: MarketCycleResult['zone'], sk: boolean): string {
 }
 
 export function useMarketCycleScore(input: ComputeInput): MarketCycleResult | null {
+  const { fearGreed, altSeason, prices, athData, lang } = input;
   return useMemo(() => {
-    const { fearGreed, altSeason, prices, athData, lang } = input;
     const sk = lang === 'sk';
 
     if (!fearGreed || !prices) return null;
@@ -186,5 +186,5 @@ export function useMarketCycleScore(input: ComputeInput): MarketCycleResult | nu
       indicators,
       tokenContext,
     };
-  }, [input.fearGreed, input.altSeason, input.prices, input.athData, input.lang]);
+  }, [fearGreed, altSeason, prices, athData, lang]);
 }
