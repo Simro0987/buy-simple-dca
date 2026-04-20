@@ -1,7 +1,19 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Clock, RefreshCw, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, RefreshCw, CheckCircle2, XCircle, AlertCircle, Play } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Lang } from '@/lib/i18n';
+
+// Maps cron jobname -> { function name, optional default body }
+const JOB_TO_FUNCTION: Record<string, { fn: string; body?: Record<string, unknown> }> = {
+  'weekly-dca-reminder': { fn: 'telegram-dca-reminder' },
+  'limit-proximity-alert': { fn: 'telegram-price-alert' },
+  'hourly-news-alert': { fn: 'telegram-news-alert' },
+  'staking-maturity-14th': { fn: 'telegram-staking-maturity' },
+  'staking-maturity-15th': { fn: 'telegram-staking-maturity' },
+  'poll-telegram-callbacks': { fn: 'telegram-poll-callbacks' },
+  'weekly-callback-cleanup': { fn: 'telegram-callback-cleanup', body: { olderThanDays: 30 } },
+};
 
 interface CronJob {
   jobid: number;
