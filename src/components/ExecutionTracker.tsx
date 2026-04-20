@@ -318,7 +318,7 @@ function MissedOpportunities({ history, prices, lang }: {
         toast.success(sk ? 'Telegram notifikácia o zmeškanom zisku odoslaná' : 'Missed opportunity alert sent to Telegram');
       }
     });
-  }, [totalMissedGain, missed.length]);
+  }, [totalMissedGain, missed, sk]);
 
   if (missed.length === 0) return null;
 
