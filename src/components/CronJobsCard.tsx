@@ -157,13 +157,25 @@ export function CronJobsCard({ lang }: Props) {
                   <span className="font-medium text-foreground text-sm truncate">
                     {job.jobname || `job #${job.jobid}`}
                   </span>
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      job.active ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {job.active ? (lang === 'sk' ? 'AKTÍVNE' : 'ACTIVE') : (lang === 'sk' ? 'PAUZA' : 'PAUSED')}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {job.jobname && JOB_TO_FUNCTION[job.jobname] && (
+                      <button
+                        onClick={() => runJob(job.jobname)}
+                        disabled={running === job.jobname}
+                        title={lang === 'sk' ? 'Spusti teraz' : 'Run now'}
+                        className="p-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                      >
+                        <Play className={`w-3 h-3 ${running === job.jobname ? 'animate-pulse' : ''}`} />
+                      </button>
+                    )}
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        job.active ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {job.active ? (lang === 'sk' ? 'AKTÍVNE' : 'ACTIVE') : (lang === 'sk' ? 'PAUZA' : 'PAUSED')}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>📅 {describeSchedule(job.schedule, lang)}</span>
