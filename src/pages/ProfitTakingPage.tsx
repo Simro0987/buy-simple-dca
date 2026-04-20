@@ -222,7 +222,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
         }
       }
     }
-  }, [prices, avgCosts]);
+  }, [prices, avgCosts, holdings]);
 
   // Realtime: listen for callback responses from Telegram inline buttons
   useEffect(() => {
