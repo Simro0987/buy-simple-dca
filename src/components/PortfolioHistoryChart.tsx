@@ -78,12 +78,14 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
     if (totalValue <= 0) return;
 
     const today = new Date().toISOString().slice(0, 10);
-    const updated = history.filter(p => p.date !== today);
-    updated.push({ date: today, value: totalValue, tokens });
-    updated.sort((a, b) => a.date.localeCompare(b.date));
-    const trimmed = updated.slice(-MAX_POINTS);
-    setHistory(trimmed);
-    saveHistory(trimmed);
+    setHistory((prev) => {
+      const updated = prev.filter(p => p.date !== today);
+      updated.push({ date: today, value: totalValue, tokens });
+      updated.sort((a, b) => a.date.localeCompare(b.date));
+      const trimmed = updated.slice(-MAX_POINTS);
+      saveHistory(trimmed);
+      return trimmed;
+    });
   }, [prices]);
 
   const filtered = useMemo(() => history.slice(-range), [history, range]);
