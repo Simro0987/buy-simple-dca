@@ -1,7 +1,19 @@
 import { useEffect, useState, useCallback } from 'react';
-import { Clock, RefreshCw, CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
+import { Clock, RefreshCw, CheckCircle2, XCircle, AlertCircle, Play } from 'lucide-react';
+import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { Lang } from '@/lib/i18n';
+
+// Maps cron jobname -> { function name, optional default body }
+const JOB_TO_FUNCTION: Record<string, { fn: string; body?: Record<string, unknown> }> = {
+  'weekly-dca-reminder': { fn: 'telegram-dca-reminder' },
+  'limit-proximity-alert': { fn: 'telegram-price-alert' },
+  'hourly-news-alert': { fn: 'telegram-news-alert' },
+  'staking-maturity-14th': { fn: 'telegram-staking-maturity' },
+  'staking-maturity-15th': { fn: 'telegram-staking-maturity' },
+  'poll-telegram-callbacks': { fn: 'telegram-poll-callbacks' },
+  'weekly-callback-cleanup': { fn: 'telegram-callback-cleanup', body: { olderThanDays: 30 } },
+};
 
 interface CronJob {
   jobid: number;
@@ -50,6 +62,7 @@ export function CronJobsCard({ lang }: Props) {
   const [jobs, setJobs] = useState<CronJob[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [running, setRunning] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -66,6 +79,31 @@ export function CronJobsCard({ lang }: Props) {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  const runJob = useCallback(async (jobname: string | null) => {
+    if (!jobname) return;
+    const mapping = JOB_TO_FUNCTION[jobname];
+    if (!mapping) {
+      toast.error(lang === 'sk' ? 'Pre tento job nie je definovaná funkcia' : 'No function mapped for this job');
+      return;
+    }
+    setRunning(jobname);
+    try {
+      const { error: invokeError } = await supabase.functions.invoke(mapping.fn, {
+        body: mapping.body ?? {},
+      });
+      if (invokeError) throw invokeError;
+      toast.success(lang === 'sk' ? `Spustené: ${jobname}` : `Triggered: ${jobname}`);
+      // Refresh after short delay so cron metadata catches up if applicable
+      setTimeout(load, 1500);
+    } catch (e) {
+      toast.error(
+        lang === 'sk' ? `Spustenie zlyhalo: ${e instanceof Error ? e.message : ''}` : `Trigger failed: ${e instanceof Error ? e.message : ''}`
+      );
+    } finally {
+      setRunning(null);
+    }
+  }, [lang, load]);
 
   return (
     <div className="bg-card border border-border rounded-xl p-4">
@@ -119,13 +157,25 @@ export function CronJobsCard({ lang }: Props) {
                   <span className="font-medium text-foreground text-sm truncate">
                     {job.jobname || `job #${job.jobid}`}
                   </span>
-                  <span
-                    className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-                      job.active ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
-                    }`}
-                  >
-                    {job.active ? (lang === 'sk' ? 'AKTÍVNE' : 'ACTIVE') : (lang === 'sk' ? 'PAUZA' : 'PAUSED')}
-                  </span>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {job.jobname && JOB_TO_FUNCTION[job.jobname] && (
+                      <button
+                        onClick={() => runJob(job.jobname)}
+                        disabled={running === job.jobname}
+                        title={lang === 'sk' ? 'Spusti teraz' : 'Run now'}
+                        className="p-1 rounded bg-primary/10 text-primary hover:bg-primary/20 transition-colors disabled:opacity-50"
+                      >
+                        <Play className={`w-3 h-3 ${running === job.jobname ? 'animate-pulse' : ''}`} />
+                      </button>
+                    )}
+                    <span
+                      className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
+                        job.active ? 'bg-success/20 text-success' : 'bg-muted text-muted-foreground'
+                      }`}
+                    >
+                      {job.active ? (lang === 'sk' ? 'AKTÍVNE' : 'ACTIVE') : (lang === 'sk' ? 'PAUZA' : 'PAUSED')}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between text-xs text-muted-foreground">
                   <span>📅 {describeSchedule(job.schedule, lang)}</span>
