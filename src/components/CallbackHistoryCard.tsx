@@ -305,7 +305,49 @@ export function CallbackHistoryCard({ lang }: Props) {
                         <span className="text-muted-foreground"> +{entry.profit_pct}%</span>
                       )}
                     </span>
-                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${color}`} />
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Icon className={`w-3.5 h-3.5 ${color}`} />
+                      <AlertDialog
+                        open={confirmDeleteId === entry.id}
+                        onOpenChange={(open) => setConfirmDeleteId(open ? entry.id : null)}
+                      >
+                        <AlertDialogTrigger asChild>
+                          <button
+                            disabled={deletingId === entry.id}
+                            title={lang === 'sk' ? 'Vymazať záznam' : 'Delete entry'}
+                            className="p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 className={`w-3 h-3 ${deletingId === entry.id ? 'animate-pulse' : ''}`} />
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              {lang === 'sk' ? 'Vymazať tento záznam?' : 'Delete this entry?'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {meta.emoji} {meta[lang]}
+                              {entry.token ? ` · ${entry.token}` : ''}
+                              {' — '}
+                              {formatRelative(entry.created_at, lang)}
+                              <br />
+                              {lang === 'sk'
+                                ? 'Túto akciu nemožno vrátiť späť.'
+                                : 'This action cannot be undone.'}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{lang === 'sk' ? 'Zrušiť' : 'Cancel'}</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteOne(entry.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              {lang === 'sk' ? 'Vymazať' : 'Delete'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {formatRelative(entry.created_at, lang)}
