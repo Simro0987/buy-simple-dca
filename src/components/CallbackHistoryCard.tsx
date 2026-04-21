@@ -8,6 +8,8 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 interface CallbackEntry {
   id: string;
@@ -81,6 +83,8 @@ export function CallbackHistoryCard({ lang }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [cleaning, setCleaning] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cleanupDays, setCleanupDays] = useState<string>('7');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -121,15 +125,14 @@ export function CallbackHistoryCard({ lang }: Props) {
     return entries.filter(e => f.prefix!.some(p => e.action_type.startsWith(p)));
   }, [entries, filter]);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
   const handleCleanup = async () => {
     setConfirmOpen(false);
     setCleaning(true);
     try {
+      const days = parseInt(cleanupDays, 10);
       const { data, error: fnError } = await supabase.functions.invoke(
         'telegram-callback-cleanup',
-        { body: { olderThanDays: 7 } }
+        { body: { olderThanDays: days } }
       );
       if (fnError) throw fnError;
       const deleted = (data as { deleted?: number } | null)?.deleted ?? 0;
@@ -172,10 +175,30 @@ export function CallbackHistoryCard({ lang }: Props) {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {lang === 'sk'
-                    ? 'Vymažú sa všetky záznamy staršie ako 7 dní. Túto akciu nemožno vrátiť späť.'
-                    : 'All entries older than 7 days will be permanently deleted. This action cannot be undone.'}
+                    ? 'Vyber počet dní. Vymažú sa všetky záznamy staršie ako zvolený počet dní. Túto akciu nemožno vrátiť späť.'
+                    : 'Select number of days. All entries older than the selected days will be permanently deleted. This action cannot be undone.'}
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              <div className="py-4">
+                <RadioGroup value={cleanupDays} onValueChange={setCleanupDays} className="flex gap-4 justify-center">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="7" id="days-7" />
+                    <Label htmlFor="days-7" className="text-sm cursor-pointer">7 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="14" id="days-14" />
+                    <Label htmlFor="days-14" className="text-sm cursor-pointer">14 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="30" id="days-30" />
+                    <Label htmlFor="days-30" className="text-sm cursor-pointer">30 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="90" id="days-90" />
+                    <Label htmlFor="days-90" className="text-sm cursor-pointer">90 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                </RadioGroup>
+              </div>
               <AlertDialogFooter>
                 <AlertDialogCancel>{lang === 'sk' ? 'Zrušiť' : 'Cancel'}</AlertDialogCancel>
                 <AlertDialogAction
