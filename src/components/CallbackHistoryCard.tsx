@@ -175,10 +175,30 @@ export function CallbackHistoryCard({ lang }: Props) {
                 </AlertDialogTitle>
                 <AlertDialogDescription>
                   {lang === 'sk'
-                    ? 'Vymažú sa všetky záznamy staršie ako 7 dní. Túto akciu nemožno vrátiť späť.'
-                    : 'All entries older than 7 days will be permanently deleted. This action cannot be undone.'}
+                    ? 'Vyber počet dní. Vymažú sa všetky záznamy staršie ako zvolený počet dní. Túto akciu nemožno vrátiť späť.'
+                    : 'Select number of days. All entries older than the selected days will be permanently deleted. This action cannot be undone.'}
                 </AlertDialogDescription>
               </AlertDialogHeader>
+              <div className="py-4">
+                <RadioGroup value={cleanupDays} onValueChange={setCleanupDays} className="flex gap-4 justify-center">
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="7" id="days-7" />
+                    <Label htmlFor="days-7" className="text-sm cursor-pointer">7 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="14" id="days-14" />
+                    <Label htmlFor="days-14" className="text-sm cursor-pointer">14 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="30" id="days-30" />
+                    <Label htmlFor="days-30" className="text-sm cursor-pointer">30 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="90" id="days-90" />
+                    <Label htmlFor="days-90" className="text-sm cursor-pointer">90 {lang === 'sk' ? 'dní' : 'days'}</Label>
+                  </div>
+                </RadioGroup>
+              </div>
               <AlertDialogFooter>
                 <AlertDialogCancel>{lang === 'sk' ? 'Zrušiť' : 'Cancel'}</AlertDialogCancel>
                 <AlertDialogAction
