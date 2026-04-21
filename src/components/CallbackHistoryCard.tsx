@@ -83,6 +83,8 @@ export function CallbackHistoryCard({ lang }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState<FilterKey>('all');
   const [cleaning, setCleaning] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [cleanupDays, setCleanupDays] = useState<string>('7');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -123,15 +125,14 @@ export function CallbackHistoryCard({ lang }: Props) {
     return entries.filter(e => f.prefix!.some(p => e.action_type.startsWith(p)));
   }, [entries, filter]);
 
-  const [confirmOpen, setConfirmOpen] = useState(false);
-
   const handleCleanup = async () => {
     setConfirmOpen(false);
     setCleaning(true);
     try {
+      const days = parseInt(cleanupDays, 10);
       const { data, error: fnError } = await supabase.functions.invoke(
         'telegram-callback-cleanup',
-        { body: { olderThanDays: 7 } }
+        { body: { olderThanDays: days } }
       );
       if (fnError) throw fnError;
       const deleted = (data as { deleted?: number } | null)?.deleted ?? 0;
