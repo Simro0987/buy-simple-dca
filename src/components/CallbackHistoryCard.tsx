@@ -148,6 +148,28 @@ export function CallbackHistoryCard({ lang }: Props) {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDeleteOne = async (id: string) => {
+    setConfirmDeleteId(null);
+    setDeletingId(id);
+    try {
+      const { error: dbError } = await supabase
+        .from('telegram_callback_log')
+        .delete()
+        .eq('id', id);
+      if (dbError) throw dbError;
+      toast.success(lang === 'sk' ? 'Záznam vymazaný' : 'Entry deleted');
+      setEntries(prev => prev?.filter(e => e.id !== id) ?? null);
+    } catch (e) {
+      toast.error(lang === 'sk' ? 'Mazanie zlyhalo' : 'Delete failed');
+      console.error('Delete error:', e);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
@@ -283,7 +305,49 @@ export function CallbackHistoryCard({ lang }: Props) {
                         <span className="text-muted-foreground"> +{entry.profit_pct}%</span>
                       )}
                     </span>
-                    <Icon className={`w-3.5 h-3.5 flex-shrink-0 ${color}`} />
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <Icon className={`w-3.5 h-3.5 ${color}`} />
+                      <AlertDialog
+                        open={confirmDeleteId === entry.id}
+                        onOpenChange={(open) => setConfirmDeleteId(open ? entry.id : null)}
+                      >
+                        <AlertDialogTrigger asChild>
+                          <button
+                            disabled={deletingId === entry.id}
+                            title={lang === 'sk' ? 'Vymazať záznam' : 'Delete entry'}
+                            className="p-0.5 rounded text-muted-foreground hover:text-destructive transition-colors disabled:opacity-50"
+                          >
+                            <Trash2 className={`w-3 h-3 ${deletingId === entry.id ? 'animate-pulse' : ''}`} />
+                          </button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>
+                              {lang === 'sk' ? 'Vymazať tento záznam?' : 'Delete this entry?'}
+                            </AlertDialogTitle>
+                            <AlertDialogDescription>
+                              {meta.emoji} {meta[lang]}
+                              {entry.token ? ` · ${entry.token}` : ''}
+                              {' — '}
+                              {formatRelative(entry.created_at, lang)}
+                              <br />
+                              {lang === 'sk'
+                                ? 'Túto akciu nemožno vrátiť späť.'
+                                : 'This action cannot be undone.'}
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>{lang === 'sk' ? 'Zrušiť' : 'Cancel'}</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteOne(entry.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                            >
+                              {lang === 'sk' ? 'Vymazať' : 'Delete'}
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-0.5">
                     {formatRelative(entry.created_at, lang)}
