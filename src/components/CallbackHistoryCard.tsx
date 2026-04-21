@@ -148,6 +148,28 @@ export function CallbackHistoryCard({ lang }: Props) {
     }
   };
 
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const handleDeleteOne = async (id: string) => {
+    setConfirmDeleteId(null);
+    setDeletingId(id);
+    try {
+      const { error: dbError } = await supabase
+        .from('telegram_callback_log')
+        .delete()
+        .eq('id', id);
+      if (dbError) throw dbError;
+      toast.success(lang === 'sk' ? 'Záznam vymazaný' : 'Entry deleted');
+      setEntries(prev => prev?.filter(e => e.id !== id) ?? null);
+    } catch (e) {
+      toast.error(lang === 'sk' ? 'Mazanie zlyhalo' : 'Delete failed');
+      console.error('Delete error:', e);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
   return (
     <div className="bg-card border border-border rounded-xl p-4">
       <div className="flex items-center justify-between mb-3">
