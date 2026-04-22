@@ -31,15 +31,15 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
 export function BottomNav({ active, onChange, lang, unreadNewsCount = 0 }: BottomNavProps) {
   return (
     <nav className="fixed bottom-0 left-0 right-0 bg-nav-bg border-t border-border nav-safe-bottom z-50">
-      <div className="flex items-center justify-around h-14 max-w-lg mx-auto">
+      <div className="flex items-center h-14 max-w-lg mx-auto overflow-x-auto scrollbar-hide">
         {tabs.map(({ id, labelSk, labelEn, icon: Icon }) => {
           const isActive = active === id;
-          const showBadge = id === 'overview' && unreadNewsCount > 0;
+          const showBadge = id === 'home' && unreadNewsCount > 0;
           return (
             <button
               key={id}
               onClick={() => onChange(id)}
-              className={`relative flex flex-col items-center justify-center gap-0.5 flex-1 h-full transition-colors ${
+              className={`relative flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[52px] h-full px-1.5 transition-colors ${
                 isActive ? 'text-nav-active' : 'text-nav-inactive'
               }`}
             >
