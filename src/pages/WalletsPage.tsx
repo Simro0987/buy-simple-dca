@@ -1,9 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Plus, Trash2, Wallet } from 'lucide-react';
+import { Plus, Trash2, Wallet, RefreshCw, AlertCircle } from 'lucide-react';
 import { Lang, t } from '@/lib/i18n';
 import { WalletEntry, loadWallets, saveWallets, getChainLabel, getChainColor } from '@/lib/wallets';
-import { usePrices } from '@/hooks/usePrices';
-import { formatUsd } from '@/lib/crypto';
+import { useWalletBalances, OnChainWalletResult } from '@/hooks/useWalletBalances';
 import { Input } from '@/components/ui/input';
 
 interface Props { lang: Lang; }
