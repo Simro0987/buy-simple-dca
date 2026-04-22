@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins } from 'lucide-react';
+import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'settings';
+export type TabId = 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -23,6 +23,7 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'market', labelSk: 'Trh', labelEn: 'Market', icon: BarChart3 },
   { id: 'profit', labelSk: 'Zisky', labelEn: 'Profit', icon: DollarSign },
   { id: 'staking', labelSk: 'Staking', labelEn: 'Staking', icon: Coins },
+  { id: 'wallets', labelSk: 'Wallety', labelEn: 'Wallets', icon: Wallet },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
