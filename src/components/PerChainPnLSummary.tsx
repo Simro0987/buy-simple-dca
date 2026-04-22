@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { TOKENS, formatUsd, PriceData } from '@/lib/crypto';
-import { getAvgCostBasis, getDcaPurchases } from '@/lib/profitTaking';
+import { getAvgCostBasis } from '@/lib/profitTaking';
 import { useChainFilter, passesChainFilter } from '@/hooks/useChainFilter';
 
 interface Props {
