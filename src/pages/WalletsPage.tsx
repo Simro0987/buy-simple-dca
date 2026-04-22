@@ -139,22 +139,56 @@ export function WalletsPage({ lang }: Props) {
             />
             <span className="font-semibold text-foreground text-sm">{label}</span>
           </div>
-          {chainWallets.map(w => (
-            <div key={w.id} className="flex items-center justify-between bg-secondary/50 rounded-lg px-3 py-2">
-              <div className="min-w-0 flex-1">
-                <p className="text-xs font-mono text-muted-foreground truncate">{w.address}</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {lang === 'sk' ? 'Len na čítanie' : 'Read-only'}
-                </p>
+          {chainWallets.map(w => {
+            const result = findResult(w.chain, w.address);
+            return (
+              <div key={w.id} className="bg-secondary/50 rounded-lg px-3 py-2 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-mono text-muted-foreground truncate">{w.address}</p>
+                    {result?.ok === false && (
+                      <p className="text-[10px] text-destructive mt-0.5">{result.error}</p>
+                    )}
+                    {!result && isFetching && (
+                      <p className="text-[10px] text-muted-foreground mt-0.5">{lang === 'sk' ? 'Načítavam…' : 'Loading…'}</p>
+                    )}
+                  </div>
+                  <button
+                    onClick={() => removeWallet(w.id)}
+                    className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                {result?.ok && (
+                  <div className="space-y-1 pt-1 border-t border-border/50">
+                    {w.chain === 'btc' && result.balanceBtc !== undefined && (
+                      <div className="flex justify-between text-xs">
+                        <span className="font-mono text-foreground">BTC</span>
+                        <span className="font-semibold text-foreground">{result.balanceBtc.toFixed(8)}</span>
+                      </div>
+                    )}
+                    {result.native && (
+                      <div className="flex justify-between text-xs">
+                        <span className="font-mono text-foreground">{result.native.symbol}</span>
+                        <span className="font-semibold text-foreground">{result.native.balance.toFixed(6)}</span>
+                      </div>
+                    )}
+                    {result.tokens && result.tokens.length > 0 && (
+                      <div className="space-y-0.5 pt-1">
+                        {result.tokens.map(tok => (
+                          <div key={tok.contract ?? tok.mint} className="flex justify-between text-[11px]">
+                            <span className="font-mono text-muted-foreground truncate max-w-[60%]">{tok.symbol}</span>
+                            <span className="text-foreground">{tok.balance.toLocaleString(undefined, { maximumFractionDigits: 4 })}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-              <button
-                onClick={() => removeWallet(w.id)}
-                className="ml-2 p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors"
-              >
-                <Trash2 className="w-4 h-4" />
-              </button>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ))}
     </div>
