@@ -18,7 +18,7 @@ function loadHoldings(): Record<string, number> {
 }
 
 const Index = () => {
-  const [tab, setTab] = useState<TabId>('overview');
+  const [tab, setTab] = useState<TabId>('home');
   const { lang, toggleLang } = useLanguage();
   const { theme, setTheme } = useTheme();
   const { data: prices, refetch, isFetching } = usePrices();
@@ -52,7 +52,7 @@ const Index = () => {
     <div className="min-h-screen bg-background">
       <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
       <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
-        {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang })}
+        {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
       </main>
       <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
     </div>

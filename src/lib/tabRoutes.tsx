@@ -15,6 +15,7 @@ import { AdvancedMarketPage } from '@/pages/AdvancedMarketPage';
 import { ProfitTakingPage } from '@/pages/ProfitTakingPage';
 import { StakingPage } from '@/pages/StakingPage';
 import { WalletsPage } from '@/pages/WalletsPage';
+import { HomePage } from '@/pages/HomePage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
@@ -28,11 +29,13 @@ export interface TabContext {
   theme: Theme;
   setTheme: (t: Theme) => void;
   toggleLang: () => void;
+  setTab: (tab: TabId) => void;
 }
 
 export type TabRenderer = (ctx: TabContext) => JSX.Element;
 
 export const TAB_ROUTES: Record<TabId, TabRenderer> = {
+  home: ({ setTab }) => <HomePage onNavigate={setTab} />,
   overview: ({ lang }) => <OverviewPage lang={lang} />,
   portfolio: ({ lang }) => <PortfolioPage lang={lang} />,
   dca: ({ lang }) => <DCAPage lang={lang} />,

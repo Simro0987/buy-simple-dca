@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { PerChainPnLSummary } from '@/components/PerChainPnLSummary';
 
 const PROFIT_ALERT_KEY = 'profit-alert-sent';
 
@@ -354,6 +355,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
         <DollarSign className="w-5 h-5" />
         Realizácia ziskov
       </h1>
+      <PerChainPnLSummary prices={prices} />
       <p className="text-xs text-muted-foreground">
         Automatická stratégia postupného predaja. Zisky → 70-80% BTC / 20-30% stablecoin.
       </p>
