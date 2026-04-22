@@ -61,7 +61,7 @@ function buildCard(t: TokenAnalysis): SignalCard {
   else if (t.rsi14 < 30) notes.push('RSI prekúpené (zóna nákupu)');
   if (t.bollingerPosition === 'upper') notes.push('Cena pri hornom Bollinger pásme');
   if (t.bollingerPosition === 'lower') notes.push('Cena pri spodnom Bollinger pásme');
-  if (t.volatility > 0.05) notes.push('Vysoká volatilita');
+  if (t.volatility30d > 0.05) notes.push('Vysoká volatilita');
   if (notes.length === 0) notes.push('Stabilný trh, bez extrémov');
 
   return {
@@ -69,9 +69,9 @@ function buildCard(t: TokenAnalysis): SignalCard {
     color: COLORS[t.symbol] ?? '#888',
     rsi: t.rsi14,
     rsiSignal,
-    trendPct: t.priceChange7d ?? 0,
+    trendPct: t.change7d ?? 0,
     trendSignal,
-    volatility: t.volatility,
+    volatility: t.volatility30d,
     sentiment,
     stakingMomentum,
     notes,
