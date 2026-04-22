@@ -14,7 +14,12 @@ export function WalletsPage({ lang }: Props) {
   const [adding, setAdding] = useState(false);
   const [newChain, setNewChain] = useState<WalletEntry['chain']>('btc');
   const [newAddress, setNewAddress] = useState('');
-  const { data: prices } = usePrices();
+  const { data: balances, isFetching, refetch, error } = useWalletBalances(wallets);
+
+  const findResult = (chain: WalletEntry['chain'], address: string): OnChainWalletResult | undefined => {
+    if (!balances) return undefined;
+    return balances[chain].find(r => r.address === address);
+  };
 
   useEffect(() => { saveWallets(wallets); }, [wallets]);
 
