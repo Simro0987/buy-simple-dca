@@ -11,19 +11,20 @@ interface BottomNavProps {
 }
 
 const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart3 }[] = [
+  { id: 'home', labelSk: 'Domov', labelEn: 'Home', icon: Home },
   { id: 'overview', labelSk: 'Prehľad', labelEn: 'Overview', icon: BarChart3 },
   { id: 'portfolio', labelSk: 'Portfólio', labelEn: 'Portfolio', icon: PieChart },
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
   { id: 'smart', labelSk: 'Smart', labelEn: 'Smart', icon: Sparkles },
   { id: 'action', labelSk: 'Akcia', labelEn: 'Action', icon: Zap },
-  { id: 'checklist', labelSk: 'Checklist', labelEn: 'Checklist', icon: ClipboardList },
+  { id: 'checklist', labelSk: 'Check', labelEn: 'Check', icon: ClipboardList },
   { id: 'execution', labelSk: 'Skóre', labelEn: 'Score', icon: Target },
   { id: 'risk', labelSk: 'Riziko', labelEn: 'Risk', icon: Shield },
   { id: 'analysis', labelSk: 'Analýza', labelEn: 'Analysis', icon: Activity },
   { id: 'market', labelSk: 'Trh', labelEn: 'Market', icon: BarChart3 },
   { id: 'profit', labelSk: 'Zisky', labelEn: 'Profit', icon: DollarSign },
-  { id: 'staking', labelSk: 'Staking', labelEn: 'Staking', icon: Coins },
-  { id: 'wallets', labelSk: 'Wallety', labelEn: 'Wallets', icon: Wallet },
+  { id: 'staking', labelSk: 'Stake', labelEn: 'Stake', icon: Coins },
+  { id: 'wallets', labelSk: 'Wallet', labelEn: 'Wallet', icon: Wallet },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
