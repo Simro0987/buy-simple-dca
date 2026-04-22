@@ -5,6 +5,7 @@ import { useFearGreed } from '@/hooks/usePrices';
 import { FearGreedGauge } from '@/components/FearGreedGauge';
 import { formatPrice } from '@/lib/crypto';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { PerChainMarketSignals } from '@/components/PerChainMarketSignals';
 import {
   TrendingUp, TrendingDown, Minus, ChevronDown, Activity, BarChart3,
   Calendar, Zap, Waves, Fish, Building2, AlertTriangle, Shield,
