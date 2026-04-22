@@ -227,7 +227,8 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
 }
 
 // Custom tooltip
-function CustomTooltip({ active, payload, label, sk }: { active?: boolean; payload?: Array<{ payload?: Record<string, unknown> }>; label?: string; sk?: boolean }) {
+type TooltipDatum = { date: string; value: number } & Record<string, number | string>;
+function CustomTooltip({ active, payload, label, sk }: { active?: boolean; payload?: Array<{ payload?: TooltipDatum }>; label?: string; sk?: boolean }) {
   if (!active || !payload?.length) return null;
   const data = payload[0]?.payload;
   if (!data) return null;
@@ -237,7 +238,7 @@ function CustomTooltip({ active, payload, label, sk }: { active?: boolean; paylo
       <p className="font-semibold text-foreground">{data.date}</p>
       <p className="text-sm font-bold text-foreground">{formatUsd(data.value)}</p>
       {TOKENS.map(token => {
-        const val = data[token.id];
+        const val = Number(data[token.id] ?? 0);
         if (!val || val <= 0) return null;
         return (
           <div key={token.id} className="flex items-center gap-1.5">
