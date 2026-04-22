@@ -1,6 +1,9 @@
-import { ComponentType } from 'react';
 import { TabId } from '@/components/BottomNav';
 import { Lang } from '@/lib/i18n';
+import { PriceData, AthData } from '@/lib/crypto';
+import { MarketCycleResult } from '@/hooks/useMarketCycle';
+import { AdvancedMarketData } from '@/hooks/useAdvancedMarket';
+import { Theme } from '@/hooks/useTheme';
 import { OverviewPage } from '@/pages/OverviewPage';
 import { DCAPage } from '@/pages/DCAPage';
 import { PortfolioPage } from '@/pages/PortfolioPage';
@@ -17,12 +20,12 @@ import { RiskDashboard } from '@/components/RiskDashboard';
 
 export interface TabContext {
   lang: Lang;
-  prices: unknown;
-  athData: unknown;
-  cycleResult: unknown;
-  advancedMarketData: unknown;
-  theme: string;
-  setTheme: (t: string) => void;
+  prices: PriceData | undefined;
+  athData: AthData | undefined;
+  cycleResult: MarketCycleResult | undefined;
+  advancedMarketData: AdvancedMarketData | undefined;
+  theme: Theme;
+  setTheme: (t: Theme) => void;
   toggleLang: () => void;
 }
 

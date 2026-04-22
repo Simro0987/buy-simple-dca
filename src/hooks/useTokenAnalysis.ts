@@ -125,7 +125,20 @@ async function fetchTokenAnalysis(): Promise<TokenAnalysis[]> {
     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=true&price_change_percentage=7d,30d`
   );
   if (!res.ok) throw new Error('Failed to fetch analysis data');
-  const coins: Array<Record<string, unknown> & { id: string; sparkline_in_7d?: { price: number[] } }> = await res.json();
+  const coins: Array<{
+    id: string;
+    sparkline_in_7d?: { price: number[] };
+    ath?: number;
+    current_price?: number;
+    market_cap?: number;
+    total_volume?: number;
+    price_change_percentage_24h?: number;
+    price_change_percentage_7d_in_currency?: number;
+    price_change_percentage_30d_in_currency?: number;
+    ath_change_percentage?: number;
+    circulating_supply?: number;
+    total_supply?: number;
+  }> = await res.json();
 
   return coins.map((coin) => {
     const token = TOKENS.find((t) => t.coingeckoId === coin.id)!;
