@@ -55,7 +55,7 @@ interface Props {
   onChange?: () => void;
 }
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ payload?: PLSnapshot }>; label?: string }) => {
   if (!active || !payload?.length) return null;
   const d = payload[0]?.payload as PLSnapshot;
   if (!d) return null;
@@ -260,7 +260,7 @@ export function PLHistoryChart({ data, onChange }: Props) {
     setVersion(v => v + 1);
     onChange?.();
   };
-  const existingDates = useMemo(() => data.map(d => d.date), [data, version]);
+  const existingDates = useMemo(() => data.map(d => d.date), [data]);
 
   const chartData = useMemo(() => {
     return data.map(d => ({
