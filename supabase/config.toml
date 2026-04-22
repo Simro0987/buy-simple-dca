@@ -1,1 +1,10 @@
 project_id = "ctykeosgiekmdhgdcvgc"
+
+[functions.wallet-balance-btc]
+verify_jwt = false
+
+[functions.wallet-balance-eth]
+verify_jwt = false
+
+[functions.wallet-balance-sol]
+verify_jwt = false

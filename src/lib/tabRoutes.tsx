@@ -14,6 +14,7 @@ import { AnalysisPage } from '@/pages/AnalysisPage';
 import { AdvancedMarketPage } from '@/pages/AdvancedMarketPage';
 import { ProfitTakingPage } from '@/pages/ProfitTakingPage';
 import { StakingPage } from '@/pages/StakingPage';
+import { WalletsPage } from '@/pages/WalletsPage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
 import { RiskDashboard } from '@/components/RiskDashboard';
@@ -48,6 +49,7 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
     <ProfitTakingPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedData={advancedMarketData} />
   ),
   staking: ({ lang }) => <StakingPage lang={lang} />,
+  wallets: ({ lang }) => <WalletsPage lang={lang} />,
   settings: ({ lang, toggleLang, theme, setTheme }) => (
     <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />
   ),
