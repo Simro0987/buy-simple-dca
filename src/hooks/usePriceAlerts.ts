@@ -22,7 +22,7 @@ function showBrowserNotification(title: string, body: string) {
       badge: '/pwa-192x192.png',
       tag: 'price-alert',
     };
-    (options as any).renotify = true;
+    (options as NotificationOptions & { renotify?: boolean }).renotify = true;
     new Notification(title, options);
   } catch {
     // Notification API not available
@@ -31,7 +31,8 @@ function showBrowserNotification(title: string, body: string) {
 
 function playAlertSound() {
   try {
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const AudioCtor = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const ctx = new AudioCtor();
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain);

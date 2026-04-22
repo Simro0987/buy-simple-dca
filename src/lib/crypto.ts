@@ -50,7 +50,7 @@ export async function fetchAthData(): Promise<AthData> {
     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc`
   );
   if (!res.ok) throw new Error('Failed to fetch ATH data');
-  const coins: any[] = await res.json();
+  const coins: Array<{ id: string; ath: number; ath_date: string; ath_change_percentage: number }> = await res.json();
   const result: AthData = {};
   for (const coin of coins) {
     result[coin.id] = {
@@ -68,7 +68,7 @@ export async function fetchSparklines(days = 7): Promise<SparklineData> {
     `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=true&price_change_percentage=7d`
   );
   if (!res.ok) throw new Error('Failed to fetch sparklines');
-  const coins: any[] = await res.json();
+  const coins: Array<{ id: string; sparkline_in_7d?: { price: number[] } }> = await res.json();
   const result: SparklineData = {};
   for (const coin of coins) {
     const prices: number[] = coin.sparkline_in_7d?.price || [];

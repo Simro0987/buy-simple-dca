@@ -48,7 +48,7 @@ function normalizeAthDistance(pct: number): number {
 
 function normalizeVolumeTrend(prices: PriceData): number {
   // Use 24h volume data if available; higher volume in uptrend = bullish
-  const btcVol = (prices?.bitcoin as any)?.usd_24h_vol ?? 0;
+  const btcVol = (prices?.bitcoin as { usd_24h_vol?: number } | undefined)?.usd_24h_vol ?? 0;
   // Heuristic: $40B+ daily vol = high activity
   if (btcVol > 60e9) return 75;
   if (btcVol > 40e9) return 60;

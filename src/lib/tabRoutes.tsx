@@ -17,12 +17,12 @@ import { RiskDashboard } from '@/components/RiskDashboard';
 
 export interface TabContext {
   lang: Lang;
-  prices: any;
-  athData: any;
-  cycleResult: any;
-  advancedMarketData: any;
-  theme: any;
-  setTheme: (t: any) => void;
+  prices: unknown;
+  athData: unknown;
+  cycleResult: unknown;
+  advancedMarketData: unknown;
+  theme: string;
+  setTheme: (t: string) => void;
   toggleLang: () => void;
 }
 
