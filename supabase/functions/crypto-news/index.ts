@@ -15,7 +15,7 @@ async function translateTexts(texts: string[], lang: string): Promise<string[]> 
           const resp = await fetch(url);
           if (!resp.ok) return t;
           const data = await resp.json();
-          return data?.[0]?.map((s: any) => s[0]).join('') || t;
+          return data?.[0]?.map((s: [string]) => s[0]).join('') || t;
         } catch { return t; }
       })
     );
@@ -140,7 +140,7 @@ Array must have exactly ${items.length} items in the same order.`;
     const parsed = JSON.parse(content);
 
     if (Array.isArray(parsed) && parsed.length === items.length) {
-      return parsed.map((p: any) => ({
+      return parsed.map((p: { impact?: string; sentiment?: string; summary?: string }) => ({
         impact: ['high', 'medium', 'low'].includes(p.impact) ? p.impact : 'low',
         sentiment: ['bullish', 'bearish', 'neutral'].includes(p.sentiment) ? p.sentiment : 'neutral',
         summary: typeof p.summary === 'string' ? p.summary : '',
@@ -210,14 +210,16 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
     if (!response?.ok) return [];
 
     const data = await response.json();
-    return (data.results || []).slice(0, 12).map((item: any) => {
+    return (data.results || []).slice(0, 12).map((item: Record<string, unknown> & { source?: { title?: string; domain?: string }; original_url?: string; url?: string; instruments?: Array<{ code: string }>; currencies?: Array<{ code: string }>; title?: string; id?: string | number; published_at?: string; description?: string; votes?: { positive?: number; negative?: number } }) => {
       const sourceName = item.source?.title || item.source?.domain || '';
       const itemUrl = item.original_url || item.url || '';
       let domainSource = sourceName;
       if (!domainSource && itemUrl) {
-        try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch {}
+        try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch {
+          // ignore URL parse error
+        }
       }
-      let tokens = (item.instruments || item.currencies || []).map((c: any) => c.code);
+      let tokens = (item.instruments || item.currencies || []).map((c: { code: string }) => c.code);
       if (tokens.length === 0) tokens = detectTokens(item.title || '');
       return {
         id: item.id || Date.now(),

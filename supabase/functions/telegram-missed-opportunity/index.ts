@@ -21,13 +21,14 @@ Deno.serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const lines = missedItems.map((m: any) =>
+    type MissedItem = { symbol: string; weekId: string; limitPrice: number; currentPrice: number; gainPct: number; missedGainUsd: number };
+    const lines = (missedItems as MissedItem[]).map((m) =>
       `🔴 <b>${m.symbol}</b> (${m.weekId})\n` +
       `   Limit: $${formatPrice(m.limitPrice)} → Aktuálna: $${formatPrice(m.currentPrice)}\n` +
       `   📈 +${m.gainPct.toFixed(1)}% — Zmeškaný zisk: <b>~$${m.missedGainUsd.toFixed(0)}</b>`
     );
 
-    const totalMissed = missedItems.reduce((s: number, m: any) => s + m.missedGainUsd, 0);
+    const totalMissed = (missedItems as MissedItem[]).reduce((s: number, m) => s + m.missedGainUsd, 0);
 
     const text =
       `⚠️ <b>Zmeškaný zisk presiahol $50!</b>\n\n` +

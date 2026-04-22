@@ -19,8 +19,8 @@ Deno.serve(async (req) => {
     if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
 
     let chatId: string | undefined;
-    let drifts: any[] | undefined;
-    let actions: any[] | undefined;
+    let drifts: Array<Record<string, unknown>> | undefined;
+    let actions: Array<Record<string, unknown>> | undefined;
     let totalValue: number | undefined;
 
     try {
