@@ -50,18 +50,19 @@ export function PerChainPnLSummary({ prices }: Props) {
   const data = useMemo<ChainPnL[]>(() => {
     if (!prices) return [];
     const holdings = loadHoldings();
+    const avgCostMap = getAvgCostBasis();
     return TOKENS
       .filter(t => passesChainFilter(t.symbol, chain))
       .map(t => {
         const qty = holdings[t.id] ?? 0;
         const price = prices[t.coingeckoId]?.usd ?? 0;
-        const avgCost = getAvgCostBasis(t.id);
+        const avgCost = avgCostMap[t.id] ?? 0;
         const positionUsd = qty * price;
         const costUsd = qty * avgCost;
         const unrealizedUsd = positionUsd - costUsd;
         const unrealizedPct = avgCost > 0 ? ((price - avgCost) / avgCost) * 100 : 0;
         const realizedUsd = computeRealized(t.id);
-        const nativeProfit = avgCost > 0 ? qty * (price - avgCost) / price : 0;
+        const nativeProfit = avgCost > 0 && price > 0 ? qty * (price - avgCost) / price : 0;
         return {
           symbol: t.symbol,
           color: CHAIN_COLORS[t.symbol] ?? t.color,
