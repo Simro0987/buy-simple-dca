@@ -51,16 +51,41 @@ export function WalletsPage({ lang }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">
-          {lang === 'sk' ? 'Peňaženky' : 'Wallets'}
+          {lang === 'sk' ? 'Peňaženky (On-chain)' : 'Wallets (On-chain)'}
         </h1>
-        <button
-          onClick={() => setAdding(!adding)}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
-        >
-          <Plus className="w-4 h-4" />
-          {lang === 'sk' ? 'Pridať' : 'Add'}
-        </button>
+        <div className="flex items-center gap-2">
+          {wallets.length > 0 && (
+            <button
+              onClick={() => refetch()}
+              disabled={isFetching}
+              aria-label="Refresh"
+              className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+          <button
+            onClick={() => setAdding(!adding)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            {lang === 'sk' ? 'Pridať' : 'Add'}
+          </button>
+        </div>
       </div>
+
+      <div className="glass-card p-3 text-[11px] text-muted-foreground leading-relaxed">
+        {lang === 'sk'
+          ? 'Read-only sledovanie balance. Manuálne zadané holdings ostávajú primárny zdroj pravdy.'
+          : 'Read-only balance tracking. Manual holdings remain the primary source of truth.'}
+      </div>
+
+      {error && (
+        <div className="glass-card p-3 flex items-center gap-2 text-xs text-destructive">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{lang === 'sk' ? 'Chyba pri načítaní balance. Skús znova.' : 'Error loading balances. Try again.'}</span>
+        </div>
+      )}
 
       {adding && (
         <div className="glass-card p-4 space-y-3">
