@@ -46,7 +46,7 @@ Deno.serve(async (req) => {
     if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
 
     let chatId: string | undefined;
-    let news: any[] | undefined;
+    let news: Array<Record<string, unknown>> | undefined;
 
     // Try reading body (manual trigger from UI sends news directly)
     try {
@@ -102,19 +102,19 @@ Deno.serve(async (req) => {
       // Filter high-impact and relevant news from last hour
       const oneHourAgo = Date.now() - 60 * 60 * 1000;
       news = results
-        .filter((item: any) => {
+        .filter((item: { published_at: string; title?: string }) => {
           const pubDate = new Date(item.published_at).getTime();
           if (pubDate < oneHourAgo) return false;
           const title = item.title || '';
           return isHighImpact(title) || isRelevant(title);
         })
         .slice(0, 5)
-        .map((item: any) => ({
+        .map((item: { title?: string; url?: string; votes?: { positive?: number; negative?: number } }) => ({
           title: item.title,
           url: item.url,
-          tokens: detectTokens(item.title),
-          sentiment: item.votes?.positive > item.votes?.negative ? 'bullish'
-            : item.votes?.negative > item.votes?.positive ? 'bearish' : 'neutral',
+          tokens: detectTokens(item.title || ''),
+          sentiment: (item.votes?.positive ?? 0) > (item.votes?.negative ?? 0) ? 'bullish'
+            : (item.votes?.negative ?? 0) > (item.votes?.positive ?? 0) ? 'bearish' : 'neutral',
         }));
     }
 
@@ -126,7 +126,7 @@ Deno.serve(async (req) => {
     }
 
     // Format message
-    const lines = news.map((item: any) => {
+    const lines = news.map((item: Record<string, unknown> & { sentiment?: string; tokens?: string[]; summary?: string; title?: string; url?: string }) => {
       const sentimentEmoji = item.sentiment === 'bullish' ? '🟢' : item.sentiment === 'bearish' ? '🔴' : '⚪';
       const tokens = item.tokens?.join(', ') || '';
       const summaryLine = item.summary ? `\n<i>${item.summary}</i>` : '';

@@ -30,7 +30,9 @@ function getChecklist(): ChecklistState {
   try {
     const saved = JSON.parse(localStorage.getItem('weekly_checklist') || '{}');
     if (saved.weekId === weekId) return saved;
-  } catch {}
+  } catch {
+    // ignore parse error
+  }
   return {
     weekId,
     dcaMarket: false,

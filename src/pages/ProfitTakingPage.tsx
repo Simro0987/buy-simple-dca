@@ -236,7 +236,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
           table: 'telegram_callback_log',
           filter: 'action_type=in.(profit_sell,profit_postpone,profit_ignore)',
         },
-        (payload: any) => {
+        (payload: { new: { action_type: string; token: string; profit_pct: number } }) => {
           const { action_type, token, profit_pct } = payload.new;
           const tokenConfig = PROFIT_CONFIGS.find(c => c.symbol === token);
           if (!tokenConfig) return;

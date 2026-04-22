@@ -52,7 +52,9 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     if (saved) setChatId(saved);
     const savedAlerts = localStorage.getItem('telegram_alert_toggles');
     if (savedAlerts) {
-      try { setAlerts(JSON.parse(savedAlerts)); } catch {}
+      try { setAlerts(JSON.parse(savedAlerts)); } catch {
+        // ignore parse error
+      }
     }
   }, []);
 
@@ -85,7 +87,7 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     setSending(type);
     try {
       let fnName = '';
-      let body: any = {};
+      let body: Record<string, unknown> = {};
 
       if (type === 'news') {
         fnName = 'telegram-news-alert';
@@ -111,8 +113,9 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || 'Failed');
       toast.success(t('testAlertSuccess', lang));
-    } catch (err: any) {
-      toast.error(t('testAlertError', lang) + ': ' + (err.message || ''));
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '';
+      toast.error(t('testAlertError', lang) + ': ' + msg);
     } finally {
       setSending(null);
     }

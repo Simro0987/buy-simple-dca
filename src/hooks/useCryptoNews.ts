@@ -32,7 +32,9 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
   try {
     const toggles = JSON.parse(localStorage.getItem('telegram_alert_toggles') || '{}');
     if (toggles.highImpactNews === false) return;
-  } catch {}
+  } catch {
+    // ignore parse error
+  }
 
   const highImpact = news.filter(n => n.impact === 'high');
   if (highImpact.length === 0) return;

@@ -47,7 +47,7 @@ function SignalMeter({ score }: { score: number }) {
 }
 
 function MetricRow({ label, value, icon: Icon, positive, negative }: {
-  label: string; value: string; icon?: any; positive?: boolean; negative?: boolean;
+  label: string; value: string; icon?: React.ComponentType<{ className?: string }>; positive?: boolean; negative?: boolean;
 }) {
   const color = positive ? 'text-gain' : negative ? 'text-loss' : 'text-foreground';
   return (

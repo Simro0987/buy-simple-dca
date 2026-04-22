@@ -35,7 +35,7 @@ function exportExecutionHistory() {
   const rows = [['Týždeň', 'DCA', 'BTC Limit', 'ETH Limit', 'SOL Limit'].join(',')];
   for (const week of history) {
     const limits = TOKENS.map(t => {
-      const l = week.limits?.find((li: any) => li.symbol === t.symbol);
+      const l = week.limits?.find((li: { symbol: string; filled?: boolean }) => li.symbol === t.symbol);
       return l?.filled ? 'Áno' : 'Nie';
     });
     rows.push([week.weekId, week.dcaExecuted ? 'Áno' : 'Nie', ...limits].join(','));

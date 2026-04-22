@@ -177,7 +177,7 @@ export function ActionPage({ lang }: Props) {
       marketData?.aggregatedSignal ?? 'hold',
       marketData?.signalScore ?? 0,
       fearGreed?.value,
-      athData as any,
+      athData as Parameters<typeof generateSmartActions>[5],
     );
   }, [prices, budget, marketData, fearGreed, athData]);
 

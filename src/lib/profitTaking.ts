@@ -175,7 +175,7 @@ export function importFromExecutionHistory(prices: Record<string, { usd: number 
         imported++;
 
         // Check if limit was filled
-        const limit = week.limits?.find((l: any) => l.symbol === token.symbol);
+        const limit = week.limits?.find((l: { symbol: string; filled?: boolean; limitPrice?: number }) => l.symbol === token.symbol);
         if (limit?.filled) {
           const limitUsd = allocUsd * 0.40;
           const limitPrice = limit.limitPrice || price * token.limitDiscount;

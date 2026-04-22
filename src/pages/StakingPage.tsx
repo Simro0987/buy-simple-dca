@@ -55,7 +55,7 @@ export function StakingPage({ lang }: Props) {
     setSending(true);
     try {
       // Collect all staking/lending positions with yield directions
-      const maturityItems: any[] = [];
+      const maturityItems: Array<Record<string, unknown>> = [];
       for (const asset of STAKING_CONFIG) {
         for (const pos of asset.positions) {
           if (pos.type === 'hold') continue;
