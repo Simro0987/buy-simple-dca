@@ -1,9 +1,12 @@
 import { PieChart, Calculator, Sparkles, Zap, ClipboardList, Target, Shield, Activity, BarChart3, DollarSign, Coins, Settings, Wallet } from 'lucide-react';
 import { TabId } from '@/components/BottomNav';
 import { PriorityDashboard } from '@/components/PriorityDashboard';
+import { TodayDecisions } from '@/components/decision/TodayDecisions';
+import { Lang } from '@/lib/i18n';
 
 interface Props {
   onNavigate: (tab: TabId) => void;
+  lang: Lang;
 }
 
 interface HubCard {
@@ -30,10 +33,11 @@ const CARDS: HubCard[] = [
   { id: 'settings', label: 'Nastavenia', desc: 'Telegram & alerty', icon: Settings, gradient: 'from-muted to-muted/30' },
 ];
 
-export function HomePage({ onNavigate }: Props) {
+export function HomePage({ onNavigate, lang }: Props) {
   return (
     <div className="space-y-3">
       <PriorityDashboard />
+      <TodayDecisions lang={lang} />
       <div>
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 px-1">Sekcie</h2>
         <div className="grid grid-cols-2 gap-2">

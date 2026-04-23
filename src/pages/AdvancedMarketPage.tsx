@@ -6,6 +6,9 @@ import { FearGreedGauge } from '@/components/FearGreedGauge';
 import { formatPrice } from '@/lib/crypto';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { PerChainMarketSignals } from '@/components/PerChainMarketSignals';
+import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
+import { OpportunityCards } from '@/components/decision/OpportunityCards';
+import { ExitSignalsCard } from '@/components/decision/ExitSignalsCard';
 import {
   TrendingUp, TrendingDown, Minus, ChevronDown, Activity, BarChart3,
   Calendar, Zap, Waves, Fish, Building2, AlertTriangle, Shield,
@@ -115,6 +118,11 @@ export function AdvancedMarketPage({ lang }: Props) {
           💡 {data.signalExplanation}
         </p>
       </div>
+
+      {/* Decision layer additions */}
+      <RiskChangeBadges />
+      <ExitSignalsCard />
+      <OpportunityCards />
 
       {/* 1. Market Sentiment */}
       <div className="glass-card p-4 space-y-3">

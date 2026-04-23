@@ -3,6 +3,7 @@ import { Lang } from '@/lib/i18n';
 import { useTokenAnalysis, TokenAnalysis } from '@/hooks/useTokenAnalysis';
 import { formatPrice, formatUsd } from '@/lib/crypto';
 import { Sparkline } from '@/components/Sparkline';
+import { TodayDecisions } from '@/components/decision/TodayDecisions';
 import {
   TrendingUp, TrendingDown, Minus, Activity, ChevronDown, ChevronUp,
   BarChart3, Shield, Layers, Zap, AlertTriangle,
@@ -207,6 +208,8 @@ export function AnalysisPage({ lang }: Props) {
       <p className="text-xs text-muted-foreground">
         {sk ? 'Technická a fundamentálna analýza podľa tokenu' : 'Technical & fundamental analysis per token'}
       </p>
+
+      <TodayDecisions lang={lang} />
 
       {isLoading ? (
         <div className="space-y-3">

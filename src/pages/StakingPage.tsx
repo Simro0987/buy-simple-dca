@@ -5,6 +5,8 @@ import { Lock, TrendingUp, Landmark, Zap, Send } from 'lucide-react';
 import { useDefiApys, DefiApyData } from '@/hooks/useDefiApys';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { ContextCTAs } from '@/components/decision/ContextCTAs';
+import { OpportunityCards } from '@/components/decision/OpportunityCards';
 
 interface Props { lang: Lang; }
 
@@ -117,6 +119,9 @@ export function StakingPage({ lang }: Props) {
             : (lang === 'sk' ? 'Live APY z DefiLlama' : 'Live APY from DefiLlama')}
         </span>
       </div>
+
+      <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
+      <OpportunityCards />
 
       {STAKING_CONFIG.map(asset => (
         <div key={asset.symbol} className="glass-card p-4 space-y-3">

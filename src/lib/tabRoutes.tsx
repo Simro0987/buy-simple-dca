@@ -35,7 +35,7 @@ export interface TabContext {
 export type TabRenderer = (ctx: TabContext) => JSX.Element;
 
 export const TAB_ROUTES: Record<TabId, TabRenderer> = {
-  home: ({ setTab }) => <HomePage onNavigate={setTab} />,
+  home: ({ setTab, lang }) => <HomePage onNavigate={setTab} lang={lang} />,
   overview: ({ lang }) => <OverviewPage lang={lang} />,
   portfolio: ({ lang }) => <PortfolioPage lang={lang} />,
   dca: ({ lang }) => <DCAPage lang={lang} />,

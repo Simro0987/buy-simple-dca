@@ -8,6 +8,9 @@ import { STAKING_CONFIG } from '@/lib/wallets';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
 import { RebalanceCard } from '@/components/RebalanceCard';
 import { Card, CardContent } from '@/components/ui/card';
+import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
+import { ConcentrationWarnings } from '@/components/decision/ConcentrationWarnings';
+import { ContextCTAs } from '@/components/decision/ContextCTAs';
 
 interface Props { lang: Lang; }
 
@@ -140,6 +143,11 @@ export function PortfolioPage({ lang }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Decision layer: risk deltas + concentration */}
+      <RiskChangeBadges />
+      <ConcentrationWarnings />
+      <ContextCTAs actions={['optimize_staking', 'reduce_exposure', 'move_to_yield']} />
 
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} />
