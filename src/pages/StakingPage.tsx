@@ -120,6 +120,9 @@ export function StakingPage({ lang }: Props) {
         </span>
       </div>
 
+      <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
+      <OpportunityCards />
+
       {STAKING_CONFIG.map(asset => (
         <div key={asset.symbol} className="glass-card p-4 space-y-3">
           {/* Header */}
