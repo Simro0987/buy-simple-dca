@@ -9,6 +9,7 @@ import { PerChainMarketSignals } from '@/components/PerChainMarketSignals';
 import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
 import { OpportunityCards } from '@/components/decision/OpportunityCards';
 import { ExitSignalsCard } from '@/components/decision/ExitSignalsCard';
+import { TopSignals } from '@/components/decision/TopSignals';
 import {
   TrendingUp, TrendingDown, Minus, ChevronDown, Activity, BarChart3,
   Calendar, Zap, Waves, Fish, Building2, AlertTriangle, Shield,

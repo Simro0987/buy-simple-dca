@@ -1,6 +1,7 @@
 import { PieChart, Calculator, Sparkles, Zap, ClipboardList, Target, Shield, Activity, BarChart3, DollarSign, Coins, Settings, Wallet } from 'lucide-react';
 import { TabId } from '@/components/BottomNav';
 import { PriorityDashboard } from '@/components/PriorityDashboard';
+import { TopSignals } from '@/components/decision/TopSignals';
 import { TodayDecisions } from '@/components/decision/TodayDecisions';
 import { Lang } from '@/lib/i18n';
 
@@ -36,6 +37,7 @@ const CARDS: HubCard[] = [
 export function HomePage({ onNavigate, lang }: Props) {
   return (
     <div className="space-y-3">
+      <TopSignals lang={lang} />
       <PriorityDashboard />
       <TodayDecisions lang={lang} />
       <div>
