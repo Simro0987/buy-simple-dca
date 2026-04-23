@@ -21,6 +21,7 @@ import {
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { PerChainPnLSummary } from '@/components/PerChainPnLSummary';
+import { ContextCTAs } from '@/components/decision/ContextCTAs';
 
 const PROFIT_ALERT_KEY = 'profit-alert-sent';
 
