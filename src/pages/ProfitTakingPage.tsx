@@ -357,6 +357,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
         Realizácia ziskov
       </h1>
       <PerChainPnLSummary prices={prices} />
+      <ContextCTAs actions={['reduce_exposure', 'move_to_yield']} />
       <p className="text-xs text-muted-foreground">
         Automatická stratégia postupného predaja. Zisky → 70-80% BTC / 20-30% stablecoin.
       </p>
