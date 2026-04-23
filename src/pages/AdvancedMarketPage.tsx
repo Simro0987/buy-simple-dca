@@ -9,6 +9,7 @@ import { PerChainMarketSignals } from '@/components/PerChainMarketSignals';
 import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
 import { OpportunityCards } from '@/components/decision/OpportunityCards';
 import { ExitSignalsCard } from '@/components/decision/ExitSignalsCard';
+import { TopSignals } from '@/components/decision/TopSignals';
 import {
   TrendingUp, TrendingDown, Minus, ChevronDown, Activity, BarChart3,
   Calendar, Zap, Waves, Fish, Building2, AlertTriangle, Shield,
@@ -106,6 +107,9 @@ export function AdvancedMarketPage({ lang }: Props) {
       <h1 className="text-xl font-bold text-foreground flex items-center gap-2">
         <Activity className="w-5 h-5" /> Pokročilá analýza trhu
       </h1>
+
+      {/* Signal Ranking Engine — top priority */}
+      <TopSignals lang={lang} />
 
       {/* MAIN SIGNAL - always visible */}
       <div className="glass-card p-5 space-y-3">
