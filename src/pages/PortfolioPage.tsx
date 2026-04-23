@@ -8,6 +8,9 @@ import { STAKING_CONFIG } from '@/lib/wallets';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
 import { RebalanceCard } from '@/components/RebalanceCard';
 import { Card, CardContent } from '@/components/ui/card';
+import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
+import { ConcentrationWarnings } from '@/components/decision/ConcentrationWarnings';
+import { ContextCTAs } from '@/components/decision/ContextCTAs';
 
 interface Props { lang: Lang; }
 

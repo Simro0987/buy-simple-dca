@@ -119,6 +119,11 @@ export function AdvancedMarketPage({ lang }: Props) {
         </p>
       </div>
 
+      {/* Decision layer additions */}
+      <RiskChangeBadges />
+      <ExitSignalsCard />
+      <OpportunityCards />
+
       {/* 1. Market Sentiment */}
       <div className="glass-card p-4 space-y-3">
         <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
