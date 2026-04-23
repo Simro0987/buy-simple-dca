@@ -144,6 +144,11 @@ export function PortfolioPage({ lang }: Props) {
         </CardContent>
       </Card>
 
+      {/* Decision layer: risk deltas + concentration */}
+      <RiskChangeBadges />
+      <ConcentrationWarnings />
+      <ContextCTAs actions={['optimize_staking', 'reduce_exposure', 'move_to_yield']} />
+
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} />
 
