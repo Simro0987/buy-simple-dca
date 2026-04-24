@@ -172,8 +172,28 @@ export function DCAPage({ lang: _lang }: Props) {
         </button>
       </div>
 
-      {/* TOP SECTION — Stress Score + deployment */}
+      {/* TOP SECTION — Regime + Stress Score + deployment */}
       <div className="glass-card p-5">
+        {(() => {
+          const rs = regimeStyle(plan.regime);
+          return (
+            <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg mb-4 ${rs.bg}`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full ${rs.dot} animate-pulse`} />
+                <div className="min-w-0">
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Trhový režim</p>
+                  <p className={`text-sm font-bold tracking-wide ${rs.text}`}>{regimeLabel(plan.regime)}</p>
+                </div>
+              </div>
+              {plan.deploymentPct !== plan.rawDeploymentPct && (
+                <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-background/60 text-amber-400 font-bold flex-shrink-0">
+                  Override · max {Math.round(plan.deploymentPct * 100)}%
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Market Stress Score</p>
