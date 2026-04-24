@@ -241,9 +241,14 @@ export function DCAPage({ lang: _lang }: Props) {
           {showWhy ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
         {showWhy && (
-          <p className="mt-2 text-xs text-muted-foreground leading-relaxed bg-secondary/40 rounded-lg p-3">
-            {plan.rationale}
-          </p>
+          <div className="mt-2 space-y-2 bg-secondary/40 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Režim:</span> {plan.regimeReason}
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Skóre:</span> {plan.rationale}
+            </p>
+          </div>
         )}
       </div>
 
