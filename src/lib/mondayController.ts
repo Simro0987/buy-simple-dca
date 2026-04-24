@@ -16,7 +16,10 @@ export type StressBand = 'dip' | 'neutral' | 'risk_off' | 'panic';
 export interface MondayPlan {
   stressScore: number;            // 0-100
   band: StressBand;
-  deploymentPct: number;          // 0.25 / 0.5 / 0.75 / 0.85
+  regime: MarketRegime;           // named regime layer
+  regimeReason: string;           // why this regime
+  deploymentPct: number;          // 0.25 / 0.5 / 0.75 / 0.85 (after override)
+  rawDeploymentPct: number;       // pre-override deployment (from stress band)
   investableUsd: number;          // capital * deploymentPct
   reservedUsd: number;            // capital - investableUsd
   marketUsd: number;              // 60% of investable
@@ -103,7 +106,11 @@ function discountPctFor(coingeckoId: string): number {
 // ----- STEP 3 + 4: Execution split & per-asset distribution -----
 export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan {
   const score = computeStressScore(inputs);
-  const { band, pct } = bandFor(score);
+  const { band, pct: rawPct } = bandFor(score);
+  const regimeRes = classifyRegime(inputs);
+  // Apply regime cap if present (e.g. F&G>80 + ATH → max 25 %)
+  const pct = typeof regimeRes.capPct === 'number' ? Math.min(rawPct, regimeRes.capPct) : rawPct;
+
   const investableUsd = inputs.capital * pct;
   const reservedUsd = inputs.capital - investableUsd;
   const marketUsd = investableUsd * MARKET_SPLIT;
@@ -112,7 +119,6 @@ export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan 
   const perAsset: AssetPlan[] = TOKENS.map(t => {
     const assetMarket = marketUsd * t.allocation;
     const assetLimit = limitUsd * t.allocation;
-    // Prefer live price if provided, else fall back to manual BTC input for BTC only
     const livePrice = prices?.[t.coingeckoId]?.usd;
     const currentPrice = livePrice && livePrice > 0
       ? livePrice
@@ -137,7 +143,10 @@ export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan 
   return {
     stressScore: score,
     band,
+    regime: regimeRes.regime,
+    regimeReason: regimeRes.reason,
     deploymentPct: pct,
+    rawDeploymentPct: rawPct,
     investableUsd,
     reservedUsd,
     marketUsd,
