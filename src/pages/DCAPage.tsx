@@ -7,6 +7,7 @@ import { formatUsd, formatPrice, formatQuantity } from '@/lib/crypto';
 import {
   buildPlan,
   bandLabel,
+  regimeLabel,
   thisMondayIso,
   loadHistory,
   saveHistoryEntry,
@@ -15,6 +16,7 @@ import {
   type MondayInputs,
   type HistoryEntry,
   type StressBand,
+  type MarketRegime,
 } from '@/lib/mondayController';
 import { toast } from 'sonner';
 
@@ -54,6 +56,15 @@ function scoreColor(score: number): string {
   if (score <= 70) return 'text-foreground';
   if (score <= 90) return 'text-amber-400';
   return 'text-rose-400';
+}
+
+function regimeStyle(r: MarketRegime): { bg: string; text: string; dot: string } {
+  switch (r) {
+    case 'ACCUMULATION':  return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' };
+    case 'NORMAL':        return { bg: 'bg-secondary',      text: 'text-foreground',  dot: 'bg-foreground/50' };
+    case 'DISTRIBUTION':  return { bg: 'bg-amber-500/15',   text: 'text-amber-400',   dot: 'bg-amber-400' };
+    case 'STRESS_EVENT':  return { bg: 'bg-rose-500/15',    text: 'text-rose-400',    dot: 'bg-rose-400' };
+  }
 }
 
 export function DCAPage({ lang: _lang }: Props) {
