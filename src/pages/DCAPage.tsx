@@ -53,9 +53,11 @@ function bandTone(band: StressBand): string {
 }
 
 function scoreColor(score: number): string {
-  if (score <= 30) return 'text-emerald-400';
-  if (score <= 70) return 'text-foreground';
-  if (score <= 90) return 'text-amber-400';
+  // U-curve: extremes on both sides are risky → red
+  if (score <= 25) return 'text-rose-400';
+  if (score <= 45) return 'text-amber-400';
+  if (score <= 65) return 'text-foreground';
+  if (score <= 80) return 'text-emerald-400';
   return 'text-rose-400';
 }
 
@@ -214,9 +216,10 @@ export function DCAPage({ lang: _lang }: Props) {
         <div className="h-2 bg-secondary rounded-full overflow-hidden">
           <div
             className={`h-full transition-all ${
-              plan.stressScore <= 30 ? 'bg-emerald-500'
-              : plan.stressScore <= 70 ? 'bg-foreground/40'
-              : plan.stressScore <= 90 ? 'bg-amber-500'
+              plan.stressScore <= 25 ? 'bg-rose-500'
+              : plan.stressScore <= 45 ? 'bg-amber-500'
+              : plan.stressScore <= 65 ? 'bg-foreground/40'
+              : plan.stressScore <= 80 ? 'bg-emerald-500'
               : 'bg-rose-500'
             }`}
             style={{ width: `${plan.stressScore}%` }}
