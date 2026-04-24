@@ -11,7 +11,7 @@ export interface MondayInputs {
   btcAbove200dMA: boolean;  // BTC trend vs 200D MA
 }
 
-export type StressBand = 'dip' | 'neutral' | 'risk_off' | 'panic';
+export type StressBand = 'defensive' | 'cautious' | 'normal' | 'strong' | 'overheated';
 
 export interface MondayPlan {
   stressScore: number;            // 0-100
@@ -71,28 +71,33 @@ export function computeStressScore(inputs: MondayInputs): number {
   return Math.round(Math.max(0, Math.min(100, score)));
 }
 
-// ----- STEP 2: Deployment band -----
-// 0–30  → 75% (dip / accumulation)
-// 31–70 → 50% (neutral)
-// 71–90 → 25% (risk-off / euphoria)
-// 91–100 → 85% (crash / panic opportunity)
+// ----- STEP 2: Deployment band (5-tier U-curve) -----
+// Extremes on BOTH sides reduce allocation.
+//   0–25  → Defensive  (32 %)  — extrémny strach / kapitulácia, riziko ďalšieho prepadu
+//  26–45  → Cautious   (45 %)  — slabosť, opatrné nasadenie
+//  46–65  → Normal     (60 %)  — zdravý trh, štandardné nasadenie
+//  66–80  → Strong     (68 %)  — sila / momentum, mierne zvýšené nasadenie
+//  81–100 → Overheated (32 %)  — euforia / vrchol, redukcia rizika
 export function bandFor(score: number): { band: StressBand; pct: number } {
-  if (score <= 30) return { band: 'dip', pct: 0.75 };
-  if (score <= 70) return { band: 'neutral', pct: 0.50 };
-  if (score <= 90) return { band: 'risk_off', pct: 0.25 };
-  return { band: 'panic', pct: 0.85 };
+  if (score <= 25) return { band: 'defensive',  pct: 0.32 };
+  if (score <= 45) return { band: 'cautious',   pct: 0.45 };
+  if (score <= 65) return { band: 'normal',     pct: 0.60 };
+  if (score <= 80) return { band: 'strong',     pct: 0.68 };
+  return              { band: 'overheated', pct: 0.32 };
 }
 
 export function rationaleFor(band: StressBand, score: number): string {
   switch (band) {
-    case 'dip':
-      return `Stress score ${score}/100 — pokojný trh / mierna korekcia. Akumulácia: nasadiť 75 % kapitálu.`;
-    case 'neutral':
-      return `Stress score ${score}/100 — neutrálny režim. Štandardné nasadenie 50 % kapitálu.`;
-    case 'risk_off':
-      return `Stress score ${score}/100 — euforia alebo riziko vrcholu. Defenzívne 25 % kapitálu, zvyšok držať v hotovosti.`;
-    case 'panic':
-      return `Stress score ${score}/100 — panika / krach. Príležitosť na vyššie nasadenie 85 % kapitálu.`;
+    case 'defensive':
+      return `Stress score ${score}/100 — extrémny strach / kapitulácia. Defenzívne nasadenie 32 % (riziko ďalšieho prepadu).`;
+    case 'cautious':
+      return `Stress score ${score}/100 — slabosť trhu. Opatrné nasadenie 45 %.`;
+    case 'normal':
+      return `Stress score ${score}/100 — zdravý trh. Štandardné nasadenie 60 %.`;
+    case 'strong':
+      return `Stress score ${score}/100 — sila a momentum. Mierne zvýšené nasadenie 68 %.`;
+    case 'overheated':
+      return `Stress score ${score}/100 — euforia / vrchol. Redukcia rizika na 32 %.`;
   }
 }
 
