@@ -7,6 +7,7 @@ import { formatUsd, formatPrice, formatQuantity } from '@/lib/crypto';
 import {
   buildPlan,
   bandLabel,
+  regimeLabel,
   thisMondayIso,
   loadHistory,
   saveHistoryEntry,
@@ -15,6 +16,7 @@ import {
   type MondayInputs,
   type HistoryEntry,
   type StressBand,
+  type MarketRegime,
 } from '@/lib/mondayController';
 import { toast } from 'sonner';
 
@@ -54,6 +56,15 @@ function scoreColor(score: number): string {
   if (score <= 70) return 'text-foreground';
   if (score <= 90) return 'text-amber-400';
   return 'text-rose-400';
+}
+
+function regimeStyle(r: MarketRegime): { bg: string; text: string; dot: string } {
+  switch (r) {
+    case 'ACCUMULATION':  return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' };
+    case 'NORMAL':        return { bg: 'bg-secondary',      text: 'text-foreground',  dot: 'bg-foreground/50' };
+    case 'DISTRIBUTION':  return { bg: 'bg-amber-500/15',   text: 'text-amber-400',   dot: 'bg-amber-400' };
+    case 'STRESS_EVENT':  return { bg: 'bg-rose-500/15',    text: 'text-rose-400',    dot: 'bg-rose-400' };
+  }
 }
 
 export function DCAPage({ lang: _lang }: Props) {
@@ -161,8 +172,28 @@ export function DCAPage({ lang: _lang }: Props) {
         </button>
       </div>
 
-      {/* TOP SECTION — Stress Score + deployment */}
+      {/* TOP SECTION — Regime + Stress Score + deployment */}
       <div className="glass-card p-5">
+        {(() => {
+          const rs = regimeStyle(plan.regime);
+          return (
+            <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg mb-4 ${rs.bg}`}>
+              <div className="flex items-center gap-2 min-w-0">
+                <span className={`w-2 h-2 rounded-full ${rs.dot} animate-pulse`} />
+                <div className="min-w-0">
+                  <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Trhový režim</p>
+                  <p className={`text-sm font-bold tracking-wide ${rs.text}`}>{regimeLabel(plan.regime)}</p>
+                </div>
+              </div>
+              {plan.deploymentPct !== plan.rawDeploymentPct && (
+                <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-background/60 text-amber-400 font-bold flex-shrink-0">
+                  Override · max {Math.round(plan.deploymentPct * 100)}%
+                </span>
+              )}
+            </div>
+          );
+        })()}
+
         <div className="flex items-start justify-between mb-4">
           <div>
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Market Stress Score</p>
@@ -210,9 +241,14 @@ export function DCAPage({ lang: _lang }: Props) {
           {showWhy ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
         </button>
         {showWhy && (
-          <p className="mt-2 text-xs text-muted-foreground leading-relaxed bg-secondary/40 rounded-lg p-3">
-            {plan.rationale}
-          </p>
+          <div className="mt-2 space-y-2 bg-secondary/40 rounded-lg p-3">
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Režim:</span> {plan.regimeReason}
+            </p>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              <span className="font-semibold text-foreground">Skóre:</span> {plan.rationale}
+            </p>
+          </div>
         )}
       </div>
 
