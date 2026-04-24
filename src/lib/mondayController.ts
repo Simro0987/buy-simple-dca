@@ -231,10 +231,11 @@ export function regimeLabel(r: MarketRegime): string {
 
 export function bandLabel(band: StressBand): string {
   switch (band) {
-    case 'dip': return 'Akumulácia';
-    case 'neutral': return 'Neutrál';
-    case 'risk_off': return 'Defenzíva';
-    case 'panic': return 'Príležitosť';
+    case 'defensive':  return 'Defenzíva';
+    case 'cautious':   return 'Opatrnosť';
+    case 'normal':     return 'Normál';
+    case 'strong':     return 'Sila';
+    case 'overheated': return 'Prehriatie';
   }
 }
 

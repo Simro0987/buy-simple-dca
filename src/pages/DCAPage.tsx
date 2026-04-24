@@ -44,10 +44,11 @@ function loadInputs(): MondayInputs {
 
 function bandTone(band: StressBand): string {
   switch (band) {
-    case 'dip': return 'text-emerald-400';
-    case 'neutral': return 'text-foreground';
-    case 'risk_off': return 'text-amber-400';
-    case 'panic': return 'text-rose-400';
+    case 'defensive':  return 'text-rose-400';
+    case 'cautious':   return 'text-amber-400';
+    case 'normal':     return 'text-foreground';
+    case 'strong':     return 'text-emerald-400';
+    case 'overheated': return 'text-rose-400';
   }
 }
 
