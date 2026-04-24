@@ -147,6 +147,74 @@ export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan 
   };
 }
 
+// ----- Market Regime classification (named, on top of stress score) -----
+// ACCUMULATION / NORMAL / DISTRIBUTION / STRESS_EVENT with override:
+//   F&G > 80 AND BTC at ATH (within 2% of 30D high) → cap deployment at 25% (DISTRIBUTION).
+export type MarketRegime = 'ACCUMULATION' | 'NORMAL' | 'DISTRIBUTION' | 'STRESS_EVENT';
+
+export interface RegimeResult {
+  regime: MarketRegime;
+  reason: string;        // short SK explanation
+  capPct?: number;       // optional override cap (e.g. 0.25)
+}
+
+export function classifyRegime(inputs: MondayInputs): RegimeResult {
+  const dropPct = inputs.btc30dHigh > 0
+    ? (inputs.btc30dHigh - inputs.btcPrice) / inputs.btc30dHigh
+    : 0;
+  const nearAth = dropPct <= 0.02; // within 2% of 30D high
+  const fg = inputs.fearGreed;
+
+  // Override: extreme greed at ATH → defenzíva
+  if (fg > 80 && nearAth) {
+    return {
+      regime: 'DISTRIBUTION',
+      reason: `F&G ${fg} (chamtivosť) + BTC pri ATH → max 25 % nasadenia.`,
+      capPct: 0.25,
+    };
+  }
+
+  // STRESS_EVENT: rýchly prepad ≥15 % od 30D high + extrémny strach
+  if (dropPct >= 0.15 && fg < 25) {
+    return {
+      regime: 'STRESS_EVENT',
+      reason: `BTC ${(dropPct * 100).toFixed(0)} % pod 30D high + extrémny strach (F&G ${fg}). Panika = príležitosť.`,
+    };
+  }
+
+  // ACCUMULATION: pokles ≥10 %, F&G < 30, BTC nad 200D MA
+  if (dropPct >= 0.10 && fg < 30 && inputs.btcAbove200dMA) {
+    return {
+      regime: 'ACCUMULATION',
+      reason: `BTC ${(dropPct * 100).toFixed(0)} % pod 30D high, F&G ${fg}, nad 200D MA → akumulácia.`,
+    };
+  }
+
+  // DISTRIBUTION: chamtivosť alebo BTC pod 200D MA / pri ATH
+  if (fg > 70 || nearAth || !inputs.btcAbove200dMA) {
+    const why = !inputs.btcAbove200dMA
+      ? 'BTC pod 200D MA → defenzíva.'
+      : nearAth
+        ? `BTC pri ATH (≤2 % od 30D high), F&G ${fg} → redukcia rizika.`
+        : `F&G ${fg} (chamtivosť) → redukcia rizika.`;
+    return { regime: 'DISTRIBUTION', reason: why };
+  }
+
+  return {
+    regime: 'NORMAL',
+    reason: 'Bez extrémnych podmienok → štandardné nasadenie.',
+  };
+}
+
+export function regimeLabel(r: MarketRegime): string {
+  switch (r) {
+    case 'ACCUMULATION': return 'AKUMULÁCIA';
+    case 'NORMAL': return 'NORMÁL';
+    case 'DISTRIBUTION': return 'DISTRIBÚCIA';
+    case 'STRESS_EVENT': return 'STRESS EVENT';
+  }
+}
+
 export function bandLabel(band: StressBand): string {
   switch (band) {
     case 'dip': return 'Akumulácia';
