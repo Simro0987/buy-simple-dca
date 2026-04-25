@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
