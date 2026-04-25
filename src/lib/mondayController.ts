@@ -19,16 +19,20 @@ export interface MondayPlan {
   band: ValuationBand;
   bandLabel: string;              // SK label
   regimeLabel: string;            // Cheap / Neutral / Expensive (short)
-  deploymentPct: number;          // 0.25 / 0.40 / 0.50 / 0.60 / 0.75
+  deploymentPct: number;          // FINAL pct after stability filter (used for $ math)
   investableUsd: number;
   reservedUsd: number;
   marketUsd: number;
   limitUsd: number;
   rationale: string;              // single explanation derived from valuation only
   perAsset: AssetPlan[];
-  // Back-compat fields (used by older history entries)
+  // Stability filter outputs
+  rawDeploymentPct: number;       // raw band pct from valuation score (pre-clamp)
+  stabilityClamped: boolean;      // true if ±15 % filter altered the value
+  panicMode: boolean;             // true if filter was bypassed due to extreme conditions
+  prevDeploymentPct?: number;     // last week's final pct, if available
+  // Back-compat
   stressScore: number;            // alias = valuationScore
-  rawDeploymentPct: number;       // = deploymentPct (no override layer)
 }
 
 export interface AssetPlan {
