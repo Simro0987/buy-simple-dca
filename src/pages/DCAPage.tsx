@@ -215,6 +215,12 @@ export function DCAPage({ lang: _lang }: Props) {
       <div className="glass-card p-5">
         {(() => {
           const rs = regimeStyle(plan.band);
+          const conf = confidence.level;
+          const confStyle = conf === 'high'
+            ? { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'High' }
+            : conf === 'medium'
+            ? { bg: 'bg-amber-500/15', text: 'text-amber-400', label: 'Medium' }
+            : { bg: 'bg-rose-500/15', text: 'text-rose-400', label: 'Low' };
           return (
             <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg mb-4 ${rs.bg}`}>
               <div className="flex items-center gap-2 min-w-0">
@@ -224,6 +230,13 @@ export function DCAPage({ lang: _lang }: Props) {
                   <p className={`text-sm font-bold tracking-wide ${rs.text}`}>{plan.regimeLabel} · {bandLabel(plan.band)}</p>
                 </div>
               </div>
+              <span
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${confStyle.bg} ${confStyle.text}`}
+                title={confidence.reasons.length ? `Chýba: ${confidence.reasons.join(', ')}` : 'Všetky zdroje aktuálne'}
+              >
+                <ShieldCheck className="w-3 h-3" />
+                Confidence: {confStyle.label}
+              </span>
             </div>
           );
         })()}
@@ -240,6 +253,14 @@ export function DCAPage({ lang: _lang }: Props) {
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Nasadiť</p>
             <p className="text-3xl font-bold text-foreground tabular-nums">{Math.round(plan.deploymentPct * 100)}%</p>
+            {plan.stabilityClamped && (
+              <p className="text-[10px] text-amber-400 mt-0.5" title="Týždenná zmena obmedzená na ±15 %">
+                vyhladené z {Math.round(plan.rawDeploymentPct * 100)}%
+              </p>
+            )}
+            {plan.panicMode && (
+              <p className="text-[10px] text-rose-400 mt-0.5">⚡ Panic Mode</p>
+            )}
             <p className="text-sm font-semibold text-foreground mt-1">{formatUsd(plan.investableUsd)}</p>
           </div>
         </div>
