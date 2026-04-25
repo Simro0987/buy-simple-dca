@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
@@ -111,7 +111,36 @@ export function DCAPage({ lang: _lang }: Props) {
     localStorage.setItem(INPUTS_KEY, JSON.stringify(inputs));
   }, [inputs]);
 
-  const plan = useMemo(() => buildPlan(inputs, prices), [inputs, prices]);
+  const prevDeploymentPct = history[0]?.plan.deploymentPct;
+  const plan = useMemo(
+    () => buildPlan(inputs, prices, prevDeploymentPct),
+    [inputs, prices, prevDeploymentPct],
+  );
+
+  // ===== Confidence Score =====
+  // High = all 3 live sources fresh. Medium = 1 missing/stale. Low = 2+ missing/stale.
+  const confidence = useMemo(() => {
+    let missing = 0;
+    const reasons: string[] = [];
+    if (!prices?.bitcoin?.usd) { missing++; reasons.push('cena BTC'); }
+    if (typeof fg?.value !== 'number') { missing++; reasons.push('Fear & Greed'); }
+    if (!ma200) { missing++; reasons.push('200D MA'); }
+    const level: 'high' | 'medium' | 'low' = missing === 0 ? 'high' : missing === 1 ? 'medium' : 'low';
+    return { level, missing, reasons };
+  }, [prices, fg, ma200]);
+
+  // ===== Cash Drag Alert =====
+  // Reserve > 3× weekly capital → flag as underdeployed (uses cumulative reserved over recent weeks
+  // if available; otherwise current week's reserve vs current capital).
+  const cashDrag = useMemo(() => {
+    const weeklyCapital = inputs.capital;
+    if (weeklyCapital <= 0) return { triggered: false, ratio: 0 };
+    // sum reserved from last 4 weeks (incl. this week's projected reserve)
+    const recent = history.slice(0, 4).reduce((s, h) => s + (h.plan.reservedUsd ?? 0), 0);
+    const totalReserve = recent + plan.reservedUsd;
+    const ratio = totalReserve / weeklyCapital;
+    return { triggered: ratio >= 3, ratio, totalReserve };
+  }, [history, plan.reservedUsd, inputs.capital]);
 
   const update = <K extends keyof MondayInputs>(key: K, value: MondayInputs[K]) =>
     setInputs(prev => ({ ...prev, [key]: value }));
@@ -186,6 +215,12 @@ export function DCAPage({ lang: _lang }: Props) {
       <div className="glass-card p-5">
         {(() => {
           const rs = regimeStyle(plan.band);
+          const conf = confidence.level;
+          const confStyle = conf === 'high'
+            ? { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'High' }
+            : conf === 'medium'
+            ? { bg: 'bg-amber-500/15', text: 'text-amber-400', label: 'Medium' }
+            : { bg: 'bg-rose-500/15', text: 'text-rose-400', label: 'Low' };
           return (
             <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg mb-4 ${rs.bg}`}>
               <div className="flex items-center gap-2 min-w-0">
@@ -195,6 +230,13 @@ export function DCAPage({ lang: _lang }: Props) {
                   <p className={`text-sm font-bold tracking-wide ${rs.text}`}>{plan.regimeLabel} · {bandLabel(plan.band)}</p>
                 </div>
               </div>
+              <span
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${confStyle.bg} ${confStyle.text}`}
+                title={confidence.reasons.length ? `Chýba: ${confidence.reasons.join(', ')}` : 'Všetky zdroje aktuálne'}
+              >
+                <ShieldCheck className="w-3 h-3" />
+                Confidence: {confStyle.label}
+              </span>
             </div>
           );
         })()}
@@ -211,6 +253,14 @@ export function DCAPage({ lang: _lang }: Props) {
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Nasadiť</p>
             <p className="text-3xl font-bold text-foreground tabular-nums">{Math.round(plan.deploymentPct * 100)}%</p>
+            {plan.stabilityClamped && (
+              <p className="text-[10px] text-amber-400 mt-0.5" title="Týždenná zmena obmedzená na ±15 %">
+                vyhladené z {Math.round(plan.rawDeploymentPct * 100)}%
+              </p>
+            )}
+            {plan.panicMode && (
+              <p className="text-[10px] text-rose-400 mt-0.5">⚡ Panic Mode</p>
+            )}
             <p className="text-sm font-semibold text-foreground mt-1">{formatUsd(plan.investableUsd)}</p>
           </div>
         </div>
@@ -258,6 +308,20 @@ export function DCAPage({ lang: _lang }: Props) {
           </div>
         )}
       </div>
+
+      {/* CASH DRAG ALERT — reserve > 3× weekly capital */}
+      {cashDrag.triggered && (
+        <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-rose-400">Kapitál nedostatočne nasadený</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+              Rezerva za posledné týždne dosahuje {cashDrag.ratio.toFixed(1)}× tvojho týždenného vkladu
+              ({formatUsd(cashDrag.totalReserve ?? 0)}). Zváž vyššiu alokáciu budúci pondelok.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* INPUTS */}
       <div className="glass-card p-4 space-y-3">

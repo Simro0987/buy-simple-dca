@@ -19,16 +19,20 @@ export interface MondayPlan {
   band: ValuationBand;
   bandLabel: string;              // SK label
   regimeLabel: string;            // Cheap / Neutral / Expensive (short)
-  deploymentPct: number;          // 0.25 / 0.40 / 0.50 / 0.60 / 0.75
+  deploymentPct: number;          // FINAL pct after stability filter (used for $ math)
   investableUsd: number;
   reservedUsd: number;
   marketUsd: number;
   limitUsd: number;
   rationale: string;              // single explanation derived from valuation only
   perAsset: AssetPlan[];
-  // Back-compat fields (used by older history entries)
+  // Stability filter outputs
+  rawDeploymentPct: number;       // raw band pct from valuation score (pre-clamp)
+  stabilityClamped: boolean;      // true if ±15 % filter altered the value
+  panicMode: boolean;             // true if filter was bypassed due to extreme conditions
+  prevDeploymentPct?: number;     // last week's final pct, if available
+  // Back-compat
   stressScore: number;            // alias = valuationScore
-  rawDeploymentPct: number;       // = deploymentPct (no override layer)
 }
 
 export interface AssetPlan {
@@ -93,6 +97,33 @@ export function bandFor(score: number): { band: ValuationBand; pct: number } {
   return              { band: 'euphoria',      pct: 0.25 };
 }
 
+// Panic Mode: extreme conditions allow bypassing the ±15 % stability filter.
+// Triggered by deep capitulation (score <= 15 + extreme fear) OR full euphoria (score >= 90).
+export function isPanicMode(score: number, fearGreed: number): boolean {
+  if (score <= 15 && fearGreed <= 20) return true; // panic accumulation
+  if (score >= 90) return true;                    // euphoria de-risk
+  return false;
+}
+
+// Allocation Stability Filter: limit week-over-week change to ±15 % (absolute pct points)
+// unless Panic Mode is active.
+export function applyStabilityFilter(
+  rawPct: number,
+  prevPct: number | undefined,
+  panic: boolean,
+): { finalPct: number; clamped: boolean; deltaPct: number } {
+  if (panic || prevPct === undefined) {
+    return { finalPct: rawPct, clamped: false, deltaPct: prevPct === undefined ? 0 : rawPct - prevPct };
+  }
+  const maxDelta = 0.15;
+  const delta = rawPct - prevPct;
+  if (Math.abs(delta) <= maxDelta) {
+    return { finalPct: rawPct, clamped: false, deltaPct: delta };
+  }
+  const clampedPct = prevPct + Math.sign(delta) * maxDelta;
+  return { finalPct: clampedPct, clamped: true, deltaPct: delta };
+}
+
 export function bandLabel(band: ValuationBand): string {
   switch (band) {
     case 'deep_value':   return 'Hlboká hodnota';
@@ -137,11 +168,19 @@ function discountPctFor(coingeckoId: string): number {
 }
 
 // ===== STEP 3 + 4: Execution split & per-asset distribution =====
-export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan {
+export function buildPlan(
+  inputs: MondayInputs,
+  prices?: PriceData,
+  prevDeploymentPct?: number,
+): MondayPlan {
   const score = computeValuationScore(inputs);
-  const { band, pct } = bandFor(score);
+  const { band, pct: rawPct } = bandFor(score);
 
-  const investableUsd = inputs.capital * pct;
+  const panicMode = isPanicMode(score, inputs.fearGreed);
+  const stab = applyStabilityFilter(rawPct, prevDeploymentPct, panicMode);
+  const finalPct = stab.finalPct;
+
+  const investableUsd = inputs.capital * finalPct;
   const reservedUsd = inputs.capital - investableUsd;
   const marketUsd = investableUsd * MARKET_SPLIT;
   const limitUsd = investableUsd * LIMIT_SPLIT;
@@ -175,16 +214,18 @@ export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan 
     band,
     bandLabel: bandLabel(band),
     regimeLabel: regimeShortLabel(band),
-    deploymentPct: pct,
+    deploymentPct: finalPct,
+    rawDeploymentPct: rawPct,
+    stabilityClamped: stab.clamped,
+    panicMode,
+    prevDeploymentPct,
     investableUsd,
     reservedUsd,
     marketUsd,
     limitUsd,
     rationale: rationaleFor(band, score),
     perAsset,
-    // back-compat
     stressScore: score,
-    rawDeploymentPct: pct,
   };
 }
 
