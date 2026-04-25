@@ -7,7 +7,6 @@ import { formatUsd, formatPrice, formatQuantity } from '@/lib/crypto';
 import {
   buildPlan,
   bandLabel,
-  regimeLabel,
   thisMondayIso,
   loadHistory,
   saveHistoryEntry,
@@ -15,8 +14,7 @@ import {
   exportHistoryCsv,
   type MondayInputs,
   type HistoryEntry,
-  type StressBand,
-  type MarketRegime,
+  type ValuationBand,
 } from '@/lib/mondayController';
 import { toast } from 'sonner';
 
@@ -42,31 +40,32 @@ function loadInputs(): MondayInputs {
   }
 }
 
-function bandTone(band: StressBand): string {
+function bandTone(band: ValuationBand): string {
   switch (band) {
-    case 'defensive':  return 'text-rose-400';
-    case 'cautious':   return 'text-amber-400';
-    case 'normal':     return 'text-foreground';
-    case 'strong':     return 'text-emerald-400';
-    case 'overheated': return 'text-rose-400';
+    case 'deep_value':   return 'text-emerald-400';
+    case 'accumulation': return 'text-emerald-400';
+    case 'neutral':      return 'text-foreground';
+    case 'expensive':    return 'text-amber-400';
+    case 'euphoria':     return 'text-rose-400';
   }
 }
 
+// Monotonic: cheap (low) = green, expensive (high) = red
 function scoreColor(score: number): string {
-  // U-curve: extremes on both sides are risky → red
-  if (score <= 25) return 'text-rose-400';
-  if (score <= 45) return 'text-amber-400';
+  if (score <= 25) return 'text-emerald-400';
+  if (score <= 45) return 'text-emerald-400';
   if (score <= 65) return 'text-foreground';
-  if (score <= 80) return 'text-emerald-400';
+  if (score <= 80) return 'text-amber-400';
   return 'text-rose-400';
 }
 
-function regimeStyle(r: MarketRegime): { bg: string; text: string; dot: string } {
-  switch (r) {
-    case 'ACCUMULATION':  return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' };
-    case 'NORMAL':        return { bg: 'bg-secondary',      text: 'text-foreground',  dot: 'bg-foreground/50' };
-    case 'DISTRIBUTION':  return { bg: 'bg-amber-500/15',   text: 'text-amber-400',   dot: 'bg-amber-400' };
-    case 'STRESS_EVENT':  return { bg: 'bg-rose-500/15',    text: 'text-rose-400',    dot: 'bg-rose-400' };
+function regimeStyle(band: ValuationBand): { bg: string; text: string; dot: string } {
+  switch (band) {
+    case 'deep_value':
+    case 'accumulation': return { bg: 'bg-emerald-500/15', text: 'text-emerald-400', dot: 'bg-emerald-400' };
+    case 'neutral':      return { bg: 'bg-secondary',      text: 'text-foreground',  dot: 'bg-foreground/50' };
+    case 'expensive':    return { bg: 'bg-amber-500/15',   text: 'text-amber-400',   dot: 'bg-amber-400' };
+    case 'euphoria':     return { bg: 'bg-rose-500/15',    text: 'text-rose-400',    dot: 'bg-rose-400' };
   }
 }
 
@@ -128,7 +127,7 @@ export function DCAPage({ lang: _lang }: Props) {
       date: thisMondayIso(),
       inputs,
       plan: {
-        stressScore: plan.stressScore,
+        valuationScore: plan.valuationScore,
         band: plan.band,
         deploymentPct: plan.deploymentPct,
         investableUsd: plan.investableUsd,
@@ -175,36 +174,31 @@ export function DCAPage({ lang: _lang }: Props) {
         </button>
       </div>
 
-      {/* TOP SECTION — Regime + Stress Score + deployment */}
+      {/* TOP SECTION — Valuation Score + deployment */}
       <div className="glass-card p-5">
         {(() => {
-          const rs = regimeStyle(plan.regime);
+          const rs = regimeStyle(plan.band);
           return (
             <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg mb-4 ${rs.bg}`}>
               <div className="flex items-center gap-2 min-w-0">
                 <span className={`w-2 h-2 rounded-full ${rs.dot} animate-pulse`} />
                 <div className="min-w-0">
                   <p className="text-[9px] uppercase tracking-wider text-muted-foreground">Trhový režim</p>
-                  <p className={`text-sm font-bold tracking-wide ${rs.text}`}>{regimeLabel(plan.regime)}</p>
+                  <p className={`text-sm font-bold tracking-wide ${rs.text}`}>{plan.regimeLabel} · {bandLabel(plan.band)}</p>
                 </div>
               </div>
-              {plan.deploymentPct !== plan.rawDeploymentPct && (
-                <span className="text-[9px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-background/60 text-amber-400 font-bold flex-shrink-0">
-                  Override · max {Math.round(plan.deploymentPct * 100)}%
-                </span>
-              )}
             </div>
           );
         })()}
 
         <div className="flex items-start justify-between mb-4">
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Market Stress Score</p>
-            <p className={`text-5xl font-bold tabular-nums ${scoreColor(plan.stressScore)}`}>
-              {plan.stressScore}
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Market Valuation Score</p>
+            <p className={`text-5xl font-bold tabular-nums ${scoreColor(plan.valuationScore)}`}>
+              {plan.valuationScore}
               <span className="text-xl text-muted-foreground font-normal">/100</span>
             </p>
-            <p className={`text-sm font-semibold mt-1 ${bandTone(plan.band)}`}>{bandLabel(plan.band)}</p>
+            <p className="text-[10px] text-muted-foreground mt-1">0 = lacný · 50 = neutrál · 100 = drahý</p>
           </div>
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Nasadiť</p>
@@ -216,13 +210,13 @@ export function DCAPage({ lang: _lang }: Props) {
         <div className="h-2 bg-secondary rounded-full overflow-hidden">
           <div
             className={`h-full transition-all ${
-              plan.stressScore <= 25 ? 'bg-rose-500'
-              : plan.stressScore <= 45 ? 'bg-amber-500'
-              : plan.stressScore <= 65 ? 'bg-foreground/40'
-              : plan.stressScore <= 80 ? 'bg-emerald-500'
+              plan.valuationScore <= 25 ? 'bg-emerald-500'
+              : plan.valuationScore <= 45 ? 'bg-emerald-500'
+              : plan.valuationScore <= 65 ? 'bg-foreground/40'
+              : plan.valuationScore <= 80 ? 'bg-amber-500'
               : 'bg-rose-500'
             }`}
-            style={{ width: `${plan.stressScore}%` }}
+            style={{ width: `${plan.valuationScore}%` }}
           />
         </div>
 
@@ -247,10 +241,11 @@ export function DCAPage({ lang: _lang }: Props) {
         {showWhy && (
           <div className="mt-2 space-y-2 bg-secondary/40 rounded-lg p-3">
             <p className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">Režim:</span> {plan.regimeReason}
+              {plan.rationale}
             </p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              <span className="font-semibold text-foreground">Skóre:</span> {plan.rationale}
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Mapovanie: 0–25 → 75 % · 26–45 → 60 % · 46–65 → 50 % · 66–80 → 40 % · 81–100 → 25 %.
+              Vyššie skóre = drahší trh = nižšia alokácia.
             </p>
           </div>
         )}
@@ -417,7 +412,7 @@ export function DCAPage({ lang: _lang }: Props) {
                       <div>
                         <p className="font-semibold text-foreground">{h.date}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          Score {h.plan.stressScore} · {bandLabel(h.plan.band)}
+                          Score {h.plan.valuationScore} · {bandLabel(h.plan.band)}
                         </p>
                       </div>
                       <div className="text-right">
