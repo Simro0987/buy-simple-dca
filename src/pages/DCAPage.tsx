@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
+import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
 import { formatUsd, formatPrice, formatQuantity } from '@/lib/crypto';
 import {
@@ -77,6 +78,7 @@ export function DCAPage({ lang: _lang }: Props) {
 
   const { data: prices, refetch: refetchPrices, isFetching: pricesLoading } = usePrices();
   const { data: fg, refetch: refetchFg, isFetching: fgLoading } = useFearGreed();
+  const { data: ma200, refetch: refetchMa, isFetching: maLoading, isError: maError } = useBtc200dMA();
 
   // Auto-fill from APIs (only if user hasn't manually overridden — empty/zero values)
   useEffect(() => {
@@ -87,7 +89,6 @@ export function DCAPage({ lang: _lang }: Props) {
       if (livePrice && (!prev.btcPrice || prev.btcPrice === 0)) {
         next.btcPrice = Math.round(livePrice);
         if (!prev.btc30dHigh || prev.btc30dHigh === 0) {
-          // No 30D-high endpoint here → seed with current price; user adjusts manually
           next.btc30dHigh = Math.round(livePrice);
         }
         changed = true;
@@ -96,9 +97,14 @@ export function DCAPage({ lang: _lang }: Props) {
         next.fearGreed = fg.value;
         changed = true;
       }
+      // Auto-derive BTC vs 200D MA whenever we have a fresh reading
+      if (ma200 && typeof ma200.above === 'boolean' && prev.btcAbove200dMA !== ma200.above) {
+        next.btcAbove200dMA = ma200.above;
+        changed = true;
+      }
       return changed ? next : prev;
     });
-  }, [prices, fg]);
+  }, [prices, fg, ma200]);
 
   // Persist inputs
   useEffect(() => {
@@ -111,13 +117,15 @@ export function DCAPage({ lang: _lang }: Props) {
     setInputs(prev => ({ ...prev, [key]: value }));
 
   const handleAutoFill = async () => {
-    const r = await Promise.all([refetchPrices(), refetchFg()]);
+    const r = await Promise.all([refetchPrices(), refetchFg(), refetchMa()]);
     const livePrice = r[0].data?.bitcoin?.usd;
     const liveFg = r[1].data?.value;
+    const liveMa = r[2].data;
     setInputs(prev => ({
       ...prev,
       btcPrice: livePrice ? Math.round(livePrice) : prev.btcPrice,
       fearGreed: typeof liveFg === 'number' ? liveFg : prev.fearGreed,
+      btcAbove200dMA: liveMa ? liveMa.above : prev.btcAbove200dMA,
     }));
     toast.success('Dáta načítané');
   };
@@ -155,7 +163,7 @@ export function DCAPage({ lang: _lang }: Props) {
     setHistory([]);
   };
 
-  const loading = pricesLoading || fgLoading;
+  const loading = pricesLoading || fgLoading || maLoading;
 
   return (
     <div className="space-y-4">
