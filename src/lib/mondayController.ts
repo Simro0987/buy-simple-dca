@@ -168,11 +168,19 @@ function discountPctFor(coingeckoId: string): number {
 }
 
 // ===== STEP 3 + 4: Execution split & per-asset distribution =====
-export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan {
+export function buildPlan(
+  inputs: MondayInputs,
+  prices?: PriceData,
+  prevDeploymentPct?: number,
+): MondayPlan {
   const score = computeValuationScore(inputs);
-  const { band, pct } = bandFor(score);
+  const { band, pct: rawPct } = bandFor(score);
 
-  const investableUsd = inputs.capital * pct;
+  const panicMode = isPanicMode(score, inputs.fearGreed);
+  const stab = applyStabilityFilter(rawPct, prevDeploymentPct, panicMode);
+  const finalPct = stab.finalPct;
+
+  const investableUsd = inputs.capital * finalPct;
   const reservedUsd = inputs.capital - investableUsd;
   const marketUsd = investableUsd * MARKET_SPLIT;
   const limitUsd = investableUsd * LIMIT_SPLIT;
@@ -206,16 +214,18 @@ export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan 
     band,
     bandLabel: bandLabel(band),
     regimeLabel: regimeShortLabel(band),
-    deploymentPct: pct,
+    deploymentPct: finalPct,
+    rawDeploymentPct: rawPct,
+    stabilityClamped: stab.clamped,
+    panicMode,
+    prevDeploymentPct,
     investableUsd,
     reservedUsd,
     marketUsd,
     limitUsd,
     rationale: rationaleFor(band, score),
     perAsset,
-    // back-compat
     stressScore: score,
-    rawDeploymentPct: pct,
   };
 }
 
