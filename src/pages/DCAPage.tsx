@@ -309,6 +309,20 @@ export function DCAPage({ lang: _lang }: Props) {
         )}
       </div>
 
+      {/* CASH DRAG ALERT — reserve > 3× weekly capital */}
+      {cashDrag.triggered && (
+        <div className="rounded-lg border border-rose-500/40 bg-rose-500/10 p-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-rose-400 flex-shrink-0 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-rose-400">Kapitál nedostatočne nasadený</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed mt-0.5">
+              Rezerva za posledné týždne dosahuje {cashDrag.ratio.toFixed(1)}× tvojho týždenného vkladu
+              ({formatUsd(cashDrag.totalReserve ?? 0)}). Zváž vyššiu alokáciu budúci pondelok.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* INPUTS */}
       <div className="glass-card p-4 space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Vstupy (manuálny override)</h2>
