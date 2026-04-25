@@ -412,7 +412,7 @@ export function DCAPage({ lang: _lang }: Props) {
                       <div>
                         <p className="font-semibold text-foreground">{h.date}</p>
                         <p className="text-[10px] text-muted-foreground">
-                          Score {h.plan.stressScore} · {bandLabel(h.plan.band)}
+                          Score {h.plan.valuationScore} · {bandLabel(h.plan.band)}
                         </p>
                       </div>
                       <div className="text-right">
