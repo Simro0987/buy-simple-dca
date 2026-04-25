@@ -93,6 +93,33 @@ export function bandFor(score: number): { band: ValuationBand; pct: number } {
   return              { band: 'euphoria',      pct: 0.25 };
 }
 
+// Panic Mode: extreme conditions allow bypassing the ±15 % stability filter.
+// Triggered by deep capitulation (score <= 15 + extreme fear) OR full euphoria (score >= 90).
+export function isPanicMode(score: number, fearGreed: number): boolean {
+  if (score <= 15 && fearGreed <= 20) return true; // panic accumulation
+  if (score >= 90) return true;                    // euphoria de-risk
+  return false;
+}
+
+// Allocation Stability Filter: limit week-over-week change to ±15 % (absolute pct points)
+// unless Panic Mode is active.
+export function applyStabilityFilter(
+  rawPct: number,
+  prevPct: number | undefined,
+  panic: boolean,
+): { finalPct: number; clamped: boolean; deltaPct: number } {
+  if (panic || prevPct === undefined) {
+    return { finalPct: rawPct, clamped: false, deltaPct: prevPct === undefined ? 0 : rawPct - prevPct };
+  }
+  const maxDelta = 0.15;
+  const delta = rawPct - prevPct;
+  if (Math.abs(delta) <= maxDelta) {
+    return { finalPct: rawPct, clamped: false, deltaPct: delta };
+  }
+  const clampedPct = prevPct + Math.sign(delta) * maxDelta;
+  return { finalPct: clampedPct, clamped: true, deltaPct: delta };
+}
+
 export function bandLabel(band: ValuationBand): string {
   switch (band) {
     case 'deep_value':   return 'Hlboká hodnota';
