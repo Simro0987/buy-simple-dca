@@ -268,27 +268,54 @@ export function DCAPage({ lang: _lang }: Props) {
           <NumberInput label="BTC 30D high" value={inputs.btc30dHigh} onChange={v => update('btc30dHigh', v)} step={100} />
         </div>
         <NumberInput label="Fear & Greed (0–100)" value={inputs.fearGreed} onChange={v => update('fearGreed', Math.max(0, Math.min(100, v)))} step={1} />
-        <div>
-          <label className="text-[10px] uppercase tracking-wider text-muted-foreground block mb-1.5">BTC vs 200D MA</label>
-          <div className="grid grid-cols-2 gap-2">
-            {[
-              { v: true, label: 'Nad 200D MA' },
-              { v: false, label: 'Pod 200D MA' },
-            ].map(opt => (
-              <button
-                key={String(opt.v)}
-                onClick={() => update('btcAbove200dMA', opt.v)}
-                className={`py-2 rounded-lg text-xs font-medium transition-colors ${
-                  inputs.btcAbove200dMA === opt.v
-                    ? 'bg-primary text-primary-foreground'
-                    : 'bg-secondary text-secondary-foreground'
-                }`}
-              >
-                {opt.label}
-              </button>
-            ))}
-          </div>
+      </div>
+
+      {/* AUTO BTC TREND CARD (200D MA — automatically calculated) */}
+      <div className="glass-card p-4">
+        <div className="flex items-center justify-between mb-2">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">BTC trend (auto)</h2>
+          {ma200 ? (
+            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
+              ma200.above ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
+            }`}>
+              {ma200.above ? 'Nad 200D MA ✅' : 'Pod 200D MA ⚠️'}
+            </span>
+          ) : maError ? (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 flex items-center gap-1">
+              <AlertTriangle className="w-3 h-3" /> Dáta nedostupné
+            </span>
+          ) : (
+            <span className="text-[10px] text-muted-foreground">Načítavam…</span>
+          )}
         </div>
+        {ma200 ? (
+          <div className="grid grid-cols-3 gap-2 text-xs">
+            <div className="bg-secondary/60 rounded-lg p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">BTC cena</p>
+              <p className="font-semibold text-foreground tabular-nums">{formatPrice(ma200.currentPrice)}</p>
+            </div>
+            <div className="bg-secondary/60 rounded-lg p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">200D MA</p>
+              <p className="font-semibold text-foreground tabular-nums">{formatPrice(ma200.ma200)}</p>
+            </div>
+            <div className="bg-secondary/60 rounded-lg p-2">
+              <p className="text-[10px] uppercase text-muted-foreground">Vzdialenosť</p>
+              <p className={`font-semibold tabular-nums flex items-center gap-1 ${ma200.above ? 'text-emerald-400' : 'text-amber-400'}`}>
+                {ma200.above ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {ma200.distancePct >= 0 ? '+' : ''}{ma200.distancePct.toFixed(1)}%
+              </p>
+            </div>
+          </div>
+        ) : maError ? (
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            Nepodarilo sa načítať denné BTC sviečky. Používa sa posledná známa hodnota trendu ({inputs.btcAbove200dMA ? 'nad' : 'pod'} 200D MA). Skús Auto-fill.
+          </p>
+        ) : (
+          <div className="h-12 rounded-lg bg-secondary/40 animate-pulse" />
+        )}
+        <p className="text-[10px] text-muted-foreground mt-2">
+          Trend sa počíta automaticky z 200 denných uzávierok BTC. Nad MA = +10 bodov k Valuation Score, pod MA = −10.
+        </p>
       </div>
 
       {/* MIDDLE — Execution breakdown */}
