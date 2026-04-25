@@ -111,7 +111,36 @@ export function DCAPage({ lang: _lang }: Props) {
     localStorage.setItem(INPUTS_KEY, JSON.stringify(inputs));
   }, [inputs]);
 
-  const plan = useMemo(() => buildPlan(inputs, prices), [inputs, prices]);
+  const prevDeploymentPct = history[0]?.plan.deploymentPct;
+  const plan = useMemo(
+    () => buildPlan(inputs, prices, prevDeploymentPct),
+    [inputs, prices, prevDeploymentPct],
+  );
+
+  // ===== Confidence Score =====
+  // High = all 3 live sources fresh. Medium = 1 missing/stale. Low = 2+ missing/stale.
+  const confidence = useMemo(() => {
+    let missing = 0;
+    const reasons: string[] = [];
+    if (!prices?.bitcoin?.usd) { missing++; reasons.push('cena BTC'); }
+    if (typeof fg?.value !== 'number') { missing++; reasons.push('Fear & Greed'); }
+    if (!ma200) { missing++; reasons.push('200D MA'); }
+    const level: 'high' | 'medium' | 'low' = missing === 0 ? 'high' : missing === 1 ? 'medium' : 'low';
+    return { level, missing, reasons };
+  }, [prices, fg, ma200]);
+
+  // ===== Cash Drag Alert =====
+  // Reserve > 3× weekly capital → flag as underdeployed (uses cumulative reserved over recent weeks
+  // if available; otherwise current week's reserve vs current capital).
+  const cashDrag = useMemo(() => {
+    const weeklyCapital = inputs.capital;
+    if (weeklyCapital <= 0) return { triggered: false, ratio: 0 };
+    // sum reserved from last 4 weeks (incl. this week's projected reserve)
+    const recent = history.slice(0, 4).reduce((s, h) => s + (h.plan.reservedUsd ?? 0), 0);
+    const totalReserve = recent + plan.reservedUsd;
+    const ratio = totalReserve / weeklyCapital;
+    return { triggered: ratio >= 3, ratio, totalReserve };
+  }, [history, plan.reservedUsd, inputs.capital]);
 
   const update = <K extends keyof MondayInputs>(key: K, value: MondayInputs[K]) =>
     setInputs(prev => ({ ...prev, [key]: value }));
