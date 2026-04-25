@@ -1,5 +1,6 @@
 // Monday Crypto DCA Controller — deterministic weekly capital allocation engine.
-// No predictions, no AI. Pure rule-based mapping from market stress → execution plan.
+// Single consistent metric: MARKET VALUATION SCORE (0 = cheap/panic → 100 = expensive/euphoria).
+// Higher score = higher risk = lower allocation. Lower score = cheaper market = higher allocation.
 
 import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, type PriceData } from './crypto';
 
@@ -11,21 +12,23 @@ export interface MondayInputs {
   btcAbove200dMA: boolean;  // BTC trend vs 200D MA
 }
 
-export type StressBand = 'defensive' | 'cautious' | 'normal' | 'strong' | 'overheated';
+export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensive' | 'euphoria';
 
 export interface MondayPlan {
-  stressScore: number;            // 0-100
-  band: StressBand;
-  regime: MarketRegime;           // named regime layer
-  regimeReason: string;           // why this regime
-  deploymentPct: number;          // 0.25 / 0.5 / 0.75 / 0.85 (after override)
-  rawDeploymentPct: number;       // pre-override deployment (from stress band)
-  investableUsd: number;          // capital * deploymentPct
-  reservedUsd: number;            // capital - investableUsd
-  marketUsd: number;              // 60% of investable
-  limitUsd: number;               // 40% of investable
-  rationale: string;              // WHY (short, deterministic)
+  valuationScore: number;         // 0-100 (cheap → expensive) — single source of truth
+  band: ValuationBand;
+  bandLabel: string;              // SK label
+  regimeLabel: string;            // Cheap / Neutral / Expensive (short)
+  deploymentPct: number;          // 0.25 / 0.40 / 0.50 / 0.60 / 0.75
+  investableUsd: number;
+  reservedUsd: number;
+  marketUsd: number;
+  limitUsd: number;
+  rationale: string;              // single explanation derived from valuation only
   perAsset: AssetPlan[];
+  // Back-compat fields (used by older history entries)
+  stressScore: number;            // alias = valuationScore
+  rawDeploymentPct: number;       // = deploymentPct (no override layer)
 }
 
 export interface AssetPlan {
@@ -38,83 +41,105 @@ export interface AssetPlan {
   limitUsd: number;
   currentPrice: number;
   limitPrice: number;             // 3-5% below current
-  limitDiscountPct: number;       // 3, 4, or 5
+  limitDiscountPct: number;
   marketQty: number;
   limitQty: number;
 }
 
-// ----- STEP 1: Market Stress Score (0-100, higher = more stress) -----
-// Components are aggregated internally and only the final score is exposed.
-export function computeStressScore(inputs: MondayInputs): number {
-  // 1. BTC distance from 30D high (0% drop = 0 stress, -30%+ drop = 100 stress)
-  const dropPct = inputs.btc30dHigh > 0
-    ? Math.max(0, (inputs.btc30dHigh - inputs.btcPrice) / inputs.btc30dHigh)
-    : 0;
-  const distScore = Math.min(100, (dropPct / 0.30) * 100);
+// ===== STEP 1: Market Valuation Score (0–100) =====
+// Single concept: how expensive vs cheap the market is.
+//   0   = extremely cheap (panic / capitulation)
+//   50  = neutral
+//   100 = extremely expensive (euphoria / ATH / overheated)
+export function computeValuationScore(inputs: MondayInputs): number {
+  // 1. BTC vs 30D high → price-action valuation component (0..100)
+  //    -15% (or worse) below high → 0–20
+  //    around the high            → ~50
+  //    above the high             → 80–100
+  const ratio = inputs.btc30dHigh > 0 ? inputs.btcPrice / inputs.btc30dHigh : 1;
+  // Map ratio to score:
+  //   ratio = 0.85 → 10   (15% under high → deep value)
+  //   ratio = 1.00 → 50   (at the high)
+  //   ratio = 1.10 → 90   (10% above 30D high → expensive)
+  let priceScore: number;
+  if (ratio <= 0.85) priceScore = Math.max(0, 10 - (0.85 - ratio) * 100); // sub-15% → ≤10
+  else if (ratio <= 1.0) priceScore = 10 + ((ratio - 0.85) / 0.15) * 40;  // 0.85→10, 1.00→50
+  else priceScore = 50 + Math.min(50, (ratio - 1.0) * 400);               // +10% → 90, +12.5% → 100
+  priceScore = Math.max(0, Math.min(100, priceScore));
 
-  // 2. Fear & Greed: 0 (extreme fear) = 100 stress, 100 (extreme greed) = also stress
-  // U-shape: stress is high at both extremes (panic AND euphoria)
-  // - 0-30 (fear/panic): high stress
-  // - 30-70 (neutral): low stress
-  // - 70-100 (greed/euphoria): high stress (different kind, but still risk-off)
-  const fg = inputs.fearGreed;
-  let fgScore: number;
-  if (fg <= 30) fgScore = ((30 - fg) / 30) * 100;
-  else if (fg >= 70) fgScore = ((fg - 70) / 30) * 100;
-  else fgScore = 0;
+  // 2. Fear & Greed → sentiment valuation component (already 0..100, monotonic)
+  const fgScore = Math.max(0, Math.min(100, inputs.fearGreed));
 
-  // 3. BTC vs 200D MA: below = +20 stress baseline
-  const maScore = inputs.btcAbove200dMA ? 0 : 60;
+  // 3. 200D MA bias: above MA = pricier regime (+15), below MA = cheaper regime (−15)
+  const maAdj = inputs.btcAbove200dMA ? 15 : -15;
 
-  // Weighted aggregate (drop is dominant, then F&G, then MA bias)
-  const score = distScore * 0.5 + fgScore * 0.3 + maScore * 0.2;
-  return Math.round(Math.max(0, Math.min(100, score)));
+  // Average of normalized components, then apply MA bias
+  const avg = (priceScore + fgScore) / 2;
+  const score = Math.round(Math.max(0, Math.min(100, avg + maAdj)));
+  return score;
 }
 
-// ----- STEP 2: Deployment band (5-tier U-curve) -----
-// Extremes on BOTH sides reduce allocation.
-//   0–25  → Defensive  (32 %)  — extrémny strach / kapitulácia, riziko ďalšieho prepadu
-//  26–45  → Cautious   (45 %)  — slabosť, opatrné nasadenie
-//  46–65  → Normal     (60 %)  — zdravý trh, štandardné nasadenie
-//  66–80  → Strong     (68 %)  — sila / momentum, mierne zvýšené nasadenie
-//  81–100 → Overheated (32 %)  — euforia / vrchol, redukcia rizika
-export function bandFor(score: number): { band: StressBand; pct: number } {
-  if (score <= 25) return { band: 'defensive',  pct: 0.32 };
-  if (score <= 45) return { band: 'cautious',   pct: 0.45 };
-  if (score <= 65) return { band: 'normal',     pct: 0.60 };
-  if (score <= 80) return { band: 'strong',     pct: 0.68 };
-  return              { band: 'overheated', pct: 0.32 };
+// ===== STEP 2: Decision engine — fixed mapping (higher score → lower allocation) =====
+//    0–25  → 75 % (deep value / panic accumulation)
+//   26–45  → 60 % (good accumulation zone)
+//   46–65  → 50 % (neutral market)
+//   66–80  → 40 % (expensive market)
+//   81–100 → 25 % (euphoria / overheated)
+export function bandFor(score: number): { band: ValuationBand; pct: number } {
+  if (score <= 25) return { band: 'deep_value',    pct: 0.75 };
+  if (score <= 45) return { band: 'accumulation',  pct: 0.60 };
+  if (score <= 65) return { band: 'neutral',       pct: 0.50 };
+  if (score <= 80) return { band: 'expensive',     pct: 0.40 };
+  return              { band: 'euphoria',      pct: 0.25 };
 }
 
-export function rationaleFor(band: StressBand, score: number): string {
+export function bandLabel(band: ValuationBand): string {
   switch (band) {
-    case 'defensive':
-      return `Stress score ${score}/100 — extrémny strach / kapitulácia. Defenzívne nasadenie 32 % (riziko ďalšieho prepadu).`;
-    case 'cautious':
-      return `Stress score ${score}/100 — slabosť trhu. Opatrné nasadenie 45 %.`;
-    case 'normal':
-      return `Stress score ${score}/100 — zdravý trh. Štandardné nasadenie 60 %.`;
-    case 'strong':
-      return `Stress score ${score}/100 — sila a momentum. Mierne zvýšené nasadenie 68 %.`;
-    case 'overheated':
-      return `Stress score ${score}/100 — euforia / vrchol. Redukcia rizika na 32 %.`;
+    case 'deep_value':   return 'Hlboká hodnota';
+    case 'accumulation': return 'Akumulácia';
+    case 'neutral':      return 'Neutrál';
+    case 'expensive':    return 'Drahý trh';
+    case 'euphoria':     return 'Eufória';
   }
 }
 
-// Deterministic limit discount per asset (existing token configs use 0.97 / 0.96 / 0.95 → 3 / 4 / 5%)
+// Short regime tag: Cheap / Neutral / Expensive
+export function regimeShortLabel(band: ValuationBand): string {
+  switch (band) {
+    case 'deep_value':
+    case 'accumulation': return 'LACNÝ';
+    case 'neutral':      return 'NEUTRÁLNY';
+    case 'expensive':
+    case 'euphoria':     return 'DRAHÝ';
+  }
+}
+
+export function rationaleFor(band: ValuationBand, score: number): string {
+  const pct = Math.round(bandFor(score).pct * 100);
+  switch (band) {
+    case 'deep_value':
+      return `Valuation ${score}/100 — hlboká hodnota / panika. Nasadenie ${pct} % (akumulácia v lacnom trhu).`;
+    case 'accumulation':
+      return `Valuation ${score}/100 — dobrá akumulačná zóna. Nasadenie ${pct} %.`;
+    case 'neutral':
+      return `Valuation ${score}/100 — neutrálny trh. Štandardné nasadenie ${pct} %.`;
+    case 'expensive':
+      return `Valuation ${score}/100 — drahý trh. Redukované nasadenie ${pct} %.`;
+    case 'euphoria':
+      return `Valuation ${score}/100 — eufória / prehriatie. Defenzívne nasadenie ${pct} %.`;
+  }
+}
+
 function discountPctFor(coingeckoId: string): number {
   const t = TOKENS.find(x => x.coingeckoId === coingeckoId);
   if (!t) return 4;
   return Math.round((1 - t.limitDiscount) * 100);
 }
 
-// ----- STEP 3 + 4: Execution split & per-asset distribution -----
+// ===== STEP 3 + 4: Execution split & per-asset distribution =====
 export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan {
-  const score = computeStressScore(inputs);
-  const { band, pct: rawPct } = bandFor(score);
-  const regimeRes = classifyRegime(inputs);
-  // Apply regime cap if present (e.g. F&G>80 + ATH → max 25 %)
-  const pct = typeof regimeRes.capPct === 'number' ? Math.min(rawPct, regimeRes.capPct) : rawPct;
+  const score = computeValuationScore(inputs);
+  const { band, pct } = bandFor(score);
 
   const investableUsd = inputs.capital * pct;
   const reservedUsd = inputs.capital - investableUsd;
@@ -146,111 +171,37 @@ export function buildPlan(inputs: MondayInputs, prices?: PriceData): MondayPlan 
   });
 
   return {
-    stressScore: score,
+    valuationScore: score,
     band,
-    regime: regimeRes.regime,
-    regimeReason: regimeRes.reason,
+    bandLabel: bandLabel(band),
+    regimeLabel: regimeShortLabel(band),
     deploymentPct: pct,
-    rawDeploymentPct: rawPct,
     investableUsd,
     reservedUsd,
     marketUsd,
     limitUsd,
     rationale: rationaleFor(band, score),
     perAsset,
+    // back-compat
+    stressScore: score,
+    rawDeploymentPct: pct,
   };
 }
 
-// ----- Market Regime classification (named, on top of stress score) -----
-// ACCUMULATION / NORMAL / DISTRIBUTION / STRESS_EVENT with override:
-//   F&G > 80 AND BTC at ATH (within 2% of 30D high) → cap deployment at 25% (DISTRIBUTION).
-export type MarketRegime = 'ACCUMULATION' | 'NORMAL' | 'DISTRIBUTION' | 'STRESS_EVENT';
-
-export interface RegimeResult {
-  regime: MarketRegime;
-  reason: string;        // short SK explanation
-  capPct?: number;       // optional override cap (e.g. 0.25)
-}
-
-export function classifyRegime(inputs: MondayInputs): RegimeResult {
-  const dropPct = inputs.btc30dHigh > 0
-    ? (inputs.btc30dHigh - inputs.btcPrice) / inputs.btc30dHigh
-    : 0;
-  const nearAth = dropPct <= 0.02; // within 2% of 30D high
-  const fg = inputs.fearGreed;
-
-  // Override: extreme greed at ATH → defenzíva
-  if (fg > 80 && nearAth) {
-    return {
-      regime: 'DISTRIBUTION',
-      reason: `F&G ${fg} (chamtivosť) + BTC pri ATH → max 25 % nasadenia.`,
-      capPct: 0.25,
-    };
-  }
-
-  // STRESS_EVENT: rýchly prepad ≥15 % od 30D high + extrémny strach
-  if (dropPct >= 0.15 && fg < 25) {
-    return {
-      regime: 'STRESS_EVENT',
-      reason: `BTC ${(dropPct * 100).toFixed(0)} % pod 30D high + extrémny strach (F&G ${fg}). Panika = príležitosť.`,
-    };
-  }
-
-  // ACCUMULATION: pokles ≥10 %, F&G < 30, BTC nad 200D MA
-  if (dropPct >= 0.10 && fg < 30 && inputs.btcAbove200dMA) {
-    return {
-      regime: 'ACCUMULATION',
-      reason: `BTC ${(dropPct * 100).toFixed(0)} % pod 30D high, F&G ${fg}, nad 200D MA → akumulácia.`,
-    };
-  }
-
-  // DISTRIBUTION: chamtivosť alebo BTC pod 200D MA / pri ATH
-  if (fg > 70 || nearAth || !inputs.btcAbove200dMA) {
-    const why = !inputs.btcAbove200dMA
-      ? 'BTC pod 200D MA → defenzíva.'
-      : nearAth
-        ? `BTC pri ATH (≤2 % od 30D high), F&G ${fg} → redukcia rizika.`
-        : `F&G ${fg} (chamtivosť) → redukcia rizika.`;
-    return { regime: 'DISTRIBUTION', reason: why };
-  }
-
-  return {
-    regime: 'NORMAL',
-    reason: 'Bez extrémnych podmienok → štandardné nasadenie.',
-  };
-}
-
-export function regimeLabel(r: MarketRegime): string {
-  switch (r) {
-    case 'ACCUMULATION': return 'AKUMULÁCIA';
-    case 'NORMAL': return 'NORMÁL';
-    case 'DISTRIBUTION': return 'DISTRIBÚCIA';
-    case 'STRESS_EVENT': return 'STRESS EVENT';
-  }
-}
-
-export function bandLabel(band: StressBand): string {
-  switch (band) {
-    case 'defensive':  return 'Defenzíva';
-    case 'cautious':   return 'Opatrnosť';
-    case 'normal':     return 'Normál';
-    case 'strong':     return 'Sila';
-    case 'overheated': return 'Prehriatie';
-  }
-}
-
-// ----- History persistence -----
+// ===== History persistence =====
 const HISTORY_KEY = 'monday-controller-history-v1';
 
 export interface HistoryEntry {
-  date: string;            // ISO Monday date
+  date: string;
   inputs: MondayInputs;
   plan: {
-    stressScore: number;
-    band: StressBand;
+    valuationScore: number;
+    band: ValuationBand;
     deploymentPct: number;
     investableUsd: number;
     reservedUsd: number;
+    // legacy alias kept readable
+    stressScore?: number;
   };
 }
 
@@ -258,7 +209,15 @@ export function loadHistory(): HistoryEntry[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
-    return JSON.parse(raw) as HistoryEntry[];
+    const arr = JSON.parse(raw) as HistoryEntry[];
+    // Migrate legacy entries (stressScore → valuationScore is NOT semantically equal, but keep displayable)
+    return arr.map(h => ({
+      ...h,
+      plan: {
+        ...h.plan,
+        valuationScore: h.plan.valuationScore ?? h.plan.stressScore ?? 50,
+      },
+    }));
   } catch {
     return [];
   }
@@ -266,9 +225,8 @@ export function loadHistory(): HistoryEntry[] {
 
 export function saveHistoryEntry(entry: HistoryEntry): HistoryEntry[] {
   const all = loadHistory();
-  // Replace if same date already saved, else prepend
   const filtered = all.filter(h => h.date !== entry.date);
-  const next = [entry, ...filtered].slice(0, 52); // keep last year
+  const next = [entry, ...filtered].slice(0, 52);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
   return next;
 }
@@ -279,15 +237,15 @@ export function clearHistory(): void {
 
 export function thisMondayIso(): string {
   const d = new Date();
-  const day = d.getDay(); // 0 Sun ... 6 Sat
-  const diff = (day + 6) % 7; // back to Monday
+  const day = d.getDay();
+  const diff = (day + 6) % 7;
   d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
 }
 
 export function exportHistoryCsv(history: HistoryEntry[]): string {
-  const headers = ['date', 'capital', 'btcPrice', 'btc30dHigh', 'fearGreed', 'above200dMA', 'stressScore', 'band', 'deploymentPct', 'investableUsd', 'reservedUsd'];
+  const headers = ['date', 'capital', 'btcPrice', 'btc30dHigh', 'fearGreed', 'above200dMA', 'valuationScore', 'band', 'deploymentPct', 'investableUsd', 'reservedUsd'];
   const rows = history.map(h => [
     h.date,
     h.inputs.capital,
@@ -295,7 +253,7 @@ export function exportHistoryCsv(history: HistoryEntry[]): string {
     h.inputs.btc30dHigh,
     h.inputs.fearGreed,
     h.inputs.btcAbove200dMA ? 'Y' : 'N',
-    h.plan.stressScore,
+    h.plan.valuationScore,
     h.plan.band,
     h.plan.deploymentPct,
     h.plan.investableUsd.toFixed(2),
