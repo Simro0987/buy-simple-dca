@@ -6,11 +6,11 @@ export interface Btc200dMAData {
   distancePct: number;   // (price - ma) / ma * 100
   above: boolean;
   candleCount: number;
+  change7dPct: number;   // 7-day BTC % change derived from daily closes
 }
 
-// Fetch ~210 daily BTC closes from CoinGecko and compute the 200D MA.
+// Fetch ~210 daily BTC closes from CoinGecko and compute the 200D MA + 7D change.
 async function fetchBtc200dMA(): Promise<Btc200dMAData> {
-  // CoinGecko free endpoint: market_chart with days=210 returns daily candles.
   const url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=210&interval=daily';
   const res = await fetch(url);
   if (!res.ok) throw new Error(`coingecko ${res.status}`);
@@ -22,12 +22,16 @@ async function fetchBtc200dMA(): Promise<Btc200dMAData> {
   const ma200 = last200.reduce((s, v) => s + v, 0) / last200.length;
   const currentPrice = closes[closes.length - 1];
   const distancePct = ((currentPrice - ma200) / ma200) * 100;
+  // 7D change: compare current to close ~7 days ago (7 candles back if available)
+  const sevenAgo = closes[Math.max(0, closes.length - 8)] ?? currentPrice;
+  const change7dPct = sevenAgo > 0 ? ((currentPrice - sevenAgo) / sevenAgo) * 100 : 0;
   return {
     currentPrice,
     ma200,
     distancePct,
     above: currentPrice > ma200,
     candleCount: closes.length,
+    change7dPct,
   };
 }
 
