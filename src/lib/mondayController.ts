@@ -113,17 +113,56 @@ export function isPanicMode(score: number, fearGreed: number): boolean {
   return false;
 }
 
-// Allocation Stability Filter: limit week-over-week change to ±15 % (absolute pct points)
-// unless Panic Mode is active.
-export function applyStabilityFilter(
+// ===== Trend Filter (risk control when BTC is below 200D MA) =====
+// Rules:
+//   1. BTC below 200D MA                              → max allocation 60 %
+//   2. BTC below 200D MA AND Fear & Greed > 55        → max allocation 40 %
+//   3. BTC above 200D MA                              → no cap
+//   4. Capitulation panic exception:
+//      BTC drawdown > 15 % from 30D high AND F&G < 25 → cap bypassed (allow up to 75 %)
+export interface TrendFilterResult {
+  active: boolean;
+  capPct: number | null;
+  reason: TrendFilterReason;
+  bypassed: boolean;            // true when panic exception bypasses the cap
+  outputPct: number;            // pct after applying (or bypassing) the cap
+}
+
+export function applyTrendFilter(
   rawPct: number,
-  prevPct: number | undefined,
-  panic: boolean,
-): { finalPct: number; clamped: boolean; deltaPct: number } {
-  if (panic || prevPct === undefined) {
-    return { finalPct: rawPct, clamped: false, deltaPct: prevPct === undefined ? 0 : rawPct - prevPct };
+  inputs: MondayInputs,
+): TrendFilterResult {
+  // Above MA → no cap
+  if (inputs.btcAbove200dMA) {
+    return { active: false, capPct: null, reason: null, bypassed: false, outputPct: rawPct };
   }
-  const maxDelta = 0.15;
+
+  // Below MA — determine cap
+  const cap = inputs.fearGreed > 55 ? 0.40 : 0.60;
+  const reason: TrendFilterReason = inputs.fearGreed > 55 ? 'below_ma_greedy' : 'below_ma';
+
+  // Panic exception: rapid >15 % drawdown from 30D high AND extreme fear
+  const drawdownPct = inputs.btc30dHigh > 0
+    ? (inputs.btc30dHigh - inputs.btcPrice) / inputs.btc30dHigh
+    : 0;
+  const panicBypass = drawdownPct > 0.15 && inputs.fearGreed < 25;
+  if (panicBypass) {
+    // Allow original raw pct (capped at 75 %) regardless of MA filter
+    return {
+      active: false,
+      capPct: cap,
+      reason,
+      bypassed: true,
+      outputPct: Math.min(rawPct, 0.75),
+    };
+  }
+
+  if (rawPct <= cap) {
+    return { active: false, capPct: cap, reason, bypassed: false, outputPct: rawPct };
+  }
+  return { active: true, capPct: cap, reason, bypassed: false, outputPct: cap };
+}
+
   const delta = rawPct - prevPct;
   if (Math.abs(delta) <= maxDelta) {
     return { finalPct: rawPct, clamped: false, deltaPct: delta };
