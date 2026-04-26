@@ -10,6 +10,21 @@ export interface MondayInputs {
   btc30dHigh: number;       // BTC 30-day high (USD)
   fearGreed: number;        // 0-100
   btcAbove200dMA: boolean;  // BTC trend vs 200D MA
+  // Optional 5-factor inputs (auto-filled when live data is available; safe defaults if absent)
+  btc7dChangePct?: number;  // BTC 7-day % change (momentum)
+  eth24hChangePct?: number; // ETH 24h % change (risk appetite)
+  sol24hChangePct?: number; // SOL 24h % change (risk appetite)
+  btc24hChangePct?: number; // BTC 24h % change (used as baseline for risk appetite)
+}
+
+export type FactorKey = 'valuation' | 'trend' | 'sentiment' | 'momentum' | 'risk_appetite';
+
+export interface FactorBreakdown {
+  key: FactorKey;
+  label: string;          // SK label
+  score: number;          // 0..100 (higher = pricier / riskier)
+  weight: number;         // contribution weight in final score
+  detail: string;         // short SK explainer with the underlying number
 }
 
 export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensive' | 'euphoria';
