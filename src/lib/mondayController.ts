@@ -163,6 +163,17 @@ export function applyTrendFilter(
   return { active: true, capPct: cap, reason, bypassed: false, outputPct: cap };
 }
 
+// Allocation Stability Filter: limit week-over-week change to ±15 % (absolute pct points)
+// unless Panic Mode is active.
+export function applyStabilityFilter(
+  rawPct: number,
+  prevPct: number | undefined,
+  panic: boolean,
+): { finalPct: number; clamped: boolean; deltaPct: number } {
+  if (panic || prevPct === undefined) {
+    return { finalPct: rawPct, clamped: false, deltaPct: prevPct === undefined ? 0 : rawPct - prevPct };
+  }
+  const maxDelta = 0.15;
   const delta = rawPct - prevPct;
   if (Math.abs(delta) <= maxDelta) {
     return { finalPct: rawPct, clamped: false, deltaPct: delta };
