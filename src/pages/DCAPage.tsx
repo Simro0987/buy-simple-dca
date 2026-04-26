@@ -130,16 +130,22 @@ export function DCAPage({ lang: _lang }: Props) {
     [inputs, prices, prevDeploymentPct],
   );
 
-  // ===== Confidence Score =====
-  // High = all 3 live sources fresh. Medium = 1 missing/stale. Low = 2+ missing/stale.
+  // ===== Confidence Score (5-factor data freshness) =====
   const confidence = useMemo(() => {
-    let missing = 0;
-    const reasons: string[] = [];
-    if (!prices?.bitcoin?.usd) { missing++; reasons.push('cena BTC'); }
-    if (typeof fg?.value !== 'number') { missing++; reasons.push('Fear & Greed'); }
-    if (!ma200) { missing++; reasons.push('200D MA'); }
-    const level: 'high' | 'medium' | 'low' = missing === 0 ? 'high' : missing === 1 ? 'medium' : 'low';
-    return { level, missing, reasons };
+    const checks = [
+      { ok: !!prices?.bitcoin?.usd,                                   name: 'cena BTC' },
+      { ok: typeof fg?.value === 'number',                            name: 'Fear & Greed' },
+      { ok: !!ma200,                                                  name: '200D MA' },
+      { ok: typeof ma200?.change7dPct === 'number',                   name: '7D momentum' },
+      { ok: typeof prices?.ethereum?.usd_24h_change === 'number'
+            && typeof prices?.solana?.usd_24h_change === 'number',    name: 'ETH/SOL strength' },
+    ];
+    const present = checks.filter(c => c.ok).length;
+    const missing = checks.length - present;
+    const reasons = checks.filter(c => !c.ok).map(c => c.name);
+    const pct = Math.round((present / checks.length) * 100);
+    const level: 'high' | 'medium' | 'low' = missing === 0 ? 'high' : missing <= 1 ? 'medium' : 'low';
+    return { level, pct, missing, reasons };
   }, [prices, fg, ma200]);
 
   // ===== Cash Drag Alert =====
