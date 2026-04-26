@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck } from 'lucide-react';
+import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
@@ -75,12 +75,14 @@ export function DCAPage({ lang: _lang }: Props) {
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const [showWhy, setShowWhy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showRitual, setShowRitual] = useState(false);
 
   const { data: prices, refetch: refetchPrices, isFetching: pricesLoading } = usePrices();
   const { data: fg, refetch: refetchFg, isFetching: fgLoading } = useFearGreed();
   const { data: ma200, refetch: refetchMa, isFetching: maLoading, isError: maError } = useBtc200dMA();
 
-  // Auto-fill from APIs (only if user hasn't manually overridden — empty/zero values)
+  // Auto-fill from APIs (only if user hasn't manually overridden — empty/zero values).
+  // Also auto-derives 5-factor signals (7D BTC, 24h ETH/SOL/BTC) on every refresh.
   useEffect(() => {
     setInputs(prev => {
       const next = { ...prev };
@@ -97,11 +99,22 @@ export function DCAPage({ lang: _lang }: Props) {
         next.fearGreed = fg.value;
         changed = true;
       }
-      // Auto-derive BTC vs 200D MA whenever we have a fresh reading
-      if (ma200 && typeof ma200.above === 'boolean' && prev.btcAbove200dMA !== ma200.above) {
-        next.btcAbove200dMA = ma200.above;
-        changed = true;
+      // Auto-derive BTC vs 200D MA + 7D momentum whenever we have a fresh reading
+      if (ma200) {
+        if (typeof ma200.above === 'boolean' && prev.btcAbove200dMA !== ma200.above) {
+          next.btcAbove200dMA = ma200.above; changed = true;
+        }
+        if (typeof ma200.change7dPct === 'number' && prev.btc7dChangePct !== ma200.change7dPct) {
+          next.btc7dChangePct = ma200.change7dPct; changed = true;
+        }
       }
+      // Risk appetite signals from live prices (24h changes)
+      const ethCh = prices?.ethereum?.usd_24h_change;
+      const solCh = prices?.solana?.usd_24h_change;
+      const btcCh = prices?.bitcoin?.usd_24h_change;
+      if (typeof ethCh === 'number' && prev.eth24hChangePct !== ethCh) { next.eth24hChangePct = ethCh; changed = true; }
+      if (typeof solCh === 'number' && prev.sol24hChangePct !== solCh) { next.sol24hChangePct = solCh; changed = true; }
+      if (typeof btcCh === 'number' && prev.btc24hChangePct !== btcCh) { next.btc24hChangePct = btcCh; changed = true; }
       return changed ? next : prev;
     });
   }, [prices, fg, ma200]);
@@ -117,16 +130,22 @@ export function DCAPage({ lang: _lang }: Props) {
     [inputs, prices, prevDeploymentPct],
   );
 
-  // ===== Confidence Score =====
-  // High = all 3 live sources fresh. Medium = 1 missing/stale. Low = 2+ missing/stale.
+  // ===== Confidence Score (5-factor data freshness) =====
   const confidence = useMemo(() => {
-    let missing = 0;
-    const reasons: string[] = [];
-    if (!prices?.bitcoin?.usd) { missing++; reasons.push('cena BTC'); }
-    if (typeof fg?.value !== 'number') { missing++; reasons.push('Fear & Greed'); }
-    if (!ma200) { missing++; reasons.push('200D MA'); }
-    const level: 'high' | 'medium' | 'low' = missing === 0 ? 'high' : missing === 1 ? 'medium' : 'low';
-    return { level, missing, reasons };
+    const checks = [
+      { ok: !!prices?.bitcoin?.usd,                                   name: 'cena BTC' },
+      { ok: typeof fg?.value === 'number',                            name: 'Fear & Greed' },
+      { ok: !!ma200,                                                  name: '200D MA' },
+      { ok: typeof ma200?.change7dPct === 'number',                   name: '7D momentum' },
+      { ok: typeof prices?.ethereum?.usd_24h_change === 'number'
+            && typeof prices?.solana?.usd_24h_change === 'number',    name: 'ETH/SOL strength' },
+    ];
+    const present = checks.filter(c => c.ok).length;
+    const missing = checks.length - present;
+    const reasons = checks.filter(c => !c.ok).map(c => c.name);
+    const pct = Math.round((present / checks.length) * 100);
+    const level: 'high' | 'medium' | 'low' = missing === 0 ? 'high' : missing <= 1 ? 'medium' : 'low';
+    return { level, pct, missing, reasons };
   }, [prices, fg, ma200]);
 
   // ===== Cash Drag Alert =====
@@ -196,19 +215,29 @@ export function DCAPage({ lang: _lang }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-foreground">Monday DCA Controller</h1>
           <p className="text-xs text-muted-foreground">Týždenný systém nasadenia kapitálu · {thisMondayIso()}</p>
         </div>
-        <button
-          onClick={handleAutoFill}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium active:scale-95 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Auto-fill
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => setShowRitual(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold active:scale-95"
+            title="Pondelkový rituál — 20 sekundové zhrnutie"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Ritual
+          </button>
+          <button
+            onClick={handleAutoFill}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Auto-fill
+          </button>
+        </div>
       </div>
 
       {/* TOP SECTION — Valuation Score + deployment */}
@@ -235,7 +264,7 @@ export function DCAPage({ lang: _lang }: Props) {
                 title={confidence.reasons.length ? `Chýba: ${confidence.reasons.join(', ')}` : 'Všetky zdroje aktuálne'}
               >
                 <ShieldCheck className="w-3 h-3" />
-                Confidence: {confStyle.label}
+                Confidence {confidence.pct}% · {confStyle.label}
               </span>
             </div>
           );
@@ -278,17 +307,46 @@ export function DCAPage({ lang: _lang }: Props) {
           />
         </div>
 
-        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-          <div
-            className={`h-full transition-all ${
-              plan.valuationScore <= 25 ? 'bg-emerald-500'
-              : plan.valuationScore <= 45 ? 'bg-emerald-500'
-              : plan.valuationScore <= 65 ? 'bg-foreground/40'
-              : plan.valuationScore <= 80 ? 'bg-amber-500'
-              : 'bg-rose-500'
-            }`}
-            style={{ width: `${plan.valuationScore}%` }}
-          />
+        {/* 5-FACTOR CARDS — heat breakdown (Valuation · Trend · Sentiment · Momentum · Risk Appetite) */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">5 faktorov trhu</p>
+            <p className="text-[10px] text-muted-foreground tabular-nums">vážený priemer = {plan.valuationScore}</p>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {plan.factors.map(f => {
+              const Icon = f.key === 'valuation' ? BarChart3
+                : f.key === 'trend' ? TrendingUp
+                : f.key === 'sentiment' ? Heart
+                : f.key === 'momentum' ? ActivityIcon
+                : Zap;
+              const color = f.score <= 25 ? 'text-emerald-400 bg-emerald-500/15'
+                : f.score <= 45 ? 'text-emerald-400 bg-emerald-500/10'
+                : f.score <= 65 ? 'text-foreground bg-secondary'
+                : f.score <= 80 ? 'text-amber-400 bg-amber-500/15'
+                : 'text-rose-400 bg-rose-500/15';
+              const barColor = f.score <= 25 ? 'bg-emerald-500'
+                : f.score <= 45 ? 'bg-emerald-500'
+                : f.score <= 65 ? 'bg-foreground/40'
+                : f.score <= 80 ? 'bg-amber-500'
+                : 'bg-rose-500';
+              return (
+                <div key={f.key} className={`rounded-lg p-2 ${color}`} title={`${f.label} · ${f.detail} · váha ${Math.round(f.weight * 100)}%`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <Icon className="w-3 h-3 opacity-80" />
+                    <span className="text-[10px] font-bold tabular-nums">{f.score}</span>
+                  </div>
+                  <p className="text-[9px] uppercase tracking-tight font-semibold leading-tight truncate">{f.label}</p>
+                  <div className="h-1 bg-background/40 rounded-full overflow-hidden mt-1.5">
+                    <div className={`h-full ${barColor}`} style={{ width: `${f.score}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[9px] text-muted-foreground mt-1.5 leading-relaxed">
+            Váhy: Valuation 30% · Trend 25% · Sentiment 25% · Momentum 10% · Risk Appetite 10%. Vyššie = drahší/rizikovejší trh.
+          </p>
         </div>
 
         {/* TREND FILTER BADGE + EXPLANATION (BTC below 200D MA risk control) */}
@@ -585,6 +643,100 @@ export function DCAPage({ lang: _lang }: Props) {
           </div>
         )}
       </div>
+
+      {/* MONDAY RITUAL — one-tap 20-second weekly summary */}
+      {showRitual && (
+        <div
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
+          onClick={() => setShowRitual(false)}
+        >
+          <div
+            className="w-full max-w-md glass-card p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Pondelkový rituál</h2>
+              </div>
+              <button onClick={() => setShowRitual(false)} className="p-1 rounded-md hover:bg-secondary">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`rounded-lg p-3 ${regimeStyle(plan.band).bg}`}>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Režim</p>
+                <p className={`text-base font-bold ${regimeStyle(plan.band).text}`}>{plan.regimeLabel}</p>
+                <p className="text-[10px] text-muted-foreground">Score {plan.valuationScore}/100</p>
+              </div>
+              <div className="rounded-lg p-3 bg-secondary/60">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Confidence</p>
+                <p className="text-base font-bold text-foreground tabular-nums">{confidence.pct}%</p>
+                <p className="text-[10px] text-muted-foreground capitalize">{confidence.level}</p>
+              </div>
+              <div className="rounded-lg p-3 bg-primary/15 border border-primary/30">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Nasadiť</p>
+                <p className="text-2xl font-bold text-primary tabular-nums">{Math.round(plan.deploymentPct * 100)}%</p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">{formatUsd(plan.investableUsd)}</p>
+              </div>
+              <div className="rounded-lg p-3 bg-secondary/60">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Týždeň kapitál</p>
+                <p className="text-base font-bold text-foreground tabular-nums">{formatUsd(inputs.capital)}</p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">rezerva {formatUsd(plan.reservedUsd)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg p-2.5 bg-secondary/40">
+                <p className="text-[10px] uppercase text-muted-foreground">Market 60%</p>
+                <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(plan.marketUsd)}</p>
+              </div>
+              <div className="rounded-lg p-2.5 bg-secondary/40">
+                <p className="text-[10px] uppercase text-muted-foreground">Limit 40% (-3 až -5%)</p>
+                <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(plan.limitUsd)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              {plan.perAsset.map(a => (
+                <div key={a.symbol} className="flex items-center justify-between bg-secondary/40 rounded-lg p-2.5">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                      style={{ backgroundColor: a.color + '20', color: a.color }}
+                    >
+                      {a.symbol}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">{Math.round(a.weight * 100)}%</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(a.marketUsd + a.limitUsd)}</p>
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      M {formatUsd(a.marketUsd)} · L {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {(plan.trendFilterActive || plan.trendFilterBypassed || plan.panicMode) && (
+              <p className="text-[11px] text-amber-300/90 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+                {plan.trendFilterActive && '⚠️ Trend Filter aktívny — alokácia obmedzená. '}
+                {plan.trendFilterBypassed && '⚡ Panic Exception — agresívna akumulácia povolená. '}
+                {plan.panicMode && '⚡ Panic Mode — stability filter bypassed.'}
+              </p>
+            )}
+
+            <button
+              onClick={() => { handleSaveWeek(); setShowRitual(false); }}
+              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
+            >
+              Potvrdiť a uložiť týždeň
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
