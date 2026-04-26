@@ -32,7 +32,7 @@ export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensi
 export type TrendFilterReason = 'below_ma' | 'below_ma_greedy' | null;
 
 export interface MondayPlan {
-  valuationScore: number;         // 0-100 (cheap → expensive) — single source of truth
+  valuationScore: number;         // 0-100 (cheap → expensive) — final weighted blend
   band: ValuationBand;
   bandLabel: string;              // SK label
   regimeLabel: string;            // Cheap / Neutral / Expensive (short)
@@ -41,21 +41,23 @@ export interface MondayPlan {
   reservedUsd: number;
   marketUsd: number;
   limitUsd: number;
-  rationale: string;              // single explanation derived from valuation only
+  rationale: string;
   perAsset: AssetPlan[];
+  // 5-factor breakdown
+  factors: FactorBreakdown[];
   // Stability filter outputs
-  rawDeploymentPct: number;       // raw band pct from valuation score (pre-clamp)
-  stabilityClamped: boolean;      // true if ±15 % filter altered the value
-  panicMode: boolean;             // true if filter was bypassed due to extreme conditions
-  prevDeploymentPct?: number;     // last week's final pct, if available
+  rawDeploymentPct: number;
+  stabilityClamped: boolean;
+  panicMode: boolean;
+  prevDeploymentPct?: number;
   // Trend filter (BTC below 200D MA risk control)
-  trendFilterActive: boolean;     // true if a below-MA cap reduced allocation
+  trendFilterActive: boolean;
   trendFilterReason: TrendFilterReason;
-  trendFilterCapPct: number | null; // the cap that was applied (e.g. 0.60, 0.40)
-  trendFilterBypassed: boolean;   // true when capitulation panic bypassed the cap
-  preTrendFilterPct: number;      // band pct before trend filter (= rawDeploymentPct)
+  trendFilterCapPct: number | null;
+  trendFilterBypassed: boolean;
+  preTrendFilterPct: number;
   // Back-compat
-  stressScore: number;            // alias = valuationScore
+  stressScore: number;
 }
 
 export interface AssetPlan {
@@ -63,11 +65,11 @@ export interface AssetPlan {
   name: string;
   color: string;
   coingeckoId: string;
-  weight: number;                 // 0.64 / 0.25 / 0.11
+  weight: number;
   marketUsd: number;
   limitUsd: number;
   currentPrice: number;
-  limitPrice: number;             // 3-5% below current
+  limitPrice: number;
   limitDiscountPct: number;
   marketQty: number;
   limitQty: number;
