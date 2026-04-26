@@ -375,6 +375,7 @@ export function buildPlan(
     limitUsd,
     rationale,
     perAsset,
+    factors,
     stressScore: score,
   };
 }
