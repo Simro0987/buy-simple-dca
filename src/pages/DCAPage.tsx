@@ -75,12 +75,14 @@ export function DCAPage({ lang: _lang }: Props) {
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const [showWhy, setShowWhy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [showRitual, setShowRitual] = useState(false);
 
   const { data: prices, refetch: refetchPrices, isFetching: pricesLoading } = usePrices();
   const { data: fg, refetch: refetchFg, isFetching: fgLoading } = useFearGreed();
   const { data: ma200, refetch: refetchMa, isFetching: maLoading, isError: maError } = useBtc200dMA();
 
-  // Auto-fill from APIs (only if user hasn't manually overridden — empty/zero values)
+  // Auto-fill from APIs (only if user hasn't manually overridden — empty/zero values).
+  // Also auto-derives 5-factor signals (7D BTC, 24h ETH/SOL/BTC) on every refresh.
   useEffect(() => {
     setInputs(prev => {
       const next = { ...prev };
@@ -97,11 +99,22 @@ export function DCAPage({ lang: _lang }: Props) {
         next.fearGreed = fg.value;
         changed = true;
       }
-      // Auto-derive BTC vs 200D MA whenever we have a fresh reading
-      if (ma200 && typeof ma200.above === 'boolean' && prev.btcAbove200dMA !== ma200.above) {
-        next.btcAbove200dMA = ma200.above;
-        changed = true;
+      // Auto-derive BTC vs 200D MA + 7D momentum whenever we have a fresh reading
+      if (ma200) {
+        if (typeof ma200.above === 'boolean' && prev.btcAbove200dMA !== ma200.above) {
+          next.btcAbove200dMA = ma200.above; changed = true;
+        }
+        if (typeof ma200.change7dPct === 'number' && prev.btc7dChangePct !== ma200.change7dPct) {
+          next.btc7dChangePct = ma200.change7dPct; changed = true;
+        }
       }
+      // Risk appetite signals from live prices (24h changes)
+      const ethCh = prices?.ethereum?.usd_24h_change;
+      const solCh = prices?.solana?.usd_24h_change;
+      const btcCh = prices?.bitcoin?.usd_24h_change;
+      if (typeof ethCh === 'number' && prev.eth24hChangePct !== ethCh) { next.eth24hChangePct = ethCh; changed = true; }
+      if (typeof solCh === 'number' && prev.sol24hChangePct !== solCh) { next.sol24hChangePct = solCh; changed = true; }
+      if (typeof btcCh === 'number' && prev.btc24hChangePct !== btcCh) { next.btc24hChangePct = btcCh; changed = true; }
       return changed ? next : prev;
     });
   }, [prices, fg, ma200]);
