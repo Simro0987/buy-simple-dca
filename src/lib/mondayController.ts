@@ -14,6 +14,8 @@ export interface MondayInputs {
 
 export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensive' | 'euphoria';
 
+export type TrendFilterReason = 'below_ma' | 'below_ma_greedy' | null;
+
 export interface MondayPlan {
   valuationScore: number;         // 0-100 (cheap → expensive) — single source of truth
   band: ValuationBand;
@@ -31,6 +33,12 @@ export interface MondayPlan {
   stabilityClamped: boolean;      // true if ±15 % filter altered the value
   panicMode: boolean;             // true if filter was bypassed due to extreme conditions
   prevDeploymentPct?: number;     // last week's final pct, if available
+  // Trend filter (BTC below 200D MA risk control)
+  trendFilterActive: boolean;     // true if a below-MA cap reduced allocation
+  trendFilterReason: TrendFilterReason;
+  trendFilterCapPct: number | null; // the cap that was applied (e.g. 0.60, 0.40)
+  trendFilterBypassed: boolean;   // true when capitulation panic bypassed the cap
+  preTrendFilterPct: number;      // band pct before trend filter (= rawDeploymentPct)
   // Back-compat
   stressScore: number;            // alias = valuationScore
 }
@@ -105,6 +113,56 @@ export function isPanicMode(score: number, fearGreed: number): boolean {
   return false;
 }
 
+// ===== Trend Filter (risk control when BTC is below 200D MA) =====
+// Rules:
+//   1. BTC below 200D MA                              → max allocation 60 %
+//   2. BTC below 200D MA AND Fear & Greed > 55        → max allocation 40 %
+//   3. BTC above 200D MA                              → no cap
+//   4. Capitulation panic exception:
+//      BTC drawdown > 15 % from 30D high AND F&G < 25 → cap bypassed (allow up to 75 %)
+export interface TrendFilterResult {
+  active: boolean;
+  capPct: number | null;
+  reason: TrendFilterReason;
+  bypassed: boolean;            // true when panic exception bypasses the cap
+  outputPct: number;            // pct after applying (or bypassing) the cap
+}
+
+export function applyTrendFilter(
+  rawPct: number,
+  inputs: MondayInputs,
+): TrendFilterResult {
+  // Above MA → no cap
+  if (inputs.btcAbove200dMA) {
+    return { active: false, capPct: null, reason: null, bypassed: false, outputPct: rawPct };
+  }
+
+  // Below MA — determine cap
+  const cap = inputs.fearGreed > 55 ? 0.40 : 0.60;
+  const reason: TrendFilterReason = inputs.fearGreed > 55 ? 'below_ma_greedy' : 'below_ma';
+
+  // Panic exception: rapid >15 % drawdown from 30D high AND extreme fear
+  const drawdownPct = inputs.btc30dHigh > 0
+    ? (inputs.btc30dHigh - inputs.btcPrice) / inputs.btc30dHigh
+    : 0;
+  const panicBypass = drawdownPct > 0.15 && inputs.fearGreed < 25;
+  if (panicBypass) {
+    // Allow original raw pct (capped at 75 %) regardless of MA filter
+    return {
+      active: false,
+      capPct: cap,
+      reason,
+      bypassed: true,
+      outputPct: Math.min(rawPct, 0.75),
+    };
+  }
+
+  if (rawPct <= cap) {
+    return { active: false, capPct: cap, reason, bypassed: false, outputPct: rawPct };
+  }
+  return { active: true, capPct: cap, reason, bypassed: false, outputPct: cap };
+}
+
 // Allocation Stability Filter: limit week-over-week change to ±15 % (absolute pct points)
 // unless Panic Mode is active.
 export function applyStabilityFilter(
@@ -176,8 +234,13 @@ export function buildPlan(
   const score = computeValuationScore(inputs);
   const { band, pct: rawPct } = bandFor(score);
 
+  // Trend filter — risk control when BTC is below 200D MA. Runs BEFORE stability filter
+  // so that the ±15 % WoW limit clamps relative to the trend-adjusted value.
+  const trend = applyTrendFilter(rawPct, inputs);
+  const postTrendPct = trend.outputPct;
+
   const panicMode = isPanicMode(score, inputs.fearGreed);
-  const stab = applyStabilityFilter(rawPct, prevDeploymentPct, panicMode);
+  const stab = applyStabilityFilter(postTrendPct, prevDeploymentPct, panicMode);
   const finalPct = stab.finalPct;
 
   const investableUsd = inputs.capital * finalPct;
@@ -209,6 +272,18 @@ export function buildPlan(
     };
   });
 
+  // Compose rationale with trend-filter explanation appended when active
+  let rationale = rationaleFor(band, score);
+  if (trend.active) {
+    const capPctTxt = Math.round((trend.capPct ?? 0) * 100);
+    const rawPctTxt = Math.round(rawPct * 100);
+    rationale += trend.reason === 'below_ma_greedy'
+      ? ` ⚠️ Trend Filter: BTC pod 200D MA + Fear & Greed > 55 → alokácia obmedzená z ${rawPctTxt} % na ${capPctTxt} % (kontrola rizika).`
+      : ` ⚠️ Trend Filter: lacné valuation, ale BTC zostáva pod 200D MA → alokácia znížená z ${rawPctTxt} % na ${capPctTxt} % (kontrola rizika).`;
+  } else if (trend.bypassed) {
+    rationale += ` ⚡ Panic exception: BTC > 15 % pod 30D high + extrémny strach → trend filter bypassed.`;
+  }
+
   return {
     valuationScore: score,
     band,
@@ -219,11 +294,16 @@ export function buildPlan(
     stabilityClamped: stab.clamped,
     panicMode,
     prevDeploymentPct,
+    trendFilterActive: trend.active,
+    trendFilterReason: trend.reason,
+    trendFilterCapPct: trend.capPct,
+    trendFilterBypassed: trend.bypassed,
+    preTrendFilterPct: rawPct,
     investableUsd,
     reservedUsd,
     marketUsd,
     limitUsd,
-    rationale: rationaleFor(band, score),
+    rationale,
     perAsset,
     stressScore: score,
   };

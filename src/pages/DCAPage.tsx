@@ -278,6 +278,51 @@ export function DCAPage({ lang: _lang }: Props) {
           />
         </div>
 
+        <div className="h-2 bg-secondary rounded-full overflow-hidden">
+          <div
+            className={`h-full transition-all ${
+              plan.valuationScore <= 25 ? 'bg-emerald-500'
+              : plan.valuationScore <= 45 ? 'bg-emerald-500'
+              : plan.valuationScore <= 65 ? 'bg-foreground/40'
+              : plan.valuationScore <= 80 ? 'bg-amber-500'
+              : 'bg-rose-500'
+            }`}
+            style={{ width: `${plan.valuationScore}%` }}
+          />
+        </div>
+
+        {/* TREND FILTER BADGE + EXPLANATION (BTC below 200D MA risk control) */}
+        {plan.trendFilterActive && (
+          <div className="mt-3 rounded-lg border border-amber-500/40 bg-amber-500/10 p-2.5">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-400 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3" /> Trend Filter Active
+              </span>
+              <span className="text-[10px] text-muted-foreground tabular-nums">
+                cap {Math.round((plan.trendFilterCapPct ?? 0) * 100)}%
+              </span>
+            </div>
+            <p className="text-[11px] text-amber-200/90 leading-relaxed">
+              {plan.trendFilterReason === 'below_ma_greedy'
+                ? 'BTC pod 200D MA a Fear & Greed > 55 — kombinácia slabého trendu a chamtivosti. Alokácia znížená pre kontrolu rizika.'
+                : 'Lacné valuation, ale BTC zostáva pod 200D MA. Alokácia znížená pre kontrolu rizika.'}
+            </p>
+            <p className="text-[10px] text-muted-foreground mt-1 tabular-nums">
+              Bez filtra: {Math.round(plan.preTrendFilterPct * 100)}% → s filtrom: {Math.round((plan.trendFilterCapPct ?? 0) * 100)}%
+            </p>
+          </div>
+        )}
+        {plan.trendFilterBypassed && (
+          <div className="mt-3 rounded-lg border border-emerald-500/40 bg-emerald-500/10 p-2.5">
+            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-400 text-[10px] font-bold uppercase tracking-wider">
+              ⚡ Panic Exception
+            </span>
+            <p className="text-[11px] text-emerald-200/90 leading-relaxed mt-1">
+              BTC viac ako 15 % pod 30D high a extrémny strach (F&G &lt; 25) — trend filter bypassed, povolená agresívna akumulácia.
+            </p>
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
           <div className="bg-secondary/60 rounded-lg p-2">
             <p className="text-muted-foreground">Hotovosť rezerva</p>
