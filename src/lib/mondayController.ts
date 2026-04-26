@@ -234,8 +234,13 @@ export function buildPlan(
   const score = computeValuationScore(inputs);
   const { band, pct: rawPct } = bandFor(score);
 
+  // Trend filter — risk control when BTC is below 200D MA. Runs BEFORE stability filter
+  // so that the ±15 % WoW limit clamps relative to the trend-adjusted value.
+  const trend = applyTrendFilter(rawPct, inputs);
+  const postTrendPct = trend.outputPct;
+
   const panicMode = isPanicMode(score, inputs.fearGreed);
-  const stab = applyStabilityFilter(rawPct, prevDeploymentPct, panicMode);
+  const stab = applyStabilityFilter(postTrendPct, prevDeploymentPct, panicMode);
   const finalPct = stab.finalPct;
 
   const investableUsd = inputs.capital * finalPct;
@@ -267,6 +272,18 @@ export function buildPlan(
     };
   });
 
+  // Compose rationale with trend-filter explanation appended when active
+  let rationale = rationaleFor(band, score);
+  if (trend.active) {
+    const capPctTxt = Math.round((trend.capPct ?? 0) * 100);
+    const rawPctTxt = Math.round(rawPct * 100);
+    rationale += trend.reason === 'below_ma_greedy'
+      ? ` ⚠️ Trend Filter: BTC pod 200D MA + Fear & Greed > 55 → alokácia obmedzená z ${rawPctTxt} % na ${capPctTxt} % (kontrola rizika).`
+      : ` ⚠️ Trend Filter: lacné valuation, ale BTC zostáva pod 200D MA → alokácia znížená z ${rawPctTxt} % na ${capPctTxt} % (kontrola rizika).`;
+  } else if (trend.bypassed) {
+    rationale += ` ⚡ Panic exception: BTC > 15 % pod 30D high + extrémny strach → trend filter bypassed.`;
+  }
+
   return {
     valuationScore: score,
     band,
@@ -277,11 +294,16 @@ export function buildPlan(
     stabilityClamped: stab.clamped,
     panicMode,
     prevDeploymentPct,
+    trendFilterActive: trend.active,
+    trendFilterReason: trend.reason,
+    trendFilterCapPct: trend.capPct,
+    trendFilterBypassed: trend.bypassed,
+    preTrendFilterPct: rawPct,
     investableUsd,
     reservedUsd,
     marketUsd,
     limitUsd,
-    rationale: rationaleFor(band, score),
+    rationale,
     perAsset,
     stressScore: score,
   };
