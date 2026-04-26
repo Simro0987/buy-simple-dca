@@ -264,7 +264,7 @@ export function DCAPage({ lang: _lang }: Props) {
                 title={confidence.reasons.length ? `Chýba: ${confidence.reasons.join(', ')}` : 'Všetky zdroje aktuálne'}
               >
                 <ShieldCheck className="w-3 h-3" />
-                Confidence: {confStyle.label}
+                Confidence {confidence.pct}% · {confStyle.label}
               </span>
             </div>
           );
@@ -307,17 +307,46 @@ export function DCAPage({ lang: _lang }: Props) {
           />
         </div>
 
-        <div className="h-2 bg-secondary rounded-full overflow-hidden">
-          <div
-            className={`h-full transition-all ${
-              plan.valuationScore <= 25 ? 'bg-emerald-500'
-              : plan.valuationScore <= 45 ? 'bg-emerald-500'
-              : plan.valuationScore <= 65 ? 'bg-foreground/40'
-              : plan.valuationScore <= 80 ? 'bg-amber-500'
-              : 'bg-rose-500'
-            }`}
-            style={{ width: `${plan.valuationScore}%` }}
-          />
+        {/* 5-FACTOR CARDS — heat breakdown (Valuation · Trend · Sentiment · Momentum · Risk Appetite) */}
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">5 faktorov trhu</p>
+            <p className="text-[10px] text-muted-foreground tabular-nums">vážený priemer = {plan.valuationScore}</p>
+          </div>
+          <div className="grid grid-cols-5 gap-1.5">
+            {plan.factors.map(f => {
+              const Icon = f.key === 'valuation' ? BarChart3
+                : f.key === 'trend' ? TrendingUp
+                : f.key === 'sentiment' ? Heart
+                : f.key === 'momentum' ? ActivityIcon
+                : Zap;
+              const color = f.score <= 25 ? 'text-emerald-400 bg-emerald-500/15'
+                : f.score <= 45 ? 'text-emerald-400 bg-emerald-500/10'
+                : f.score <= 65 ? 'text-foreground bg-secondary'
+                : f.score <= 80 ? 'text-amber-400 bg-amber-500/15'
+                : 'text-rose-400 bg-rose-500/15';
+              const barColor = f.score <= 25 ? 'bg-emerald-500'
+                : f.score <= 45 ? 'bg-emerald-500'
+                : f.score <= 65 ? 'bg-foreground/40'
+                : f.score <= 80 ? 'bg-amber-500'
+                : 'bg-rose-500';
+              return (
+                <div key={f.key} className={`rounded-lg p-2 ${color}`} title={`${f.label} · ${f.detail} · váha ${Math.round(f.weight * 100)}%`}>
+                  <div className="flex items-center justify-between mb-1">
+                    <Icon className="w-3 h-3 opacity-80" />
+                    <span className="text-[10px] font-bold tabular-nums">{f.score}</span>
+                  </div>
+                  <p className="text-[9px] uppercase tracking-tight font-semibold leading-tight truncate">{f.label}</p>
+                  <div className="h-1 bg-background/40 rounded-full overflow-hidden mt-1.5">
+                    <div className={`h-full ${barColor}`} style={{ width: `${f.score}%` }} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[9px] text-muted-foreground mt-1.5 leading-relaxed">
+            Váhy: Valuation 30% · Trend 25% · Sentiment 25% · Momentum 10% · Risk Appetite 10%. Vyššie = drahší/rizikovejší trh.
+          </p>
         </div>
 
         {/* TREND FILTER BADGE + EXPLANATION (BTC below 200D MA risk control) */}
