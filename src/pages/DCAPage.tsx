@@ -643,6 +643,100 @@ export function DCAPage({ lang: _lang }: Props) {
           </div>
         )}
       </div>
+
+      {/* MONDAY RITUAL — one-tap 20-second weekly summary */}
+      {showRitual && (
+        <div
+          className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
+          onClick={() => setShowRitual(false)}
+        >
+          <div
+            className="w-full max-w-md glass-card p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-primary" />
+                <h2 className="text-sm font-bold text-foreground uppercase tracking-wider">Pondelkový rituál</h2>
+              </div>
+              <button onClick={() => setShowRitual(false)} className="p-1 rounded-md hover:bg-secondary">
+                <X className="w-4 h-4 text-muted-foreground" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className={`rounded-lg p-3 ${regimeStyle(plan.band).bg}`}>
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Režim</p>
+                <p className={`text-base font-bold ${regimeStyle(plan.band).text}`}>{plan.regimeLabel}</p>
+                <p className="text-[10px] text-muted-foreground">Score {plan.valuationScore}/100</p>
+              </div>
+              <div className="rounded-lg p-3 bg-secondary/60">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Confidence</p>
+                <p className="text-base font-bold text-foreground tabular-nums">{confidence.pct}%</p>
+                <p className="text-[10px] text-muted-foreground capitalize">{confidence.level}</p>
+              </div>
+              <div className="rounded-lg p-3 bg-primary/15 border border-primary/30">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Nasadiť</p>
+                <p className="text-2xl font-bold text-primary tabular-nums">{Math.round(plan.deploymentPct * 100)}%</p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">{formatUsd(plan.investableUsd)}</p>
+              </div>
+              <div className="rounded-lg p-3 bg-secondary/60">
+                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Týždeň kapitál</p>
+                <p className="text-base font-bold text-foreground tabular-nums">{formatUsd(inputs.capital)}</p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">rezerva {formatUsd(plan.reservedUsd)}</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <div className="rounded-lg p-2.5 bg-secondary/40">
+                <p className="text-[10px] uppercase text-muted-foreground">Market 60%</p>
+                <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(plan.marketUsd)}</p>
+              </div>
+              <div className="rounded-lg p-2.5 bg-secondary/40">
+                <p className="text-[10px] uppercase text-muted-foreground">Limit 40% (-3 až -5%)</p>
+                <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(plan.limitUsd)}</p>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              {plan.perAsset.map(a => (
+                <div key={a.symbol} className="flex items-center justify-between bg-secondary/40 rounded-lg p-2.5">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
+                      style={{ backgroundColor: a.color + '20', color: a.color }}
+                    >
+                      {a.symbol}
+                    </div>
+                    <p className="text-[10px] text-muted-foreground">{Math.round(a.weight * 100)}%</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(a.marketUsd + a.limitUsd)}</p>
+                    <p className="text-[10px] text-muted-foreground tabular-nums">
+                      M {formatUsd(a.marketUsd)} · L {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {(plan.trendFilterActive || plan.trendFilterBypassed || plan.panicMode) && (
+              <p className="text-[11px] text-amber-300/90 leading-relaxed bg-amber-500/10 border border-amber-500/30 rounded-lg p-2">
+                {plan.trendFilterActive && '⚠️ Trend Filter aktívny — alokácia obmedzená. '}
+                {plan.trendFilterBypassed && '⚡ Panic Exception — agresívna akumulácia povolená. '}
+                {plan.panicMode && '⚡ Panic Mode — stability filter bypassed.'}
+              </p>
+            )}
+
+            <button
+              onClick={() => { handleSaveWeek(); setShowRitual(false); }}
+              className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
+            >
+              Potvrdiť a uložiť týždeň
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
