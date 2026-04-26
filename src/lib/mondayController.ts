@@ -1,64 +1,95 @@
-// Monday Crypto DCA Controller — deterministic weekly capital allocation engine.
-// Single consistent metric: MARKET VALUATION SCORE (0 = cheap/panic → 100 = expensive/euphoria).
-// Higher score = higher risk = lower allocation. Lower score = cheaper market = higher allocation.
+// Monday Crypto DCA Controller — institutional-grade adaptive allocator.
+// - Detects BTC market regime automatically (Bull / Bear / Sideways / Panic / Euphoria).
+// - Applies regime-specific factor weights to a 5-factor model.
+// - Computes a smooth allocation (formula-based, no rigid bands).
+// - Confidence multiplier rewards factor agreement, dampens contradictions.
+//
+// Higher final score = pricier / riskier  → lower allocation.
+// Lower final score  = cheaper / attractive → higher allocation.
 
 import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, type PriceData } from './crypto';
 
+export type Regime = 'bull' | 'bear' | 'sideways' | 'panic' | 'euphoria';
+
 export interface MondayInputs {
-  capital: number;          // Total available capital this Monday (USD)
-  btcPrice: number;         // BTC current price (USD)
-  btc30dHigh: number;       // BTC 30-day high (USD)
-  fearGreed: number;        // 0-100
-  btcAbove200dMA: boolean;  // BTC trend vs 200D MA
-  // Optional 5-factor inputs (auto-filled when live data is available; safe defaults if absent)
-  btc7dChangePct?: number;  // BTC 7-day % change (momentum)
-  eth24hChangePct?: number; // ETH 24h % change (risk appetite)
-  sol24hChangePct?: number; // SOL 24h % change (risk appetite)
-  btc24hChangePct?: number; // BTC 24h % change (used as baseline for risk appetite)
+  capital: number;
+  btcPrice: number;
+  btc30dHigh: number;
+  fearGreed: number;
+  btcAbove200dMA: boolean;
+  // 5-factor + regime detection inputs (auto-filled when live data is available)
+  btc7dChangePct?: number;
+  btc30dChangePct?: number;       // 30D momentum
+  btcDistanceFrom30dHighPct?: number; // negative when below 30D high
+  btcMa50AboveMa200?: boolean;    // golden/death cross
+  btcVolatility30dPct?: number;   // realized vol (stdev of daily returns), %
+  eth24hChangePct?: number;
+  sol24hChangePct?: number;
+  btc24hChangePct?: number;
 }
 
 export type FactorKey = 'valuation' | 'trend' | 'sentiment' | 'momentum' | 'risk_appetite';
 
 export interface FactorBreakdown {
   key: FactorKey;
-  label: string;          // SK label
-  score: number;          // 0..100 (higher = pricier / riskier)
-  weight: number;         // contribution weight in final score
-  detail: string;         // short SK explainer with the underlying number
+  label: string;
+  score: number;   // 0..100 (higher = pricier / riskier)
+  weight: number;  // active regime weight
+  detail: string;
 }
 
-export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensive' | 'euphoria';
-
-export type TrendFilterReason = 'below_ma' | 'below_ma_greedy' | null;
+export type ConfidenceLevel = 'high' | 'medium' | 'low';
 
 export interface MondayPlan {
-  valuationScore: number;         // 0-100 (cheap → expensive) — final weighted blend
-  band: ValuationBand;
-  bandLabel: string;              // SK label
-  regimeLabel: string;            // Cheap / Neutral / Expensive (short)
-  deploymentPct: number;          // FINAL pct after stability filter (used for $ math)
+  // Regime detection
+  regime: Regime;
+  regimeLabel: string;        // SK label
+  regimeShort: string;        // BULL / BEAR / SIDEWAYS / PANIC / EUFÓRIA
+
+  // 5-factor model
+  factors: FactorBreakdown[];
+  factorScore: number;        // 0..100 (active-regime weighted blend)
+
+  // Smooth allocation
+  baseAllocationPct: number;  // before confidence multiplier
+  confidence: ConfidenceLevel;
+  confidenceAgreement: number; // 0..1 (how aligned the factors are)
+  confidenceMultiplier: number; // 1.00 / 0.93 / 0.85
+  finalAllocationPct: number; // after confidence multiplier (rounded whole %)
+  overrideTriggered: 'panic_floor' | 'euphoria_ceiling' | null;
+
+  // Limit-order config (regime-aware discount)
+  limitDiscountPct: number;   // e.g. 4 = 4 % below market
+
+  // Capital math
   investableUsd: number;
   reservedUsd: number;
   marketUsd: number;
   limitUsd: number;
-  rationale: string;
   perAsset: AssetPlan[];
-  // 5-factor breakdown
-  factors: FactorBreakdown[];
-  // Stability filter outputs
+
+  // Narrative
+  rationale: string;
+
+  // Back-compat (legacy fields)
+  valuationScore: number;     // alias of factorScore
+  band: ValuationBand;
+  bandLabel: string;
+  regimeLabel_legacy: string;
+  deploymentPct: number;      // alias of finalAllocationPct/100
   rawDeploymentPct: number;
   stabilityClamped: boolean;
   panicMode: boolean;
   prevDeploymentPct?: number;
-  // Trend filter (BTC below 200D MA risk control)
   trendFilterActive: boolean;
-  trendFilterReason: TrendFilterReason;
+  trendFilterReason: null;
   trendFilterCapPct: number | null;
   trendFilterBypassed: boolean;
   preTrendFilterPct: number;
-  // Back-compat
   stressScore: number;
 }
+
+export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensive' | 'euphoria';
 
 export interface AssetPlan {
   symbol: string;
@@ -75,28 +106,79 @@ export interface AssetPlan {
   limitQty: number;
 }
 
-// ===== STEP 1: 5-Factor Market Model → final Valuation Score (0–100) =====
-// All five factors are normalized to a 0..100 "expensive/risky" axis, then
-// blended with fixed weights. Higher result = pricier/riskier market = lower allocation.
-//
-//  1. Valuation       (BTC vs 30D high)        weight 0.30
-//  2. Trend           (BTC vs 200D MA)         weight 0.25
-//  3. Sentiment       (Fear & Greed)           weight 0.25
-//  4. Momentum        (BTC 7D % change)        weight 0.10
-//  5. Risk Appetite   (ETH/BTC + SOL strength) weight 0.10  (light weight)
+const clamp = (n: number, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, n));
 
-const FACTOR_WEIGHTS: Record<FactorKey, number> = {
-  valuation:     0.30,
-  trend:         0.25,
-  sentiment:     0.25,
-  momentum:      0.10,
-  risk_appetite: 0.10,
+// ============================================================
+// 1) AUTO REGIME DETECTION
+// ============================================================
+//
+// Signals:
+//   - BTC price vs 200D MA
+//   - 50D MA vs 200D MA
+//   - Distance from 30D high
+//   - 30D realized volatility
+//   - Fear & Greed Index
+//   - 30D momentum (BTC 30D % change)
+
+export function detectRegime(inputs: MondayInputs): Regime {
+  const above200 = inputs.btcAbove200dMA;
+  const goldenCross = inputs.btcMa50AboveMa200 ?? above200;
+  const mom30 = inputs.btc30dChangePct ?? 0;
+  const distHigh = inputs.btcDistanceFrom30dHighPct ?? 0; // ≤0 normally
+  const vol = inputs.btcVolatility30dPct ?? 2;
+  const fg = inputs.fearGreed;
+
+  // PANIC CAPITULATION — sharp drop, high vol, extreme fear
+  if (mom30 <= -15 && vol >= 3 && fg <= 25) return 'panic';
+  if (distHigh <= -25 && fg <= 20) return 'panic';
+
+  // EUPHORIC BLOW-OFF — near highs, stretched above MA, extreme greed, hot momentum
+  if (above200 && distHigh >= -3 && fg >= 75 && mom30 >= 15) return 'euphoria';
+  if (above200 && fg >= 80 && mom30 >= 20) return 'euphoria';
+
+  // BULL TREND — above 200D, golden cross, positive momentum
+  if (above200 && goldenCross && mom30 > 2) return 'bull';
+
+  // BEAR TREND — below 200D, death cross, negative momentum
+  if (!above200 && !goldenCross && mom30 < -2) return 'bear';
+
+  // SIDEWAYS / RANGE — anything else (low directional conviction)
+  return 'sideways';
+}
+
+const REGIME_LABEL_SK: Record<Regime, string> = {
+  bull:      'Býčí trend',
+  bear:      'Medvedí trend',
+  sideways:  'Bočný pohyb',
+  panic:     'Panická kapitulácia',
+  euphoria:  'Eufória',
 };
 
-function clamp(n: number, lo = 0, hi = 100): number { return Math.max(lo, Math.min(hi, n)); }
+const REGIME_SHORT: Record<Regime, string> = {
+  bull:      'BULL',
+  bear:      'BEAR',
+  sideways:  'SIDEWAYS',
+  panic:     'PANIC',
+  euphoria:  'EUFÓRIA',
+};
 
-// 1. Valuation: BTC vs 30D high — exact mapping kept from the previous model.
-function valuationFactor(inputs: MondayInputs): FactorBreakdown {
+// ============================================================
+// 2) ADAPTIVE FACTOR WEIGHTS BY REGIME
+// ============================================================
+
+const REGIME_WEIGHTS: Record<Regime, Record<FactorKey, number>> = {
+  bull:     { valuation: 0.20, trend: 0.35, sentiment: 0.15, momentum: 0.20, risk_appetite: 0.10 },
+  bear:     { valuation: 0.35, trend: 0.30, sentiment: 0.20, momentum: 0.05, risk_appetite: 0.10 },
+  sideways: { valuation: 0.30, trend: 0.20, sentiment: 0.20, momentum: 0.15, risk_appetite: 0.15 },
+  panic:    { valuation: 0.45, trend: 0.15, sentiment: 0.25, momentum: 0.05, risk_appetite: 0.10 },
+  euphoria: { valuation: 0.35, trend: 0.10, sentiment: 0.25, momentum: 0.10, risk_appetite: 0.20 },
+};
+
+// ============================================================
+// 3) FACTOR SCORERS — all on a 0..100 "expensive/risky" axis
+// ============================================================
+
+function valuationFactor(inputs: MondayInputs, w: number): FactorBreakdown {
   const ratio = inputs.btc30dHigh > 0 ? inputs.btcPrice / inputs.btc30dHigh : 1;
   let score: number;
   if (ratio <= 0.85) score = Math.max(0, 10 - (0.85 - ratio) * 100);
@@ -104,151 +186,276 @@ function valuationFactor(inputs: MondayInputs): FactorBreakdown {
   else score = 50 + Math.min(50, (ratio - 1.0) * 400);
   score = clamp(score);
   const distancePct = (ratio - 1) * 100;
-  const detail = `${distancePct >= 0 ? '+' : ''}${distancePct.toFixed(1)} % vs 30D high`;
-  return { key: 'valuation', label: 'Valuation', score: Math.round(score), weight: FACTOR_WEIGHTS.valuation, detail };
+  return {
+    key: 'valuation', label: 'Valuation', weight: w,
+    score: Math.round(score),
+    detail: `${distancePct >= 0 ? '+' : ''}${distancePct.toFixed(1)} % vs 30D high`,
+  };
 }
 
-// 2. Trend: BTC vs 200D MA — boolean → bipolar score around 50.
-//    Above MA → 70 (structural bull), Below MA → 30 (defensive).
-function trendFactor(inputs: MondayInputs): FactorBreakdown {
-  const score = inputs.btcAbove200dMA ? 70 : 30;
-  const detail = inputs.btcAbove200dMA ? 'BTC nad 200D MA' : 'BTC pod 200D MA';
-  return { key: 'trend', label: 'Trend', score, weight: FACTOR_WEIGHTS.trend, detail };
+function trendFactor(inputs: MondayInputs, w: number): FactorBreakdown {
+  // Combine 200D + 50D state. Both above = strong bull (80), both below = bear (20),
+  // mixed = neutral (50).
+  const above200 = inputs.btcAbove200dMA;
+  const golden = inputs.btcMa50AboveMa200 ?? above200;
+  let score = 50;
+  if (above200 && golden) score = 80;
+  else if (!above200 && !golden) score = 20;
+  else score = 50;
+  const detail = `${above200 ? 'nad' : 'pod'} 200D · ${golden ? 'golden' : 'death'} cross`;
+  return { key: 'trend', label: 'Trend', score, weight: w, detail };
 }
 
-// 3. Sentiment: Fear & Greed (already 0..100, monotonic).
-function sentimentFactor(inputs: MondayInputs): FactorBreakdown {
+function sentimentFactor(inputs: MondayInputs, w: number): FactorBreakdown {
   const score = clamp(inputs.fearGreed);
-  const label = score < 25 ? 'Extrémny strach' : score < 45 ? 'Strach' : score <= 55 ? 'Neutrál' : score <= 75 ? 'Chamtivosť' : 'Extrémna chamtivosť';
-  return { key: 'sentiment', label: 'Sentiment', score: Math.round(score), weight: FACTOR_WEIGHTS.sentiment, detail: `F&G ${Math.round(score)} · ${label}` };
+  const label = score < 25 ? 'Extrémny strach'
+    : score < 45 ? 'Strach'
+    : score <= 55 ? 'Neutrál'
+    : score <= 75 ? 'Chamtivosť'
+    : 'Extrémna chamtivosť';
+  return {
+    key: 'sentiment', label: 'Sentiment', weight: w,
+    score: Math.round(score),
+    detail: `F&G ${Math.round(score)} · ${label}`,
+  };
 }
 
-// 4. Momentum: BTC 7D % change. +0% → 50, +10% → 80, +20% → 100, −10% → 20, −20% → 0.
-function momentumFactor(inputs: MondayInputs): FactorBreakdown {
-  const ch = inputs.btc7dChangePct ?? 0;
-  const score = clamp(50 + ch * 3);
-  const detail = `BTC 7D ${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %`;
-  return { key: 'momentum', label: 'Momentum', score: Math.round(score), weight: FACTOR_WEIGHTS.momentum, detail };
+function momentumFactor(inputs: MondayInputs, w: number): FactorBreakdown {
+  // Prefer 30D momentum (regime concept), fall back to 7D.
+  const ch = inputs.btc30dChangePct ?? inputs.btc7dChangePct ?? 0;
+  // +0% → 50, +20% → 80, +40% → 100, −20% → 20, −40% → 0
+  const score = clamp(50 + ch * 1.5);
+  const window = inputs.btc30dChangePct !== undefined ? '30D' : '7D';
+  return {
+    key: 'momentum', label: 'Momentum', weight: w,
+    score: Math.round(score),
+    detail: `BTC ${window} ${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %`,
+  };
 }
 
-// 5. Risk Appetite: ETH + SOL strength relative to BTC (24h).
-//    Avg(alt 24h) − BTC 24h → diff. +0 → 50, +5pp → 75, +10pp → 100, −5pp → 25.
-function riskAppetiteFactor(inputs: MondayInputs): FactorBreakdown {
+function riskAppetiteFactor(inputs: MondayInputs, w: number): FactorBreakdown {
   const eth = inputs.eth24hChangePct ?? 0;
   const sol = inputs.sol24hChangePct ?? 0;
   const btc = inputs.btc24hChangePct ?? 0;
   const altAvg = (eth + sol) / 2;
   const diff = altAvg - btc;
   const score = clamp(50 + diff * 5);
-  const detail = `Alt − BTC ${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pp`;
-  return { key: 'risk_appetite', label: 'Risk Appetite', score: Math.round(score), weight: FACTOR_WEIGHTS.risk_appetite, detail };
+  return {
+    key: 'risk_appetite', label: 'Risk Appetite', weight: w,
+    score: Math.round(score),
+    detail: `Alt − BTC ${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pp`,
+  };
 }
 
-export function computeFactors(inputs: MondayInputs): FactorBreakdown[] {
+export function computeFactors(inputs: MondayInputs, regime: Regime): FactorBreakdown[] {
+  const w = REGIME_WEIGHTS[regime];
   return [
-    valuationFactor(inputs),
-    trendFactor(inputs),
-    sentimentFactor(inputs),
-    momentumFactor(inputs),
-    riskAppetiteFactor(inputs),
+    valuationFactor(inputs, w.valuation),
+    trendFactor(inputs, w.trend),
+    sentimentFactor(inputs, w.sentiment),
+    momentumFactor(inputs, w.momentum),
+    riskAppetiteFactor(inputs, w.risk_appetite),
   ];
 }
 
-export function computeValuationScore(inputs: MondayInputs): number {
-  const factors = computeFactors(inputs);
+export function computeFactorScore(factors: FactorBreakdown[]): number {
   const weighted = factors.reduce((s, f) => s + f.score * f.weight, 0);
   return Math.round(clamp(weighted));
 }
 
-// ===== STEP 2: Decision engine — fixed mapping (higher score → lower allocation) =====
-//    0–25  → 75 % (deep value / panic accumulation)
-//   26–45  → 60 % (good accumulation zone)
-//   46–65  → 50 % (neutral market)
-//   66–80  → 40 % (expensive market)
-//   81–100 → 25 % (euphoria / overheated)
-export function bandFor(score: number): { band: ValuationBand; pct: number } {
-  if (score <= 25) return { band: 'deep_value',    pct: 0.75 };
-  if (score <= 45) return { band: 'accumulation',  pct: 0.60 };
-  if (score <= 65) return { band: 'neutral',       pct: 0.50 };
-  if (score <= 80) return { band: 'expensive',     pct: 0.40 };
-  return              { band: 'euphoria',      pct: 0.25 };
+// ============================================================
+// 4) SMOOTH ALLOCATION FORMULA
+//    Allocation % = 82 - (Score × 0.62)   clamped [22, 80]
+//    Overrides:
+//      Panic + score < 15  → 85 %
+//      Euphoria + score > 90 → 20 %
+// ============================================================
+
+export function smoothAllocation(score: number, regime: Regime): {
+  pct: number;                                  // 0..100
+  override: 'panic_floor' | 'euphoria_ceiling' | null;
+} {
+  if (regime === 'panic' && score < 15) return { pct: 85, override: 'panic_floor' };
+  if (regime === 'euphoria' && score > 90) return { pct: 20, override: 'euphoria_ceiling' };
+  const raw = 82 - score * 0.62;
+  return { pct: clamp(raw, 22, 80), override: null };
 }
 
-// Panic Mode: extreme conditions allow bypassing the ±15 % stability filter.
-// Triggered by deep capitulation (score <= 15 + extreme fear) OR full euphoria (score >= 90).
-export function isPanicMode(score: number, fearGreed: number): boolean {
-  if (score <= 15 && fearGreed <= 20) return true; // panic accumulation
-  if (score >= 90) return true;                    // euphoria de-risk
-  return false;
+// ============================================================
+// 5) CONFIDENCE ENGINE — factor agreement
+//    High = factors aligned (low spread)  → ×1.00
+//    Medium                                 → ×0.93
+//    Low  = contradictory                   → ×0.85
+// ============================================================
+
+export function computeConfidence(factors: FactorBreakdown[]): {
+  level: ConfidenceLevel;
+  agreement: number;     // 0..1
+  multiplier: number;
+} {
+  // Use weighted variance around weighted mean (active regime weights).
+  const totalW = factors.reduce((s, f) => s + f.weight, 0) || 1;
+  const mean = factors.reduce((s, f) => s + f.score * f.weight, 0) / totalW;
+  const variance = factors.reduce((s, f) => s + f.weight * (f.score - mean) ** 2, 0) / totalW;
+  const stdev = Math.sqrt(variance); // 0..50ish
+  // Map stdev → agreement (1 = perfect alignment, 0 = scattered).
+  // stdev 0 → 1.0 ; stdev 30+ → 0.0
+  const agreement = clamp(1 - stdev / 30, 0, 1);
+
+  let level: ConfidenceLevel;
+  let multiplier: number;
+  if (agreement >= 0.7)      { level = 'high';   multiplier = 1.00; }
+  else if (agreement >= 0.45){ level = 'medium'; multiplier = 0.93; }
+  else                       { level = 'low';    multiplier = 0.85; }
+  return { level, agreement, multiplier };
 }
 
-// ===== Trend Filter (risk control when BTC is below 200D MA) =====
-// Rules:
-//   1. BTC below 200D MA                              → max allocation 60 %
-//   2. BTC below 200D MA AND Fear & Greed > 55        → max allocation 40 %
-//   3. BTC above 200D MA                              → no cap
-//   4. Capitulation panic exception:
-//      BTC drawdown > 15 % from 30D high AND F&G < 25 → cap bypassed (allow up to 75 %)
-export interface TrendFilterResult {
-  active: boolean;
-  capPct: number | null;
-  reason: TrendFilterReason;
-  bypassed: boolean;            // true when panic exception bypasses the cap
-  outputPct: number;            // pct after applying (or bypassing) the cap
+// ============================================================
+// 6) LIMIT DISCOUNT BY REGIME
+// ============================================================
+
+function limitDiscountFor(regime: Regime): number {
+  switch (regime) {
+    case 'panic':    return 2.5;
+    case 'bear':     return 5;
+    case 'bull':     return 3;
+    case 'euphoria': return 4;
+    case 'sideways': return 4;
+  }
 }
 
-export function applyTrendFilter(
-  rawPct: number,
+// ============================================================
+// 7) RATIONALE (short, deterministic)
+// ============================================================
+
+function rationaleFor(p: {
+  regime: Regime;
+  score: number;
+  basePct: number;
+  finalPct: number;
+  conf: ConfidenceLevel;
+  override: 'panic_floor' | 'euphoria_ceiling' | null;
+}): string {
+  const head = `Režim ${REGIME_LABEL_SK[p.regime]} · skóre ${p.score}/100`;
+  if (p.override === 'panic_floor') {
+    return `${head}. Panická kapitulácia + extrémne lacné valuation → override 85 % (agresívna akumulácia).`;
+  }
+  if (p.override === 'euphoria_ceiling') {
+    return `${head}. Eufória + prehriate skóre > 90 → override 20 % (defenzíva).`;
+  }
+  const confTxt = p.conf === 'high' ? 'vysoká zhoda faktorov'
+    : p.conf === 'medium' ? 'mierne rozporné faktory'
+    : 'rozporné faktory';
+  const tail = p.finalPct === Math.round(p.basePct)
+    ? ''
+    : ` · z ${Math.round(p.basePct)} % na ${p.finalPct} % (${confTxt})`;
+  return `${head}. Vyhladená alokácia podľa vzorca 82 − skóre×0.62${tail}.`;
+}
+
+// ============================================================
+// MAIN BUILD
+// ============================================================
+
+export function buildPlan(
   inputs: MondayInputs,
-): TrendFilterResult {
-  // Above MA → no cap
-  if (inputs.btcAbove200dMA) {
-    return { active: false, capPct: null, reason: null, bypassed: false, outputPct: rawPct };
-  }
+  prices?: PriceData,
+  prevDeploymentPct?: number,
+): MondayPlan {
+  const regime = detectRegime(inputs);
+  const factors = computeFactors(inputs, regime);
+  const factorScore = computeFactorScore(factors);
 
-  // Below MA — determine cap
-  const cap = inputs.fearGreed > 55 ? 0.40 : 0.60;
-  const reason: TrendFilterReason = inputs.fearGreed > 55 ? 'below_ma_greedy' : 'below_ma';
+  const { pct: basePct, override } = smoothAllocation(factorScore, regime);
+  const conf = computeConfidence(factors);
 
-  // Panic exception: rapid >15 % drawdown from 30D high AND extreme fear
-  const drawdownPct = inputs.btc30dHigh > 0
-    ? (inputs.btc30dHigh - inputs.btcPrice) / inputs.btc30dHigh
-    : 0;
-  const panicBypass = drawdownPct > 0.15 && inputs.fearGreed < 25;
-  if (panicBypass) {
-    // Allow original raw pct (capped at 75 %) regardless of MA filter
+  const finalPctRaw = override ? basePct : basePct * conf.multiplier;
+  const finalPct = Math.round(clamp(finalPctRaw, 0, 100));
+  const finalFraction = finalPct / 100;
+
+  const investableUsd = inputs.capital * finalFraction;
+  const reservedUsd = inputs.capital - investableUsd;
+  const marketUsd = investableUsd * MARKET_SPLIT;
+  const limitUsd = investableUsd * LIMIT_SPLIT;
+
+  const limitDiscountPct = limitDiscountFor(regime);
+  const limitMultiplier = 1 - limitDiscountPct / 100;
+
+  const perAsset: AssetPlan[] = TOKENS.map(t => {
+    const assetMarket = marketUsd * t.allocation;
+    const assetLimit = limitUsd * t.allocation;
+    const livePrice = prices?.[t.coingeckoId]?.usd;
+    const currentPrice = livePrice && livePrice > 0
+      ? livePrice
+      : (t.coingeckoId === 'bitcoin' ? inputs.btcPrice : 0);
+    const limitPrice = currentPrice * limitMultiplier;
     return {
-      active: false,
-      capPct: cap,
-      reason,
-      bypassed: true,
-      outputPct: Math.min(rawPct, 0.75),
+      symbol: t.symbol,
+      name: t.name,
+      color: t.color,
+      coingeckoId: t.coingeckoId,
+      weight: t.allocation,
+      marketUsd: assetMarket,
+      limitUsd: assetLimit,
+      currentPrice,
+      limitPrice,
+      limitDiscountPct,
+      marketQty: currentPrice > 0 ? assetMarket / currentPrice : 0,
+      limitQty: limitPrice > 0 ? assetLimit / limitPrice : 0,
     };
-  }
+  });
 
-  if (rawPct <= cap) {
-    return { active: false, capPct: cap, reason, bypassed: false, outputPct: rawPct };
-  }
-  return { active: true, capPct: cap, reason, bypassed: false, outputPct: cap };
-}
+  // Legacy band mapping — kept for back-compat (history exports/UI fallbacks).
+  const band: ValuationBand =
+    factorScore <= 25 ? 'deep_value'
+    : factorScore <= 45 ? 'accumulation'
+    : factorScore <= 65 ? 'neutral'
+    : factorScore <= 80 ? 'expensive'
+    : 'euphoria';
 
-// Allocation Stability Filter: limit week-over-week change to ±15 % (absolute pct points)
-// unless Panic Mode is active.
-export function applyStabilityFilter(
-  rawPct: number,
-  prevPct: number | undefined,
-  panic: boolean,
-): { finalPct: number; clamped: boolean; deltaPct: number } {
-  if (panic || prevPct === undefined) {
-    return { finalPct: rawPct, clamped: false, deltaPct: prevPct === undefined ? 0 : rawPct - prevPct };
-  }
-  const maxDelta = 0.15;
-  const delta = rawPct - prevPct;
-  if (Math.abs(delta) <= maxDelta) {
-    return { finalPct: rawPct, clamped: false, deltaPct: delta };
-  }
-  const clampedPct = prevPct + Math.sign(delta) * maxDelta;
-  return { finalPct: clampedPct, clamped: true, deltaPct: delta };
+  return {
+    regime,
+    regimeLabel: REGIME_LABEL_SK[regime],
+    regimeShort: REGIME_SHORT[regime],
+
+    factors,
+    factorScore,
+
+    baseAllocationPct: basePct,
+    confidence: conf.level,
+    confidenceAgreement: conf.agreement,
+    confidenceMultiplier: conf.multiplier,
+    finalAllocationPct: finalPct,
+    overrideTriggered: override,
+
+    limitDiscountPct,
+    investableUsd,
+    reservedUsd,
+    marketUsd,
+    limitUsd,
+    perAsset,
+
+    rationale: rationaleFor({
+      regime, score: factorScore, basePct, finalPct,
+      conf: conf.level, override,
+    }),
+
+    // Back-compat
+    valuationScore: factorScore,
+    band,
+    bandLabel: bandLabel(band),
+    regimeLabel_legacy: REGIME_SHORT[regime],
+    deploymentPct: finalFraction,
+    rawDeploymentPct: basePct / 100,
+    stabilityClamped: false,
+    panicMode: regime === 'panic' || regime === 'euphoria',
+    prevDeploymentPct,
+    trendFilterActive: false,
+    trendFilterReason: null,
+    trendFilterCapPct: null,
+    trendFilterBypassed: false,
+    preTrendFilterPct: basePct / 100,
+    stressScore: factorScore,
+  };
 }
 
 export function bandLabel(band: ValuationBand): string {
@@ -261,126 +468,10 @@ export function bandLabel(band: ValuationBand): string {
   }
 }
 
-// Short regime tag: Cheap / Neutral / Expensive
-export function regimeShortLabel(band: ValuationBand): string {
-  switch (band) {
-    case 'deep_value':
-    case 'accumulation': return 'LACNÝ';
-    case 'neutral':      return 'NEUTRÁLNY';
-    case 'expensive':
-    case 'euphoria':     return 'DRAHÝ';
-  }
-}
+// ============================================================
+// HISTORY (persisted in localStorage)
+// ============================================================
 
-export function rationaleFor(band: ValuationBand, score: number): string {
-  const pct = Math.round(bandFor(score).pct * 100);
-  switch (band) {
-    case 'deep_value':
-      return `Valuation ${score}/100 — hlboká hodnota / panika. Nasadenie ${pct} % (akumulácia v lacnom trhu).`;
-    case 'accumulation':
-      return `Valuation ${score}/100 — dobrá akumulačná zóna. Nasadenie ${pct} %.`;
-    case 'neutral':
-      return `Valuation ${score}/100 — neutrálny trh. Štandardné nasadenie ${pct} %.`;
-    case 'expensive':
-      return `Valuation ${score}/100 — drahý trh. Redukované nasadenie ${pct} %.`;
-    case 'euphoria':
-      return `Valuation ${score}/100 — eufória / prehriatie. Defenzívne nasadenie ${pct} %.`;
-  }
-}
-
-function discountPctFor(coingeckoId: string): number {
-  const t = TOKENS.find(x => x.coingeckoId === coingeckoId);
-  if (!t) return 4;
-  return Math.round((1 - t.limitDiscount) * 100);
-}
-
-// ===== STEP 3 + 4: Execution split & per-asset distribution =====
-export function buildPlan(
-  inputs: MondayInputs,
-  prices?: PriceData,
-  prevDeploymentPct?: number,
-): MondayPlan {
-  const factors = computeFactors(inputs);
-  const score = computeValuationScore(inputs);
-  const { band, pct: rawPct } = bandFor(score);
-
-  // Trend filter — risk control when BTC is below 200D MA. Runs BEFORE stability filter
-  // so that the ±15 % WoW limit clamps relative to the trend-adjusted value.
-  const trend = applyTrendFilter(rawPct, inputs);
-  const postTrendPct = trend.outputPct;
-
-  const panicMode = isPanicMode(score, inputs.fearGreed);
-  const stab = applyStabilityFilter(postTrendPct, prevDeploymentPct, panicMode);
-  const finalPct = stab.finalPct;
-
-  const investableUsd = inputs.capital * finalPct;
-  const reservedUsd = inputs.capital - investableUsd;
-  const marketUsd = investableUsd * MARKET_SPLIT;
-  const limitUsd = investableUsd * LIMIT_SPLIT;
-
-  const perAsset: AssetPlan[] = TOKENS.map(t => {
-    const assetMarket = marketUsd * t.allocation;
-    const assetLimit = limitUsd * t.allocation;
-    const livePrice = prices?.[t.coingeckoId]?.usd;
-    const currentPrice = livePrice && livePrice > 0
-      ? livePrice
-      : (t.coingeckoId === 'bitcoin' ? inputs.btcPrice : 0);
-    const limitPrice = currentPrice * t.limitDiscount;
-    return {
-      symbol: t.symbol,
-      name: t.name,
-      color: t.color,
-      coingeckoId: t.coingeckoId,
-      weight: t.allocation,
-      marketUsd: assetMarket,
-      limitUsd: assetLimit,
-      currentPrice,
-      limitPrice,
-      limitDiscountPct: discountPctFor(t.coingeckoId),
-      marketQty: currentPrice > 0 ? assetMarket / currentPrice : 0,
-      limitQty: limitPrice > 0 ? assetLimit / limitPrice : 0,
-    };
-  });
-
-  // Compose rationale with trend-filter explanation appended when active
-  let rationale = rationaleFor(band, score);
-  if (trend.active) {
-    const capPctTxt = Math.round((trend.capPct ?? 0) * 100);
-    const rawPctTxt = Math.round(rawPct * 100);
-    rationale += trend.reason === 'below_ma_greedy'
-      ? ` ⚠️ Trend Filter: BTC pod 200D MA + Fear & Greed > 55 → alokácia obmedzená z ${rawPctTxt} % na ${capPctTxt} % (kontrola rizika).`
-      : ` ⚠️ Trend Filter: lacné valuation, ale BTC zostáva pod 200D MA → alokácia znížená z ${rawPctTxt} % na ${capPctTxt} % (kontrola rizika).`;
-  } else if (trend.bypassed) {
-    rationale += ` ⚡ Panic exception: BTC > 15 % pod 30D high + extrémny strach → trend filter bypassed.`;
-  }
-
-  return {
-    valuationScore: score,
-    band,
-    bandLabel: bandLabel(band),
-    regimeLabel: regimeShortLabel(band),
-    deploymentPct: finalPct,
-    rawDeploymentPct: rawPct,
-    stabilityClamped: stab.clamped,
-    panicMode,
-    prevDeploymentPct,
-    trendFilterActive: trend.active,
-    trendFilterReason: trend.reason,
-    trendFilterCapPct: trend.capPct,
-    trendFilterBypassed: trend.bypassed,
-    preTrendFilterPct: rawPct,
-    investableUsd,
-    reservedUsd,
-    marketUsd,
-    limitUsd,
-    rationale,
-    perAsset,
-    factors,
-    stressScore: score,
-  };
-}
-
-// ===== History persistence =====
 const HISTORY_KEY = 'monday-controller-history-v1';
 
 export interface HistoryEntry {
@@ -392,7 +483,8 @@ export interface HistoryEntry {
     deploymentPct: number;
     investableUsd: number;
     reservedUsd: number;
-    // legacy alias kept readable
+    regime?: Regime;
+    confidence?: ConfidenceLevel;
     stressScore?: number;
   };
 }
@@ -402,7 +494,6 @@ export function loadHistory(): HistoryEntry[] {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     const arr = JSON.parse(raw) as HistoryEntry[];
-    // Migrate legacy entries (stressScore → valuationScore is NOT semantically equal, but keep displayable)
     return arr.map(h => ({
       ...h,
       plan: {
@@ -437,7 +528,7 @@ export function thisMondayIso(): string {
 }
 
 export function exportHistoryCsv(history: HistoryEntry[]): string {
-  const headers = ['date', 'capital', 'btcPrice', 'btc30dHigh', 'fearGreed', 'above200dMA', 'valuationScore', 'band', 'deploymentPct', 'investableUsd', 'reservedUsd'];
+  const headers = ['date', 'capital', 'btcPrice', 'btc30dHigh', 'fearGreed', 'above200dMA', 'regime', 'confidence', 'score', 'band', 'allocationPct', 'investableUsd', 'reservedUsd'];
   const rows = history.map(h => [
     h.date,
     h.inputs.capital,
@@ -445,9 +536,11 @@ export function exportHistoryCsv(history: HistoryEntry[]): string {
     h.inputs.btc30dHigh,
     h.inputs.fearGreed,
     h.inputs.btcAbove200dMA ? 'Y' : 'N',
+    h.plan.regime ?? '',
+    h.plan.confidence ?? '',
     h.plan.valuationScore,
     h.plan.band,
-    h.plan.deploymentPct,
+    Math.round(h.plan.deploymentPct * 100),
     h.plan.investableUsd.toFixed(2),
     h.plan.reservedUsd.toFixed(2),
   ].join(','));
