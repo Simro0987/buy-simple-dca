@@ -215,19 +215,29 @@ export function DCAPage({ lang: _lang }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <div>
+      <div className="flex items-center justify-between gap-2">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-foreground">Monday DCA Controller</h1>
           <p className="text-xs text-muted-foreground">Týždenný systém nasadenia kapitálu · {thisMondayIso()}</p>
         </div>
-        <button
-          onClick={handleAutoFill}
-          disabled={loading}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium active:scale-95 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
-          Auto-fill
-        </button>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          <button
+            onClick={() => setShowRitual(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold active:scale-95"
+            title="Pondelkový rituál — 20 sekundové zhrnutie"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            Ritual
+          </button>
+          <button
+            onClick={handleAutoFill}
+            disabled={loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-secondary text-secondary-foreground text-xs font-medium active:scale-95 disabled:opacity-50"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+            Auto-fill
+          </button>
+        </div>
       </div>
 
       {/* TOP SECTION — Valuation Score + deployment */}
