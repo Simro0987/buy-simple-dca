@@ -300,6 +300,7 @@ export function buildPlan(
   prices?: PriceData,
   prevDeploymentPct?: number,
 ): MondayPlan {
+  const factors = computeFactors(inputs);
   const score = computeValuationScore(inputs);
   const { band, pct: rawPct } = bandFor(score);
 
