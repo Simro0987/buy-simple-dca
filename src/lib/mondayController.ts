@@ -14,6 +14,8 @@ export interface MondayInputs {
 
 export type ValuationBand = 'deep_value' | 'accumulation' | 'neutral' | 'expensive' | 'euphoria';
 
+export type TrendFilterReason = 'below_ma' | 'below_ma_greedy' | null;
+
 export interface MondayPlan {
   valuationScore: number;         // 0-100 (cheap → expensive) — single source of truth
   band: ValuationBand;
@@ -31,6 +33,12 @@ export interface MondayPlan {
   stabilityClamped: boolean;      // true if ±15 % filter altered the value
   panicMode: boolean;             // true if filter was bypassed due to extreme conditions
   prevDeploymentPct?: number;     // last week's final pct, if available
+  // Trend filter (BTC below 200D MA risk control)
+  trendFilterActive: boolean;     // true if a below-MA cap reduced allocation
+  trendFilterReason: TrendFilterReason;
+  trendFilterCapPct: number | null; // the cap that was applied (e.g. 0.60, 0.40)
+  trendFilterBypassed: boolean;   // true when capitulation panic bypassed the cap
+  preTrendFilterPct: number;      // band pct before trend filter (= rawDeploymentPct)
   // Back-compat
   stressScore: number;            // alias = valuationScore
 }
