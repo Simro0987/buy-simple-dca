@@ -75,37 +75,89 @@ export interface AssetPlan {
   limitQty: number;
 }
 
-// ===== STEP 1: Market Valuation Score (0–100) =====
-// Single concept: how expensive vs cheap the market is.
-//   0   = extremely cheap (panic / capitulation)
-//   50  = neutral
-//   100 = extremely expensive (euphoria / ATH / overheated)
-export function computeValuationScore(inputs: MondayInputs): number {
-  // 1. BTC vs 30D high → price-action valuation component (0..100)
-  //    -15% (or worse) below high → 0–20
-  //    around the high            → ~50
-  //    above the high             → 80–100
+// ===== STEP 1: 5-Factor Market Model → final Valuation Score (0–100) =====
+// All five factors are normalized to a 0..100 "expensive/risky" axis, then
+// blended with fixed weights. Higher result = pricier/riskier market = lower allocation.
+//
+//  1. Valuation       (BTC vs 30D high)        weight 0.30
+//  2. Trend           (BTC vs 200D MA)         weight 0.25
+//  3. Sentiment       (Fear & Greed)           weight 0.25
+//  4. Momentum        (BTC 7D % change)        weight 0.10
+//  5. Risk Appetite   (ETH/BTC + SOL strength) weight 0.10  (light weight)
+
+const FACTOR_WEIGHTS: Record<FactorKey, number> = {
+  valuation:     0.30,
+  trend:         0.25,
+  sentiment:     0.25,
+  momentum:      0.10,
+  risk_appetite: 0.10,
+};
+
+function clamp(n: number, lo = 0, hi = 100): number { return Math.max(lo, Math.min(hi, n)); }
+
+// 1. Valuation: BTC vs 30D high — exact mapping kept from the previous model.
+function valuationFactor(inputs: MondayInputs): FactorBreakdown {
   const ratio = inputs.btc30dHigh > 0 ? inputs.btcPrice / inputs.btc30dHigh : 1;
-  // Map ratio to score:
-  //   ratio = 0.85 → 10   (15% under high → deep value)
-  //   ratio = 1.00 → 50   (at the high)
-  //   ratio = 1.10 → 90   (10% above 30D high → expensive)
-  let priceScore: number;
-  if (ratio <= 0.85) priceScore = Math.max(0, 10 - (0.85 - ratio) * 100); // sub-15% → ≤10
-  else if (ratio <= 1.0) priceScore = 10 + ((ratio - 0.85) / 0.15) * 40;  // 0.85→10, 1.00→50
-  else priceScore = 50 + Math.min(50, (ratio - 1.0) * 400);               // +10% → 90, +12.5% → 100
-  priceScore = Math.max(0, Math.min(100, priceScore));
+  let score: number;
+  if (ratio <= 0.85) score = Math.max(0, 10 - (0.85 - ratio) * 100);
+  else if (ratio <= 1.0) score = 10 + ((ratio - 0.85) / 0.15) * 40;
+  else score = 50 + Math.min(50, (ratio - 1.0) * 400);
+  score = clamp(score);
+  const distancePct = (ratio - 1) * 100;
+  const detail = `${distancePct >= 0 ? '+' : ''}${distancePct.toFixed(1)} % vs 30D high`;
+  return { key: 'valuation', label: 'Valuation', score: Math.round(score), weight: FACTOR_WEIGHTS.valuation, detail };
+}
 
-  // 2. Fear & Greed → sentiment valuation component (already 0..100, monotonic)
-  const fgScore = Math.max(0, Math.min(100, inputs.fearGreed));
+// 2. Trend: BTC vs 200D MA — boolean → bipolar score around 50.
+//    Above MA → 70 (structural bull), Below MA → 30 (defensive).
+function trendFactor(inputs: MondayInputs): FactorBreakdown {
+  const score = inputs.btcAbove200dMA ? 70 : 30;
+  const detail = inputs.btcAbove200dMA ? 'BTC nad 200D MA' : 'BTC pod 200D MA';
+  return { key: 'trend', label: 'Trend', score, weight: FACTOR_WEIGHTS.trend, detail };
+}
 
-  // 3. 200D MA bias: above MA = pricier regime (+15), below MA = cheaper regime (−15)
-  const maAdj = inputs.btcAbove200dMA ? 15 : -15;
+// 3. Sentiment: Fear & Greed (already 0..100, monotonic).
+function sentimentFactor(inputs: MondayInputs): FactorBreakdown {
+  const score = clamp(inputs.fearGreed);
+  const label = score < 25 ? 'Extrémny strach' : score < 45 ? 'Strach' : score <= 55 ? 'Neutrál' : score <= 75 ? 'Chamtivosť' : 'Extrémna chamtivosť';
+  return { key: 'sentiment', label: 'Sentiment', score: Math.round(score), weight: FACTOR_WEIGHTS.sentiment, detail: `F&G ${Math.round(score)} · ${label}` };
+}
 
-  // Average of normalized components, then apply MA bias
-  const avg = (priceScore + fgScore) / 2;
-  const score = Math.round(Math.max(0, Math.min(100, avg + maAdj)));
-  return score;
+// 4. Momentum: BTC 7D % change. +0% → 50, +10% → 80, +20% → 100, −10% → 20, −20% → 0.
+function momentumFactor(inputs: MondayInputs): FactorBreakdown {
+  const ch = inputs.btc7dChangePct ?? 0;
+  const score = clamp(50 + ch * 3);
+  const detail = `BTC 7D ${ch >= 0 ? '+' : ''}${ch.toFixed(1)} %`;
+  return { key: 'momentum', label: 'Momentum', score: Math.round(score), weight: FACTOR_WEIGHTS.momentum, detail };
+}
+
+// 5. Risk Appetite: ETH + SOL strength relative to BTC (24h).
+//    Avg(alt 24h) − BTC 24h → diff. +0 → 50, +5pp → 75, +10pp → 100, −5pp → 25.
+function riskAppetiteFactor(inputs: MondayInputs): FactorBreakdown {
+  const eth = inputs.eth24hChangePct ?? 0;
+  const sol = inputs.sol24hChangePct ?? 0;
+  const btc = inputs.btc24hChangePct ?? 0;
+  const altAvg = (eth + sol) / 2;
+  const diff = altAvg - btc;
+  const score = clamp(50 + diff * 5);
+  const detail = `Alt − BTC ${diff >= 0 ? '+' : ''}${diff.toFixed(1)} pp`;
+  return { key: 'risk_appetite', label: 'Risk Appetite', score: Math.round(score), weight: FACTOR_WEIGHTS.risk_appetite, detail };
+}
+
+export function computeFactors(inputs: MondayInputs): FactorBreakdown[] {
+  return [
+    valuationFactor(inputs),
+    trendFactor(inputs),
+    sentimentFactor(inputs),
+    momentumFactor(inputs),
+    riskAppetiteFactor(inputs),
+  ];
+}
+
+export function computeValuationScore(inputs: MondayInputs): number {
+  const factors = computeFactors(inputs);
+  const weighted = factors.reduce((s, f) => s + f.score * f.weight, 0);
+  return Math.round(clamp(weighted));
 }
 
 // ===== STEP 2: Decision engine — fixed mapping (higher score → lower allocation) =====
