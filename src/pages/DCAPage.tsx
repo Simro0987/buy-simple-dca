@@ -326,6 +326,13 @@ export function DCAPage({ lang: _lang }: Props) {
         )}
       </div>
 
+      {/* MONEY MODE — performance vs Plain DCA + auto-tuning */}
+      <MoneyModePanel
+        history={history}
+        prices={prices}
+        onTuningChange={setTuning}
+      />
+
       {/* INPUTS */}
       <div className="glass-card p-4 space-y-3">
         <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Vstupy (manuálny override)</h2>
