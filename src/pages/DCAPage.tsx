@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
+import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
@@ -17,6 +18,7 @@ import {
   type HistoryEntry,
   type Regime,
 } from '@/lib/mondayController';
+import { loadTuning, type TuningParams } from '@/lib/moneyMode';
 import { toast } from 'sonner';
 
 interface Props { lang: Lang; }
