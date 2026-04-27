@@ -49,6 +49,10 @@ const Index = () => {
     }, 0);
   }, [prices]);
 
+  if (!unlocked) {
+    return <PinLock onUnlock={() => setUnlocked(true)} />;
+  }
+
   const renderTab = TAB_ROUTES[tab];
 
   return (
