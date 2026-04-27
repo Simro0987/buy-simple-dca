@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { AppHeader } from '@/components/AppHeader';
+import { PinLock } from '@/components/PinLock';
+import { isUnlocked } from '@/lib/pin';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useTheme } from '@/hooks/useTheme';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
@@ -18,6 +20,7 @@ function loadHoldings(): Record<string, number> {
 }
 
 const Index = () => {
+  const [unlocked, setUnlocked] = useState<boolean>(() => isUnlocked());
   const [tab, setTab] = useState<TabId>('home');
   const { lang, toggleLang } = useLanguage();
   const { theme, setTheme } = useTheme();
@@ -45,6 +48,10 @@ const Index = () => {
       return sum + qty * price;
     }, 0);
   }, [prices]);
+
+  if (!unlocked) {
+    return <PinLock onUnlock={() => setUnlocked(true)} />;
+  }
 
   const renderTab = TAB_ROUTES[tab];
 
