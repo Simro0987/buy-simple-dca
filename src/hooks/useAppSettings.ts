@@ -23,9 +23,9 @@ export interface AppSettings {
   theme: string;
   telegram_token: string | null;
   telegram_chat_id: string | null;
-  staking_config: Record<string, unknown>;
-  score_base_allocations: Record<string, number>;
-  regime_multipliers: Record<string, number>;
+  staking_config: any;
+  score_base_allocations: any;
+  regime_multipliers: any;
 }
 
 export function useAppSettings() {
@@ -49,7 +49,10 @@ export function useUpdateAppSettings() {
   return useMutation({
     mutationFn: async (patch: Partial<AppSettings> & { id: string }) => {
       const { id, ...rest } = patch;
-      const { error } = await supabase.from('app_settings').update(rest).eq('id', id);
+      const { error } = await supabase
+        .from('app_settings')
+        .update(rest as any)
+        .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['app_settings'] }),
