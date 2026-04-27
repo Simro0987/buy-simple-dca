@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
+import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
@@ -17,6 +18,7 @@ import {
   type HistoryEntry,
   type Regime,
 } from '@/lib/mondayController';
+import { loadTuning, type TuningParams } from '@/lib/moneyMode';
 import { toast } from 'sonner';
 
 interface Props { lang: Lang; }
@@ -111,9 +113,15 @@ export function DCAPage({ lang: _lang }: Props) {
   }, [inputs]);
 
   const prevDeploymentPct = history[0]?.plan.deploymentPct;
+  const [tuning, setTuning] = useState<TuningParams>(loadTuning);
+  // MA reclaim = previous saved week was below 200D, current input is above.
+  const maReclaimActive = useMemo(
+    () => inputs.btcAbove200dMA === true && history[0]?.inputs.btcAbove200dMA === false,
+    [inputs.btcAbove200dMA, history],
+  );
   const plan = useMemo(
-    () => buildPlan(inputs, prices, prevDeploymentPct),
-    [inputs, prices, prevDeploymentPct],
+    () => buildPlan(inputs, prices, prevDeploymentPct, { ...tuning, maReclaimActive }),
+    [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
 
   const update = <K extends keyof MondayInputs>(key: K, value: MondayInputs[K]) =>
@@ -317,6 +325,13 @@ export function DCAPage({ lang: _lang }: Props) {
           </div>
         )}
       </div>
+
+      {/* MONEY MODE — performance vs Plain DCA + auto-tuning */}
+      <MoneyModePanel
+        history={history}
+        prices={prices}
+        onTuningChange={setTuning}
+      />
 
       {/* INPUTS */}
       <div className="glass-card p-4 space-y-3">

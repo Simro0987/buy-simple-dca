@@ -271,14 +271,26 @@ export function computeFactorScore(factors: FactorBreakdown[]): number {
 //      Euphoria + score > 90 → 20 %
 // ============================================================
 
-export function smoothAllocation(score: number, regime: Regime): {
+export interface AllocationTuning {
+  minAllocationPct?: number;       // default 22
+  maxAllocationPct?: number;       // default 80
+  highScoreReducerPct?: number;    // subtract from raw when score > 75
+  maReclaimBonusPct?: number;      // add when BTC just reclaimed 200D MA
+  maReclaimActive?: boolean;
+}
+
+export function smoothAllocation(score: number, regime: Regime, tuning?: AllocationTuning): {
   pct: number;                                  // 0..100
   override: 'panic_floor' | 'euphoria_ceiling' | null;
 } {
+  const lo = tuning?.minAllocationPct ?? 22;
+  const hi = tuning?.maxAllocationPct ?? 80;
   if (regime === 'panic' && score < 15) return { pct: 85, override: 'panic_floor' };
   if (regime === 'euphoria' && score > 90) return { pct: 20, override: 'euphoria_ceiling' };
-  const raw = 82 - score * 0.62;
-  return { pct: clamp(raw, 22, 80), override: null };
+  let raw = 82 - score * 0.62;
+  if (score > 75 && tuning?.highScoreReducerPct) raw -= tuning.highScoreReducerPct;
+  if (tuning?.maReclaimActive && tuning?.maReclaimBonusPct) raw += tuning.maReclaimBonusPct;
+  return { pct: clamp(raw, lo, hi), override: null };
 }
 
 // ============================================================
@@ -288,39 +300,43 @@ export function smoothAllocation(score: number, regime: Regime): {
 //    Low  = contradictory                   → ×0.85
 // ============================================================
 
-export function computeConfidence(factors: FactorBreakdown[]): {
+export interface ConfidenceTuning {
+  low?: number;   // default 0.85
+  med?: number;   // default 0.93
+  high?: number;  // default 1.00
+}
+
+export function computeConfidence(factors: FactorBreakdown[], tuning?: ConfidenceTuning): {
   level: ConfidenceLevel;
   agreement: number;     // 0..1
   multiplier: number;
 } {
-  // Use weighted variance around weighted mean (active regime weights).
   const totalW = factors.reduce((s, f) => s + f.weight, 0) || 1;
   const mean = factors.reduce((s, f) => s + f.score * f.weight, 0) / totalW;
   const variance = factors.reduce((s, f) => s + f.weight * (f.score - mean) ** 2, 0) / totalW;
-  const stdev = Math.sqrt(variance); // 0..50ish
-  // Map stdev → agreement (1 = perfect alignment, 0 = scattered).
-  // stdev 0 → 1.0 ; stdev 30+ → 0.0
+  const stdev = Math.sqrt(variance);
   const agreement = clamp(1 - stdev / 30, 0, 1);
+
+  const lowM = tuning?.low ?? 0.85;
+  const medM = tuning?.med ?? 0.93;
+  const highM = tuning?.high ?? 1.00;
 
   let level: ConfidenceLevel;
   let multiplier: number;
-  if (agreement >= 0.7)      { level = 'high';   multiplier = 1.00; }
-  else if (agreement >= 0.45){ level = 'medium'; multiplier = 0.93; }
-  else                       { level = 'low';    multiplier = 0.85; }
+  if (agreement >= 0.7)      { level = 'high';   multiplier = highM; }
+  else if (agreement >= 0.45){ level = 'medium'; multiplier = medM; }
+  else                       { level = 'low';    multiplier = lowM; }
   return { level, agreement, multiplier };
 }
 
-// ============================================================
-// 6) LIMIT DISCOUNT BY REGIME
-// ============================================================
-
-function limitDiscountFor(regime: Regime): number {
+function limitDiscountFor(regime: Regime, defaultPct?: number): number {
+  const def = defaultPct ?? 4;
   switch (regime) {
     case 'panic':    return 2.5;
-    case 'bear':     return 5;
-    case 'bull':     return 3;
-    case 'euphoria': return 4;
-    case 'sideways': return 4;
+    case 'bear':     return Math.max(def, 5);
+    case 'bull':     return Math.min(def, 3);
+    case 'euphoria': return def;
+    case 'sideways': return def;
   }
 }
 
@@ -356,17 +372,40 @@ function rationaleFor(p: {
 // MAIN BUILD
 // ============================================================
 
+export interface BuildPlanTuning {
+  minAllocationPct?: number;
+  maxAllocationPct?: number;
+  confLowMult?: number;
+  confMedMult?: number;
+  confHighMult?: number;
+  limitDiscountDefaultPct?: number;
+  highScoreReducerPct?: number;
+  maReclaimBonusPct?: number;
+  maReclaimActive?: boolean;
+}
+
 export function buildPlan(
   inputs: MondayInputs,
   prices?: PriceData,
   prevDeploymentPct?: number,
+  tuning?: BuildPlanTuning,
 ): MondayPlan {
   const regime = detectRegime(inputs);
   const factors = computeFactors(inputs, regime);
   const factorScore = computeFactorScore(factors);
 
-  const { pct: basePct, override } = smoothAllocation(factorScore, regime);
-  const conf = computeConfidence(factors);
+  const { pct: basePct, override } = smoothAllocation(factorScore, regime, {
+    minAllocationPct: tuning?.minAllocationPct,
+    maxAllocationPct: tuning?.maxAllocationPct,
+    highScoreReducerPct: tuning?.highScoreReducerPct,
+    maReclaimBonusPct: tuning?.maReclaimBonusPct,
+    maReclaimActive: tuning?.maReclaimActive,
+  });
+  const conf = computeConfidence(factors, {
+    low: tuning?.confLowMult,
+    med: tuning?.confMedMult,
+    high: tuning?.confHighMult,
+  });
 
   const finalPctRaw = override ? basePct : basePct * conf.multiplier;
   const finalPct = Math.round(clamp(finalPctRaw, 0, 100));
@@ -377,7 +416,7 @@ export function buildPlan(
   const marketUsd = investableUsd * MARKET_SPLIT;
   const limitUsd = investableUsd * LIMIT_SPLIT;
 
-  const limitDiscountPct = limitDiscountFor(regime);
+  const limitDiscountPct = limitDiscountFor(regime, tuning?.limitDiscountDefaultPct);
   const limitMultiplier = 1 - limitDiscountPct / 100;
 
   const perAsset: AssetPlan[] = TOKENS.map(t => {
