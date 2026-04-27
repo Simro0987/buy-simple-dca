@@ -300,39 +300,43 @@ export function smoothAllocation(score: number, regime: Regime, tuning?: Allocat
 //    Low  = contradictory                   → ×0.85
 // ============================================================
 
-export function computeConfidence(factors: FactorBreakdown[]): {
+export interface ConfidenceTuning {
+  low?: number;   // default 0.85
+  med?: number;   // default 0.93
+  high?: number;  // default 1.00
+}
+
+export function computeConfidence(factors: FactorBreakdown[], tuning?: ConfidenceTuning): {
   level: ConfidenceLevel;
   agreement: number;     // 0..1
   multiplier: number;
 } {
-  // Use weighted variance around weighted mean (active regime weights).
   const totalW = factors.reduce((s, f) => s + f.weight, 0) || 1;
   const mean = factors.reduce((s, f) => s + f.score * f.weight, 0) / totalW;
   const variance = factors.reduce((s, f) => s + f.weight * (f.score - mean) ** 2, 0) / totalW;
-  const stdev = Math.sqrt(variance); // 0..50ish
-  // Map stdev → agreement (1 = perfect alignment, 0 = scattered).
-  // stdev 0 → 1.0 ; stdev 30+ → 0.0
+  const stdev = Math.sqrt(variance);
   const agreement = clamp(1 - stdev / 30, 0, 1);
+
+  const lowM = tuning?.low ?? 0.85;
+  const medM = tuning?.med ?? 0.93;
+  const highM = tuning?.high ?? 1.00;
 
   let level: ConfidenceLevel;
   let multiplier: number;
-  if (agreement >= 0.7)      { level = 'high';   multiplier = 1.00; }
-  else if (agreement >= 0.45){ level = 'medium'; multiplier = 0.93; }
-  else                       { level = 'low';    multiplier = 0.85; }
+  if (agreement >= 0.7)      { level = 'high';   multiplier = highM; }
+  else if (agreement >= 0.45){ level = 'medium'; multiplier = medM; }
+  else                       { level = 'low';    multiplier = lowM; }
   return { level, agreement, multiplier };
 }
 
-// ============================================================
-// 6) LIMIT DISCOUNT BY REGIME
-// ============================================================
-
-function limitDiscountFor(regime: Regime): number {
+function limitDiscountFor(regime: Regime, defaultPct?: number): number {
+  const def = defaultPct ?? 4;
   switch (regime) {
     case 'panic':    return 2.5;
-    case 'bear':     return 5;
-    case 'bull':     return 3;
-    case 'euphoria': return 4;
-    case 'sideways': return 4;
+    case 'bear':     return Math.max(def, 5);
+    case 'bull':     return Math.min(def, 3);
+    case 'euphoria': return def;
+    case 'sideways': return def;
   }
 }
 
