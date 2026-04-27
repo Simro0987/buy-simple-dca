@@ -113,9 +113,15 @@ export function DCAPage({ lang: _lang }: Props) {
   }, [inputs]);
 
   const prevDeploymentPct = history[0]?.plan.deploymentPct;
+  const [tuning, setTuning] = useState<TuningParams>(loadTuning);
+  // MA reclaim = previous saved week was below 200D, current input is above.
+  const maReclaimActive = useMemo(
+    () => inputs.btcAbove200dMA === true && history[0]?.inputs.btcAbove200dMA === false,
+    [inputs.btcAbove200dMA, history],
+  );
   const plan = useMemo(
-    () => buildPlan(inputs, prices, prevDeploymentPct),
-    [inputs, prices, prevDeploymentPct],
+    () => buildPlan(inputs, prices, prevDeploymentPct, { ...tuning, maReclaimActive }),
+    [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
 
   const update = <K extends keyof MondayInputs>(key: K, value: MondayInputs[K]) =>
