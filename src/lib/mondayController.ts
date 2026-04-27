@@ -271,14 +271,26 @@ export function computeFactorScore(factors: FactorBreakdown[]): number {
 //      Euphoria + score > 90 → 20 %
 // ============================================================
 
-export function smoothAllocation(score: number, regime: Regime): {
+export interface AllocationTuning {
+  minAllocationPct?: number;       // default 22
+  maxAllocationPct?: number;       // default 80
+  highScoreReducerPct?: number;    // subtract from raw when score > 75
+  maReclaimBonusPct?: number;      // add when BTC just reclaimed 200D MA
+  maReclaimActive?: boolean;
+}
+
+export function smoothAllocation(score: number, regime: Regime, tuning?: AllocationTuning): {
   pct: number;                                  // 0..100
   override: 'panic_floor' | 'euphoria_ceiling' | null;
 } {
+  const lo = tuning?.minAllocationPct ?? 22;
+  const hi = tuning?.maxAllocationPct ?? 80;
   if (regime === 'panic' && score < 15) return { pct: 85, override: 'panic_floor' };
   if (regime === 'euphoria' && score > 90) return { pct: 20, override: 'euphoria_ceiling' };
-  const raw = 82 - score * 0.62;
-  return { pct: clamp(raw, 22, 80), override: null };
+  let raw = 82 - score * 0.62;
+  if (score > 75 && tuning?.highScoreReducerPct) raw -= tuning.highScoreReducerPct;
+  if (tuning?.maReclaimActive && tuning?.maReclaimBonusPct) raw += tuning.maReclaimBonusPct;
+  return { pct: clamp(raw, lo, hi), override: null };
 }
 
 // ============================================================
