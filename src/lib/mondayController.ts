@@ -372,17 +372,40 @@ function rationaleFor(p: {
 // MAIN BUILD
 // ============================================================
 
+export interface BuildPlanTuning {
+  minAllocationPct?: number;
+  maxAllocationPct?: number;
+  confLowMult?: number;
+  confMedMult?: number;
+  confHighMult?: number;
+  limitDiscountDefaultPct?: number;
+  highScoreReducerPct?: number;
+  maReclaimBonusPct?: number;
+  maReclaimActive?: boolean;
+}
+
 export function buildPlan(
   inputs: MondayInputs,
   prices?: PriceData,
   prevDeploymentPct?: number,
+  tuning?: BuildPlanTuning,
 ): MondayPlan {
   const regime = detectRegime(inputs);
   const factors = computeFactors(inputs, regime);
   const factorScore = computeFactorScore(factors);
 
-  const { pct: basePct, override } = smoothAllocation(factorScore, regime);
-  const conf = computeConfidence(factors);
+  const { pct: basePct, override } = smoothAllocation(factorScore, regime, {
+    minAllocationPct: tuning?.minAllocationPct,
+    maxAllocationPct: tuning?.maxAllocationPct,
+    highScoreReducerPct: tuning?.highScoreReducerPct,
+    maReclaimBonusPct: tuning?.maReclaimBonusPct,
+    maReclaimActive: tuning?.maReclaimActive,
+  });
+  const conf = computeConfidence(factors, {
+    low: tuning?.confLowMult,
+    med: tuning?.confMedMult,
+    high: tuning?.confHighMult,
+  });
 
   const finalPctRaw = override ? basePct : basePct * conf.multiplier;
   const finalPct = Math.round(clamp(finalPctRaw, 0, 100));
@@ -393,7 +416,7 @@ export function buildPlan(
   const marketUsd = investableUsd * MARKET_SPLIT;
   const limitUsd = investableUsd * LIMIT_SPLIT;
 
-  const limitDiscountPct = limitDiscountFor(regime);
+  const limitDiscountPct = limitDiscountFor(regime, tuning?.limitDiscountDefaultPct);
   const limitMultiplier = 1 - limitDiscountPct / 100;
 
   const perAsset: AssetPlan[] = TOKENS.map(t => {
