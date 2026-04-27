@@ -14,6 +14,237 @@ export type Database = {
   }
   public: {
     Tables: {
+      app_settings: {
+        Row: {
+          arbiscan_api_key: string | null
+          btc_address: string | null
+          created_at: string
+          dca_day: string
+          dca_frequency: string
+          dca_horizon_weeks: number
+          default_amount: number
+          eth_address: string | null
+          eth_arb_address: string | null
+          etherscan_api_key: string | null
+          helius_api_key: string | null
+          id: string
+          jitosol_contract: string
+          pin_hash: string | null
+          rebalance_threshold: number
+          regime_multipliers: Json
+          score_base_allocations: Json
+          sol_address: string | null
+          sol_arb_address: string | null
+          staking_config: Json
+          telegram_chat_id: string | null
+          telegram_token: string | null
+          theme: string
+          total_capital: number
+          updated_at: string
+          wsteth_contract: string
+        }
+        Insert: {
+          arbiscan_api_key?: string | null
+          btc_address?: string | null
+          created_at?: string
+          dca_day?: string
+          dca_frequency?: string
+          dca_horizon_weeks?: number
+          default_amount?: number
+          eth_address?: string | null
+          eth_arb_address?: string | null
+          etherscan_api_key?: string | null
+          helius_api_key?: string | null
+          id?: string
+          jitosol_contract?: string
+          pin_hash?: string | null
+          rebalance_threshold?: number
+          regime_multipliers?: Json
+          score_base_allocations?: Json
+          sol_address?: string | null
+          sol_arb_address?: string | null
+          staking_config?: Json
+          telegram_chat_id?: string | null
+          telegram_token?: string | null
+          theme?: string
+          total_capital?: number
+          updated_at?: string
+          wsteth_contract?: string
+        }
+        Update: {
+          arbiscan_api_key?: string | null
+          btc_address?: string | null
+          created_at?: string
+          dca_day?: string
+          dca_frequency?: string
+          dca_horizon_weeks?: number
+          default_amount?: number
+          eth_address?: string | null
+          eth_arb_address?: string | null
+          etherscan_api_key?: string | null
+          helius_api_key?: string | null
+          id?: string
+          jitosol_contract?: string
+          pin_hash?: string | null
+          rebalance_threshold?: number
+          regime_multipliers?: Json
+          score_base_allocations?: Json
+          sol_address?: string | null
+          sol_arb_address?: string | null
+          staking_config?: Json
+          telegram_chat_id?: string | null
+          telegram_token?: string | null
+          theme?: string
+          total_capital?: number
+          updated_at?: string
+          wsteth_contract?: string
+        }
+        Relationships: []
+      }
+      capital_entries: {
+        Row: {
+          amount: number
+          created_at: string
+          id: string
+          note: string | null
+          type: string
+        }
+        Insert: {
+          amount: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          type?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          id?: string
+          note?: string | null
+          type?: string
+        }
+        Relationships: []
+      }
+      dca_purchases: {
+        Row: {
+          allocation_pct: number | null
+          btc_amount: number
+          btc_price: number
+          created_at: string
+          eth_amount: number
+          eth_price: number
+          id: string
+          limit_amount: number
+          market_amount: number
+          notes: string | null
+          regime: string | null
+          score: number | null
+          sol_amount: number
+          sol_price: number
+          total_amount: number
+          week_number: number
+        }
+        Insert: {
+          allocation_pct?: number | null
+          btc_amount?: number
+          btc_price?: number
+          created_at?: string
+          eth_amount?: number
+          eth_price?: number
+          id?: string
+          limit_amount?: number
+          market_amount?: number
+          notes?: string | null
+          regime?: string | null
+          score?: number | null
+          sol_amount?: number
+          sol_price?: number
+          total_amount?: number
+          week_number: number
+        }
+        Update: {
+          allocation_pct?: number | null
+          btc_amount?: number
+          btc_price?: number
+          created_at?: string
+          eth_amount?: number
+          eth_price?: number
+          id?: string
+          limit_amount?: number
+          market_amount?: number
+          notes?: string | null
+          regime?: string | null
+          score?: number | null
+          sol_amount?: number
+          sol_price?: number
+          total_amount?: number
+          week_number?: number
+        }
+        Relationships: []
+      }
+      limit_orders: {
+        Row: {
+          amount_usd: number
+          coin: string
+          created_at: string
+          filled_at: string | null
+          id: string
+          limit_price: number
+          status: string
+          week_number: number
+        }
+        Insert: {
+          amount_usd: number
+          coin: string
+          created_at?: string
+          filled_at?: string | null
+          id?: string
+          limit_price: number
+          status?: string
+          week_number: number
+        }
+        Update: {
+          amount_usd?: number
+          coin?: string
+          created_at?: string
+          filled_at?: string | null
+          id?: string
+          limit_price?: number
+          status?: string
+          week_number?: number
+        }
+        Relationships: []
+      }
+      staking_rewards: {
+        Row: {
+          btc_reward: number
+          created_at: string
+          eth_reward: number
+          id: string
+          month: string
+          sol_reward: number
+          total_usd: number
+        }
+        Insert: {
+          btc_reward?: number
+          created_at?: string
+          eth_reward?: number
+          id?: string
+          month: string
+          sol_reward?: number
+          total_usd?: number
+        }
+        Update: {
+          btc_reward?: number
+          created_at?: string
+          eth_reward?: number
+          id?: string
+          month?: string
+          sol_reward?: number
+          total_usd?: number
+        }
+        Relationships: []
+      }
       telegram_bot_state: {
         Row: {
           id: number
@@ -95,6 +326,63 @@ export type Database = {
           news_alert_enabled?: boolean
           updated_at?: string
           weekly_budget?: number
+        }
+        Relationships: []
+      }
+      weekly_scores: {
+        Row: {
+          base_allocation: number | null
+          cash_reserve: number | null
+          created_at: string
+          final_allocation: number | null
+          flush_score: number | null
+          id: string
+          invested_amount: number | null
+          onchain_score: number | null
+          regime: string
+          regime_multiplier: number | null
+          risk_score: number | null
+          score: number
+          sentiment_score: number | null
+          trend_score: number | null
+          week_number: number
+          weekly_capital: number | null
+        }
+        Insert: {
+          base_allocation?: number | null
+          cash_reserve?: number | null
+          created_at?: string
+          final_allocation?: number | null
+          flush_score?: number | null
+          id?: string
+          invested_amount?: number | null
+          onchain_score?: number | null
+          regime: string
+          regime_multiplier?: number | null
+          risk_score?: number | null
+          score: number
+          sentiment_score?: number | null
+          trend_score?: number | null
+          week_number: number
+          weekly_capital?: number | null
+        }
+        Update: {
+          base_allocation?: number | null
+          cash_reserve?: number | null
+          created_at?: string
+          final_allocation?: number | null
+          flush_score?: number | null
+          id?: string
+          invested_amount?: number | null
+          onchain_score?: number | null
+          regime?: string
+          regime_multiplier?: number | null
+          risk_score?: number | null
+          score?: number
+          sentiment_score?: number | null
+          trend_score?: number | null
+          week_number?: number
+          weekly_capital?: number | null
         }
         Relationships: []
       }
