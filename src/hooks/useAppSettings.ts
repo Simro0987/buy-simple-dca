@@ -26,6 +26,7 @@ export interface AppSettings {
   staking_config: any;
   score_base_allocations: any;
   regime_multipliers: any;
+  manual_holdings?: { btc?: number; eth?: number; sol?: number } | null;
 }
 
 export function useAppSettings() {
