@@ -3,6 +3,14 @@ import { TabId } from '@/components/BottomNav';
 import { PriorityDashboard } from '@/components/PriorityDashboard';
 import { TopSignals } from '@/components/decision/TopSignals';
 import { TodayDecisions } from '@/components/decision/TodayDecisions';
+import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
+import { AssetCardsRow } from '@/components/dashboard/AssetCardsRow';
+import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
+import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChart';
+import { RebalanceCheckCard } from '@/components/dashboard/RebalanceCheckCard';
+import { usePrices } from '@/hooks/usePrices';
+import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import { Lang } from '@/lib/i18n';
 
 interface Props {
@@ -35,11 +43,26 @@ const CARDS: HubCard[] = [
 ];
 
 export function HomePage({ onNavigate, lang }: Props) {
+  const { data: prices } = usePrices();
+  const { data: settings } = useAppSettings();
+  const metrics = usePortfolioMetrics(prices);
+  const weeklyCapital = Number(settings?.default_amount ?? 0);
+  const cashReserve = Math.max(0, Number(settings?.total_capital ?? 0) - metrics.totalInvested);
+
   return (
     <div className="space-y-3">
+      <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
+      <AssetCardsRow metrics={metrics} prices={prices} />
+      <div className="grid grid-cols-1 gap-3">
+        <AllocationDonut metrics={metrics} />
+        <PerformanceLineChart metrics={metrics} prices={prices} />
+        <RebalanceCheckCard metrics={metrics} thresholdPct={Number(settings?.rebalance_threshold ?? 5)} />
+      </div>
+
       <TopSignals lang={lang} />
       <PriorityDashboard />
       <TodayDecisions lang={lang} />
+
       <div>
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 px-1">Sekcie</h2>
         <div className="grid grid-cols-2 gap-2">

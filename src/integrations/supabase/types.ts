@@ -29,6 +29,7 @@ export type Database = {
           helius_api_key: string | null
           id: string
           jitosol_contract: string
+          manual_holdings: Json
           pin_hash: string | null
           rebalance_threshold: number
           regime_multipliers: Json
@@ -57,6 +58,7 @@ export type Database = {
           helius_api_key?: string | null
           id?: string
           jitosol_contract?: string
+          manual_holdings?: Json
           pin_hash?: string | null
           rebalance_threshold?: number
           regime_multipliers?: Json
@@ -85,6 +87,7 @@ export type Database = {
           helius_api_key?: string | null
           id?: string
           jitosol_contract?: string
+          manual_holdings?: Json
           pin_hash?: string | null
           rebalance_threshold?: number
           regime_multipliers?: Json
