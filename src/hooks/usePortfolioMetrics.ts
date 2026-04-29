@@ -93,6 +93,7 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
   return useMemo<PortfolioMetrics>(() => {
     const rows = purchases ?? [];
     const manual = (settings?.manual_holdings ?? {}) as { btc?: number; eth?: number; sol?: number };
+    const initialCost = (settings?.initial_cost_basis ?? {}) as { btc?: number; eth?: number; sol?: number };
 
     const aggHoldings = {
       BTC: rows.reduce((s, r) => s + Number(r.btc_amount || 0), 0),
@@ -107,10 +108,14 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
 
     const assets: AssetMetric[] = TOKENS.map(t => {
       const sym = t.symbol as 'BTC' | 'ETH' | 'SOL';
-      const manualAmt = Number(manual[TOKEN_KEY[sym]] ?? 0);
+      const key = TOKEN_KEY[sym];
+      const manualAmt = Number(manual[key] ?? 0);
       const useManual = manualAmt > 0;
+      // Holdings: manual override else aggregated DCA
       const holdings = useManual ? manualAmt : aggHoldings[sym];
-      const invested = aggInvested[sym]; // invested always comes from purchases (cost basis)
+      // Invested = DCA cost + initial cost basis (USD spent before tracking)
+      const initialCostUsd = Number(initialCost[key] ?? 0);
+      const invested = aggInvested[sym] + initialCostUsd;
       const currentPrice = prices?.[t.coingeckoId]?.usd ?? 0;
       const value = holdings * currentPrice;
       const pnl = value - invested;
@@ -125,7 +130,7 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
         value,
         pnl,
         pnlPct,
-        actualPct: 0, // filled below
+        actualPct: 0,
         deviationPct: 0,
         source: useManual ? 'manual' : 'dca',
       };
