@@ -28,6 +28,7 @@ export interface AppSettings {
   regime_multipliers: any;
   manual_holdings?: { btc?: number; eth?: number; sol?: number } | null;
   initial_cost_basis?: { btc?: number; eth?: number; sol?: number } | null;
+  dynamic_execution_enabled?: boolean;
 }
 
 export function useAppSettings() {

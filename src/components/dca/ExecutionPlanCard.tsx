@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity } from 'lucide-react';
+import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { TOKENS, formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
+import { formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAppSettings } from '@/hooks/useAppSettings';
+import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
+import { calcCoinExecution, fixedExecution, type CoinKey, type CoinExecution } from '@/lib/dynamicExecution';
 
 interface Props {
   prices: PriceData | undefined;
@@ -39,7 +42,38 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
   const [checks, setChecks] = useState<Record<string, boolean>>(loadChecks);
   const [saving, setSaving] = useState(false);
 
-  const dca = useMemo(() => prices ? calculateDCA(weeklyCapital, prices) : [], [prices, weeklyCapital]);
+  const { data: settings } = useAppSettings();
+  const dynEnabled = settings?.dynamic_execution_enabled ?? true;
+  const { data: perCoinMetrics } = usePerCoinMetrics();
+
+  // Per-coin executions
+  const executions: Record<CoinKey, CoinExecution> = useMemo(() => {
+    const coins: CoinKey[] = ['btc', 'eth', 'sol'];
+    const out: Partial<Record<CoinKey, CoinExecution>> = {};
+    for (const c of coins) {
+      if (!dynEnabled || !perCoinMetrics) {
+        out[c] = fixedExecution(c);
+      } else {
+        out[c] = calcCoinExecution(c, score ?? 50, perCoinMetrics[c]);
+      }
+    }
+    return out as Record<CoinKey, CoinExecution>;
+  }, [dynEnabled, perCoinMetrics, score]);
+
+  // Build dca rows but use per-coin Market/Limit% and distance instead of fixed 60/40
+  const dca = useMemo(() => {
+    if (!prices) return [];
+    const base = calculateDCA(weeklyCapital, prices); // gives totalUsd per token
+    return base.map(r => {
+      const exec = executions[r.token.id as CoinKey];
+      const marketUsd = r.totalUsd * (exec.marketPct / 100);
+      const limitUsd = r.totalUsd * (exec.limitPct / 100);
+      const limitPrice = r.currentPrice * (1 + exec.limitDistancePct / 100);
+      const marketQuantity = r.currentPrice > 0 ? marketUsd / r.currentPrice : 0;
+      const limitQuantity = limitPrice > 0 ? limitUsd / limitPrice : 0;
+      return { ...r, marketUsd, limitUsd, limitPrice, marketQuantity, limitQuantity, exec };
+    });
+  }, [prices, weeklyCapital, executions]);
   const { iso, week } = getMondayWeek();
 
   // Fetch limit orders for tracker
@@ -81,11 +115,14 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         return acc;
       }, {} as Record<string, number>);
 
-      const { error: pErr } = await supabase.from('dca_purchases').insert({
+      const totalMarket = dca.reduce((s, r) => s + r.marketUsd, 0);
+      const totalLimit = dca.reduce((s, r) => s + r.limitUsd, 0);
+
+      const { data: purchase, error: pErr } = await supabase.from('dca_purchases').insert({
         week_number: week,
         total_amount: weeklyCapital,
-        market_amount: weeklyCapital * 0.6,
-        limit_amount: weeklyCapital * 0.4,
+        market_amount: totalMarket,
+        limit_amount: totalLimit,
         btc_amount: totals.btc_amount || 0,
         eth_amount: totals.eth_amount || 0,
         sol_amount: totals.sol_amount || 0,
@@ -94,9 +131,28 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         sol_price: totals.sol_price || 0,
         regime: regime || null,
         score: score || null,
-        notes: 'Execution plan',
-      });
+        notes: dynEnabled ? 'Execution plan (Dynamic Engine)' : 'Execution plan (Fixed 60/40)',
+      }).select().single();
       if (pErr) throw pErr;
+
+      // Save per-coin execution metrics to weekly_scores (best-effort)
+      try {
+        const btc = executions.btc, eth = executions.eth, sol = executions.sol;
+        await supabase.from('weekly_scores').insert({
+          week_number: week,
+          score: score ?? 50,
+          regime: regime ?? 'sideways',
+          btc_market_pct: btc.marketPct, btc_limit_pct: btc.limitPct, btc_limit_distance: btc.limitDistancePct,
+          btc_volatility_30d: btc.volatility30d, btc_momentum_30d: btc.momentum30d,
+          eth_market_pct: eth.marketPct, eth_limit_pct: eth.limitPct, eth_limit_distance: eth.limitDistancePct,
+          eth_volatility_30d: eth.volatility30d, eth_momentum_30d: eth.momentum30d,
+          sol_market_pct: sol.marketPct, sol_limit_pct: sol.limitPct, sol_limit_distance: sol.limitDistancePct,
+          sol_volatility_30d: sol.volatility30d, sol_momentum_30d: sol.momentum30d,
+        });
+      } catch (e) {
+        console.warn('weekly_scores insert failed (non-blocking)', e);
+      }
+      void purchase;
 
       // Insert limit orders
       const limitInserts = dca.map(r => ({
@@ -149,12 +205,15 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
 
       {/* Market orders */}
       <div className="glass-card p-3 space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky (60%)</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky</p>
+          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>}
+        </div>
         {dca.map(r => (
           <div key={`m-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.marketUsd)}</p>
+              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.marketUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.marketPct)}%)</span></p>
               <p className="text-[10px] text-muted-foreground tabular-nums">~{r.marketQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
             </div>
             <button onClick={() => copy(`Market BUY ${r.token.symbol} $${r.marketUsd.toFixed(2)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
@@ -165,13 +224,16 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
 
       {/* Limit orders */}
       <div className="glass-card p-3 space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky (40%, -4 % až -5 %)</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky</p>
+          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>}
+        </div>
         {dca.map(r => (
           <div key={`l-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.limitUsd)} @ {formatPrice(r.limitPrice)}</p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">~{r.limitQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
+              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.limitUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.limitPct)}%, {r.exec.limitDistancePct.toFixed(1)}%)</span></p>
+              <p className="text-[10px] text-muted-foreground tabular-nums">@ {formatPrice(r.limitPrice)} · ~{r.limitQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
             </div>
             <button onClick={() => copy(`Limit BUY ${r.token.symbol} $${r.limitUsd.toFixed(2)} @ $${r.limitPrice.toFixed(2)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
             <a href={HL_LINKS[r.token.symbol]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded bg-primary/10 text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
