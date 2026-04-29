@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { WalletEntry } from '@/lib/wallets';
+import { WalletEntry, ChainId } from '@/lib/wallets';
 
 export interface OnChainToken {
   symbol: string;
@@ -15,13 +15,13 @@ export interface OnChainToken {
 export interface OnChainWalletResult {
   ok: boolean;
   address: string;
-  chain: 'btc' | 'eth' | 'sol';
+  chain: ChainId;
   error?: string;
   // BTC
   balanceBtc?: number;
   balanceSats?: number;
   txCount?: number;
-  // ETH/SOL
+  // ETH/SOL/ARB
   native?: { symbol: string; balance: number; coingeckoId: string };
   tokens?: OnChainToken[];
 }
@@ -37,16 +37,18 @@ export function useWalletBalances(wallets: WalletEntry[]) {
   const btcAddrs = wallets.filter(w => w.chain === 'btc').map(w => w.address);
   const ethAddrs = wallets.filter(w => w.chain === 'eth').map(w => w.address);
   const solAddrs = wallets.filter(w => w.chain === 'sol').map(w => w.address);
+  const arbAddrs = wallets.filter(w => w.chain === 'arb').map(w => w.address);
 
   return useQuery({
-    queryKey: ['wallet-balances', btcAddrs, ethAddrs, solAddrs],
+    queryKey: ['wallet-balances', btcAddrs, ethAddrs, solAddrs, arbAddrs],
     queryFn: async () => {
-      const [btc, eth, sol] = await Promise.all([
+      const [btc, eth, sol, arb] = await Promise.all([
         fetchChain('wallet-balance-btc', btcAddrs),
         fetchChain('wallet-balance-eth', ethAddrs),
         fetchChain('wallet-balance-sol', solAddrs),
+        fetchChain('wallet-balance-arb', arbAddrs),
       ]);
-      return { btc, eth, sol };
+      return { btc, eth, sol, arb };
     },
     enabled: wallets.length > 0,
     refetchInterval: 60_000,
