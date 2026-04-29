@@ -115,11 +115,14 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         return acc;
       }, {} as Record<string, number>);
 
-      const { error: pErr } = await supabase.from('dca_purchases').insert({
+      const totalMarket = dca.reduce((s, r) => s + r.marketUsd, 0);
+      const totalLimit = dca.reduce((s, r) => s + r.limitUsd, 0);
+
+      const { data: purchase, error: pErr } = await supabase.from('dca_purchases').insert({
         week_number: week,
         total_amount: weeklyCapital,
-        market_amount: weeklyCapital * 0.6,
-        limit_amount: weeklyCapital * 0.4,
+        market_amount: totalMarket,
+        limit_amount: totalLimit,
         btc_amount: totals.btc_amount || 0,
         eth_amount: totals.eth_amount || 0,
         sol_amount: totals.sol_amount || 0,
@@ -128,9 +131,28 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         sol_price: totals.sol_price || 0,
         regime: regime || null,
         score: score || null,
-        notes: 'Execution plan',
-      });
+        notes: dynEnabled ? 'Execution plan (Dynamic Engine)' : 'Execution plan (Fixed 60/40)',
+      }).select().single();
       if (pErr) throw pErr;
+
+      // Save per-coin execution metrics to weekly_scores (best-effort)
+      try {
+        const btc = executions.btc, eth = executions.eth, sol = executions.sol;
+        await supabase.from('weekly_scores').insert({
+          week_number: week,
+          score: score ?? 50,
+          regime: regime ?? 'sideways',
+          btc_market_pct: btc.marketPct, btc_limit_pct: btc.limitPct, btc_limit_distance: btc.limitDistancePct,
+          btc_volatility_30d: btc.volatility30d, btc_momentum_30d: btc.momentum30d,
+          eth_market_pct: eth.marketPct, eth_limit_pct: eth.limitPct, eth_limit_distance: eth.limitDistancePct,
+          eth_volatility_30d: eth.volatility30d, eth_momentum_30d: eth.momentum30d,
+          sol_market_pct: sol.marketPct, sol_limit_pct: sol.limitPct, sol_limit_distance: sol.limitDistancePct,
+          sol_volatility_30d: sol.volatility30d, sol_momentum_30d: sol.momentum30d,
+        });
+      } catch (e) {
+        console.warn('weekly_scores insert failed (non-blocking)', e);
+      }
+      void purchase;
 
       // Insert limit orders
       const limitInserts = dca.map(r => ({
