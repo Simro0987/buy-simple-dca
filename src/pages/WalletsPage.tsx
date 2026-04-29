@@ -1,24 +1,27 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Wallet, RefreshCw, AlertCircle } from 'lucide-react';
-import { Lang, t } from '@/lib/i18n';
-import { WalletEntry, loadWallets, saveWallets, getChainLabel, getChainColor } from '@/lib/wallets';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Wallet, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
+import { Lang } from '@/lib/i18n';
+import { WalletEntry, ChainId, loadWallets, saveWallets, getChainLabel, getChainColor, getExplorerUrl } from '@/lib/wallets';
 import { useWalletBalances, OnChainWalletResult } from '@/hooks/useWalletBalances';
 import { Input } from '@/components/ui/input';
+import { usePrices } from '@/hooks/usePrices';
+import { formatUsd } from '@/lib/crypto';
 
 interface Props { lang: Lang; }
 
-const CHAINS: WalletEntry['chain'][] = ['btc', 'eth', 'sol'];
+const CHAINS: ChainId[] = ['btc', 'eth', 'sol', 'arb'];
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);
   const [adding, setAdding] = useState(false);
-  const [newChain, setNewChain] = useState<WalletEntry['chain']>('btc');
+  const [newChain, setNewChain] = useState<ChainId>('btc');
   const [newAddress, setNewAddress] = useState('');
   const { data: balances, isFetching, refetch, error } = useWalletBalances(wallets);
+  const { data: prices } = usePrices();
 
-  const findResult = (chain: WalletEntry['chain'], address: string): OnChainWalletResult | undefined => {
+  const findResult = (chain: ChainId, address: string): OnChainWalletResult | undefined => {
     if (!balances) return undefined;
-    return balances[chain].find(r => r.address === address);
+    return balances[chain]?.find(r => r.address === address);
   };
 
   useEffect(() => { saveWallets(wallets); }, [wallets]);
