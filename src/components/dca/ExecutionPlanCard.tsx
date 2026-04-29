@@ -1,9 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity } from 'lucide-react';
+import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap } from 'lucide-react';
 import { toast } from 'sonner';
 import { TOKENS, formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useAppSettings } from '@/hooks/useAppSettings';
+import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
+import { calcCoinExecution, fixedExecution, type CoinKey, type CoinExecution } from '@/lib/dynamicExecution';
 
 interface Props {
   prices: PriceData | undefined;
