@@ -42,7 +42,38 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
   const [checks, setChecks] = useState<Record<string, boolean>>(loadChecks);
   const [saving, setSaving] = useState(false);
 
-  const dca = useMemo(() => prices ? calculateDCA(weeklyCapital, prices) : [], [prices, weeklyCapital]);
+  const { data: settings } = useAppSettings();
+  const dynEnabled = settings?.dynamic_execution_enabled ?? true;
+  const { data: perCoinMetrics } = usePerCoinMetrics();
+
+  // Per-coin executions
+  const executions: Record<CoinKey, CoinExecution> = useMemo(() => {
+    const coins: CoinKey[] = ['btc', 'eth', 'sol'];
+    const out: Partial<Record<CoinKey, CoinExecution>> = {};
+    for (const c of coins) {
+      if (!dynEnabled || !perCoinMetrics) {
+        out[c] = fixedExecution(c);
+      } else {
+        out[c] = calcCoinExecution(c, score ?? 50, perCoinMetrics[c]);
+      }
+    }
+    return out as Record<CoinKey, CoinExecution>;
+  }, [dynEnabled, perCoinMetrics, score]);
+
+  // Build dca rows but use per-coin Market/Limit% and distance instead of fixed 60/40
+  const dca = useMemo(() => {
+    if (!prices) return [];
+    const base = calculateDCA(weeklyCapital, prices); // gives totalUsd per token
+    return base.map(r => {
+      const exec = executions[r.token.id as CoinKey];
+      const marketUsd = r.totalUsd * (exec.marketPct / 100);
+      const limitUsd = r.totalUsd * (exec.limitPct / 100);
+      const limitPrice = r.currentPrice * (1 + exec.limitDistancePct / 100);
+      const marketQuantity = r.currentPrice > 0 ? marketUsd / r.currentPrice : 0;
+      const limitQuantity = limitPrice > 0 ? limitUsd / limitPrice : 0;
+      return { ...r, marketUsd, limitUsd, limitPrice, marketQuantity, limitQuantity, exec };
+    });
+  }, [prices, weeklyCapital, executions]);
   const { iso, week } = getMondayWeek();
 
   // Fetch limit orders for tracker
