@@ -27,6 +27,7 @@ export interface AppSettings {
   score_base_allocations: any;
   regime_multipliers: any;
   manual_holdings?: { btc?: number; eth?: number; sol?: number } | null;
+  initial_cost_basis?: { btc?: number; eth?: number; sol?: number } | null;
 }
 
 export function useAppSettings() {

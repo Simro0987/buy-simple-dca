@@ -5,6 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
 import { CronJobsCard } from '@/components/CronJobsCard';
 import { CallbackHistoryCard } from '@/components/CallbackHistoryCard';
+import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
+import { BackupRestoreCard } from '@/components/settings/BackupRestoreCard';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
 import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
@@ -314,6 +316,12 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
 
       {/* Telegram callback history */}
       <CallbackHistoryCard lang={lang} />
+
+      {/* Initial holdings & cost basis */}
+      <InitialHoldingsCard />
+
+      {/* Backup & restore */}
+      <BackupRestoreCard />
 
       {/* CSV Export */}
       <CsvExport lang={lang} />

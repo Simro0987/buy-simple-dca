@@ -30,6 +30,7 @@ export type Database = {
           helius_api_key: string | null
           holdings_strategy: Json
           id: string
+          initial_cost_basis: Json
           jitosol_contract: string
           manual_holdings: Json
           pin_hash: string | null
@@ -62,6 +63,7 @@ export type Database = {
           helius_api_key?: string | null
           holdings_strategy?: Json
           id?: string
+          initial_cost_basis?: Json
           jitosol_contract?: string
           manual_holdings?: Json
           pin_hash?: string | null
@@ -94,6 +96,7 @@ export type Database = {
           helius_api_key?: string | null
           holdings_strategy?: Json
           id?: string
+          initial_cost_basis?: Json
           jitosol_contract?: string
           manual_holdings?: Json
           pin_hash?: string | null
