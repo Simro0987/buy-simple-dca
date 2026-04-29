@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap } from 'lucide-react';
 import { toast } from 'sonner';
-import { TOKENS, formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
+import { formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useAppSettings } from '@/hooks/useAppSettings';
