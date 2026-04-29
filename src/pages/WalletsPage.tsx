@@ -50,6 +50,25 @@ export function WalletsPage({ lang }: Props) {
     wallets: wallets.filter(w => w.chain === chain),
   })).filter(g => g.wallets.length > 0);
 
+  // Total on-chain value in USD
+  const totalUsd = useMemo(() => {
+    if (!balances || !prices) return 0;
+    let total = 0;
+    for (const chain of CHAINS) {
+      for (const r of balances[chain] ?? []) {
+        if (!r.ok) continue;
+        if (r.balanceBtc) total += r.balanceBtc * (prices.bitcoin?.usd ?? 0);
+        if (r.native) total += r.native.balance * (prices[r.native.coingeckoId]?.usd ?? 0);
+        for (const tok of r.tokens ?? []) {
+          if (tok.coingeckoId && prices[tok.coingeckoId]) {
+            total += tok.balance * prices[tok.coingeckoId].usd;
+          }
+        }
+      }
+    }
+    return total;
+  }, [balances, prices]);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
