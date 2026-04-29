@@ -114,11 +114,9 @@ export function AllocationCalculatorPage({ lang }: Props) {
       await update.mutateAsync({
         id: settings.id,
         manual_holdings: { btc: holdings.BTC, eth: holdings.ETH, sol: holdings.SOL },
-        // @ts-expect-error - new columns from Part 3 migration
-        holdings_strategy: strategy,
-        // @ts-expect-error
-        yield_apys: apys,
-      });
+        holdings_strategy: strategy as any,
+        yield_apys: apys as any,
+      } as any);
       toast.success('Stratégia uložená');
     } catch (e) {
       toast.error('Chyba: ' + (e as Error).message);
