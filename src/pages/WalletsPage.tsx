@@ -141,6 +141,17 @@ export function WalletsPage({ lang }: Props) {
         </div>
       )}
 
+      {wallets.length > 0 && (
+        <div className="glass-card p-4">
+          <p className="text-[10px] uppercase text-muted-foreground tracking-wide">
+            {lang === 'sk' ? 'Spolu on-chain (USD)' : 'Total on-chain (USD)'}
+          </p>
+          <p className="text-2xl font-bold text-foreground tabular-nums mt-0.5">
+            {formatUsd(totalUsd)}
+          </p>
+        </div>
+      )}
+
       {grouped.length === 0 && !adding && (
         <div className="glass-card p-8 flex flex-col items-center gap-3 text-center">
           <Wallet className="w-10 h-10 text-muted-foreground" />
@@ -175,6 +186,15 @@ export function WalletsPage({ lang }: Props) {
                       <p className="text-[10px] text-muted-foreground mt-0.5">{lang === 'sk' ? 'Načítavam…' : 'Loading…'}</p>
                     )}
                   </div>
+                  <a
+                    href={getExplorerUrl(w.chain, w.address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+                    aria-label="Explorer"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
                   <button
                     onClick={() => removeWallet(w.id)}
                     className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors shrink-0"
