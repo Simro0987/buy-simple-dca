@@ -11,6 +11,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
 import { ConcentrationWarnings } from '@/components/decision/ConcentrationWarnings';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
+import { HistorySection } from '@/components/portfolio/HistorySection';
 
 interface Props { lang: Lang; }
 
@@ -152,6 +153,8 @@ export function PortfolioPage({ lang }: Props) {
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} />
 
+      {/* DCA history + stats + cost basis chart + exports */}
+      <HistorySection />
       {/* Rebalancing suggestions */}
       <RebalanceCard lang={lang} prices={prices} />
 
