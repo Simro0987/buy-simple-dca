@@ -205,12 +205,15 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
 
       {/* Market orders */}
       <div className="glass-card p-3 space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky (60%)</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky</p>
+          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>}
+        </div>
         {dca.map(r => (
           <div key={`m-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.marketUsd)}</p>
+              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.marketUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.marketPct)}%)</span></p>
               <p className="text-[10px] text-muted-foreground tabular-nums">~{r.marketQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
             </div>
             <button onClick={() => copy(`Market BUY ${r.token.symbol} $${r.marketUsd.toFixed(2)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
@@ -221,13 +224,16 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
 
       {/* Limit orders */}
       <div className="glass-card p-3 space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky (40%, -4 % až -5 %)</p>
+        <div className="flex items-center justify-between mb-1">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky</p>
+          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>}
+        </div>
         {dca.map(r => (
           <div key={`l-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
             <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
             <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.limitUsd)} @ {formatPrice(r.limitPrice)}</p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">~{r.limitQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
+              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.limitUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.limitPct)}%, {r.exec.limitDistancePct.toFixed(1)}%)</span></p>
+              <p className="text-[10px] text-muted-foreground tabular-nums">@ {formatPrice(r.limitPrice)} · ~{r.limitQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
             </div>
             <button onClick={() => copy(`Limit BUY ${r.token.symbol} $${r.limitUsd.toFixed(2)} @ $${r.limitPrice.toFixed(2)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
             <a href={HL_LINKS[r.token.symbol]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded bg-primary/10 text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
