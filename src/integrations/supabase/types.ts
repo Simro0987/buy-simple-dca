@@ -24,6 +24,7 @@ export type Database = {
           dca_frequency: string
           dca_horizon_weeks: number
           default_amount: number
+          dynamic_execution_enabled: boolean
           eth_address: string | null
           eth_arb_address: string | null
           etherscan_api_key: string | null
@@ -57,6 +58,7 @@ export type Database = {
           dca_frequency?: string
           dca_horizon_weeks?: number
           default_amount?: number
+          dynamic_execution_enabled?: boolean
           eth_address?: string | null
           eth_arb_address?: string | null
           etherscan_api_key?: string | null
@@ -90,6 +92,7 @@ export type Database = {
           dca_frequency?: string
           dca_horizon_weeks?: number
           default_amount?: number
+          dynamic_execution_enabled?: boolean
           eth_address?: string | null
           eth_arb_address?: string | null
           etherscan_api_key?: string | null
@@ -350,8 +353,18 @@ export type Database = {
       weekly_scores: {
         Row: {
           base_allocation: number | null
+          btc_limit_distance: number | null
+          btc_limit_pct: number | null
+          btc_market_pct: number | null
+          btc_momentum_30d: number | null
+          btc_volatility_30d: number | null
           cash_reserve: number | null
           created_at: string
+          eth_limit_distance: number | null
+          eth_limit_pct: number | null
+          eth_market_pct: number | null
+          eth_momentum_30d: number | null
+          eth_volatility_30d: number | null
           final_allocation: number | null
           flush_score: number | null
           id: string
@@ -362,14 +375,29 @@ export type Database = {
           risk_score: number | null
           score: number
           sentiment_score: number | null
+          sol_limit_distance: number | null
+          sol_limit_pct: number | null
+          sol_market_pct: number | null
+          sol_momentum_30d: number | null
+          sol_volatility_30d: number | null
           trend_score: number | null
           week_number: number
           weekly_capital: number | null
         }
         Insert: {
           base_allocation?: number | null
+          btc_limit_distance?: number | null
+          btc_limit_pct?: number | null
+          btc_market_pct?: number | null
+          btc_momentum_30d?: number | null
+          btc_volatility_30d?: number | null
           cash_reserve?: number | null
           created_at?: string
+          eth_limit_distance?: number | null
+          eth_limit_pct?: number | null
+          eth_market_pct?: number | null
+          eth_momentum_30d?: number | null
+          eth_volatility_30d?: number | null
           final_allocation?: number | null
           flush_score?: number | null
           id?: string
@@ -380,14 +408,29 @@ export type Database = {
           risk_score?: number | null
           score: number
           sentiment_score?: number | null
+          sol_limit_distance?: number | null
+          sol_limit_pct?: number | null
+          sol_market_pct?: number | null
+          sol_momentum_30d?: number | null
+          sol_volatility_30d?: number | null
           trend_score?: number | null
           week_number: number
           weekly_capital?: number | null
         }
         Update: {
           base_allocation?: number | null
+          btc_limit_distance?: number | null
+          btc_limit_pct?: number | null
+          btc_market_pct?: number | null
+          btc_momentum_30d?: number | null
+          btc_volatility_30d?: number | null
           cash_reserve?: number | null
           created_at?: string
+          eth_limit_distance?: number | null
+          eth_limit_pct?: number | null
+          eth_market_pct?: number | null
+          eth_momentum_30d?: number | null
+          eth_volatility_30d?: number | null
           final_allocation?: number | null
           flush_score?: number | null
           id?: string
@@ -398,6 +441,11 @@ export type Database = {
           risk_score?: number | null
           score?: number
           sentiment_score?: number | null
+          sol_limit_distance?: number | null
+          sol_limit_pct?: number | null
+          sol_market_pct?: number | null
+          sol_momentum_30d?: number | null
+          sol_volatility_30d?: number | null
           trend_score?: number | null
           week_number?: number
           weekly_capital?: number | null
