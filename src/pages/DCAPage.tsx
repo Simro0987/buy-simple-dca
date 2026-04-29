@@ -6,6 +6,7 @@ import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 import { FactorOverrideCard } from '@/components/dca/FactorOverrideCard';
 import { RegimeOverrideCard } from '@/components/dca/RegimeOverrideCard';
 import { BreakdownTable } from '@/components/dca/BreakdownTable';
+import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
@@ -402,6 +403,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* BREAKDOWN TABLE — fixed allocation 64/25/11 × 60/40 split */}
       <BreakdownTable plan={plan} />
+
+      {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split */}
+      <DynamicExecutionCard score={effectiveScore} prices={prices} />
 
       {/* INPUTS */}
       <div className="glass-card p-4 space-y-3">
