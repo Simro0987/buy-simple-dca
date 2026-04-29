@@ -317,6 +317,12 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
       {/* Telegram callback history */}
       <CallbackHistoryCard lang={lang} />
 
+      {/* Initial holdings & cost basis */}
+      <InitialHoldingsCard />
+
+      {/* Backup & restore */}
+      <BackupRestoreCard />
+
       {/* CSV Export */}
       <CsvExport lang={lang} />
     </div>
