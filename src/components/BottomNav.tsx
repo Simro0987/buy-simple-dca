@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet, Home } from 'lucide-react';
+import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet, Home, Calculator as CalcIcon } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'settings';
+export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'allocator' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -25,6 +25,7 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'profit', labelSk: 'Zisky', labelEn: 'Profit', icon: DollarSign },
   { id: 'staking', labelSk: 'Stake', labelEn: 'Stake', icon: Coins },
   { id: 'wallets', labelSk: 'Wallet', labelEn: 'Wallet', icon: Wallet },
+  { id: 'allocator', labelSk: 'Alokátor', labelEn: 'Allocator', icon: CalcIcon },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 

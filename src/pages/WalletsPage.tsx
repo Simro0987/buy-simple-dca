@@ -1,24 +1,27 @@
-import { useState, useEffect } from 'react';
-import { Plus, Trash2, Wallet, RefreshCw, AlertCircle } from 'lucide-react';
-import { Lang, t } from '@/lib/i18n';
-import { WalletEntry, loadWallets, saveWallets, getChainLabel, getChainColor } from '@/lib/wallets';
+import { useState, useEffect, useMemo } from 'react';
+import { Plus, Trash2, Wallet, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
+import { Lang } from '@/lib/i18n';
+import { WalletEntry, ChainId, loadWallets, saveWallets, getChainLabel, getChainColor, getExplorerUrl } from '@/lib/wallets';
 import { useWalletBalances, OnChainWalletResult } from '@/hooks/useWalletBalances';
 import { Input } from '@/components/ui/input';
+import { usePrices } from '@/hooks/usePrices';
+import { formatUsd } from '@/lib/crypto';
 
 interface Props { lang: Lang; }
 
-const CHAINS: WalletEntry['chain'][] = ['btc', 'eth', 'sol'];
+const CHAINS: ChainId[] = ['btc', 'eth', 'sol', 'arb'];
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);
   const [adding, setAdding] = useState(false);
-  const [newChain, setNewChain] = useState<WalletEntry['chain']>('btc');
+  const [newChain, setNewChain] = useState<ChainId>('btc');
   const [newAddress, setNewAddress] = useState('');
   const { data: balances, isFetching, refetch, error } = useWalletBalances(wallets);
+  const { data: prices } = usePrices();
 
-  const findResult = (chain: WalletEntry['chain'], address: string): OnChainWalletResult | undefined => {
+  const findResult = (chain: ChainId, address: string): OnChainWalletResult | undefined => {
     if (!balances) return undefined;
-    return balances[chain].find(r => r.address === address);
+    return balances[chain]?.find(r => r.address === address);
   };
 
   useEffect(() => { saveWallets(wallets); }, [wallets]);
@@ -46,6 +49,25 @@ export function WalletsPage({ lang }: Props) {
     color: getChainColor(chain),
     wallets: wallets.filter(w => w.chain === chain),
   })).filter(g => g.wallets.length > 0);
+
+  // Total on-chain value in USD
+  const totalUsd = useMemo(() => {
+    if (!balances || !prices) return 0;
+    let total = 0;
+    for (const chain of CHAINS) {
+      for (const r of balances[chain] ?? []) {
+        if (!r.ok) continue;
+        if (r.balanceBtc) total += r.balanceBtc * (prices.bitcoin?.usd ?? 0);
+        if (r.native) total += r.native.balance * (prices[r.native.coingeckoId]?.usd ?? 0);
+        for (const tok of r.tokens ?? []) {
+          if (tok.coingeckoId && prices[tok.coingeckoId]) {
+            total += tok.balance * prices[tok.coingeckoId].usd;
+          }
+        }
+      }
+    }
+    return total;
+  }, [balances, prices]);
 
   return (
     <div className="space-y-4">
@@ -119,6 +141,17 @@ export function WalletsPage({ lang }: Props) {
         </div>
       )}
 
+      {wallets.length > 0 && (
+        <div className="glass-card p-4">
+          <p className="text-[10px] uppercase text-muted-foreground tracking-wide">
+            {lang === 'sk' ? 'Spolu on-chain (USD)' : 'Total on-chain (USD)'}
+          </p>
+          <p className="text-2xl font-bold text-foreground tabular-nums mt-0.5">
+            {formatUsd(totalUsd)}
+          </p>
+        </div>
+      )}
+
       {grouped.length === 0 && !adding && (
         <div className="glass-card p-8 flex flex-col items-center gap-3 text-center">
           <Wallet className="w-10 h-10 text-muted-foreground" />
@@ -153,6 +186,15 @@ export function WalletsPage({ lang }: Props) {
                       <p className="text-[10px] text-muted-foreground mt-0.5">{lang === 'sk' ? 'Načítavam…' : 'Loading…'}</p>
                     )}
                   </div>
+                  <a
+                    href={getExplorerUrl(w.chain, w.address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors shrink-0"
+                    aria-label="Explorer"
+                  >
+                    <ExternalLink className="w-4 h-4" />
+                  </a>
                   <button
                     onClick={() => removeWallet(w.id)}
                     className="p-1.5 rounded-lg text-destructive hover:bg-destructive/10 transition-colors shrink-0"

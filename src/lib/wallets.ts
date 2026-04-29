@@ -1,6 +1,8 @@
+export type ChainId = 'btc' | 'eth' | 'sol' | 'arb';
+
 export interface WalletEntry {
   id: string;
-  chain: 'btc' | 'eth' | 'sol';
+  chain: ChainId;
   label: string;
   address: string;
 }
@@ -74,20 +76,31 @@ export function saveWallets(wallets: WalletEntry[]): void {
   localStorage.setItem(WALLET_STORAGE_KEY, JSON.stringify(wallets));
 }
 
-export function getChainLabel(chain: WalletEntry['chain']): string {
-  const labels: Record<string, string> = {
-    btc: 'BTC (Trezor)',
-    eth: 'ETH (Ledger)',
-    sol: 'SOL (Ledger)',
+export function getChainLabel(chain: ChainId): string {
+  const labels: Record<ChainId, string> = {
+    btc: 'BTC (Taproot)',
+    eth: 'ETH (Mainnet)',
+    sol: 'SOL (Solana)',
+    arb: 'ARB (Arbitrum)',
   };
-  return labels[chain] || chain.toUpperCase();
+  return labels[chain] || (chain as string).toUpperCase();
 }
 
-export function getChainColor(chain: WalletEntry['chain']): string {
-  const colors: Record<string, string> = {
+export function getChainColor(chain: ChainId): string {
+  const colors: Record<ChainId, string> = {
     btc: '#F7931A',
     eth: '#627EEA',
     sol: '#9945FF',
+    arb: '#28A0F0',
   };
   return colors[chain] || '#888';
+}
+
+export function getExplorerUrl(chain: ChainId, address: string): string {
+  switch (chain) {
+    case 'btc': return `https://mempool.space/address/${address}`;
+    case 'eth': return `https://etherscan.io/address/${address}`;
+    case 'sol': return `https://solscan.io/account/${address}`;
+    case 'arb': return `https://arbiscan.io/address/${address}`;
+  }
 }

@@ -3,6 +3,8 @@ import { calculateDCA, formatUsd, formatPrice, formatQuantity, TOKENS, PriceData
 import { CopyButton } from '@/components/CopyButton';
 import { usePrices, useFearGreed, useAthData } from '@/hooks/usePrices';
 import { useAdvancedMarket } from '@/hooks/useAdvancedMarket';
+import { useAppSettings } from '@/hooks/useAppSettings';
+import { ExecutionPlanCard } from '@/components/dca/ExecutionPlanCard';
 import { Lang } from '@/lib/i18n';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -165,7 +167,8 @@ export function ActionPage({ lang }: Props) {
   const { data: fearGreed } = useFearGreed();
   const { data: athData } = useAthData();
   const { data: marketData } = useAdvancedMarket();
-  const budget = Number(localStorage.getItem('dca-budget')) || 100;
+  const { data: settings } = useAppSettings();
+  const budget = Number(settings?.default_amount ?? localStorage.getItem('dca-budget') ?? 100);
   const [executedIds, setExecutedIds] = useState<Set<string>>(new Set());
   const [autoPrefs, setAutoPrefs] = useState<AutoExecPrefs>(getAutoExecPrefs);
 
@@ -208,6 +211,14 @@ export function ActionPage({ lang }: Props) {
         <Zap className="w-5 h-5 text-primary" />
         <h1 className="text-xl font-bold text-foreground">Smart akcie</h1>
       </div>
+
+      {/* Execution Plan (Monday checklist) */}
+      <ExecutionPlanCard
+        prices={prices}
+        weeklyCapital={budget}
+        regime={(marketData as any)?.regime}
+        score={marketData?.signalScore}
+      />
 
       {/* Signal Summary */}
       {marketData && (

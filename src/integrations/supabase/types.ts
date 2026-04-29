@@ -16,6 +16,7 @@ export type Database = {
     Tables: {
       app_settings: {
         Row: {
+          arb_addresses: Json
           arbiscan_api_key: string | null
           btc_address: string | null
           created_at: string
@@ -27,6 +28,7 @@ export type Database = {
           eth_arb_address: string | null
           etherscan_api_key: string | null
           helius_api_key: string | null
+          holdings_strategy: Json
           id: string
           jitosol_contract: string
           manual_holdings: Json
@@ -43,8 +45,10 @@ export type Database = {
           total_capital: number
           updated_at: string
           wsteth_contract: string
+          yield_apys: Json
         }
         Insert: {
+          arb_addresses?: Json
           arbiscan_api_key?: string | null
           btc_address?: string | null
           created_at?: string
@@ -56,6 +60,7 @@ export type Database = {
           eth_arb_address?: string | null
           etherscan_api_key?: string | null
           helius_api_key?: string | null
+          holdings_strategy?: Json
           id?: string
           jitosol_contract?: string
           manual_holdings?: Json
@@ -72,8 +77,10 @@ export type Database = {
           total_capital?: number
           updated_at?: string
           wsteth_contract?: string
+          yield_apys?: Json
         }
         Update: {
+          arb_addresses?: Json
           arbiscan_api_key?: string | null
           btc_address?: string | null
           created_at?: string
@@ -85,6 +92,7 @@ export type Database = {
           eth_arb_address?: string | null
           etherscan_api_key?: string | null
           helius_api_key?: string | null
+          holdings_strategy?: Json
           id?: string
           jitosol_contract?: string
           manual_holdings?: Json
@@ -101,6 +109,7 @@ export type Database = {
           total_capital?: number
           updated_at?: string
           wsteth_contract?: string
+          yield_apys?: Json
         }
         Relationships: []
       }
@@ -188,6 +197,7 @@ export type Database = {
       limit_orders: {
         Row: {
           amount_usd: number
+          cancelled_at: string | null
           coin: string
           created_at: string
           filled_at: string | null
@@ -198,6 +208,7 @@ export type Database = {
         }
         Insert: {
           amount_usd: number
+          cancelled_at?: string | null
           coin: string
           created_at?: string
           filled_at?: string | null
@@ -208,6 +219,7 @@ export type Database = {
         }
         Update: {
           amount_usd?: number
+          cancelled_at?: string | null
           coin?: string
           created_at?: string
           filled_at?: string | null

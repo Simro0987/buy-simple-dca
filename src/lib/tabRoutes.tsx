@@ -15,6 +15,7 @@ import { AdvancedMarketPage } from '@/pages/AdvancedMarketPage';
 import { ProfitTakingPage } from '@/pages/ProfitTakingPage';
 import { StakingPage } from '@/pages/StakingPage';
 import { WalletsPage } from '@/pages/WalletsPage';
+import { AllocationCalculatorPage } from '@/pages/AllocationCalculatorPage';
 import { HomePage } from '@/pages/HomePage';
 import { ExecutionTracker } from '@/components/ExecutionTracker';
 import { WeeklyChecklist } from '@/components/WeeklyChecklist';
@@ -53,6 +54,7 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   ),
   staking: ({ lang }) => <StakingPage lang={lang} />,
   wallets: ({ lang }) => <WalletsPage lang={lang} />,
+  allocator: ({ lang }) => <AllocationCalculatorPage lang={lang} />,
   settings: ({ lang, toggleLang, theme, setTheme }) => (
     <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />
   ),
