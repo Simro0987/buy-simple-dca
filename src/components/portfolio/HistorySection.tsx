@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useState } from 'react';
 import { Download, FileText, Filter, ChevronDown, ChevronRight } from 'lucide-react';
-import { TOKENS, formatUsd } from '@/lib/crypto';
+import { formatUsd } from '@/lib/crypto';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { usePrices } from '@/hooks/usePrices';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
@@ -151,79 +151,104 @@ export function HistorySection() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="glass-card p-2 overflow-x-auto">
+      {/* Table — compact main row, expandable per-coin detail */}
+      <div className="glass-card p-2">
         {filtered.length === 0 ? (
           <p className="text-xs text-center text-muted-foreground py-6">Zatiaľ žiadne nákupy</p>
         ) : (
-          <table className="w-full text-[10px]">
+          <table className="w-full text-[11px]">
             <thead>
               <tr className="text-muted-foreground border-b border-border">
                 <th className="w-4 p-1"></th>
                 <th className="text-left p-1">Dátum</th>
-                <th className="text-right p-1">USD</th>
-                <th className="text-right p-1">BTC</th>
-                <th className="text-right p-1">ETH</th>
-                <th className="text-right p-1">SOL</th>
-                <th className="text-right p-1">Reg.</th>
+                <th className="text-right p-1">Investované</th>
+                <th className="text-right p-1">PnL</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map(r => {
                 const isOpen = expanded === r.id;
                 const ws = (r as any).week_number != null ? scoresByWeek.get((r as any).week_number) : null;
+
+                // Weekly PnL: market value at current prices vs. invested USD
+                const btcQty = Number(r.btc_amount) || 0;
+                const ethQty = Number(r.eth_amount) || 0;
+                const solQty = Number(r.sol_amount) || 0;
+                const invested = Number(r.total_amount) || 0;
+                const nowVal =
+                  btcQty * (prices?.bitcoin?.usd ?? 0) +
+                  ethQty * (prices?.ethereum?.usd ?? 0) +
+                  solQty * (prices?.solana?.usd ?? 0);
+                const costVal =
+                  btcQty * Number(r.btc_price) +
+                  ethQty * Number(r.eth_price) +
+                  solQty * Number(r.sol_price);
+                const basis = costVal > 0 ? costVal : invested;
+                const pnl = nowVal - basis;
+                const pnlPct = basis > 0 ? (pnl / basis) * 100 : 0;
+                const pnlColor = pnl >= 0 ? 'text-emerald-400' : 'text-rose-400';
+                const pnlReady = nowVal > 0 && basis > 0;
+
                 return (
                   <Fragment key={r.id}>
                     <tr
                       onClick={() => setExpanded(isOpen ? null : r.id)}
                       className="border-b border-border/40 cursor-pointer hover:bg-secondary/30"
                     >
-                      <td className="p-1 text-muted-foreground">
-                        {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      <td className="p-1 text-muted-foreground align-middle">
+                        {isOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
                       </td>
-                      <td className="p-1 text-foreground">{new Date(r.created_at).toLocaleDateString('sk', { month: 'numeric', day: 'numeric' })}</td>
-                      <td className="p-1 text-right tabular-nums text-foreground">${Number(r.total_amount).toFixed(0)}</td>
-                      <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.btc_amount).toFixed(5)}</td>
-                      <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.eth_amount).toFixed(3)}</td>
-                      <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.sol_amount).toFixed(2)}</td>
-                      <td className="p-1 text-right text-muted-foreground">{(r as any).regime?.slice(0, 4) || '-'}</td>
+                      <td className="p-1 text-foreground tabular-nums">
+                        {new Date(r.created_at).toLocaleDateString('sk', { year: '2-digit', month: '2-digit', day: '2-digit' })}
+                      </td>
+                      <td className="p-1 text-right tabular-nums text-foreground font-semibold">
+                        ${invested.toFixed(0)}
+                      </td>
+                      <td className={`p-1 text-right tabular-nums font-semibold ${pnlReady ? pnlColor : 'text-muted-foreground'}`}>
+                        {pnlReady
+                          ? `${pnl >= 0 ? '+' : ''}$${Math.abs(pnl).toFixed(0)} (${pnl >= 0 ? '+' : ''}${pnlPct.toFixed(1)}%)`
+                          : '–'}
+                      </td>
                     </tr>
                     {isOpen && (
                       <tr key={`${r.id}-detail`} className="bg-secondary/20 border-b border-border/40">
-                        <td colSpan={7} className="p-2">
+                        <td colSpan={4} className="p-2">
+                          {/* Per-coin amounts (always available from purchase row) */}
+                          <div className="grid grid-cols-3 gap-1.5 mb-2">
+                            <DetailMini label="BTC" value={`${btcQty.toFixed(5)}`} sub={`@ $${Number(r.btc_price).toFixed(0)}`} />
+                            <DetailMini label="ETH" value={`${ethQty.toFixed(3)}`} sub={`@ $${Number(r.eth_price).toFixed(0)}`} />
+                            <DetailMini label="SOL" value={`${solQty.toFixed(2)}`} sub={`@ $${Number(r.sol_price).toFixed(2)}`} />
+                          </div>
+
+                          {/* Per-coin execution split (from weekly_scores if saved) */}
                           {ws ? (
                             <div className="space-y-1">
                               <p className="text-[9px] uppercase text-muted-foreground font-semibold">Per-coin execution</p>
-                              <table className="w-full text-[10px]">
-                                <thead className="text-muted-foreground">
-                                  <tr>
-                                    <th className="text-left p-0.5">Coin</th>
-                                    <th className="text-right p-0.5">Market %</th>
-                                    <th className="text-right p-0.5">Limit %</th>
-                                    <th className="text-right p-0.5">Distance</th>
-                                    <th className="text-right p-0.5">Vol 30D</th>
-                                    <th className="text-right p-0.5">Mom 30D</th>
-                                  </tr>
-                                </thead>
-                                <tbody className="text-foreground tabular-nums">
-                                  {(['btc', 'eth', 'sol'] as const).map(k => (
-                                    <tr key={k}>
-                                      <td className="p-0.5 font-semibold">{k.toUpperCase()}</td>
-                                      <td className="text-right p-0.5">{ws[`${k}_market_pct`] != null ? `${Number(ws[`${k}_market_pct`]).toFixed(0)}%` : '–'}</td>
-                                      <td className="text-right p-0.5">{ws[`${k}_limit_pct`] != null ? `${Number(ws[`${k}_limit_pct`]).toFixed(0)}%` : '–'}</td>
-                                      <td className="text-right p-0.5">{ws[`${k}_limit_distance`] != null ? `${Number(ws[`${k}_limit_distance`]).toFixed(1)}%` : '–'}</td>
-                                      <td className="text-right p-0.5 text-muted-foreground">{ws[`${k}_volatility_30d`] != null ? `${Number(ws[`${k}_volatility_30d`]).toFixed(2)}%` : '–'}</td>
-                                      <td className="text-right p-0.5 text-muted-foreground">{ws[`${k}_momentum_30d`] != null ? `${Number(ws[`${k}_momentum_30d`]).toFixed(1)}%` : '–'}</td>
-                                    </tr>
-                                  ))}
-                                </tbody>
-                              </table>
-                              {(r as any).score != null && (
-                                <p className="text-[9px] text-muted-foreground pt-1">Skóre: {(r as any).score} · Regime: {(r as any).regime || '–'}</p>
+                              <div className="space-y-0.5">
+                                {(['btc', 'eth', 'sol'] as const).map(k => {
+                                  const m = ws[`${k}_market_pct`];
+                                  const l = ws[`${k}_limit_pct`];
+                                  const d = ws[`${k}_limit_distance`];
+                                  return (
+                                    <div key={k} className="flex items-center justify-between text-[10px] bg-background/40 rounded px-2 py-1 tabular-nums">
+                                      <span className="font-semibold text-foreground">{k.toUpperCase()}</span>
+                                      <span className="text-muted-foreground">
+                                        Mkt {m != null ? `${Number(m).toFixed(0)}%` : '–'}
+                                        {' / '}Lmt {l != null ? `${Number(l).toFixed(0)}%` : '–'}
+                                        {' / '}Dist {d != null ? `${Number(d).toFixed(1)}%` : '–'}
+                                      </span>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              {((r as any).score != null || (r as any).regime) && (
+                                <p className="text-[9px] text-muted-foreground pt-1">
+                                  Skóre: {(r as any).score ?? '–'} · Regime: {(r as any).regime || '–'}
+                                </p>
                               )}
                             </div>
                           ) : (
-                            <p className="text-[10px] text-muted-foreground text-center py-2">Per-coin metriky neuložené pre tento týždeň</p>
+                            <p className="text-[10px] text-muted-foreground text-center py-1">Per-coin metriky neuložené pre tento týždeň</p>
                           )}
                         </td>
                       </tr>
@@ -284,6 +309,16 @@ function Stat({ label, value }: { label: string; value: string }) {
     <div className="bg-secondary/40 rounded p-2">
       <p className="text-[9px] uppercase text-muted-foreground">{label}</p>
       <p className="text-xs font-bold text-foreground tabular-nums mt-0.5">{value}</p>
+    </div>
+  );
+}
+
+function DetailMini({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-background/40 rounded px-2 py-1 text-center">
+      <p className="text-[9px] uppercase text-muted-foreground font-semibold">{label}</p>
+      <p className="text-[11px] text-foreground tabular-nums">{value}</p>
+      {sub && <p className="text-[9px] text-muted-foreground tabular-nums">{sub}</p>}
     </div>
   );
 }
