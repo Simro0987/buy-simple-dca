@@ -312,3 +312,13 @@ function Stat({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
+
+function DetailMini({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="bg-background/40 rounded px-2 py-1 text-center">
+      <p className="text-[9px] uppercase text-muted-foreground font-semibold">{label}</p>
+      <p className="text-[11px] text-foreground tabular-nums">{value}</p>
+      {sub && <p className="text-[9px] text-muted-foreground tabular-nums">{sub}</p>}
+    </div>
+  );
+}
