@@ -498,8 +498,9 @@ export function DCAPage({ lang: _lang }: Props) {
           {[
             'Skontroluj nevyplnené limit ordery z minulého týždňa → zruš ich',
             `Pripočítaj zrušený limit kapitál k tomuto týždňu (rezerva: ${formatUsd(plan.reservedUsd)})`,
-            `Zadaj 3 market ordery (BTC ${formatUsd(plan.perAsset[0].marketUsd)} · ETH ${formatUsd(plan.perAsset[1].marketUsd)} · SOL ${formatUsd(plan.perAsset[2].marketUsd)})`,
-            `Zadaj 3 limit ordery (−${plan.limitDiscountPct} % od market ceny)`,
+            'Zadaj market ordery podľa Dynamic Execution Engine vyššie (BTC / ETH / SOL)',
+            'Zadaj limit ordery podľa per-coin distance z Dynamic Execution Engine',
+            'Plné zadanie + Hyperliquid linky nájdeš na stránke Action',
             'Ulož týždeň do histórie tlačidlom nižšie',
           ].map((step, i) => (
             <li key={i} className="flex gap-2">
