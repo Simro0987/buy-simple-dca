@@ -173,7 +173,7 @@ export function HistorySection() {
                 const isOpen = expanded === r.id;
                 const ws = (r as any).week_number != null ? scoresByWeek.get((r as any).week_number) : null;
                 return (
-                  <>
+                  <Fragment key={r.id}>
                     <tr
                       key={r.id}
                       onClick={() => setExpanded(isOpen ? null : r.id)}
