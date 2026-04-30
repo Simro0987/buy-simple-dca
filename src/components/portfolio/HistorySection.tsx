@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { Fragment, useMemo, useState } from 'react';
 import { Download, FileText, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
