@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react';
-import { Download, FileText, Filter } from 'lucide-react';
+import { Download, FileText, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { usePrices } from '@/hooks/usePrices';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 type CoinFilter = 'ALL' | 'BTC' | 'ETH' | 'SOL';
 type SortDir = 'newest' | 'oldest';
