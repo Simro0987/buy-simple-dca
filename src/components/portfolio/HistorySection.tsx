@@ -175,7 +175,6 @@ export function HistorySection() {
                 return (
                   <Fragment key={r.id}>
                     <tr
-                      key={r.id}
                       onClick={() => setExpanded(isOpen ? null : r.id)}
                       className="border-b border-border/40 cursor-pointer hover:bg-secondary/30"
                     >
