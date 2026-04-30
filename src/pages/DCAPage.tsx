@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
-import { CopyButton } from '@/components/CopyButton';
+
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 import { FactorOverrideCard } from '@/components/dca/FactorOverrideCard';
@@ -10,7 +10,7 @@ import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
-import { formatUsd, formatPrice, formatQuantity } from '@/lib/crypto';
+import { formatUsd, formatPrice } from '@/lib/crypto';
 import {
   buildPlan,
   bandLabel,
@@ -486,81 +486,8 @@ export function DCAPage({ lang: _lang }: Props) {
         </p>
       </div>
 
-      {/* EXECUTION PLAN */}
-      <div className="glass-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Exekučný plán</h2>
-          <div className="flex gap-1.5 text-[10px]">
-            <span className="px-2 py-0.5 rounded-full bg-secondary text-foreground">Market 60%</span>
-            <span className="px-2 py-0.5 rounded-full bg-secondary text-foreground">Limit 40% · −{plan.limitDiscountPct}%</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="bg-secondary/60 rounded-lg p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Market</p>
-            <p className="text-lg font-bold text-foreground tabular-nums">{formatUsd(plan.marketUsd)}</p>
-          </div>
-          <div className="bg-secondary/60 rounded-lg p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Limit (−{plan.limitDiscountPct}%)</p>
-            <p className="text-lg font-bold text-foreground tabular-nums">{formatUsd(plan.limitUsd)}</p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {plan.perAsset.map(a => (
-            <div key={a.symbol} className="bg-secondary/40 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-                    style={{ backgroundColor: a.color + '20', color: a.color }}
-                  >
-                    {a.symbol.slice(0, 2)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{a.symbol}</p>
-                    <p className="text-[10px] text-muted-foreground">{Math.round(a.weight * 100)}%</p>
-                  </div>
-                </div>
-                <p className="text-sm font-bold text-foreground tabular-nums">
-                  {formatUsd(a.marketUsd + a.limitUsd)}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-background/40 rounded p-2">
-                  <p className="text-[10px] text-muted-foreground">Market</p>
-                  <p className="font-semibold text-foreground tabular-nums">{formatUsd(a.marketUsd)}</p>
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {a.currentPrice > 0 ? `${formatQuantity(a.marketQty, a.symbol)} ${a.symbol}` : '—'}
-                  </p>
-                </div>
-                <div className="bg-background/40 rounded p-2">
-                  <p className="text-[10px] text-muted-foreground">Limit −{a.limitDiscountPct}%</p>
-                  <p className="font-semibold text-foreground tabular-nums">{formatUsd(a.limitUsd)}</p>
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {a.limitPrice > 0 ? `${formatQuantity(a.limitQty, a.symbol)} ${a.symbol}` : '—'}
-                  </p>
-                </div>
-              </div>
-
-              {a.limitPrice > 0 && (
-                <div className="flex items-center justify-between bg-background/40 rounded p-2">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Limit cena</p>
-                    <p className="text-sm font-bold text-foreground tabular-nums">{formatPrice(a.limitPrice)}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Aktuálna: {formatPrice(a.currentPrice)}
-                    </p>
-                  </div>
-                  <CopyButton text={a.limitPrice.toFixed(2)} label="Kopírovať" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* EXECUTION PLAN — full per-coin orders + Hyperliquid links live on the Action page.
+          Removed duplicate fixed 60/40 panel here to keep Dynamic Engine as single source of truth. */}
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">
@@ -571,8 +498,9 @@ export function DCAPage({ lang: _lang }: Props) {
           {[
             'Skontroluj nevyplnené limit ordery z minulého týždňa → zruš ich',
             `Pripočítaj zrušený limit kapitál k tomuto týždňu (rezerva: ${formatUsd(plan.reservedUsd)})`,
-            `Zadaj 3 market ordery (BTC ${formatUsd(plan.perAsset[0].marketUsd)} · ETH ${formatUsd(plan.perAsset[1].marketUsd)} · SOL ${formatUsd(plan.perAsset[2].marketUsd)})`,
-            `Zadaj 3 limit ordery (−${plan.limitDiscountPct} % od market ceny)`,
+            'Zadaj market ordery podľa Dynamic Execution Engine vyššie (BTC / ETH / SOL)',
+            'Zadaj limit ordery podľa per-coin distance z Dynamic Execution Engine',
+            'Plné zadanie + Hyperliquid linky nájdeš na stránke Action',
             'Ulož týždeň do histórie tlačidlom nižšie',
           ].map((step, i) => (
             <li key={i} className="flex gap-2">
