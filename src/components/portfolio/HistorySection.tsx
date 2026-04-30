@@ -228,7 +228,7 @@ export function HistorySection() {
                         </td>
                       </tr>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </tbody>
