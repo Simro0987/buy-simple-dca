@@ -17,6 +17,28 @@ export function HistorySection() {
   const [coin, setCoin] = useState<CoinFilter>('ALL');
   const [year, setYear] = useState<string>('ALL');
   const [sort, setSort] = useState<SortDir>('newest');
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const { data: weeklyScores } = useQuery({
+    queryKey: ['weekly_scores_history'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekly_scores')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const scoresByWeek = useMemo(() => {
+    const m = new Map<number, any>();
+    (weeklyScores ?? []).forEach((s: any) => {
+      if (!m.has(s.week_number)) m.set(s.week_number, s);
+    });
+    return m;
+  }, [weeklyScores]);
 
   const years = useMemo(() => {
     const ys = new Set(metrics.history.map(r => new Date(r.created_at).getUTCFullYear().toString()));
