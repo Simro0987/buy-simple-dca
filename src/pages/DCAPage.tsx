@@ -486,81 +486,8 @@ export function DCAPage({ lang: _lang }: Props) {
         </p>
       </div>
 
-      {/* EXECUTION PLAN */}
-      <div className="glass-card p-4">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Exekučný plán</h2>
-          <div className="flex gap-1.5 text-[10px]">
-            <span className="px-2 py-0.5 rounded-full bg-secondary text-foreground">Market 60%</span>
-            <span className="px-2 py-0.5 rounded-full bg-secondary text-foreground">Limit 40% · −{plan.limitDiscountPct}%</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-2 mb-4">
-          <div className="bg-secondary/60 rounded-lg p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Market</p>
-            <p className="text-lg font-bold text-foreground tabular-nums">{formatUsd(plan.marketUsd)}</p>
-          </div>
-          <div className="bg-secondary/60 rounded-lg p-3">
-            <p className="text-[10px] uppercase text-muted-foreground">Limit (−{plan.limitDiscountPct}%)</p>
-            <p className="text-lg font-bold text-foreground tabular-nums">{formatUsd(plan.limitUsd)}</p>
-          </div>
-        </div>
-
-        <div className="space-y-3">
-          {plan.perAsset.map(a => (
-            <div key={a.symbol} className="bg-secondary/40 rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div
-                    className="w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold"
-                    style={{ backgroundColor: a.color + '20', color: a.color }}
-                  >
-                    {a.symbol.slice(0, 2)}
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">{a.symbol}</p>
-                    <p className="text-[10px] text-muted-foreground">{Math.round(a.weight * 100)}%</p>
-                  </div>
-                </div>
-                <p className="text-sm font-bold text-foreground tabular-nums">
-                  {formatUsd(a.marketUsd + a.limitUsd)}
-                </p>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div className="bg-background/40 rounded p-2">
-                  <p className="text-[10px] text-muted-foreground">Market</p>
-                  <p className="font-semibold text-foreground tabular-nums">{formatUsd(a.marketUsd)}</p>
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {a.currentPrice > 0 ? `${formatQuantity(a.marketQty, a.symbol)} ${a.symbol}` : '—'}
-                  </p>
-                </div>
-                <div className="bg-background/40 rounded p-2">
-                  <p className="text-[10px] text-muted-foreground">Limit −{a.limitDiscountPct}%</p>
-                  <p className="font-semibold text-foreground tabular-nums">{formatUsd(a.limitUsd)}</p>
-                  <p className="text-[10px] text-muted-foreground tabular-nums">
-                    {a.limitPrice > 0 ? `${formatQuantity(a.limitQty, a.symbol)} ${a.symbol}` : '—'}
-                  </p>
-                </div>
-              </div>
-
-              {a.limitPrice > 0 && (
-                <div className="flex items-center justify-between bg-background/40 rounded p-2">
-                  <div>
-                    <p className="text-[10px] text-muted-foreground">Limit cena</p>
-                    <p className="text-sm font-bold text-foreground tabular-nums">{formatPrice(a.limitPrice)}</p>
-                    <p className="text-[10px] text-muted-foreground">
-                      Aktuálna: {formatPrice(a.currentPrice)}
-                    </p>
-                  </div>
-                  <CopyButton text={a.limitPrice.toFixed(2)} label="Kopírovať" />
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
+      {/* EXECUTION PLAN — full per-coin orders + Hyperliquid links live on the Action page.
+          Removed duplicate fixed 60/40 panel here to keep Dynamic Engine as single source of truth. */}
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">
