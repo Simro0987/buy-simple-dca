@@ -1,10 +1,12 @@
-import { useMemo, useState } from 'react';
-import { Download, FileText, Filter } from 'lucide-react';
+import { Fragment, useMemo, useState } from 'react';
+import { Download, FileText, Filter, ChevronDown, ChevronRight } from 'lucide-react';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { usePrices } from '@/hooks/usePrices';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 type CoinFilter = 'ALL' | 'BTC' | 'ETH' | 'SOL';
 type SortDir = 'newest' | 'oldest';
@@ -15,6 +17,28 @@ export function HistorySection() {
   const [coin, setCoin] = useState<CoinFilter>('ALL');
   const [year, setYear] = useState<string>('ALL');
   const [sort, setSort] = useState<SortDir>('newest');
+  const [expanded, setExpanded] = useState<string | null>(null);
+
+  const { data: weeklyScores } = useQuery({
+    queryKey: ['weekly_scores_history'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('weekly_scores')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 60_000,
+  });
+  const scoresByWeek = useMemo(() => {
+    const m = new Map<number, any>();
+    (weeklyScores ?? []).forEach((s: any) => {
+      if (!m.has(s.week_number)) m.set(s.week_number, s);
+    });
+    return m;
+  }, [weeklyScores]);
 
   const years = useMemo(() => {
     const ys = new Set(metrics.history.map(r => new Date(r.created_at).getUTCFullYear().toString()));
@@ -135,6 +159,7 @@ export function HistorySection() {
           <table className="w-full text-[10px]">
             <thead>
               <tr className="text-muted-foreground border-b border-border">
+                <th className="w-4 p-1"></th>
                 <th className="text-left p-1">Dátum</th>
                 <th className="text-right p-1">USD</th>
                 <th className="text-right p-1">BTC</th>
@@ -144,16 +169,68 @@ export function HistorySection() {
               </tr>
             </thead>
             <tbody>
-              {filtered.map(r => (
-                <tr key={r.id} className="border-b border-border/40">
-                  <td className="p-1 text-foreground">{new Date(r.created_at).toLocaleDateString('sk', { month: 'numeric', day: 'numeric' })}</td>
-                  <td className="p-1 text-right tabular-nums text-foreground">${Number(r.total_amount).toFixed(0)}</td>
-                  <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.btc_amount).toFixed(5)}</td>
-                  <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.eth_amount).toFixed(3)}</td>
-                  <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.sol_amount).toFixed(2)}</td>
-                  <td className="p-1 text-right text-muted-foreground">{(r as any).regime?.slice(0, 4) || '-'}</td>
-                </tr>
-              ))}
+              {filtered.map(r => {
+                const isOpen = expanded === r.id;
+                const ws = (r as any).week_number != null ? scoresByWeek.get((r as any).week_number) : null;
+                return (
+                  <Fragment key={r.id}>
+                    <tr
+                      onClick={() => setExpanded(isOpen ? null : r.id)}
+                      className="border-b border-border/40 cursor-pointer hover:bg-secondary/30"
+                    >
+                      <td className="p-1 text-muted-foreground">
+                        {isOpen ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      </td>
+                      <td className="p-1 text-foreground">{new Date(r.created_at).toLocaleDateString('sk', { month: 'numeric', day: 'numeric' })}</td>
+                      <td className="p-1 text-right tabular-nums text-foreground">${Number(r.total_amount).toFixed(0)}</td>
+                      <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.btc_amount).toFixed(5)}</td>
+                      <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.eth_amount).toFixed(3)}</td>
+                      <td className="p-1 text-right tabular-nums text-muted-foreground">{Number(r.sol_amount).toFixed(2)}</td>
+                      <td className="p-1 text-right text-muted-foreground">{(r as any).regime?.slice(0, 4) || '-'}</td>
+                    </tr>
+                    {isOpen && (
+                      <tr key={`${r.id}-detail`} className="bg-secondary/20 border-b border-border/40">
+                        <td colSpan={7} className="p-2">
+                          {ws ? (
+                            <div className="space-y-1">
+                              <p className="text-[9px] uppercase text-muted-foreground font-semibold">Per-coin execution</p>
+                              <table className="w-full text-[10px]">
+                                <thead className="text-muted-foreground">
+                                  <tr>
+                                    <th className="text-left p-0.5">Coin</th>
+                                    <th className="text-right p-0.5">Market %</th>
+                                    <th className="text-right p-0.5">Limit %</th>
+                                    <th className="text-right p-0.5">Distance</th>
+                                    <th className="text-right p-0.5">Vol 30D</th>
+                                    <th className="text-right p-0.5">Mom 30D</th>
+                                  </tr>
+                                </thead>
+                                <tbody className="text-foreground tabular-nums">
+                                  {(['btc', 'eth', 'sol'] as const).map(k => (
+                                    <tr key={k}>
+                                      <td className="p-0.5 font-semibold">{k.toUpperCase()}</td>
+                                      <td className="text-right p-0.5">{ws[`${k}_market_pct`] != null ? `${Number(ws[`${k}_market_pct`]).toFixed(0)}%` : '–'}</td>
+                                      <td className="text-right p-0.5">{ws[`${k}_limit_pct`] != null ? `${Number(ws[`${k}_limit_pct`]).toFixed(0)}%` : '–'}</td>
+                                      <td className="text-right p-0.5">{ws[`${k}_limit_distance`] != null ? `${Number(ws[`${k}_limit_distance`]).toFixed(1)}%` : '–'}</td>
+                                      <td className="text-right p-0.5 text-muted-foreground">{ws[`${k}_volatility_30d`] != null ? `${Number(ws[`${k}_volatility_30d`]).toFixed(2)}%` : '–'}</td>
+                                      <td className="text-right p-0.5 text-muted-foreground">{ws[`${k}_momentum_30d`] != null ? `${Number(ws[`${k}_momentum_30d`]).toFixed(1)}%` : '–'}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {(r as any).score != null && (
+                                <p className="text-[9px] text-muted-foreground pt-1">Skóre: {(r as any).score} · Regime: {(r as any).regime || '–'}</p>
+                              )}
+                            </div>
+                          ) : (
+                            <p className="text-[10px] text-muted-foreground text-center py-2">Per-coin metriky neuložené pre tento týždeň</p>
+                          )}
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         )}
