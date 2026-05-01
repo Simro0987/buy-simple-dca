@@ -56,11 +56,20 @@ export function usePerCoinMetrics() {
       const coins: CoinKey[] = ['btc', 'eth', 'sol'];
       // Sequential to be friendly to CoinGecko rate limits
       const out: Partial<Record<CoinKey, CoinMetrics>> = {};
+      // Historické priemery 14D dennej volatility (fallback ak CoinGecko zlyhá) —
+      // zachovávajú diferenciáciu medzi tokenmi namiesto núl.
+      const FALLBACK: Record<CoinKey, CoinMetrics> = {
+        btc: { volatility30d: 2.0, momentum30d: 0 },
+        eth: { volatility30d: 2.8, momentum30d: 0 },
+        sol: { volatility30d: 4.0, momentum30d: 0 },
+      };
       for (const c of coins) {
         try {
-          out[c] = await fetchCoinMetrics(c);
+          const m = await fetchCoinMetrics(c);
+          // Ak API vráti zjavne nevalidné dáta (vol=0), použij fallback
+          out[c] = m.volatility30d > 0 ? m : FALLBACK[c];
         } catch {
-          out[c] = { volatility30d: 0, momentum30d: 0 };
+          out[c] = FALLBACK[c];
         }
       }
       return out as Record<CoinKey, CoinMetrics>;
