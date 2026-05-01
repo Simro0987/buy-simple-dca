@@ -128,7 +128,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         sol_price: totals.sol_price || 0,
         regime: regime || null,
         score: score || null,
-        notes: dynEnabled ? 'Execution plan (Dynamic Engine)' : 'Execution plan (Fixed 60/40)',
+        notes: 'Execution plan (Dynamic Engine)',
       }).select().single();
       if (pErr) throw pErr;
 
@@ -204,7 +204,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       <div className="glass-card p-3 space-y-2">
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky</p>
-          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>}
+          <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>
         </div>
         {dca.map(r => (
           <div key={`m-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
@@ -223,7 +223,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       <div className="glass-card p-3 space-y-2">
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky</p>
-          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>}
+          <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>
         </div>
         {dca.map(r => (
           <div key={`l-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
