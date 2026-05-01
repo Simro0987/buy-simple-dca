@@ -244,7 +244,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         {[
           { id: 'cancel', label: 'Zruš nesplnené limity z minulého týždňa' },
           { id: 'market', label: 'Zadaj 3 market objednávky (BTC/ETH/SOL)' },
-          { id: 'limit', label: 'Zadaj 3 limit objednávky (-4 % od trhu)' },
+          { id: 'limit', label: 'Zadaj 3 limit objednávky (per-coin distance auto)' },
           { id: 'withdraw', label: 'Vyber BTC do Taproot peňaženky (ak nad limit)' },
           { id: 'save', label: 'Ulož týždeň do histórie' },
         ].map(it => (
