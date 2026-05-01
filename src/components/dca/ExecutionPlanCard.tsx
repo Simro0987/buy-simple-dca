@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAppSettings } from '@/hooks/useAppSettings';
+
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { calcCoinExecution, fixedExecution, type CoinKey, type CoinExecution } from '@/lib/dynamicExecution';
 
