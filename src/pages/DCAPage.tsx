@@ -3,10 +3,9 @@ import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, Tr
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
-import { FactorOverrideCard } from '@/components/dca/FactorOverrideCard';
-import { RegimeOverrideCard } from '@/components/dca/RegimeOverrideCard';
 import { BreakdownTable } from '@/components/dca/BreakdownTable';
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
+import { ExecutionSummaryCard } from '@/components/dca/ExecutionSummaryCard';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
@@ -22,7 +21,6 @@ import {
   type MondayInputs,
   type HistoryEntry,
   type Regime,
-  type FactorKey,
 } from '@/lib/mondayController';
 import { loadTuning, type TuningParams } from '@/lib/moneyMode';
 import { toast } from 'sonner';
@@ -120,8 +118,6 @@ export function DCAPage({ lang: _lang }: Props) {
 
   const prevDeploymentPct = history[0]?.plan.deploymentPct;
   const [tuning, setTuning] = useState<TuningParams>(loadTuning);
-  const [factorOverrides, setFactorOverrides] = useState<Partial<Record<FactorKey, number>>>({});
-  const [regimeOverride, setRegimeOverride] = useState<Regime | 'auto'>('auto');
   // MA reclaim = previous saved week was below 200D, current input is above.
   const maReclaimActive = useMemo(
     () => inputs.btcAbove200dMA === true && history[0]?.inputs.btcAbove200dMA === false,
@@ -132,18 +128,8 @@ export function DCAPage({ lang: _lang }: Props) {
     [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
 
-  // Apply manual overrides on top of computed factors (visual + score recompute)
-  const effectiveFactors = useMemo(
-    () => plan.factors.map(f => ({ ...f, score: factorOverrides[f.key] ?? f.score })),
-    [plan.factors, factorOverrides],
-  );
-  const overrideActive =
-    Object.keys(factorOverrides).length > 0 || regimeOverride !== 'auto';
-  const effectiveScore = useMemo(() => {
-    if (!overrideActive) return plan.factorScore;
-    const total = effectiveFactors.reduce((s, f) => s + f.weight, 0) || 1;
-    return Math.round(effectiveFactors.reduce((s, f) => s + f.score * f.weight, 0) / total);
-  }, [effectiveFactors, plan.factorScore, overrideActive]);
+  // Engine is fully automatic — no manual factor/regime overrides.
+  const effectiveScore = plan.factorScore;
 
   const update = <K extends keyof MondayInputs>(key: K, value: MondayInputs[K]) =>
     setInputs(prev => ({ ...prev, [key]: value }));
