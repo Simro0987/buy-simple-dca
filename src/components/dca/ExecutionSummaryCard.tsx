@@ -13,15 +13,14 @@ interface Props {
   weeklyCapital: number;
   prices: PriceData | undefined;
   score: number;
-  enabled?: boolean;
 }
 
 /**
  * Part 5/5a — "This Week's Execution Summary"
  * Aggregated total Market/Limit USD + per-coin table.
- * Shared engine output via usePerCoinMetrics → no duplication with DynamicExecutionCard.
+ * Engine is ALWAYS automatic; falls back to fixed 60/40 only while metrics load.
  */
-export function ExecutionSummaryCard({ weeklyCapital, prices, score, enabled = true }: Props) {
+export function ExecutionSummaryCard({ weeklyCapital, prices, score }: Props) {
   const { data: metrics } = usePerCoinMetrics();
 
   const rows = useMemo(() => {
@@ -29,8 +28,9 @@ export function ExecutionSummaryCard({ weeklyCapital, prices, score, enabled = t
     const base = calculateDCA(weeklyCapital, prices);
     return base.map(r => {
       const coin = r.token.id as CoinKey;
-      const exec: CoinExecution =
-        !enabled || !metrics ? fixedExecution(coin) : calcCoinExecution(coin, score, metrics[coin]);
+      const exec: CoinExecution = !metrics
+        ? fixedExecution(coin)
+        : calcCoinExecution(coin, score, metrics[coin]);
       const marketUsd = r.totalUsd * (exec.marketPct / 100);
       const limitUsd = r.totalUsd * (exec.limitPct / 100);
       const qty = r.currentPrice > 0 ? r.totalUsd / r.currentPrice : 0;
@@ -47,7 +47,7 @@ export function ExecutionSummaryCard({ weeklyCapital, prices, score, enabled = t
         decimals: coin === 'btc' ? 8 : coin === 'eth' ? 4 : 3,
       };
     });
-  }, [prices, weeklyCapital, score, metrics, enabled]);
+  }, [prices, weeklyCapital, score, metrics]);
 
   const totalMarket = rows.reduce((s, r) => s + r.marketUsd, 0);
   const totalLimit = rows.reduce((s, r) => s + r.limitUsd, 0);
