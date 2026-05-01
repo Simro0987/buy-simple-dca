@@ -5,7 +5,7 @@ import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 import { BreakdownTable } from '@/components/dca/BreakdownTable';
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
-import { ExecutionSummaryCard } from '@/components/dca/ExecutionSummaryCard';
+
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
 import { Lang } from '@/lib/i18n';
@@ -349,25 +349,6 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} />
 
-      {/* THIS WEEK'S EXECUTION SUMMARY — aggregated totals + per-coin table */}
-      <ExecutionSummaryCard
-        weeklyCapital={inputs.capital}
-        prices={prices}
-        score={effectiveScore}
-      />
-
-      {/* MARKET INPUTS — auto-filled from APIs, editable for what-if */}
-      <div className="glass-card p-4 space-y-3">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">Trhové vstupy (auto-fill)</h2>
-        <div className="grid grid-cols-2 gap-2">
-          <NumberInput label="BTC cena" value={inputs.btcPrice} onChange={v => update('btcPrice', v)} step={100} />
-          <NumberInput label="BTC 30D high" value={inputs.btc30dHigh} onChange={v => update('btc30dHigh', v)} step={100} />
-        </div>
-        <NumberInput label="Fear & Greed (0–100)" value={inputs.fearGreed} onChange={v => update('fearGreed', Math.max(0, Math.min(100, v)))} step={1} />
-        <p className="text-[10px] text-muted-foreground">
-          Týždenný kapitál sa nastavuje hore v sekcii Weekly Investment.
-        </p>
-      </div>
 
       {/* AUTO BTC SIGNALS */}
       <div className="glass-card p-4">

@@ -60,35 +60,44 @@ export interface CoinMetrics {
   momentum30d: number;
 }
 
+/**
+ * Per-coin execution.
+ * Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich celkové Score + agregované momentum) —
+ * splity sa menia v čase podľa indikátorov, ale v rámci jedného týždňa sú konzistentné naprieč coins.
+ * Limit Distance % je **per-coin** — riadi ho 30D volatilita daného tokenu (volatilnejší token = širší distance).
+ *
+ * @param sharedMomentumAdj voliteľný spoločný momentum adjustment (z agregátu BTC+ETH+SOL).
+ *                          Ak nie je daný, použije sa per-coin momentum (legacy).
+ */
 export function calcCoinExecution(
   coin: CoinKey,
   score: number,
   metrics: CoinMetrics,
+  sharedMomentumAdj?: number,
 ): CoinExecution {
   const base = getBaseSplit(score);
   const volMult = getVolatilityMultiplier(metrics.volatility30d);
-  const momAdj = getMomentumAdjustment(metrics.momentum30d);
+  const momAdj = sharedMomentumAdj ?? getMomentumAdjustment(metrics.momentum30d);
 
-  // Distance: base × multiplier, clamp [-10, -1.5]
+  // Distance: PER-COIN — base × per-coin volatility multiplier, clamp [-10, -1.5]
   const rawDist = base.distance * volMult;
   const distance = Math.max(-10, Math.min(-1.5, rawDist));
 
-  // Market%: base + adjustment, clamp [25, 90]
+  // Market%: SHARED — base + shared adjustment, clamp [25, 90]
   const rawMarket = base.marketPct + momAdj;
   const marketPct = Math.max(25, Math.min(90, rawMarket));
   const limitPct = 100 - marketPct;
 
+  // Per-coin distance rationale (volatility-driven)
   let rationale = '';
-  if (metrics.volatility30d > 4 && Math.abs(metrics.momentum30d) > 15) {
-    rationale = 'Veľmi vysoká volatilita a silné momentum.';
-  } else if (metrics.volatility30d > 2.5 && metrics.momentum30d > 5) {
-    rationale = 'Vyššia volatilita + uptrend. Viac market objednávok.';
-  } else if (metrics.momentum30d < -10) {
-    rationale = 'Pokles ceny. Širšie limity pre lepší vstup.';
-  } else if (metrics.volatility30d < 1.5) {
-    rationale = 'Nízka volatilita. Tesnejšie limity stačia.';
+  if (metrics.volatility30d >= 4) {
+    rationale = `Vysoká 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → širší limit (${distance.toFixed(1)}%) pre lepší vstup pri výkyvoch.`;
+  } else if (metrics.volatility30d >= 2.5) {
+    rationale = `Stredná 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → štandardný limit distance ${distance.toFixed(1)}%.`;
+  } else if (metrics.volatility30d >= 1.5) {
+    rationale = `Nižšia 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → mierne tesnejší limit ${distance.toFixed(1)}%.`;
   } else {
-    rationale = 'Normálne podmienky. Štandardný split.';
+    rationale = `Nízka 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → tesný limit ${distance.toFixed(1)}% stačí.`;
   }
 
   return {
@@ -105,6 +114,42 @@ export function calcCoinExecution(
     volatilityMultiplier: volMult,
     momentumAdjustment: momAdj,
     rationale,
+  };
+}
+
+/**
+ * Vypočíta jednotný Market/Limit % split pre všetky tokeny + per-coin distance.
+ * Toto je hlavná vstupná funkcia (Part 6).
+ */
+export function calcUnifiedExecution(
+  score: number,
+  metrics: Record<CoinKey, CoinMetrics>,
+): {
+  executions: Record<CoinKey, CoinExecution>;
+  sharedMarketPct: number;
+  sharedLimitPct: number;
+  sharedMomentumAvg: number;
+  sharedMomentumAdj: number;
+  base: BaseSplit;
+} {
+  const coins: CoinKey[] = ['btc', 'eth', 'sol'];
+  // Agregované momentum (priemer per-coin) — riadi spoločný Market% adjustment
+  const avgMom = coins.reduce((s, c) => s + (metrics[c]?.momentum30d ?? 0), 0) / coins.length;
+  const sharedMomAdj = getMomentumAdjustment(avgMom);
+  const base = getBaseSplit(score);
+  const out = {} as Record<CoinKey, CoinExecution>;
+  for (const c of coins) {
+    out[c] = calcCoinExecution(c, score, metrics[c] ?? { volatility30d: 0, momentum30d: 0 }, sharedMomAdj);
+  }
+  // Všetky majú rovnaký marketPct/limitPct
+  const shared = out.btc;
+  return {
+    executions: out,
+    sharedMarketPct: shared.marketPct,
+    sharedLimitPct: shared.limitPct,
+    sharedMomentumAvg: avgMom,
+    sharedMomentumAdj: sharedMomAdj,
+    base,
   };
 }
 
