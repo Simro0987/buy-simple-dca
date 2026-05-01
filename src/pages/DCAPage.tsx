@@ -186,7 +186,7 @@ export function DCAPage({ lang: _lang }: Props) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-foreground">Monday DCA Controller</h1>
+          <h1 className="text-xl font-bold text-foreground">DCA Exekučný plán na týždeň</h1>
           <p className="text-xs text-muted-foreground">Adaptívny týždenný alokátor · {thisMondayIso()}</p>
         </div>
         <div className="flex items-center gap-1.5 flex-shrink-0">
