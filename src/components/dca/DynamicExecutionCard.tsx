@@ -22,8 +22,8 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
 
 /**
  * Plne automatický engine.
- * - Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich Score + agregované 30D momentum).
- * - Limit Distance % je **per-coin** (riadi ho 30D volatilita daného tokenu).
+ * - Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich Score + agregované 14D momentum).
+ * - Limit Distance % je **per-coin** (riadi ho 14D volatilita daného tokenu).
  */
 export function DynamicExecutionCard({ score, prices }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
@@ -60,10 +60,10 @@ export function DynamicExecutionCard({ score, prices }: Props) {
       : `Skóre ${score} → veľmi drahý, base ${base.marketPct}/${base.limitPct} (najviac limit).`;
     const momPart =
       sharedMomentumAdj === 0
-        ? `Priemerné 30D momentum ${sharedMomentumAvg.toFixed(1)}% — bez úpravy.`
+        ? `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% — bez úpravy.`
         : sharedMomentumAvg > 0
-        ? `Priemerné 30D momentum +${sharedMomentumAvg.toFixed(1)}% (uptrend) → +${sharedMomentumAdj}% k market% (chyť trend).`
-        : `Priemerné 30D momentum ${sharedMomentumAvg.toFixed(1)}% (downtrend) → +${sharedMomentumAdj}% k market% (defenzívne nakupuj pokles).`;
+        ? `Priemerné 14D momentum +${sharedMomentumAvg.toFixed(1)}% (uptrend) → +${sharedMomentumAdj}% k market% (chyť trend).`
+        : `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% (downtrend) → +${sharedMomentumAdj}% k market% (defenzívne nakupuj pokles).`;
     return `${scorePart} ${momPart}`;
   }, [score, base, sharedMomentumAvg, sharedMomentumAdj]);
 
@@ -85,7 +85,7 @@ export function DynamicExecutionCard({ score, prices }: Props) {
       </div>
 
       {isLoading && (
-        <p className="text-[11px] text-muted-foreground">Načítavam 30D volatilitu a momentum…</p>
+        <p className="text-[11px] text-muted-foreground">Načítavam 14D volatilitu a momentum…</p>
       )}
 
       {/* JEDNOTNÝ Market / Limit split (rovnaký pre všetky tokeny) */}
@@ -114,7 +114,7 @@ export function DynamicExecutionCard({ score, prices }: Props) {
       {/* PER-COIN distance (volatility-driven) */}
       <div className="space-y-2">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-          Limit distance per token (podľa 30D volatility)
+          Limit distance per token (podľa 14D volatility)
         </p>
         {coins.map(c => {
           const e = executions[c];

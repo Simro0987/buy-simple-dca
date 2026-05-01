@@ -11,6 +11,11 @@ interface MarketChartResponse {
   prices: Array<[number, number]>;
 }
 
+// Window optimized for WEEKLY DCA (Monday buys):
+// 14 days = ~2 weeks → captures recent swings without 30D lag,
+// while still smoother than 7D (which is too noisy for a single weekly decision).
+const WINDOW_DAYS = 14;
+
 function calcVolatility(prices: number[]): number {
   if (prices.length < 2) return 0;
   const returns: number[] = [];
@@ -33,7 +38,7 @@ function calcMomentum(prices: number[]): number {
 
 async function fetchCoinMetrics(coin: CoinKey): Promise<CoinMetrics> {
   const id = COIN_IDS[coin];
-  const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=30&interval=daily`;
+  const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${WINDOW_DAYS}&interval=daily`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
   const data: MarketChartResponse = await res.json();
@@ -46,7 +51,7 @@ async function fetchCoinMetrics(coin: CoinKey): Promise<CoinMetrics> {
 
 export function usePerCoinMetrics() {
   return useQuery({
-    queryKey: ['per-coin-metrics-30d'],
+    queryKey: ['per-coin-metrics-14d'],
     queryFn: async (): Promise<Record<CoinKey, CoinMetrics>> => {
       const coins: CoinKey[] = ['btc', 'eth', 'sol'];
       // Sequential to be friendly to CoinGecko rate limits
