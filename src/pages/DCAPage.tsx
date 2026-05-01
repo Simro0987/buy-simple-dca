@@ -3,7 +3,7 @@ import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, Tr
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
-import { BreakdownTable } from '@/components/dca/BreakdownTable';
+
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
@@ -342,9 +342,6 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* CAPITAL INPUT — set weekly DCA capital from total + horizon */}
       <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
-
-      {/* BREAKDOWN TABLE — high-level allocation 59/25/11/5 (BTC/ETH/SOL/HYPE) */}
-      <BreakdownTable plan={plan} />
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} />
