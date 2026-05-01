@@ -1,8 +1,8 @@
 // Dynamic Per-Coin Execution Engine
 // Calculates Market/Limit split and limit distance per coin based on:
 // 1) Final Score (0-100) → base split
-// 2) Per-coin 30D volatility → distance multiplier
-// 3) Per-coin 30D momentum → market% adjustment
+// 2) Per-coin 14D volatility → distance multiplier
+// 3) Per-coin 14D momentum → market% adjustment
 
 export type CoinKey = 'btc' | 'eth' | 'sol';
 
@@ -67,7 +67,7 @@ export interface CoinMetrics {
  * Per-coin execution.
  * Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich celkové Score + agregované momentum) —
  * splity sa menia v čase podľa indikátorov, ale v rámci jedného týždňa sú konzistentné naprieč coins.
- * Limit Distance % je **per-coin** — riadi ho 30D volatilita daného tokenu (volatilnejší token = širší distance).
+ * Limit Distance % je **per-coin** — riadi ho 14D volatilita daného tokenu (volatilnejší token = širší distance).
  *
  * @param sharedMomentumAdj voliteľný spoločný momentum adjustment (z agregátu BTC+ETH+SOL).
  *                          Ak nie je daný, použije sa per-coin momentum (legacy).
@@ -94,13 +94,13 @@ export function calcCoinExecution(
   // Per-coin distance rationale (volatility-driven)
   let rationale = '';
   if (metrics.volatility30d >= 4) {
-    rationale = `Vysoká 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → širší limit (${distance.toFixed(1)}%) pre lepší vstup pri výkyvoch.`;
+    rationale = `Vysoká 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → širší limit (${distance.toFixed(1)}%) pre lepší vstup pri výkyvoch.`;
   } else if (metrics.volatility30d >= 2.5) {
-    rationale = `Stredná 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → štandardný limit distance ${distance.toFixed(1)}%.`;
+    rationale = `Stredná 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → štandardný limit distance ${distance.toFixed(1)}%.`;
   } else if (metrics.volatility30d >= 1.5) {
-    rationale = `Nižšia 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → mierne tesnejší limit ${distance.toFixed(1)}%.`;
+    rationale = `Nižšia 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → mierne tesnejší limit ${distance.toFixed(1)}%.`;
   } else {
-    rationale = `Nízka 30D volatilita (${metrics.volatility30d.toFixed(1)}%) → tesný limit ${distance.toFixed(1)}% stačí.`;
+    rationale = `Nízka 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → tesný limit ${distance.toFixed(1)}% stačí.`;
   }
 
   return {
