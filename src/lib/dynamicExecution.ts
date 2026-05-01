@@ -82,8 +82,21 @@ export function calcCoinExecution(
   const volMult = getVolatilityMultiplier(metrics.volatility30d);
   const momAdj = sharedMomentumAdj ?? getMomentumAdjustment(metrics.momentum30d);
 
-  // Distance: PER-COIN — base × per-coin volatility multiplier, clamp [-10, -1.5]
-  const rawDist = base.distance * volMult;
+  // Per-coin momentum bias na DISTANCE (rovnaká logika pre BTC, ETH aj SOL):
+  //  - silný downtrend (<-10 %) → ×1.20 (širší limit, čakaj lepší vstup)
+  //  - mierny downtrend (-10..-3 %) → ×1.10
+  //  - neutrál (-3..+3 %) → ×1.00
+  //  - mierny uptrend (+3..+10 %) → ×0.90
+  //  - silný uptrend (>+10 %) → ×0.80 (tesný, chyť trend)
+  const m = metrics.momentum30d;
+  const momDistMult =
+    m < -10 ? 1.20 :
+    m < -3  ? 1.10 :
+    m <= 3  ? 1.00 :
+    m <= 10 ? 0.90 : 0.80;
+
+  // Distance: PER-COIN — base × per-coin volatility × per-coin momentum, clamp [-10, -1.5]
+  const rawDist = base.distance * volMult * momDistMult;
   const distance = Math.max(-10, Math.min(-1.5, rawDist));
 
   // Market%: SHARED — base + shared adjustment, clamp [25, 90]
@@ -91,17 +104,19 @@ export function calcCoinExecution(
   const marketPct = Math.max(25, Math.min(90, rawMarket));
   const limitPct = 100 - marketPct;
 
-  // Per-coin distance rationale (volatility-driven)
-  let rationale = '';
-  if (metrics.volatility30d >= 4) {
-    rationale = `Vysoká 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → širší limit (${distance.toFixed(1)}%) pre lepší vstup pri výkyvoch.`;
-  } else if (metrics.volatility30d >= 2.5) {
-    rationale = `Stredná 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → štandardný limit distance ${distance.toFixed(1)}%.`;
-  } else if (metrics.volatility30d >= 1.5) {
-    rationale = `Nižšia 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → mierne tesnejší limit ${distance.toFixed(1)}%.`;
-  } else {
-    rationale = `Nízka 14D volatilita (${metrics.volatility30d.toFixed(1)}%) → tesný limit ${distance.toFixed(1)}% stačí.`;
-  }
+  // Per-coin rationale: vol + momentum (rovnaká pre BTC/ETH/SOL)
+  const volPart =
+    metrics.volatility30d >= 4 ? `vysoká 14D vol ${metrics.volatility30d.toFixed(1)}%`
+    : metrics.volatility30d >= 2.5 ? `stredná 14D vol ${metrics.volatility30d.toFixed(1)}%`
+    : metrics.volatility30d >= 1.5 ? `nižšia 14D vol ${metrics.volatility30d.toFixed(1)}%`
+    : `nízka 14D vol ${metrics.volatility30d.toFixed(1)}%`;
+  const momPart =
+    m < -10 ? `silný downtrend ${m.toFixed(1)}% → širší limit`
+    : m < -3 ? `mierny downtrend ${m.toFixed(1)}% → mierne širší limit`
+    : m <= 3 ? `neutrálne momentum ${m.toFixed(1)}%`
+    : m <= 10 ? `mierny uptrend +${m.toFixed(1)}% → tesnejší limit`
+    : `silný uptrend +${m.toFixed(1)}% → tesný limit`;
+  const rationale = `${volPart} + ${momPart} → distance ${distance.toFixed(1)}%.`;
 
   return {
     coin,
