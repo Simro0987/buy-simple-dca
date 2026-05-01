@@ -36,11 +36,14 @@ export function getBaseSplit(score: number): BaseSplit {
   return { marketPct: 35, limitPct: 65, distance: -6 };
 }
 
+/**
+ * Kontinuálny multiplier (nie skokový) — aj malý rozdiel vol medzi BTC/ETH/SOL
+ * generuje viditeľne odlišný limit distance.
+ * Mapovanie: vol 0% → 0.5×, vol 2% → 1.0×, vol 4% → 1.5×, vol 6%+ → 2.0× (cap).
+ */
 export function getVolatilityMultiplier(vol30d: number): number {
-  if (vol30d < 1.5) return 0.75;
-  if (vol30d < 2.5) return 1.0;
-  if (vol30d < 4.0) return 1.25;
-  return 1.5;
+  const mult = 0.5 + vol30d * 0.25;
+  return Math.max(0.5, Math.min(2.0, mult));
 }
 
 export function getMomentumAdjustment(mom30d: number): number {
