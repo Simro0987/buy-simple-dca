@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { formatUsd, formatPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useAppSettings } from '@/hooks/useAppSettings';
+
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { calcCoinExecution, fixedExecution, type CoinKey, type CoinExecution } from '@/lib/dynamicExecution';
 
@@ -42,23 +42,20 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
   const [checks, setChecks] = useState<Record<string, boolean>>(loadChecks);
   const [saving, setSaving] = useState(false);
 
-  const { data: settings } = useAppSettings();
-  const dynEnabled = settings?.dynamic_execution_enabled ?? true;
   const { data: perCoinMetrics } = usePerCoinMetrics();
 
-  // Per-coin executions
+  // Per-coin executions — engine is ALWAYS automatic (Part 5/5a).
+  // Falls back to fixed 60/40 only while 30D metrics are still loading.
   const executions: Record<CoinKey, CoinExecution> = useMemo(() => {
     const coins: CoinKey[] = ['btc', 'eth', 'sol'];
     const out: Partial<Record<CoinKey, CoinExecution>> = {};
     for (const c of coins) {
-      if (!dynEnabled || !perCoinMetrics) {
-        out[c] = fixedExecution(c);
-      } else {
-        out[c] = calcCoinExecution(c, score ?? 50, perCoinMetrics[c]);
-      }
+      out[c] = !perCoinMetrics
+        ? fixedExecution(c)
+        : calcCoinExecution(c, score ?? 50, perCoinMetrics[c]);
     }
     return out as Record<CoinKey, CoinExecution>;
-  }, [dynEnabled, perCoinMetrics, score]);
+  }, [perCoinMetrics, score]);
 
   // Build dca rows but use per-coin Market/Limit% and distance instead of fixed 60/40
   const dca = useMemo(() => {
@@ -131,7 +128,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         sol_price: totals.sol_price || 0,
         regime: regime || null,
         score: score || null,
-        notes: dynEnabled ? 'Execution plan (Dynamic Engine)' : 'Execution plan (Fixed 60/40)',
+        notes: 'Execution plan (Dynamic Engine)',
       }).select().single();
       if (pErr) throw pErr;
 
@@ -207,7 +204,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       <div className="glass-card p-3 space-y-2">
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky</p>
-          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>}
+          <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>
         </div>
         {dca.map(r => (
           <div key={`m-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
@@ -226,7 +223,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       <div className="glass-card p-3 space-y-2">
         <div className="flex items-center justify-between mb-1">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky</p>
-          {dynEnabled && <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>}
+          <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>
         </div>
         {dca.map(r => (
           <div key={`l-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
