@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import { Zap, TrendingUp, TrendingDown, Activity } from 'lucide-react';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
-import { useAppSettings } from '@/hooks/useAppSettings';
 import {
   calcCoinExecution,
   fixedExecution,
@@ -22,17 +21,18 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
   sol: 'solana',
 };
 
+/**
+ * Part 5/5a — Engine is ALWAYS automatic. No ON/OFF toggle, no manual overrides.
+ * Falls back to fixed 60/40 only while 30D metrics are still loading.
+ */
 export function DynamicExecutionCard({ score, prices }: Props) {
-  const { data: settings } = useAppSettings();
   const { data: metrics, isLoading } = usePerCoinMetrics();
-  const enabled = settings?.dynamic_execution_enabled ?? true;
 
   const executions: CoinExecution[] = useMemo(() => {
     const coins: CoinKey[] = ['btc', 'eth', 'sol'];
-    if (!enabled) return coins.map(fixedExecution);
     if (!metrics) return coins.map(fixedExecution);
     return coins.map(c => calcCoinExecution(c, score, metrics[c]));
-  }, [enabled, metrics, score]);
+  }, [metrics, score]);
 
   const narrative = overallNarrative(executions);
 
@@ -43,12 +43,12 @@ export function DynamicExecutionCard({ score, prices }: Props) {
           <Zap className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-bold text-foreground">Dynamic Execution Engine</h3>
         </div>
-        <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${enabled ? 'bg-primary/15 text-primary' : 'bg-secondary text-muted-foreground'}`}>
-          {enabled ? 'ON' : 'OFF (60/40)'}
+        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-primary/15 text-primary">
+          AUTO
         </span>
       </div>
 
-      {isLoading && enabled && (
+      {isLoading && (
         <p className="text-[11px] text-muted-foreground">Načítavam 30D volatilitu a momentum…</p>
       )}
 

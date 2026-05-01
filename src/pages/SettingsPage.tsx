@@ -7,7 +7,6 @@ import { CronJobsCard } from '@/components/CronJobsCard';
 import { CallbackHistoryCard } from '@/components/CallbackHistoryCard';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 import { BackupRestoreCard } from '@/components/settings/BackupRestoreCard';
-import { DynamicExecutionToggleCard } from '@/components/settings/DynamicExecutionToggleCard';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
 import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
@@ -317,9 +316,6 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
 
       {/* Telegram callback history */}
       <CallbackHistoryCard lang={lang} />
-
-      {/* Dynamic Execution Engine toggle */}
-      <DynamicExecutionToggleCard />
 
       {/* Initial holdings & cost basis */}
       <InitialHoldingsCard />
