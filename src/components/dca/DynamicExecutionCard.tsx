@@ -41,7 +41,7 @@ const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
  * - Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich Score + agregované 14D momentum).
  * - Limit Distance % je **per-coin** (riadi ho 14D volatilita daného tokenu).
  */
-export function DynamicExecutionCard({ score, prices }: Props) {
+export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
 
   const result = useMemo(() => {
