@@ -57,12 +57,18 @@ export function getVolatilityMultiplier(vol30d: number): number {
   return Math.max(0.5, Math.min(2.0, mult));
 }
 
+/**
+ * Kontinuálny momentum adjustment na Market% (žiadne skokové +5/+10).
+ * mom -20 % → +12 (viac market, kupuj pád)
+ * mom   0 % → 0
+ * mom +20 % → +12 (viac market, chyť trend)
+ * Lineárna |mom| × 0.6, cap ±15.
+ * Znamienko: pri downtrende aj uptrende zvyšujeme market % (rýchlejší vstup),
+ * pri neutráli nechávame base split.
+ */
 export function getMomentumAdjustment(mom30d: number): number {
-  if (mom30d > 15) return 10;
-  if (mom30d > 5) return 5;
-  if (mom30d >= -5) return 0;
-  if (mom30d >= -15) return 5;
-  return 10;
+  const adj = Math.abs(mom30d) * 0.6;
+  return Math.max(0, Math.min(15, Math.round(adj * 10) / 10));
 }
 
 const SYMBOLS: Record<CoinKey, 'BTC' | 'ETH' | 'SOL'> = {
