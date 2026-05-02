@@ -200,6 +200,108 @@ export type Database = {
         }
         Relationships: []
       }
+      engine_params: {
+        Row: {
+          base_distance_high: number
+          base_distance_low: number
+          base_market_high: number
+          base_market_low: number
+          enabled: boolean
+          id: number
+          iteration: number
+          last_change_log: Json
+          last_reward: number | null
+          max_step_pct: number
+          momentum_sensitivity: number
+          updated_at: string
+          volatility_sensitivity: number
+          weight_flush: number
+          weight_onchain: number
+          weight_risk: number
+          weight_sentiment: number
+          weight_trend: number
+        }
+        Insert: {
+          base_distance_high?: number
+          base_distance_low?: number
+          base_market_high?: number
+          base_market_low?: number
+          enabled?: boolean
+          id?: number
+          iteration?: number
+          last_change_log?: Json
+          last_reward?: number | null
+          max_step_pct?: number
+          momentum_sensitivity?: number
+          updated_at?: string
+          volatility_sensitivity?: number
+          weight_flush?: number
+          weight_onchain?: number
+          weight_risk?: number
+          weight_sentiment?: number
+          weight_trend?: number
+        }
+        Update: {
+          base_distance_high?: number
+          base_distance_low?: number
+          base_market_high?: number
+          base_market_low?: number
+          enabled?: boolean
+          id?: number
+          iteration?: number
+          last_change_log?: Json
+          last_reward?: number | null
+          max_step_pct?: number
+          momentum_sensitivity?: number
+          updated_at?: string
+          volatility_sensitivity?: number
+          weight_flush?: number
+          weight_onchain?: number
+          weight_risk?: number
+          weight_sentiment?: number
+          weight_trend?: number
+        }
+        Relationships: []
+      }
+      learning_outcomes: {
+        Row: {
+          avg_fill_rate: number | null
+          avg_price_delta_7d: number | null
+          created_at: string
+          evaluated_at: string
+          id: string
+          notes: string | null
+          params_snapshot: Json
+          per_coin_results: Json
+          reward_score: number | null
+          week_number: number
+        }
+        Insert: {
+          avg_fill_rate?: number | null
+          avg_price_delta_7d?: number | null
+          created_at?: string
+          evaluated_at?: string
+          id?: string
+          notes?: string | null
+          params_snapshot?: Json
+          per_coin_results?: Json
+          reward_score?: number | null
+          week_number: number
+        }
+        Update: {
+          avg_fill_rate?: number | null
+          avg_price_delta_7d?: number | null
+          created_at?: string
+          evaluated_at?: string
+          id?: string
+          notes?: string | null
+          params_snapshot?: Json
+          per_coin_results?: Json
+          reward_score?: number | null
+          week_number?: number
+        }
+        Relationships: []
+      }
       limit_orders: {
         Row: {
           amount_usd: number

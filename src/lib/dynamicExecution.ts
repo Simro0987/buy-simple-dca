@@ -28,18 +28,49 @@ export interface BaseSplit {
   distance: number; // negative
 }
 
+/** Adaptive overrides z DB engine_params. */
+export interface AdaptiveOverrides {
+  baseMarketHigh?: number;     // default 85
+  baseMarketLow?: number;      // default 30
+  baseDistanceLow?: number;    // default -1.5
+  baseDistanceHigh?: number;   // default -6.5
+  volatilitySensitivity?: number; // default 0.25
+  momentumSensitivity?: number;   // default 0.6
+}
+
+const DEFAULTS: Required<AdaptiveOverrides> = {
+  baseMarketHigh: 85,
+  baseMarketLow: 30,
+  baseDistanceLow: -1.5,
+  baseDistanceHigh: -6.5,
+  volatilitySensitivity: 0.25,
+  momentumSensitivity: 0.6,
+};
+
+let CURRENT_OVERRIDES: Required<AdaptiveOverrides> = { ...DEFAULTS };
+
+/** Voliteľne nastav adaptive parametre z DB (volá sa raz pri načítaní engine_params). */
+export function setAdaptiveOverrides(o: AdaptiveOverrides | null | undefined): void {
+  CURRENT_OVERRIDES = {
+    baseMarketHigh: o?.baseMarketHigh ?? DEFAULTS.baseMarketHigh,
+    baseMarketLow: o?.baseMarketLow ?? DEFAULTS.baseMarketLow,
+    baseDistanceLow: o?.baseDistanceLow ?? DEFAULTS.baseDistanceLow,
+    baseDistanceHigh: o?.baseDistanceHigh ?? DEFAULTS.baseDistanceHigh,
+    volatilitySensitivity: o?.volatilitySensitivity ?? DEFAULTS.volatilitySensitivity,
+    momentumSensitivity: o?.momentumSensitivity ?? DEFAULTS.momentumSensitivity,
+  };
+}
+
 /**
- * Kontinuálny base split — žiadne skokové pásma.
- * Score 0  → market 85 %, distance -1.5 %
- * Score 50 → market 60 %, distance -4.0 %
- * Score 100 → market 30 %, distance -6.5 %
- * (lineárna interpolácia medzi krajnými bodmi)
+ * Kontinuálny base split — žiadne skokové pásma. Hodnoty riadi adaptívny engine
+ * (engine_params v DB). Defaults: 85→30 market, -1.5→-6.5 distance.
  */
 export function getBaseSplit(score: number): BaseSplit {
   const s = Math.max(0, Math.min(100, score));
   const t = s / 100; // 0..1
-  const marketPct = 85 - 55 * t;        // 85 → 30
-  const distance = -1.5 - 5.0 * t;       // -1.5 → -6.5
+  const { baseMarketHigh, baseMarketLow, baseDistanceLow, baseDistanceHigh } = CURRENT_OVERRIDES;
+  const marketPct = baseMarketHigh - (baseMarketHigh - baseMarketLow) * t;
+  const distance = baseDistanceLow - (Math.abs(baseDistanceHigh) - Math.abs(baseDistanceLow)) * t;
   return {
     marketPct: Math.round(marketPct * 10) / 10,
     limitPct: Math.round((100 - marketPct) * 10) / 10,
@@ -53,21 +84,18 @@ export function getBaseSplit(score: number): BaseSplit {
  * Mapovanie: vol 0% → 0.5×, vol 2% → 1.0×, vol 4% → 1.5×, vol 6%+ → 2.0× (cap).
  */
 export function getVolatilityMultiplier(vol30d: number): number {
-  const mult = 0.5 + vol30d * 0.25;
+  const sens = CURRENT_OVERRIDES.volatilitySensitivity;
+  const mult = 0.5 + vol30d * sens;
   return Math.max(0.5, Math.min(2.0, mult));
 }
 
 /**
- * Kontinuálny momentum adjustment na Market% (žiadne skokové +5/+10).
- * mom -20 % → +12 (viac market, kupuj pád)
- * mom   0 % → 0
- * mom +20 % → +12 (viac market, chyť trend)
- * Lineárna |mom| × 0.6, cap ±15.
- * Znamienko: pri downtrende aj uptrende zvyšujeme market % (rýchlejší vstup),
- * pri neutráli nechávame base split.
+ * Kontinuálny momentum adjustment na Market% — koeficient riadi engine_params.
+ * mom 0 % → 0, |mom| × momentumSensitivity, cap ±15.
  */
 export function getMomentumAdjustment(mom30d: number): number {
-  const adj = Math.abs(mom30d) * 0.6;
+  const sens = CURRENT_OVERRIDES.momentumSensitivity;
+  const adj = Math.abs(mom30d) * sens;
   return Math.max(0, Math.min(15, Math.round(adj * 10) / 10));
 }
 
