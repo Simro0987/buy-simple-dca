@@ -5,6 +5,7 @@ import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
+import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
 
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useBtc200dMA } from '@/hooks/useBtc200dMA';
@@ -345,6 +346,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
+
+      {/* SELF-LEARNING ENGINE — adaptívne parametre + história výkonu */}
+      <LearningEngineCard />
 
 
       {/* AUTO BTC SIGNALS */}
