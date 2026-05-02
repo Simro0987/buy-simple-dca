@@ -12,6 +12,8 @@ import { formatPrice, type PriceData } from '@/lib/crypto';
 interface Props {
   score: number;
   prices: PriceData | undefined;
+  /** Týždenná alokácia v USD (z Final Score × kapitál). Rozdelí sa medzi BTC/ETH/SOL. */
+  investableUsd: number;
 }
 
 const COIN_PRICE_KEY: Record<CoinKey, string> = {
@@ -20,12 +22,26 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
   sol: 'solana',
 };
 
+// Cieľové portfólio váhy (z Core memory: 59% BTC / 25% ETH / 11% SOL / 5% HYPE).
+// HYPE nie je v DCA pláne (BTC/ETH/SOL spot) → re-normalizujeme zvyšné 95% na 100%.
+const TARGET_WEIGHTS: Record<CoinKey, number> = {
+  btc: 0.59 / 0.95, // ≈ 62.1%
+  eth: 0.25 / 0.95, // ≈ 26.3%
+  sol: 0.11 / 0.95, // ≈ 11.6%
+};
+
+const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
+  btc: '59%',
+  eth: '25%',
+  sol: '11%',
+};
+
 /**
  * Plne automatický engine.
  * - Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich Score + agregované 14D momentum).
  * - Limit Distance % je **per-coin** (riadi ho 14D volatilita daného tokenu).
  */
-export function DynamicExecutionCard({ score, prices }: Props) {
+export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
 
   const result = useMemo(() => {
@@ -111,21 +127,35 @@ export function DynamicExecutionCard({ score, prices }: Props) {
         </div>
       </div>
 
-      {/* PER-COIN distance (volatility-driven) */}
+      {/* PER-COIN: alokácia USD → Market / Limit + distance */}
       <div className="space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-          Limit distance per token (podľa 14D volatility)
-        </p>
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+            Rozdelenie alokácie podľa tokenov
+          </p>
+          <span className="text-[10px] tabular-nums text-foreground font-semibold">
+            Σ ${investableUsd.toFixed(0)}
+          </span>
+        </div>
         {coins.map(c => {
           const e = executions[c];
           const price = prices?.[COIN_PRICE_KEY[c]]?.usd ?? 0;
           const limitPrice = price * (1 + e.limitDistancePct / 100);
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
+
+          // Suma pre tento token podľa cieľovej váhy v portfóliu
+          const coinUsd = investableUsd * TARGET_WEIGHTS[c];
+          const marketUsd = coinUsd * (e.marketPct / 100);
+          const limitUsd = coinUsd * (e.limitPct / 100);
+
           return (
-            <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-1.5">
+            <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-foreground">{e.symbol}</span>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-xs font-bold text-foreground">{e.symbol}</span>
+                  <span className="text-[9px] text-muted-foreground">váha {COIN_LABEL_WEIGHT[c]}</span>
+                </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
                   <span className="text-muted-foreground flex items-center gap-1">
                     <Activity className="w-3 h-3" /> vol {e.volatility30d.toFixed(2)}%
@@ -137,15 +167,54 @@ export function DynamicExecutionCard({ score, prices }: Props) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex-1">
-                  <p className="text-[10px] text-muted-foreground">Limit distance</p>
-                  <p className="text-sm font-bold text-emerald-400 tabular-nums">
-                    {e.limitDistancePct.toFixed(1)}%
+              {/* Suma pre token */}
+              <div className="flex items-center justify-between bg-background/40 rounded px-2 py-1.5">
+                <p className="text-[10px] text-muted-foreground">Alokácia tokenu</p>
+                <p className="text-sm font-bold text-foreground tabular-nums">
+                  ${coinUsd.toFixed(2)}
+                </p>
+              </div>
+
+              {/* Market / Limit rozdelenie sumy */}
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="bg-primary/10 rounded p-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-primary font-semibold">MARKET {e.marketPct}%</p>
+                    <button
+                      onClick={() => copy(marketUsd.toFixed(2))}
+                      className="p-0.5 rounded text-primary hover:bg-primary/20 active:scale-95"
+                      aria-label={`Kopíruj market USD ${e.symbol}`}
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <p className="text-sm font-bold text-foreground tabular-nums">
+                    ${marketUsd.toFixed(2)}
                   </p>
+                  <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
                 </div>
-                <div className="flex-1 text-right">
-                  <p className="text-[10px] text-muted-foreground">Limit cena</p>
+                <div className="bg-emerald-500/10 rounded p-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] text-emerald-400 font-semibold">LIMIT {e.limitPct}%</p>
+                    <button
+                      onClick={() => copy(limitUsd.toFixed(2))}
+                      className="p-0.5 rounded text-emerald-400 hover:bg-emerald-500/20 active:scale-95"
+                      aria-label={`Kopíruj limit USD ${e.symbol}`}
+                    >
+                      <Copy className="w-3 h-3" />
+                    </button>
+                  </div>
+                  <p className="text-sm font-bold text-foreground tabular-nums">
+                    ${limitUsd.toFixed(2)}
+                  </p>
+                  <p className="text-[9px] text-muted-foreground">limit @ {e.limitDistancePct.toFixed(1)}%</p>
+                </div>
+              </div>
+
+              {/* Limit cena (kopírovateľná) */}
+              <div className="flex items-center justify-between gap-2 bg-background/40 rounded px-2 py-1.5">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Limit cena ({e.limitDistancePct.toFixed(1)}%)</p>
                   <p className="text-sm font-semibold text-foreground tabular-nums">
                     {price > 0 ? formatPrice(limitPrice) : '—'}
                   </p>
