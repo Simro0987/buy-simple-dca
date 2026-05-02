@@ -6,8 +6,8 @@ import { useDefiApys, DefiApyData } from '@/hooks/useDefiApys';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
-import { OpportunityCards } from '@/components/decision/OpportunityCards';
 import { MasterProtocolCard } from '@/components/staking/MasterProtocolCard';
+import { StakingCalculator } from '@/components/staking/StakingCalculator';
 
 interface Props { lang: Lang; }
 
@@ -122,7 +122,8 @@ export function StakingPage({ lang }: Props) {
       </div>
 
       <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
-      <OpportunityCards />
+
+      <StakingCalculator lang={lang} />
 
       <MasterProtocolCard lang={lang} />
 
