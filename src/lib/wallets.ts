@@ -25,38 +25,39 @@ export interface AssetStakingConfig {
   positions: StakingPosition[];
 }
 
+// Master Protokol 2026 — Multi-chain accumulation cez Base, mesačná očista a presun
 export const STAKING_CONFIG: AssetStakingConfig[] = [
   {
     symbol: 'BTC',
-    name: 'Bitcoin',
+    name: 'Bitcoin (cbBTC → Native BTC)',
     color: '#F7931A',
     allocation: 64,
     positions: [
-      { label: 'Cold Storage (HODL)', type: 'hold', percentage: 100, yieldDirection: 'none' },
+      { label: 'Cold Storage (Native BTC)', type: 'hold', percentage: 64, chain: 'BTC L1', yieldDirection: 'none' },
+      { label: 'Babylon Staking (Native BTC)', type: 'staking', percentage: 22, protocol: 'Babylon', chain: 'BTC L1', apy: 4, yieldDirection: 'compound' },
+      { label: 'LBTC vault (Lombard)', type: 'lending', percentage: 14, protocol: 'Beefy / Lombard', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc' },
     ],
   },
   {
     symbol: 'ETH',
-    name: 'Ethereum',
+    name: 'Ethereum (WETH → Native ETH)',
     color: '#627EEA',
     allocation: 25,
     positions: [
-      { label: 'ETH hold', type: 'hold', percentage: 8, chain: 'Ethereum', yieldDirection: 'none' },
-      { label: 'rETH staking', type: 'staking', percentage: 23, protocol: 'Rocket Pool', apy: 3.2, yieldDirection: 'btc' },
-      { label: 'wstETH hold', type: 'hold', percentage: 53, chain: 'Arbitrum', yieldDirection: 'none' },
-      { label: 'wstETH lending', type: 'lending', percentage: 16, protocol: 'Aave V3', apy: 1.8, yieldDirection: 'btc' },
+      { label: 'Native ETH (HODL)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
+      { label: 'stETH (Lido)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
+      { label: 'rETH vault', type: 'lending', percentage: 27, protocol: 'Beefy / Rocket Pool', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
     ],
   },
   {
     symbol: 'SOL',
-    name: 'Solana',
+    name: 'Solana (SOL → Native SOL)',
     color: '#9945FF',
     allocation: 11,
     positions: [
-      { label: 'SOL hold', type: 'hold', percentage: 10, yieldDirection: 'none' },
-      { label: 'SOL staking', type: 'staking', percentage: 44, protocol: 'Jito', apy: 7.5, yieldDirection: 'btc' },
-      { label: 'JitoSOL hold', type: 'hold', percentage: 27, yieldDirection: 'none' },
-      { label: 'JitoSOL lending', type: 'lending', percentage: 19, protocol: 'Kamino', apy: 4.2, yieldDirection: 'btc' },
+      { label: 'Native SOL (Phantom HODL)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
+      { label: 'jitoSOL (Staking + MEV)', type: 'staking', percentage: 33, protocol: 'Jito (Jupiter)', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
+      { label: 'jitoSOL Multiply vault', type: 'lending', percentage: 31, protocol: 'Kamino Multiply', chain: 'Solana', apy: 16, yieldDirection: 'btc' },
     ],
   },
 ];
