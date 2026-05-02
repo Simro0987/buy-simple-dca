@@ -124,6 +124,8 @@ export function StakingPage({ lang }: Props) {
       <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
       <OpportunityCards />
 
+      <MasterProtocolCard lang={lang} />
+
       {STAKING_CONFIG.map(asset => (
         <div key={asset.symbol} className="glass-card p-4 space-y-3">
           {/* Header */}
