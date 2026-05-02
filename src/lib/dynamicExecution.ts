@@ -28,12 +28,23 @@ export interface BaseSplit {
   distance: number; // negative
 }
 
+/**
+ * Kontinuálny base split — žiadne skokové pásma.
+ * Score 0  → market 85 %, distance -1.5 %
+ * Score 50 → market 60 %, distance -4.0 %
+ * Score 100 → market 30 %, distance -6.5 %
+ * (lineárna interpolácia medzi krajnými bodmi)
+ */
 export function getBaseSplit(score: number): BaseSplit {
-  if (score <= 25) return { marketPct: 80, limitPct: 20, distance: -2 };
-  if (score <= 45) return { marketPct: 70, limitPct: 30, distance: -3 };
-  if (score <= 60) return { marketPct: 60, limitPct: 40, distance: -4 };
-  if (score <= 75) return { marketPct: 50, limitPct: 50, distance: -5 };
-  return { marketPct: 35, limitPct: 65, distance: -6 };
+  const s = Math.max(0, Math.min(100, score));
+  const t = s / 100; // 0..1
+  const marketPct = 85 - 55 * t;        // 85 → 30
+  const distance = -1.5 - 5.0 * t;       // -1.5 → -6.5
+  return {
+    marketPct: Math.round(marketPct * 10) / 10,
+    limitPct: Math.round((100 - marketPct) * 10) / 10,
+    distance: Math.round(distance * 10) / 10,
+  };
 }
 
 /**
@@ -46,12 +57,18 @@ export function getVolatilityMultiplier(vol30d: number): number {
   return Math.max(0.5, Math.min(2.0, mult));
 }
 
+/**
+ * Kontinuálny momentum adjustment na Market% (žiadne skokové +5/+10).
+ * mom -20 % → +12 (viac market, kupuj pád)
+ * mom   0 % → 0
+ * mom +20 % → +12 (viac market, chyť trend)
+ * Lineárna |mom| × 0.6, cap ±15.
+ * Znamienko: pri downtrende aj uptrende zvyšujeme market % (rýchlejší vstup),
+ * pri neutráli nechávame base split.
+ */
 export function getMomentumAdjustment(mom30d: number): number {
-  if (mom30d > 15) return 10;
-  if (mom30d > 5) return 5;
-  if (mom30d >= -5) return 0;
-  if (mom30d >= -15) return 5;
-  return 10;
+  const adj = Math.abs(mom30d) * 0.6;
+  return Math.max(0, Math.min(15, Math.round(adj * 10) / 10));
 }
 
 const SYMBOLS: Record<CoinKey, 'BTC' | 'ETH' | 'SOL'> = {
@@ -82,27 +99,21 @@ export function calcCoinExecution(
   const volMult = getVolatilityMultiplier(metrics.volatility30d);
   const momAdj = sharedMomentumAdj ?? getMomentumAdjustment(metrics.momentum30d);
 
-  // Per-coin momentum bias na DISTANCE (rovnaká logika pre BTC, ETH aj SOL):
-  //  - silný downtrend (<-10 %) → ×1.20 (širší limit, čakaj lepší vstup)
-  //  - mierny downtrend (-10..-3 %) → ×1.10
-  //  - neutrál (-3..+3 %) → ×1.00
-  //  - mierny uptrend (+3..+10 %) → ×0.90
-  //  - silný uptrend (>+10 %) → ×0.80 (tesný, chyť trend)
+  // Per-coin momentum bias na DISTANCE — kontinuálne, žiadne pásma.
+  //   downtrend (m<0) → multiplier > 1 (širší limit, čakaj nižšiu cenu)
+  //   uptrend   (m>0) → multiplier < 1 (tesnejší limit, chyť trend)
+  // Lineárne: mult = 1 - m/50, clamp [0.75, 1.25]
   const m = metrics.momentum30d;
-  const momDistMult =
-    m < -10 ? 1.20 :
-    m < -3  ? 1.10 :
-    m <= 3  ? 1.00 :
-    m <= 10 ? 0.90 : 0.80;
+  const momDistMult = Math.max(0.75, Math.min(1.25, 1 - m / 50));
 
   // Distance: PER-COIN — base × per-coin volatility × per-coin momentum, clamp [-10, -1.5]
   const rawDist = base.distance * volMult * momDistMult;
-  const distance = Math.max(-10, Math.min(-1.5, rawDist));
+  const distance = Math.round(Math.max(-10, Math.min(-1.5, rawDist)) * 10) / 10;
 
   // Market%: SHARED — base + shared adjustment, clamp [25, 90]
   const rawMarket = base.marketPct + momAdj;
-  const marketPct = Math.max(25, Math.min(90, rawMarket));
-  const limitPct = 100 - marketPct;
+  const marketPct = Math.round(Math.max(25, Math.min(90, rawMarket)) * 10) / 10;
+  const limitPct = Math.round((100 - marketPct) * 10) / 10;
 
   // Per-coin rationale: vol + momentum (rovnaká pre BTC/ETH/SOL)
   const volPart =
