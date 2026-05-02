@@ -84,21 +84,18 @@ export function getBaseSplit(score: number): BaseSplit {
  * Mapovanie: vol 0% → 0.5×, vol 2% → 1.0×, vol 4% → 1.5×, vol 6%+ → 2.0× (cap).
  */
 export function getVolatilityMultiplier(vol30d: number): number {
-  const mult = 0.5 + vol30d * 0.25;
+  const sens = CURRENT_OVERRIDES.volatilitySensitivity;
+  const mult = 0.5 + vol30d * sens;
   return Math.max(0.5, Math.min(2.0, mult));
 }
 
 /**
- * Kontinuálny momentum adjustment na Market% (žiadne skokové +5/+10).
- * mom -20 % → +12 (viac market, kupuj pád)
- * mom   0 % → 0
- * mom +20 % → +12 (viac market, chyť trend)
- * Lineárna |mom| × 0.6, cap ±15.
- * Znamienko: pri downtrende aj uptrende zvyšujeme market % (rýchlejší vstup),
- * pri neutráli nechávame base split.
+ * Kontinuálny momentum adjustment na Market% — koeficient riadi engine_params.
+ * mom 0 % → 0, |mom| × momentumSensitivity, cap ±15.
  */
 export function getMomentumAdjustment(mom30d: number): number {
-  const adj = Math.abs(mom30d) * 0.6;
+  const sens = CURRENT_OVERRIDES.momentumSensitivity;
+  const adj = Math.abs(mom30d) * sens;
   return Math.max(0, Math.min(15, Math.round(adj * 10) / 10));
 }
 
