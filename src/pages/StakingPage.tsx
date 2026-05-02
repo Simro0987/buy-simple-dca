@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { OpportunityCards } from '@/components/decision/OpportunityCards';
+import { MasterProtocolCard } from '@/components/staking/MasterProtocolCard';
 
 interface Props { lang: Lang; }
 
