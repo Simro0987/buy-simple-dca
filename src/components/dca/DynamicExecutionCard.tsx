@@ -127,20 +127,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         </div>
       </div>
 
-      {/* PER-COIN distance (volatility-driven) */}
-      <div className="space-y-2">
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-          Limit distance per token (podľa 14D volatility)
-        </p>
-        {coins.map(c => {
-          const e = executions[c];
-          const price = prices?.[COIN_PRICE_KEY[c]]?.usd ?? 0;
-          const limitPrice = price * (1 + e.limitDistancePct / 100);
-          const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
-          const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
-          return (
-            <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-1.5">
-              <div className="flex items-center justify-between">
       {/* PER-COIN: alokácia USD → Market / Limit + distance */}
       <div className="space-y-2">
         <div className="flex items-center justify-between">
