@@ -22,16 +22,15 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
   sol: 'solana',
 };
 
-// Cieľové portfólio váhy (z Core memory: 59% BTC / 25% ETH / 11% SOL / 5% HYPE).
-// HYPE nie je v DCA pláne (BTC/ETH/SOL spot) → re-normalizujeme zvyšné 95% na 100%.
+// Cieľové portfólio váhy: BTC 64% / ETH 25% / SOL 11% (bez HYPE).
 const TARGET_WEIGHTS: Record<CoinKey, number> = {
-  btc: 0.59 / 0.95, // ≈ 62.1%
-  eth: 0.25 / 0.95, // ≈ 26.3%
-  sol: 0.11 / 0.95, // ≈ 11.6%
+  btc: 0.64,
+  eth: 0.25,
+  sol: 0.11,
 };
 
 const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
-  btc: '59%',
+  btc: '64%',
   eth: '25%',
   sol: '11%',
 };
