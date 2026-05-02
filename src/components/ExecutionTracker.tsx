@@ -39,14 +39,42 @@ export function ExecutionTracker({ lang, prices }: Props) {
   const [history, setHistory] = useState<WeekRecord[]>(getHistory);
   const weekId = getCurrentWeekId();
 
-  const currentWeek = history.find(r => r.weekId === weekId) || {
+  // Live limit prices per token (recomputed from current prices, so they
+  // always render even if the stored history snapshot was missing a price).
+  const liveLimitBySymbol = useMemo(() => {
+    const map: Record<string, number> = {};
+    TOKENS.forEach(t => {
+      const p = prices?.[t.coingeckoId]?.usd ?? 0;
+      map[t.symbol] = p * t.limitDiscount;
+    });
+    return map;
+  }, [prices]);
+
+  const storedWeek = history.find(r => r.weekId === weekId);
+  const baseWeek: WeekRecord = storedWeek ?? {
     weekId,
     dcaExecuted: false,
     limits: TOKENS.map(t => ({
       symbol: t.symbol,
       filled: false,
-      limitPrice: (prices?.[t.coingeckoId]?.usd ?? 0) * t.limitDiscount,
+      limitPrice: liveLimitBySymbol[t.symbol] ?? 0,
     })),
+  };
+
+  // Ensure every token has a row + a non-zero limit price when we have live data.
+  const currentWeek: WeekRecord = {
+    ...baseWeek,
+    limits: TOKENS.map(t => {
+      const existing = baseWeek.limits.find(l => l.symbol === t.symbol);
+      const live = liveLimitBySymbol[t.symbol] ?? 0;
+      const stored = existing?.limitPrice ?? 0;
+      return {
+        symbol: t.symbol,
+        filled: existing?.filled ?? false,
+        limitPrice: stored > 0 ? stored : live,
+        currentPrice: existing?.currentPrice,
+      };
+    }),
   };
 
   const toggleDca = () => {
