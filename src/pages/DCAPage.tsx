@@ -344,7 +344,7 @@ export function DCAPage({ lang: _lang }: Props) {
       <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
-      <DynamicExecutionCard score={effectiveScore} prices={prices} />
+      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
 
 
       {/* AUTO BTC SIGNALS */}
