@@ -28,12 +28,23 @@ export interface BaseSplit {
   distance: number; // negative
 }
 
+/**
+ * Kontinuálny base split — žiadne skokové pásma.
+ * Score 0  → market 85 %, distance -1.5 %
+ * Score 50 → market 60 %, distance -4.0 %
+ * Score 100 → market 30 %, distance -6.5 %
+ * (lineárna interpolácia medzi krajnými bodmi)
+ */
 export function getBaseSplit(score: number): BaseSplit {
-  if (score <= 25) return { marketPct: 80, limitPct: 20, distance: -2 };
-  if (score <= 45) return { marketPct: 70, limitPct: 30, distance: -3 };
-  if (score <= 60) return { marketPct: 60, limitPct: 40, distance: -4 };
-  if (score <= 75) return { marketPct: 50, limitPct: 50, distance: -5 };
-  return { marketPct: 35, limitPct: 65, distance: -6 };
+  const s = Math.max(0, Math.min(100, score));
+  const t = s / 100; // 0..1
+  const marketPct = 85 - 55 * t;        // 85 → 30
+  const distance = -1.5 - 5.0 * t;       // -1.5 → -6.5
+  return {
+    marketPct: Math.round(marketPct * 10) / 10,
+    limitPct: Math.round((100 - marketPct) * 10) / 10,
+    distance: Math.round(distance * 10) / 10,
+  };
 }
 
 /**
