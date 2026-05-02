@@ -7,6 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { OpportunityCards } from '@/components/decision/OpportunityCards';
+import { MasterProtocolCard } from '@/components/staking/MasterProtocolCard';
 
 interface Props { lang: Lang; }
 
@@ -123,6 +124,8 @@ export function StakingPage({ lang }: Props) {
       <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
       <OpportunityCards />
 
+      <MasterProtocolCard lang={lang} />
+
       {STAKING_CONFIG.map(asset => (
         <div key={asset.symbol} className="glass-card p-4 space-y-3">
           {/* Header */}
@@ -193,17 +196,23 @@ export function StakingPage({ lang }: Props) {
         </div>
       ))}
 
-      {/* Yield flow summary */}
+      {/* Yield flow summary — Master Protokol 2026 */}
       <div className="glass-card p-4 space-y-2">
         <p className="text-sm font-semibold text-foreground">
-          {lang === 'sk' ? 'Tok výnosov' : 'Yield Flow'}
+          {lang === 'sk' ? 'Tok výnosov (Master Protokol 2026)' : 'Yield Flow (Master Protocol 2026)'}
         </p>
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">
-            • ETH + SOL {lang === 'sk' ? 'výnosy' : 'yields'} → BTC ({lang === 'sk' ? '15. deň' : 'Day 15'})
+            • <span className="text-foreground">ETH:</span> rETH vault (Beefy/ARB) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
-            • BTC → {lang === 'sk' ? 'bez výnosu (cold storage)' : 'No yield (cold storage)'}
+            • <span className="text-foreground">SOL:</span> Kamino Multiply (jitoSOL) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            • <span className="text-foreground">BTC:</span> Babylon (compound) + LBTC vault (Beefy/ARB) → {lang === 'sk' ? 'späť do BTC' : 'back to BTC'}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            • {lang === 'sk' ? 'Cieľ: akumulovať 1 BTC cez všetky kanály.' : 'Goal: accumulate 1 BTC across all channels.'}
           </p>
         </div>
       </div>
