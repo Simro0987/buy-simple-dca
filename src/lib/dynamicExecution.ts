@@ -99,27 +99,21 @@ export function calcCoinExecution(
   const volMult = getVolatilityMultiplier(metrics.volatility30d);
   const momAdj = sharedMomentumAdj ?? getMomentumAdjustment(metrics.momentum30d);
 
-  // Per-coin momentum bias na DISTANCE (rovnaká logika pre BTC, ETH aj SOL):
-  //  - silný downtrend (<-10 %) → ×1.20 (širší limit, čakaj lepší vstup)
-  //  - mierny downtrend (-10..-3 %) → ×1.10
-  //  - neutrál (-3..+3 %) → ×1.00
-  //  - mierny uptrend (+3..+10 %) → ×0.90
-  //  - silný uptrend (>+10 %) → ×0.80 (tesný, chyť trend)
+  // Per-coin momentum bias na DISTANCE — kontinuálne, žiadne pásma.
+  //   downtrend (m<0) → multiplier > 1 (širší limit, čakaj nižšiu cenu)
+  //   uptrend   (m>0) → multiplier < 1 (tesnejší limit, chyť trend)
+  // Lineárne: mult = 1 - m/50, clamp [0.75, 1.25]
   const m = metrics.momentum30d;
-  const momDistMult =
-    m < -10 ? 1.20 :
-    m < -3  ? 1.10 :
-    m <= 3  ? 1.00 :
-    m <= 10 ? 0.90 : 0.80;
+  const momDistMult = Math.max(0.75, Math.min(1.25, 1 - m / 50));
 
   // Distance: PER-COIN — base × per-coin volatility × per-coin momentum, clamp [-10, -1.5]
   const rawDist = base.distance * volMult * momDistMult;
-  const distance = Math.max(-10, Math.min(-1.5, rawDist));
+  const distance = Math.round(Math.max(-10, Math.min(-1.5, rawDist)) * 10) / 10;
 
   // Market%: SHARED — base + shared adjustment, clamp [25, 90]
   const rawMarket = base.marketPct + momAdj;
-  const marketPct = Math.max(25, Math.min(90, rawMarket));
-  const limitPct = 100 - marketPct;
+  const marketPct = Math.round(Math.max(25, Math.min(90, rawMarket)) * 10) / 10;
+  const limitPct = Math.round((100 - marketPct) * 10) / 10;
 
   // Per-coin rationale: vol + momentum (rovnaká pre BTC/ETH/SOL)
   const volPart =
