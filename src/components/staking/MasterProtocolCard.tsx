@@ -1,5 +1,5 @@
 import { Lang } from '@/lib/i18n';
-import { ShoppingCart, Sparkles, Shield, ArrowRight, Bitcoin, Coins } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
@@ -70,104 +70,7 @@ export function MasterProtocolCard({ lang }: Props) {
         </div>
       </div>
 
-      {/* PHASE 1: Accumulation */}
-      <div className="glass-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <ShoppingCart className="w-4 h-4 text-accent" />
-          <h3 className="text-sm font-semibold text-foreground">
-            {isSk ? '🛠️ Fáza 1: Akumulácia (každý pondelok)' : '🛠️ Phase 1: Accumulation (every Monday)'}
-          </h3>
-        </div>
-        <div className="bg-secondary/40 rounded-lg p-3 space-y-2">
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">{isSk ? 'Sieť' : 'Network'}</span>
-            <span className="font-medium text-foreground">Base</span>
-          </div>
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">{isSk ? 'Miesto' : 'Venue'}</span>
-            <span className="font-medium text-foreground">swap.cow.fi (Rabby)</span>
-          </div>
-          <div className="flex items-center justify-between text-[11px]">
-            <span className="text-muted-foreground">{isSk ? 'Akcia' : 'Action'}</span>
-            <span className="font-medium text-foreground">3× Limit Orders</span>
-          </div>
-        </div>
-        <div className="grid grid-cols-3 gap-2">
-          {[
-            { sym: 'cbBTC', color: '#F7931A', pct: 64 },
-            { sym: 'WETH', color: '#627EEA', pct: 25 },
-            { sym: 'SOL', color: '#9945FF', pct: 11 },
-          ].map(t => (
-            <div key={t.sym} className="bg-secondary/40 rounded-lg p-2 text-center">
-              <div className="text-[10px] font-bold" style={{ color: t.color }}>{t.sym}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">{t.pct}%</div>
-            </div>
-          ))}
-        </div>
-        <p className="text-[10px] text-muted-foreground italic">
-          {isSk ? 'Cieľ: Vybudovať pozíciu s MEV ochranou bez plynu pri čakaní.' : 'Goal: Build position with MEV protection, no gas while waiting.'}
-        </p>
-      </div>
-
-      {/* PHASE 2: Monthly cleanup + routes */}
-      <div className="glass-card p-4 space-y-3">
-        <div className="flex items-center gap-2">
-          <Shield className="w-4 h-4 text-gain" />
-          <h3 className="text-sm font-semibold text-foreground">
-            {isSk ? '🧼 Fáza 2: Mesačná očista (raz / nedeľa)' : '🧼 Phase 2: Monthly cleanup (Sunday)'}
-          </h3>
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          {isSk
-            ? 'Pretrhne väzbu na Base a rozdelí majetok do bezpečia podľa trasy:'
-            : 'Breaks the link to Base and splits assets to safety per route:'}
-        </p>
-
-        {ROUTES.map(route => (
-          <div key={route.symbol} className="bg-secondary/30 rounded-lg p-3 space-y-2 border border-border/50">
-            {/* Route header */}
-            <div className="flex items-center gap-2">
-              {route.symbol === 'BTC' ? (
-                <Bitcoin className="w-3.5 h-3.5" style={{ color: route.color }} />
-              ) : (
-                <Coins className="w-3.5 h-3.5" style={{ color: route.color }} />
-              )}
-              <span className="text-xs font-bold" style={{ color: route.color }}>{route.symbol}</span>
-              <span className="text-[10px] text-muted-foreground">{isSk ? 'trasa' : 'route'}</span>
-            </div>
-
-            {/* Bridge */}
-            <div className="flex items-center gap-1.5 text-[10px] bg-background/40 rounded px-2 py-1.5">
-              <span className="text-muted-foreground shrink-0">{route.base}</span>
-              <ArrowRight className="w-2.5 h-2.5 text-muted-foreground shrink-0" />
-              <span className="text-foreground font-medium">{route.bridge}</span>
-            </div>
-
-            {/* Steps */}
-            <div className="space-y-1.5">
-              {route.steps.map((s, i) => (
-                <div key={i} className="flex items-start gap-2 text-[10px]">
-                  <span
-                    className="px-1.5 py-0.5 rounded font-bold shrink-0"
-                    style={{ backgroundColor: route.color + '20', color: route.color }}
-                  >
-                    {s.pct}%
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="font-medium text-foreground truncate">{s.label}</span>
-                      {s.apy && <span className="text-gain font-medium shrink-0">{s.apy} APY</span>}
-                    </div>
-                    <div className="text-muted-foreground truncate">
-                      {s.protocol} · <span className="text-accent">{s.chain}</span>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
+      {/* Phase sections removed per user request */}
 
       {/* Tips */}
       <div className="glass-card p-4 space-y-2">
