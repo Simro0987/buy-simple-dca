@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { TOKENS } from '@/lib/crypto';
+import { cgFetch } from '@/lib/coingecko';
 
 export interface TokenAnalysis {
   id: string;
@@ -121,9 +122,9 @@ const STAKING_PCTS: Record<string, number> = {
 
 async function fetchTokenAnalysis(): Promise<TokenAnalysis[]> {
   const ids = TOKENS.map((t) => t.coingeckoId).join(',');
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=true&price_change_percentage=7d,30d`
-  );
+  const res = await cgFetch('/coins/markets', {
+    vs_currency: 'usd', ids, order: 'market_cap_desc', sparkline: true, price_change_percentage: '7d,30d',
+  });
   if (!res.ok) throw new Error('Failed to fetch analysis data');
   const coins: Array<{
     id: string;

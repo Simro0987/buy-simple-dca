@@ -25,11 +25,13 @@ export interface PriceData {
   };
 }
 
+import { cgFetch } from './coingecko';
+
 export async function fetchPrices(): Promise<PriceData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true&include_24hr_vol=true`
-  );
+  const res = await cgFetch('/simple/price', {
+    ids, vs_currencies: 'usd', include_24hr_change: true, include_24hr_vol: true,
+  });
   if (!res.ok) throw new Error('Failed to fetch prices');
   return res.json();
 }
@@ -46,9 +48,7 @@ export type SparklineData = Record<string, number[]>;
 
 export async function fetchAthData(): Promise<AthData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc`
-  );
+  const res = await cgFetch('/coins/markets', { vs_currency: 'usd', ids, order: 'market_cap_desc' });
   if (!res.ok) throw new Error('Failed to fetch ATH data');
   const coins: Array<{ id: string; ath: number; ath_date: string; ath_change_percentage: number }> = await res.json();
   const result: AthData = {};
@@ -64,9 +64,9 @@ export async function fetchAthData(): Promise<AthData> {
 
 export async function fetchSparklines(days = 7): Promise<SparklineData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
-  const res = await fetch(
-    `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&order=market_cap_desc&sparkline=true&price_change_percentage=7d`
-  );
+  const res = await cgFetch('/coins/markets', {
+    vs_currency: 'usd', ids, order: 'market_cap_desc', sparkline: true, price_change_percentage: '7d',
+  });
   if (!res.ok) throw new Error('Failed to fetch sparklines');
   const coins: Array<{ id: string; sparkline_in_7d?: { price: number[] } }> = await res.json();
   const result: SparklineData = {};
@@ -86,9 +86,9 @@ export async function fetchSparklines(days = 7): Promise<SparklineData> {
 export async function fetchAltSeasonIndex(): Promise<{ value: number; label: string }> {
   try {
     // Alt season heuristic: if >75% of top alts outperform BTC over 90 days = alt season
-    const res = await fetch(
-      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true'
-    );
+    const res = await cgFetch('/simple/price', {
+      ids: 'bitcoin,ethereum,solana', vs_currencies: 'usd', include_24hr_change: true,
+    });
     const data = await res.json();
     const btcChange = data.bitcoin?.usd_24h_change ?? 0;
     const ethChange = data.ethereum?.usd_24h_change ?? 0;
