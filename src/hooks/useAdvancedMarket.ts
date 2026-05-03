@@ -108,9 +108,10 @@ function computeSignal(
 
 async function fetchAdvancedMarket(): Promise<AdvancedMarketData> {
   // Fetch BTC dominance from CoinGecko global endpoint
+  const { cgFetch } = await import('@/lib/coingecko');
   const [globalRes, priceRes, fgRes] = await Promise.all([
-    fetch('https://api.coingecko.com/api/v3/global').catch(() => null),
-    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_change=true').catch(() => null),
+    cgFetch('/global').catch(() => null),
+    cgFetch('/simple/price', { ids: 'bitcoin', vs_currencies: 'usd', include_24hr_change: true }).catch(() => null),
     fetch('https://api.alternative.me/fng/?limit=1').catch(() => null),
   ]);
 

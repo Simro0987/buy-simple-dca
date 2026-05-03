@@ -75,8 +75,8 @@ function computeMetrics(closes: number[], source: 'coingecko' | 'binance'): Btc2
 
 async function fetchFromCoinGecko(): Promise<number[]> {
   // Bez `interval=daily` (vyžaduje pro tier od Mar 2024). days=365 vracia 1h candles, ktoré agregujeme na denné closes.
-  const url = 'https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=365';
-  const res = await fetch(url);
+  const { cgFetch } = await import('@/lib/coingecko');
+  const res = await cgFetch('/coins/bitcoin/market_chart', { vs_currency: 'usd', days: 365 });
   if (!res.ok) throw new Error(`coingecko ${res.status}`);
   const json = await res.json() as { prices: [number, number][] };
   const prices = json.prices ?? [];

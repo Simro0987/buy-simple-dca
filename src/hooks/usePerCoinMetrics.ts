@@ -38,8 +38,8 @@ function calcMomentum(prices: number[]): number {
 
 async function fetchCoinMetrics(coin: CoinKey): Promise<CoinMetrics> {
   const id = COIN_IDS[coin];
-  const url = `https://api.coingecko.com/api/v3/coins/${id}/market_chart?vs_currency=usd&days=${WINDOW_DAYS}&interval=daily`;
-  const res = await fetch(url);
+  const { cgFetch } = await import('@/lib/coingecko');
+  const res = await cgFetch(`/coins/${id}/market_chart`, { vs_currency: 'usd', days: WINDOW_DAYS, interval: 'daily' });
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
   const data: MarketChartResponse = await res.json();
   const prices = (data.prices ?? []).map(p => p[1]);
