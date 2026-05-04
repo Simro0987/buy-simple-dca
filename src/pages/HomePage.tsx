@@ -1,13 +1,9 @@
-import { PieChart, Calculator, Sparkles, Zap, ClipboardList, Target, Shield, Activity, BarChart3, DollarSign, Coins, Settings, Wallet } from 'lucide-react';
+import { PieChart, Calculator, Shield, Activity, BarChart3, DollarSign, Coins, Settings, Wallet } from 'lucide-react';
 import { TabId } from '@/components/BottomNav';
-import { PriorityDashboard } from '@/components/PriorityDashboard';
-import { TopSignals } from '@/components/decision/TopSignals';
-import { TodayDecisions } from '@/components/decision/TodayDecisions';
 import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
 import { AssetCardsRow } from '@/components/dashboard/AssetCardsRow';
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChart';
-import { RebalanceCheckCard } from '@/components/dashboard/RebalanceCheckCard';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
@@ -53,12 +49,7 @@ export function HomePage({ onNavigate, lang }: Props) {
       <div className="grid grid-cols-1 gap-3">
         <AllocationDonut metrics={metrics} />
         <PerformanceLineChart metrics={metrics} prices={prices} />
-        <RebalanceCheckCard metrics={metrics} thresholdPct={Number(settings?.rebalance_threshold ?? 5)} />
       </div>
-
-      <TopSignals lang={lang} />
-      <PriorityDashboard />
-      <TodayDecisions lang={lang} />
 
       <div>
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 px-1">Sekcie</h2>
