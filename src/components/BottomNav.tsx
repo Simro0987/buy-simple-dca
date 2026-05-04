@@ -1,7 +1,7 @@
 import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet, Home, Calculator as CalcIcon } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'allocator' | 'settings';
+export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'allocator' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
