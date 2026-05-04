@@ -34,10 +34,7 @@ const CARDS: HubCard[] = [
 
 export function HomePage({ onNavigate, lang }: Props) {
   const { data: prices } = usePrices();
-  const { data: settings } = useAppSettings();
   const metrics = usePortfolioMetrics(prices);
-  const weeklyCapital = Number(settings?.default_amount ?? 0);
-  const cashReserve = Math.max(0, Number(settings?.total_capital ?? 0) - metrics.totalInvested);
 
   return (
     <div className="space-y-3">
