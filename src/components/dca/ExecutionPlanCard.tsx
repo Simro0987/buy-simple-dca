@@ -335,6 +335,16 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
               >
                 {filled ? <><Check className="w-3 h-3" /> Naplnené</> : pending ? <><Clock className="w-3 h-3" /> Sleduje</> : (busy === key ? '…' : 'Zadať')}
               </button>
+              {pending && st?.id && (
+                <button
+                  onClick={() => handleCancelLimit(st.id, r.token.symbol)}
+                  disabled={busy === key}
+                  className="px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                  aria-label={`Zrušiť limit ${r.token.symbol}`}
+                >
+                  <X className="w-3 h-3" /> Zrušiť
+                </button>
+              )}
             </div>
           );
         })}
