@@ -88,14 +88,13 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
   });
 
   // Per-week per-coin executions to color buttons + show status
-  const { iso: _iso, week: currentWeek } = getMondayWeek();
   const { data: executionsRows } = useQuery({
-    queryKey: ['dca_executions', currentWeek],
+    queryKey: ['dca_executions', week],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('dca_executions')
         .select('*')
-        .eq('week_number', currentWeek);
+        .eq('week_number', week);
       if (error) throw error;
       return data ?? [];
     },
