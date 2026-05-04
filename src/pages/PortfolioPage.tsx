@@ -100,8 +100,8 @@ export function PortfolioPage({ lang }: Props) {
           {!hasHoldings && (
             <p className="text-xs text-muted-foreground mt-2">
               {sk
-                ? 'Zadaj držby v záložke Smart pre zobrazenie portfólia'
-                : 'Enter holdings in the Smart tab to see portfolio'}
+                ? 'Zadaj držby pre zobrazenie portfólia'
+                : 'Enter holdings to see portfolio'}
             </p>
           )}
 
