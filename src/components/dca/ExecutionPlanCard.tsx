@@ -132,6 +132,24 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
     }
   };
 
+  const handleCancelLimit = async (id: string, coin: string) => {
+    if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
+    setBusy(`${coin}-limit`);
+    try {
+      const { error } = await supabase
+        .from('dca_executions')
+        .update({ status: 'CANCELLED' })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success(`${coin} limit zrušený`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const setCheck = (k: string, v: boolean) => {
     const next = { ...checks, [k]: v };
     setChecks(next);
