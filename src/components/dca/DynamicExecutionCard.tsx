@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import {
   calcUnifiedExecution,
   fixedExecution,
