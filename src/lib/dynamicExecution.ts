@@ -139,9 +139,10 @@ export function calcCoinExecution(
   const distance = Math.round(Math.max(-10, Math.min(-1.5, rawDist)) * 10) / 10;
 
   // Market%: SHARED — base + shared adjustment, clamp [25, 90]
+  // Zaokrúhľujeme na celé čísla, aby Market + Limit = 100 % vždy presne.
   const rawMarket = base.marketPct + momAdj;
-  const marketPct = Math.round(Math.max(25, Math.min(90, rawMarket)) * 10) / 10;
-  const limitPct = Math.round((100 - marketPct) * 10) / 10;
+  const marketPct = Math.round(Math.max(25, Math.min(90, rawMarket)));
+  const limitPct = 100 - marketPct;
 
   // Per-coin rationale: vol + momentum (rovnaká pre BTC/ETH/SOL)
   const volPart =
