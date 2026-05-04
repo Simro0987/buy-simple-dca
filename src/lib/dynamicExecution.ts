@@ -69,11 +69,11 @@ export function getBaseSplit(score: number): BaseSplit {
   const s = Math.max(0, Math.min(100, score));
   const t = s / 100; // 0..1
   const { baseMarketHigh, baseMarketLow, baseDistanceLow, baseDistanceHigh } = CURRENT_OVERRIDES;
-  const marketPct = baseMarketHigh - (baseMarketHigh - baseMarketLow) * t;
+  const marketPct = Math.round(baseMarketHigh - (baseMarketHigh - baseMarketLow) * t);
   const distance = baseDistanceLow - (Math.abs(baseDistanceHigh) - Math.abs(baseDistanceLow)) * t;
   return {
-    marketPct: Math.round(marketPct * 10) / 10,
-    limitPct: Math.round((100 - marketPct) * 10) / 10,
+    marketPct,
+    limitPct: 100 - marketPct,
     distance: Math.round(distance * 10) / 10,
   };
 }
