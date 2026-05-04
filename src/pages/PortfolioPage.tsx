@@ -3,6 +3,8 @@ import { Wallet, RefreshCw, TrendingUp, Shield, Landmark, ExternalLink, ChevronD
 import { TOKENS, formatUsd, PriceData } from '@/lib/crypto';
 import { usePrices, useAthData } from '@/hooks/usePrices';
 import { useDefiApys } from '@/hooks/useDefiApys';
+import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
@@ -12,6 +14,8 @@ import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
 import { ConcentrationWarnings } from '@/components/decision/ConcentrationWarnings';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { HistorySection } from '@/components/portfolio/HistorySection';
+import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
+import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 
 interface Props { lang: Lang; }
 
