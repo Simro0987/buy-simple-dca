@@ -47,6 +47,10 @@ export function PortfolioPage({ lang }: Props) {
   const { data: prices, refetch, isFetching } = usePrices();
   const { data: athData } = useAthData();
   const { data: apys } = useDefiApys();
+  const { data: settings } = useAppSettings();
+  const metrics = usePortfolioMetrics(prices);
+  const weeklyCapital = Number(settings?.default_amount ?? 0);
+  const cashReserve = Math.max(0, Number(settings?.total_capital ?? 0) - metrics.totalInvested);
   const [expandedToken, setExpandedToken] = useState<string | null>(null);
   const holdings = useMemo(() => loadHoldings(), []);
 
