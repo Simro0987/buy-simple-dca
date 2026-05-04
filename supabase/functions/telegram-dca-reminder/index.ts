@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       return [
         `<b>${token.symbol}</b> — $${totalUsd.toFixed(2)}`,
         `  🟢 Market: $${marketUsd.toFixed(2)} (${formatQty(marketQty, token.symbol)})`,
-        `  🟡 Limit: $${limitUsd.toFixed(2)} @ $${formatPrice(limitPrice)} (${formatQty(limitQty, token.symbol)})`,
+        `  🟡 Limit: $${limitUsd.toFixed(2)} @ $${limitPrice.toFixed(4)} (${formatQty(limitQty, token.symbol)})`,
       ].join('\n');
     });
 

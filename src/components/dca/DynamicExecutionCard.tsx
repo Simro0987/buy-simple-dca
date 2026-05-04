@@ -7,7 +7,7 @@ import {
   fixedExecution,
   type CoinKey,
 } from '@/lib/dynamicExecution';
-import { formatPrice, type PriceData } from '@/lib/crypto';
+import { formatPrice, formatLimitPrice, type PriceData } from '@/lib/crypto';
 
 interface Props {
   score: number;
@@ -215,11 +215,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 <div>
                   <p className="text-[10px] text-muted-foreground">Limit cena ({e.limitDistancePct.toFixed(1)}%)</p>
                   <p className="text-sm font-semibold text-foreground tabular-nums">
-                    {price > 0 ? formatPrice(limitPrice) : '—'}
+                    {price > 0 ? formatLimitPrice(limitPrice) : '—'}
                   </p>
                 </div>
                 <button
-                  onClick={() => price > 0 && copy(limitPrice.toFixed(2))}
+                  onClick={() => price > 0 && copy(limitPrice.toFixed(4))}
                   disabled={price <= 0}
                   className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                   aria-label={`Kopíruj limit cenu ${e.symbol}`}

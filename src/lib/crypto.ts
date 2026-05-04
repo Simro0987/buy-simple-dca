@@ -169,6 +169,10 @@ export function formatPrice(value: number): string {
   return `$${value.toFixed(4)}`;
 }
 
+export function formatLimitPrice(value: number): string {
+  return `$${value.toFixed(4)}`;
+}
+
 export function formatQuantity(value: number, symbol: string): string {
   if (symbol === 'BTC') return value.toFixed(8);
   if (symbol === 'ETH') return value.toFixed(6);

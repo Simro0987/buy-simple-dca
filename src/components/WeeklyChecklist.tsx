@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Lang } from '@/lib/i18n';
-import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, formatPrice, formatUsd, formatQuantity, calculateDCA, PriceData } from '@/lib/crypto';
+import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, formatPrice, formatLimitPrice, formatUsd, formatQuantity, calculateDCA, PriceData } from '@/lib/crypto';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { CheckCircle, XCircle, Circle, ClipboardList, ShoppingCart, TrendingDown, Layers, Target } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
@@ -192,7 +192,7 @@ export function WeeklyChecklist({ lang, prices }: Props) {
                   </span>
                 )}
                 <p className="text-xs text-muted-foreground">
-                  {sk ? 'Aktuálna' : 'Current'}: {formatPrice(price)} → Limit: {formatPrice(limitPrice)}
+                  {sk ? 'Aktuálna' : 'Current'}: {formatPrice(price)} → Limit: {formatLimitPrice(limitPrice)}
                 </p>
               </div>
               <CheckItem
