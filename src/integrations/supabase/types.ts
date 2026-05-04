@@ -143,6 +143,51 @@ export type Database = {
         }
         Relationships: []
       }
+      dca_executions: {
+        Row: {
+          amount_usd: number
+          coin: string
+          created_at: string
+          executed_price: number | null
+          filled_at: string | null
+          id: string
+          kind: string
+          notes: string | null
+          quantity: number
+          status: string
+          target_price: number
+          week_number: number
+        }
+        Insert: {
+          amount_usd: number
+          coin: string
+          created_at?: string
+          executed_price?: number | null
+          filled_at?: string | null
+          id?: string
+          kind: string
+          notes?: string | null
+          quantity?: number
+          status?: string
+          target_price: number
+          week_number: number
+        }
+        Update: {
+          amount_usd?: number
+          coin?: string
+          created_at?: string
+          executed_price?: number | null
+          filled_at?: string | null
+          id?: string
+          kind?: string
+          notes?: string | null
+          quantity?: number
+          status?: string
+          target_price?: number
+          week_number?: number
+        }
+        Relationships: []
+      }
       dca_purchases: {
         Row: {
           allocation_pct: number | null
