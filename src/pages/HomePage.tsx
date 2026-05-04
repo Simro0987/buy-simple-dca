@@ -44,12 +44,8 @@ export function HomePage({ onNavigate, lang }: Props) {
 
   return (
     <div className="space-y-3">
-      <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
       <AssetCardsRow metrics={metrics} prices={prices} />
-      <div className="grid grid-cols-1 gap-3">
-        <AllocationDonut metrics={metrics} />
-        <PerformanceLineChart metrics={metrics} prices={prices} />
-      </div>
+      <PerformanceLineChart metrics={metrics} prices={prices} />
 
       <div>
         <h2 className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 px-1">Sekcie</h2>
