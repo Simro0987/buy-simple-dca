@@ -53,6 +53,7 @@ const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
  */
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
+  const { data: settings } = useAppSettings();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
