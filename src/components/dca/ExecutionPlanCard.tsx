@@ -87,6 +87,52 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
     },
   });
 
+  // Per-week per-coin executions to color buttons + show status
+  const { iso: _iso, week: currentWeek } = getMondayWeek();
+  const { data: executionsRows } = useQuery({
+    queryKey: ['dca_executions', currentWeek],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dca_executions')
+        .select('*')
+        .eq('week_number', currentWeek);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const execStatus = useMemo(() => {
+    const m = new Map<string, { market?: any; limit?: any }>();
+    for (const r of (executionsRows ?? []) as any[]) {
+      const key = r.coin;
+      const cur = m.get(key) ?? {};
+      if (r.kind === 'market') cur.market = r;
+      else cur.limit = r;
+      m.set(key, cur);
+    }
+    return m;
+  }, [executionsRows]);
+
+  const [busy, setBusy] = useState<string | null>(null);
+  const handleExecute = async (coin: string, kind: 'market'|'limit', amount: number, price: number) => {
+    const key = `${coin}-${kind}`;
+    setBusy(key);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin: coin.toLowerCase(), kind, amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      toast.success(kind === 'market' ? `${coin} market vykonaný ✓` : `${coin} limit zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', currentWeek] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const setCheck = (k: string, v: boolean) => {
     const next = { ...checks, [k]: v };
     setChecks(next);
