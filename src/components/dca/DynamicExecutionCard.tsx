@@ -7,7 +7,7 @@ import {
   fixedExecution,
   type CoinKey,
 } from '@/lib/dynamicExecution';
-import { formatPrice, type PriceData } from '@/lib/crypto';
+import { formatPrice, formatLimitPrice, type PriceData } from '@/lib/crypto';
 
 interface Props {
   score: number;
