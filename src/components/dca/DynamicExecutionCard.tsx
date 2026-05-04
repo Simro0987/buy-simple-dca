@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import {
   calcUnifiedExecution,
@@ -8,6 +10,14 @@ import {
   type CoinKey,
 } from '@/lib/dynamicExecution';
 import { formatPrice, formatLimitPrice, type PriceData } from '@/lib/crypto';
+
+function getMondayWeek(d = new Date()): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
 
 interface Props {
   score: number;
@@ -42,6 +52,67 @@ const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
  */
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
+  const qc = useQueryClient();
+  const week = useMemo(() => getMondayWeek(), []);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const { data: executionsRows } = useQuery({
+    queryKey: ['dca_executions', week],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dca_executions')
+        .select('*')
+        .eq('week_number', week);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const execStatus = useMemo(() => {
+    const m = new Map<string, { market?: any; limit?: any }>();
+    for (const r of (executionsRows ?? []) as any[]) {
+      const cur = m.get(r.coin) ?? {};
+      if (r.kind === 'market') cur.market = r;
+      else cur.limit = r;
+      m.set(r.coin, cur);
+    }
+    return m;
+  }, [executionsRows]);
+
+  const handleExecute = async (coin: CoinKey, kind: 'market'|'limit', amount: number, price: number) => {
+    const key = `${coin}-${kind}`;
+    setBusy(key);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin, kind, amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      toast.success(kind === 'market' ? `${coin.toUpperCase()} market vykonaný ✓` : `${coin.toUpperCase()} limit zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCancelLimit = async (id: string, coin: string) => {
+    if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
+    setBusy(`${coin.toLowerCase()}-limit`);
+    try {
+      const { error } = await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', id);
+      if (error) throw error;
+      toast.success(`${coin} limit zrušený`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
 
   const result = useMemo(() => {
     if (!metrics) {
@@ -148,6 +219,20 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const marketUsd = coinUsd * (e.marketPct / 100);
           const limitUsd = coinUsd * (e.limitPct / 100);
 
+          const symU = e.symbol.toUpperCase();
+          const st = execStatus.get(symU);
+          const mDone = st?.market?.status === 'EXECUTED';
+          const lFilled = st?.limit?.status === 'FILLED';
+          const lPending = st?.limit?.status === 'PENDING';
+          const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
+          const lBg = lFilled
+            ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
+            : lPending
+            ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
+            : 'bg-emerald-500/10';
+          const mBusy = busy === `${c}-market`;
+          const lBusy = busy === `${c}-limit`;
+
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
               <div className="flex items-center justify-between">
@@ -176,7 +261,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
               {/* Market / Limit rozdelenie sumy */}
               <div className="grid grid-cols-2 gap-1.5">
-                <div className="bg-primary/10 rounded p-2">
+                <div className={`rounded p-2 ${mBg}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-primary font-semibold">MARKET {e.marketPct}%</p>
                     <button
@@ -191,8 +276,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     ${marketUsd.toFixed(2)}
                   </p>
                   <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
+                  <button
+                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price)}
+                    disabled={mDone || mBusy || marketUsd <= 0 || price <= 0}
+                    className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
+                      mDone ? 'bg-emerald-500 text-background' : 'bg-primary text-primary-foreground'
+                    }`}
+                  >
+                    {mDone ? <><Check className="w-3 h-3" /> Vykonané</> : (mBusy ? '…' : 'Vykonať')}
+                  </button>
                 </div>
-                <div className="bg-emerald-500/10 rounded p-2">
+                <div className={`rounded p-2 ${lBg}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-emerald-400 font-semibold">LIMIT {e.limitPct}%</p>
                     <button
@@ -207,6 +301,28 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     ${limitUsd.toFixed(2)}
                   </p>
                   <p className="text-[9px] text-muted-foreground">limit @ {e.limitDistancePct.toFixed(1)}%</p>
+                  <button
+                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice)}
+                    disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
+                    className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
+                      lFilled ? 'bg-emerald-500 text-background'
+                      : lPending ? 'bg-amber-500 text-background'
+                      : 'bg-emerald-500/80 text-background'
+                    }`}
+                  >
+                    {lFilled ? <><Check className="w-3 h-3" /> Naplnené</>
+                      : lPending ? <><Clock className="w-3 h-3" /> Sleduje</>
+                      : (lBusy ? '…' : 'Zadať limit')}
+                  </button>
+                  {lPending && st?.limit?.id && (
+                    <button
+                      onClick={() => handleCancelLimit(st.limit.id, symU)}
+                      disabled={lBusy}
+                      className="mt-1 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                    >
+                      <X className="w-3 h-3" /> Zrušiť limit
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -227,6 +343,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   <Copy className="w-3.5 h-3.5" />
                 </button>
               </div>
+
+
 
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
