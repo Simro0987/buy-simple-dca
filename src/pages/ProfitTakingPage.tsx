@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { PerChainPnLSummary } from '@/components/PerChainPnLSummary';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
 
