@@ -261,7 +261,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
               {/* Market / Limit rozdelenie sumy */}
               <div className="grid grid-cols-2 gap-1.5">
-                <div className="bg-primary/10 rounded p-2">
+                <div className={`rounded p-2 ${mBg}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-primary font-semibold">MARKET {e.marketPct}%</p>
                     <button
@@ -276,8 +276,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     ${marketUsd.toFixed(2)}
                   </p>
                   <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
+                  <button
+                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price)}
+                    disabled={mDone || mBusy || marketUsd <= 0 || price <= 0}
+                    className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
+                      mDone ? 'bg-emerald-500 text-background' : 'bg-primary text-primary-foreground'
+                    }`}
+                  >
+                    {mDone ? <><Check className="w-3 h-3" /> Vykonané</> : (mBusy ? '…' : 'Vykonať')}
+                  </button>
                 </div>
-                <div className="bg-emerald-500/10 rounded p-2">
+                <div className={`rounded p-2 ${lBg}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-emerald-400 font-semibold">LIMIT {e.limitPct}%</p>
                     <button
@@ -292,7 +301,47 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     ${limitUsd.toFixed(2)}
                   </p>
                   <p className="text-[9px] text-muted-foreground">limit @ {e.limitDistancePct.toFixed(1)}%</p>
+                  <button
+                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice)}
+                    disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
+                    className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
+                      lFilled ? 'bg-emerald-500 text-background'
+                      : lPending ? 'bg-amber-500 text-background'
+                      : 'bg-emerald-500/80 text-background'
+                    }`}
+                  >
+                    {lFilled ? <><Check className="w-3 h-3" /> Naplnené</>
+                      : lPending ? <><Clock className="w-3 h-3" /> Sleduje</>
+                      : (lBusy ? '…' : 'Zadať limit')}
+                  </button>
+                  {lPending && st?.limit?.id && (
+                    <button
+                      onClick={() => handleCancelLimit(st.limit.id, symU)}
+                      disabled={lBusy}
+                      className="mt-1 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                    >
+                      <X className="w-3 h-3" /> Zrušiť limit
+                    </button>
+                  )}
                 </div>
+              </div>
+
+              {/* Limit cena (kopírovateľná) */}
+              <div className="flex items-center justify-between gap-2 bg-background/40 rounded px-2 py-1.5">
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Limit cena ({e.limitDistancePct.toFixed(1)}%)</p>
+                  <p className="text-sm font-semibold text-foreground tabular-nums">
+                    {price > 0 ? formatLimitPrice(limitPrice) : '—'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => price > 0 && copy(limitPrice.toFixed(4))}
+                  disabled={price <= 0}
+                  className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                  aria-label={`Kopíruj limit cenu ${e.symbol}`}
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                </button>
               </div>
 
               {/* Limit cena (kopírovateľná) */}
