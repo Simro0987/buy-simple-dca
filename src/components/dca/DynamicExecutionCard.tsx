@@ -52,6 +52,67 @@ const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
  */
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
+  const qc = useQueryClient();
+  const week = useMemo(() => getMondayWeek(), []);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  const { data: executionsRows } = useQuery({
+    queryKey: ['dca_executions', week],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dca_executions')
+        .select('*')
+        .eq('week_number', week);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const execStatus = useMemo(() => {
+    const m = new Map<string, { market?: any; limit?: any }>();
+    for (const r of (executionsRows ?? []) as any[]) {
+      const cur = m.get(r.coin) ?? {};
+      if (r.kind === 'market') cur.market = r;
+      else cur.limit = r;
+      m.set(r.coin, cur);
+    }
+    return m;
+  }, [executionsRows]);
+
+  const handleExecute = async (coin: CoinKey, kind: 'market'|'limit', amount: number, price: number) => {
+    const key = `${coin}-${kind}`;
+    setBusy(key);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin, kind, amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      toast.success(kind === 'market' ? `${coin.toUpperCase()} market vykonaný ✓` : `${coin.toUpperCase()} limit zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCancelLimit = async (id: string, coin: string) => {
+    if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
+    setBusy(`${coin.toLowerCase()}-limit`);
+    try {
+      const { error } = await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', id);
+      if (error) throw error;
+      toast.success(`${coin} limit zrušený`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
 
   const result = useMemo(() => {
     if (!metrics) {
