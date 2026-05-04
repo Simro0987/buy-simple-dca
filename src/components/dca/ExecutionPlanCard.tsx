@@ -283,7 +283,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
               return (
                 <div key={o.id} className="flex items-center justify-between text-[11px] bg-secondary/30 rounded px-2 py-1">
                   <span className="font-mono text-foreground">{o.coin}</span>
-                  <span className="tabular-nums text-muted-foreground">${Number(o.amount_usd).toFixed(0)} @ ${Number(o.limit_price).toFixed(2)}</span>
+                  <span className="tabular-nums text-muted-foreground">${Number(o.amount_usd).toFixed(0)} @ ${Number(o.limit_price).toFixed(4)}</span>
                   <span className={`font-semibold ${statusColor}`}>{o.status}</span>
                   <span className="text-muted-foreground tabular-nums">{days}d</span>
                 </div>
