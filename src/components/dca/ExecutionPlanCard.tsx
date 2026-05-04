@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap } from 'lucide-react';
+import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap, Check, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUsd, formatPrice, formatLimitPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
@@ -86,6 +86,51 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       return data ?? [];
     },
   });
+
+  // Per-week per-coin executions to color buttons + show status
+  const { data: executionsRows } = useQuery({
+    queryKey: ['dca_executions', week],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('dca_executions')
+        .select('*')
+        .eq('week_number', week);
+      if (error) throw error;
+      return data ?? [];
+    },
+    refetchInterval: 30_000,
+  });
+
+  const execStatus = useMemo(() => {
+    const m = new Map<string, { market?: any; limit?: any }>();
+    for (const r of (executionsRows ?? []) as any[]) {
+      const key = r.coin;
+      const cur = m.get(key) ?? {};
+      if (r.kind === 'market') cur.market = r;
+      else cur.limit = r;
+      m.set(key, cur);
+    }
+    return m;
+  }, [executionsRows]);
+
+  const [busy, setBusy] = useState<string | null>(null);
+  const handleExecute = async (coin: string, kind: 'market'|'limit', amount: number, price: number) => {
+    const key = `${coin}-${kind}`;
+    setBusy(key);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin: coin.toLowerCase(), kind, amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      toast.success(kind === 'market' ? `${coin} market vykonaný ✓` : `${coin} limit zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
 
   const setCheck = (k: string, v: boolean) => {
     const next = { ...checks, [k]: v };
@@ -206,17 +251,33 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Market objednávky</p>
           <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Dynamic</span>
         </div>
-        {dca.map(r => (
-          <div key={`m-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.marketUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.marketPct)}%)</span></p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">~{r.marketQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
+        {dca.map(r => {
+          const st = execStatus.get(r.token.symbol)?.market;
+          const done = st?.status === 'EXECUTED';
+          const rowBg = done ? 'bg-emerald-500/15 border border-emerald-500/40' : 'bg-secondary/40';
+          const btnCls = done
+            ? 'bg-emerald-500 text-background'
+            : 'bg-primary text-primary-foreground';
+          const key = `${r.token.symbol}-market`;
+          return (
+            <div key={`m-${r.token.id}`} className={`flex items-center gap-2 rounded-lg p-2 ${rowBg}`}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.marketUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.marketPct)}%)</span></p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">~{r.marketQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
+              </div>
+              <button onClick={() => copy(`Market BUY ${r.token.symbol} $${r.marketUsd.toFixed(2)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
+              <a href={HL_LINKS[r.token.symbol]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded bg-primary/10 text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
+              <button
+                onClick={() => !done && handleExecute(r.token.symbol, 'market', r.marketUsd, r.currentPrice)}
+                disabled={done || busy === key || r.marketUsd <= 0}
+                className={`px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 active:scale-95 disabled:opacity-70 ${btnCls}`}
+              >
+                {done ? <><Check className="w-3 h-3" /> Vykonané</> : (busy === key ? '…' : 'Vykonať')}
+              </button>
             </div>
-            <button onClick={() => copy(`Market BUY ${r.token.symbol} $${r.marketUsd.toFixed(2)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
-            <a href={HL_LINKS[r.token.symbol]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded bg-primary/10 text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Limit orders */}
@@ -225,17 +286,40 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Limit objednávky</p>
           <span className="text-[9px] text-primary flex items-center gap-1"><Zap className="w-3 h-3"/>Per-coin</span>
         </div>
-        {dca.map(r => (
-          <div key={`l-${r.token.id}`} className="flex items-center gap-2 bg-secondary/40 rounded-lg p-2">
-            <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.limitUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.limitPct)}%, {r.exec.limitDistancePct.toFixed(1)}%)</span></p>
-              <p className="text-[10px] text-muted-foreground tabular-nums">@ {formatLimitPrice(r.limitPrice)} · ~{r.limitQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
+        {dca.map(r => {
+          const st = execStatus.get(r.token.symbol)?.limit;
+          const filled = st?.status === 'FILLED';
+          const pending = st?.status === 'PENDING';
+          const rowBg = filled
+            ? 'bg-emerald-500/15 border border-emerald-500/40'
+            : pending
+            ? 'bg-amber-500/10 border border-amber-500/40'
+            : 'bg-secondary/40';
+          const btnCls = filled
+            ? 'bg-emerald-500 text-background'
+            : pending
+            ? 'bg-amber-500 text-background'
+            : 'bg-primary text-primary-foreground';
+          const key = `${r.token.symbol}-limit`;
+          return (
+            <div key={`l-${r.token.id}`} className={`flex items-center gap-2 rounded-lg p-2 ${rowBg}`}>
+              <div className="w-7 h-7 rounded-full flex items-center justify-center text-[9px] font-bold shrink-0" style={{ backgroundColor: r.token.color + '20', color: r.token.color }}>{r.token.symbol}</div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-semibold text-foreground tabular-nums">{formatUsd(r.limitUsd)} <span className="text-[10px] text-muted-foreground font-normal">({Math.round(r.exec.limitPct)}%, {r.exec.limitDistancePct.toFixed(1)}%)</span></p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">@ {formatLimitPrice(r.limitPrice)} · ~{r.limitQuantity.toFixed(r.token.id === 'btc' ? 8 : 4)} {r.token.symbol}</p>
+              </div>
+              <button onClick={() => copy(`Limit BUY ${r.token.symbol} $${r.limitUsd.toFixed(2)} @ $${r.limitPrice.toFixed(4)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
+              <a href={HL_LINKS[r.token.symbol]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded bg-primary/10 text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
+              <button
+                onClick={() => !filled && !pending && handleExecute(r.token.symbol, 'limit', r.limitUsd, r.limitPrice)}
+                disabled={filled || pending || busy === key || r.limitUsd <= 0}
+                className={`px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 active:scale-95 disabled:opacity-70 ${btnCls}`}
+              >
+                {filled ? <><Check className="w-3 h-3" /> Naplnené</> : pending ? <><Clock className="w-3 h-3" /> Sleduje</> : (busy === key ? '…' : 'Zadať')}
+              </button>
             </div>
-            <button onClick={() => copy(`Limit BUY ${r.token.symbol} $${r.limitUsd.toFixed(2)} @ $${r.limitPrice.toFixed(4)}`)} className="p-1.5 rounded bg-secondary text-muted-foreground"><Copy className="w-3.5 h-3.5" /></button>
-            <a href={HL_LINKS[r.token.symbol]} target="_blank" rel="noopener noreferrer" className="p-1.5 rounded bg-primary/10 text-primary"><ExternalLink className="w-3.5 h-3.5" /></a>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Checklist */}
