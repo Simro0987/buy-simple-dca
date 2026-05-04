@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { MasterProtocolCard } from '@/components/staking/MasterProtocolCard';
 import { StakingCalculator } from '@/components/staking/StakingCalculator';
+import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
 
 interface Props { lang: Lang; }
 
@@ -122,6 +123,8 @@ export function StakingPage({ lang }: Props) {
       </div>
 
       <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
+
+      <StakingTimingCard lang={lang} amountUsd={500} />
 
       <StakingCalculator lang={lang} />
 

@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.coingecko-proxy]
 verify_jwt = false
+
+[functions.gas-prices]
+verify_jwt = false
