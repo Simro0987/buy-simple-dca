@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap, Check, Clock } from 'lucide-react';
+import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap, Check, Clock, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUsd, formatPrice, formatLimitPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
