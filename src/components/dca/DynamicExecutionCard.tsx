@@ -344,23 +344,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </button>
               </div>
 
-              {/* Limit cena (kopírovateľná) */}
-              <div className="flex items-center justify-between gap-2 bg-background/40 rounded px-2 py-1.5">
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Limit cena ({e.limitDistancePct.toFixed(1)}%)</p>
-                  <p className="text-sm font-semibold text-foreground tabular-nums">
-                    {price > 0 ? formatLimitPrice(limitPrice) : '—'}
-                  </p>
-                </div>
-                <button
-                  onClick={() => price > 0 && copy(limitPrice.toFixed(4))}
-                  disabled={price <= 0}
-                  className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label={`Kopíruj limit cenu ${e.symbol}`}
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
-              </div>
+
 
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
