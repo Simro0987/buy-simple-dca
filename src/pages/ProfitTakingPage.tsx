@@ -125,7 +125,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     }
   }, [prices]);
 
-  // Auto-recalculate avg costs from DCA purchases + wallet sync on every price update
+  // Auto-recalculate avg costs: portfólio (DB) má prioritu, fallback na lokálne DCA nákupy
   useEffect(() => {
     if (!prices) return;
     const purchases = getDcaPurchases();
@@ -133,9 +133,14 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     const newBasis: Record<string, number> = { ...getAvgCostBasis() };
 
     for (const token of TOKENS) {
+      const fromPortfolio = portfolioAvgCosts[token.id];
+      if (fromPortfolio && fromPortfolio > 0) {
+        newBasis[token.id] = fromPortfolio;
+        sources[token.id] = 'auto';
+        continue;
+      }
       const tokenPurchases = purchases.filter(p => p.tokenId === token.id);
       if (tokenPurchases.length > 0) {
-        // Auto-calculate from purchase history
         const totalQty = tokenPurchases.reduce((s, p) => s + p.quantity, 0);
         const totalCost = tokenPurchases.reduce((s, p) => s + p.totalUsd, 0);
         if (totalQty > 0) {
@@ -143,7 +148,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
           sources[token.id] = 'auto';
         }
       } else if (newBasis[token.id] && newBasis[token.id] > 0) {
-        // Keep manual value
         sources[token.id] = 'manual';
       }
     }
@@ -151,7 +155,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     setAvgCostBasis(newBasis);
     setAvgCosts(newBasis);
     setCostSource(sources);
-  }, [prices]);
+  }, [prices, portfolioAvgCosts]);
 
   const saveAvgCost = (tokenId: string) => {
     const val = parseFloat(editValue);
