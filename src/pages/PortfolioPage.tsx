@@ -95,6 +95,10 @@ export function PortfolioPage({ lang }: Props) {
         </button>
       </div>
 
+      {/* Synced summary from Home */}
+      <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
+      <AllocationDonut metrics={metrics} />
+
       {/* Total Value Card */}
       <Card className="border-border bg-card overflow-hidden">
         <div className="h-1 bg-primary" />
