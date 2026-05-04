@@ -323,6 +323,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   <p className="text-sm font-bold text-foreground tabular-nums">
                     ${limitUsd.toFixed(2)}
                   </p>
+                  <p className="text-[9px] text-foreground/70 tabular-nums">
+                    ≈ {qtyFmt(limitQty)} {e.symbol}
+                  </p>
+                  {lFilled && lAddedQty > 0 && (
+                    <p className="text-[9px] text-emerald-400 tabular-nums">
+                      +{qtyFmt(lAddedQty)} {e.symbol} pridané
+                    </p>
+                  )}
                   <p className="text-[9px] text-muted-foreground">limit @ {e.limitDistancePct.toFixed(1)}%</p>
                   <button
                     onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice)}
