@@ -1,12 +1,9 @@
 import { PieChart, Calculator, Shield, Activity, BarChart3, DollarSign, Coins, Settings, Wallet } from 'lucide-react';
 import { TabId } from '@/components/BottomNav';
-import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
 import { AssetCardsRow } from '@/components/dashboard/AssetCardsRow';
-import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChart';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
-import { useAppSettings } from '@/hooks/useAppSettings';
 import { Lang } from '@/lib/i18n';
 
 interface Props {
