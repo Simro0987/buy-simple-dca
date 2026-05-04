@@ -1,6 +1,8 @@
-import { useMemo } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import {
   calcUnifiedExecution,
@@ -8,6 +10,14 @@ import {
   type CoinKey,
 } from '@/lib/dynamicExecution';
 import { formatPrice, formatLimitPrice, type PriceData } from '@/lib/crypto';
+
+function getMondayWeek(d = new Date()): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
 
 interface Props {
   score: number;
