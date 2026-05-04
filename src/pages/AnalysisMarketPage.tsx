@@ -1,5 +1,4 @@
 import { lazy, Suspense } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lang } from '@/lib/i18n';
 
@@ -15,17 +14,9 @@ const Fallback = () => (
 
 export function AnalysisMarketPage({ lang }: { lang: Lang }) {
   return (
-    <Tabs defaultValue="analysis" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 mb-4">
-        <TabsTrigger value="analysis">{lang === 'sk' ? 'Analýza' : 'Analysis'}</TabsTrigger>
-        <TabsTrigger value="market">{lang === 'sk' ? 'Trh' : 'Market'}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="analysis">
-        <Suspense fallback={<Fallback />}><AnalysisPage lang={lang} /></Suspense>
-      </TabsContent>
-      <TabsContent value="market">
-        <Suspense fallback={<Fallback />}><AdvancedMarketPage lang={lang} /></Suspense>
-      </TabsContent>
-    </Tabs>
+    <div className="space-y-6">
+      <Suspense fallback={<Fallback />}><AnalysisPage lang={lang} /></Suspense>
+      <Suspense fallback={<Fallback />}><AdvancedMarketPage lang={lang} /></Suspense>
+    </div>
   );
 }

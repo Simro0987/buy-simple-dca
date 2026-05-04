@@ -1,5 +1,4 @@
 import { lazy, Suspense } from 'react';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Lang } from '@/lib/i18n';
 import { PriceData, AthData } from '@/lib/crypto';
@@ -26,19 +25,11 @@ interface Props {
 
 export function PortfolioProfitPage({ lang, prices, athData, cycleResult, advancedMarketData }: Props) {
   return (
-    <Tabs defaultValue="portfolio" className="w-full">
-      <TabsList className="grid w-full grid-cols-2 mb-4">
-        <TabsTrigger value="portfolio">{lang === 'sk' ? 'Portfólio' : 'Portfolio'}</TabsTrigger>
-        <TabsTrigger value="profit">{lang === 'sk' ? 'Zisky' : 'Profits'}</TabsTrigger>
-      </TabsList>
-      <TabsContent value="portfolio">
-        <Suspense fallback={<Fallback />}><PortfolioPage lang={lang} /></Suspense>
-      </TabsContent>
-      <TabsContent value="profit">
-        <Suspense fallback={<Fallback />}>
-          <ProfitTakingPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedData={advancedMarketData} />
-        </Suspense>
-      </TabsContent>
-    </Tabs>
+    <div className="space-y-6">
+      <Suspense fallback={<Fallback />}><PortfolioPage lang={lang} /></Suspense>
+      <Suspense fallback={<Fallback />}>
+        <ProfitTakingPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedData={advancedMarketData} />
+      </Suspense>
+    </div>
   );
 }
