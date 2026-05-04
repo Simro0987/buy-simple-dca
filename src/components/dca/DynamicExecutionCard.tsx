@@ -219,6 +219,20 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const marketUsd = coinUsd * (e.marketPct / 100);
           const limitUsd = coinUsd * (e.limitPct / 100);
 
+          const symU = e.symbol.toUpperCase();
+          const st = execStatus.get(symU);
+          const mDone = st?.market?.status === 'EXECUTED';
+          const lFilled = st?.limit?.status === 'FILLED';
+          const lPending = st?.limit?.status === 'PENDING';
+          const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
+          const lBg = lFilled
+            ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
+            : lPending
+            ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
+            : 'bg-emerald-500/10';
+          const mBusy = busy === `${c}-market`;
+          const lBusy = busy === `${c}-limit`;
+
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
               <div className="flex items-center justify-between">
