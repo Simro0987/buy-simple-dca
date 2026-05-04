@@ -9,13 +9,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 const OverviewPage = lazy(() => import('@/pages/OverviewPage').then(m => ({ default: m.OverviewPage })));
 const DCAPage = lazy(() => import('@/pages/DCAPage').then(m => ({ default: m.DCAPage })));
-const PortfolioPage = lazy(() => import('@/pages/PortfolioPage').then(m => ({ default: m.PortfolioPage })));
+const PortfolioProfitPage = lazy(() => import('@/pages/PortfolioProfitPage').then(m => ({ default: m.PortfolioProfitPage })));
 const ActionPage = lazy(() => import('@/pages/ActionPage').then(m => ({ default: m.ActionPage })));
 const SmartAllocPage = lazy(() => import('@/pages/SmartAllocPage').then(m => ({ default: m.SmartAllocPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
-const AnalysisPage = lazy(() => import('@/pages/AnalysisPage').then(m => ({ default: m.AnalysisPage })));
-const AdvancedMarketPage = lazy(() => import('@/pages/AdvancedMarketPage').then(m => ({ default: m.AdvancedMarketPage })));
-const ProfitTakingPage = lazy(() => import('@/pages/ProfitTakingPage').then(m => ({ default: m.ProfitTakingPage })));
+const AnalysisMarketPage = lazy(() => import('@/pages/AnalysisMarketPage').then(m => ({ default: m.AnalysisMarketPage })));
 const StakingPage = lazy(() => import('@/pages/StakingPage').then(m => ({ default: m.StakingPage })));
 const WalletsPage = lazy(() => import('@/pages/WalletsPage').then(m => ({ default: m.WalletsPage })));
 const AllocationCalculatorPage = lazy(() => import('@/pages/AllocationCalculatorPage').then(m => ({ default: m.AllocationCalculatorPage })));
@@ -51,15 +49,17 @@ const wrap = (node: JSX.Element) => <Suspense fallback={<Fallback />}>{node}</Su
 export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   home: ({ setTab, lang }) => wrap(<HomePage onNavigate={setTab} lang={lang} />),
   overview: ({ lang }) => wrap(<OverviewPage lang={lang} />),
-  portfolio: ({ lang }) => wrap(<PortfolioPage lang={lang} />),
+  portfolio: ({ lang, prices, athData, cycleResult, advancedMarketData }) => wrap(
+    <PortfolioProfitPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedMarketData={advancedMarketData} />
+  ),
   dca: ({ lang }) => wrap(<DCAPage lang={lang} />),
   risk: ({ lang, prices, athData, cycleResult }) => wrap(
     <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
   ),
-  analysis: ({ lang }) => wrap(<AnalysisPage lang={lang} />),
-  market: ({ lang }) => wrap(<AdvancedMarketPage lang={lang} />),
+  analysis: ({ lang }) => wrap(<AnalysisMarketPage lang={lang} />),
+  market: ({ lang }) => wrap(<AnalysisMarketPage lang={lang} />),
   profit: ({ lang, prices, athData, cycleResult, advancedMarketData }) => wrap(
-    <ProfitTakingPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedData={advancedMarketData} />
+    <PortfolioProfitPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedMarketData={advancedMarketData} />
   ),
   staking: ({ lang }) => wrap(<StakingPage lang={lang} />),
   wallets: ({ lang }) => wrap(<WalletsPage lang={lang} />),

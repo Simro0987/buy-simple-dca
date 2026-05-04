@@ -17,8 +17,6 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
   { id: 'risk', labelSk: 'Riziko', labelEn: 'Risk', icon: Shield },
   { id: 'analysis', labelSk: 'Analýza', labelEn: 'Analysis', icon: Activity },
-  { id: 'market', labelSk: 'Trh', labelEn: 'Market', icon: BarChart3 },
-  { id: 'profit', labelSk: 'Zisky', labelEn: 'Profit', icon: DollarSign },
   { id: 'staking', labelSk: 'Stake', labelEn: 'Stake', icon: Coins },
   { id: 'wallets', labelSk: 'Wallet', labelEn: 'Wallet', icon: Wallet },
   { id: 'allocator', labelSk: 'Alokátor', labelEn: 'Allocator', icon: CalcIcon },
