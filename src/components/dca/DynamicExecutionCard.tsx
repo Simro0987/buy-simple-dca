@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import {
   calcUnifiedExecution,
   fixedExecution,
@@ -52,6 +53,7 @@ const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
  */
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
+  const { data: settings } = useAppSettings();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
@@ -233,6 +235,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const mBusy = busy === `${c}-market`;
           const lBusy = busy === `${c}-limit`;
 
+          // Aktuálne držané tokeny
+          const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
+          // Množstvo tokenov pre market/limit objednávku
+          const marketQty = price > 0 ? marketUsd / price : 0;
+          const limitQty = limitPrice > 0 ? limitUsd / limitPrice : 0;
+          // Skutočne pridané z executions (ak vykonané/naplnené)
+          const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;
+          const lAddedQty = lFilled ? Number(st?.limit?.quantity ?? 0) : 0;
+          const qtyFmt = (n: number) => c === 'btc' ? n.toFixed(6) : n.toFixed(4);
+
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
               <div className="flex items-center justify-between">
@@ -251,9 +263,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               </div>
 
-              {/* Suma pre token */}
+              {/* Suma pre token + držané */}
               <div className="flex items-center justify-between bg-background/40 rounded px-2 py-1.5">
-                <p className="text-[10px] text-muted-foreground">Alokácia tokenu</p>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Alokácia tokenu</p>
+                  <p className="text-[9px] text-muted-foreground">vlastním: <span className="text-foreground tabular-nums font-semibold">{qtyFmt(heldQty)} {e.symbol}</span></p>
+                </div>
                 <p className="text-sm font-bold text-foreground tabular-nums">
                   ${coinUsd.toFixed(2)}
                 </p>
@@ -275,6 +290,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   <p className="text-sm font-bold text-foreground tabular-nums">
                     ${marketUsd.toFixed(2)}
                   </p>
+                  <p className="text-[9px] text-foreground/70 tabular-nums">
+                    ≈ {qtyFmt(marketQty)} {e.symbol}
+                  </p>
+                  {mDone && mAddedQty > 0 && (
+                    <p className="text-[9px] text-emerald-400 tabular-nums">
+                      +{qtyFmt(mAddedQty)} {e.symbol} pridané
+                    </p>
+                  )}
                   <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
                   <button
                     onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price)}
@@ -300,6 +323,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   <p className="text-sm font-bold text-foreground tabular-nums">
                     ${limitUsd.toFixed(2)}
                   </p>
+                  <p className="text-[9px] text-foreground/70 tabular-nums">
+                    ≈ {qtyFmt(limitQty)} {e.symbol}
+                  </p>
+                  {lFilled && lAddedQty > 0 && (
+                    <p className="text-[9px] text-emerald-400 tabular-nums">
+                      +{qtyFmt(lAddedQty)} {e.symbol} pridané
+                    </p>
+                  )}
                   <p className="text-[9px] text-muted-foreground">limit @ {e.limitDistancePct.toFixed(1)}%</p>
                   <button
                     onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice)}
