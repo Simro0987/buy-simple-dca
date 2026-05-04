@@ -86,6 +86,7 @@ function loadHoldings(): Record<string, number> {
 export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResult, advancedData }: Props) {
   const { data: hookPrices } = usePrices();
   const prices = propPrices || hookPrices;
+  const portfolio = usePortfolioMetrics(prices);
   const [avgCosts, setAvgCosts] = useState<Record<string, number>>(getAvgCostBasis);
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
@@ -96,7 +97,24 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const [purchaseQty, setPurchaseQty] = useState('');
   const [purchaseType, setPurchaseType] = useState<'market' | 'limit'>('market');
   const [costSource, setCostSource] = useState<Record<string, 'auto' | 'manual'>>({});
-  const holdings = loadHoldings();
+
+  // Holdings z portfólia (manual_holdings + DCA agregát) — jediný zdroj pravdy
+  const holdings = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const a of portfolio.assets) {
+      map[a.coingeckoId] = a.holdings;
+    }
+    return map;
+  }, [portfolio.assets]);
+
+  // Avg cost z portfólia (invested USD / holdings)
+  const portfolioAvgCosts = useMemo<Record<string, number>>(() => {
+    const map: Record<string, number> = {};
+    for (const a of portfolio.assets) {
+      if (a.holdings > 0 && a.invested > 0) map[a.coingeckoId] = a.invested / a.holdings;
+    }
+    return map;
+  }, [portfolio.assets]);
 
   // Auto-import from execution history on first load
   useEffect(() => {
