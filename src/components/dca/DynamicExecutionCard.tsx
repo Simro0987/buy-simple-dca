@@ -263,9 +263,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               </div>
 
-              {/* Suma pre token */}
+              {/* Suma pre token + držané */}
               <div className="flex items-center justify-between bg-background/40 rounded px-2 py-1.5">
-                <p className="text-[10px] text-muted-foreground">Alokácia tokenu</p>
+                <div>
+                  <p className="text-[10px] text-muted-foreground">Alokácia tokenu</p>
+                  <p className="text-[9px] text-muted-foreground">vlastním: <span className="text-foreground tabular-nums font-semibold">{qtyFmt(heldQty)} {e.symbol}</span></p>
+                </div>
                 <p className="text-sm font-bold text-foreground tabular-nums">
                   ${coinUsd.toFixed(2)}
                 </p>
