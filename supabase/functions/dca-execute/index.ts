@@ -55,12 +55,14 @@ Deno.serve(async (req) => {
         target_price, executed_price: target_price, quantity: qty,
         status: 'EXECUTED', filled_at: new Date().toISOString(),
       });
-      // Update manual_holdings
-      const { data: s } = await supabase.from('app_settings').select('id, manual_holdings').limit(1).maybeSingle();
+      // Update manual_holdings + initial_cost_basis (invested USD)
+      const { data: s } = await supabase.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle();
       if (s) {
         const mh = (s.manual_holdings ?? {}) as Record<string, number>;
+        const cb = (s.initial_cost_basis ?? {}) as Record<string, number>;
         mh[coin] = Number(mh[coin] ?? 0) + qty;
-        await supabase.from('app_settings').update({ manual_holdings: mh }).eq('id', s.id);
+        cb[coin] = Number(cb[coin] ?? 0) + amount_usd;
+        await supabase.from('app_settings').update({ manual_holdings: mh, initial_cost_basis: cb }).eq('id', s.id);
       }
       await notifyTelegram(
         `✅ <b>MARKET vykonaný — ${coin.toUpperCase()}</b>\n` +

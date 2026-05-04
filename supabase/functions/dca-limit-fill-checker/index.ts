@@ -64,13 +64,15 @@ Deno.serve(async (req) => {
           filled_at: new Date().toISOString(),
         }).eq('id', p.id);
 
-        // Update manual_holdings
-        const { data: s } = await supabase.from('app_settings').select('id, manual_holdings').limit(1).maybeSingle();
+        // Update manual_holdings + initial_cost_basis (invested USD)
+        const { data: s } = await supabase.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle();
         if (s) {
           const mh = (s.manual_holdings ?? {}) as Record<string, number>;
+          const cb = (s.initial_cost_basis ?? {}) as Record<string, number>;
           const k = COIN_KEY[p.coin];
           mh[k] = Number(mh[k] ?? 0) + qty;
-          await supabase.from('app_settings').update({ manual_holdings: mh }).eq('id', s.id);
+          cb[k] = Number(cb[k] ?? 0) + Number(p.amount_usd);
+          await supabase.from('app_settings').update({ manual_holdings: mh, initial_cost_basis: cb }).eq('id', s.id);
         }
 
         await notifyTelegram(
