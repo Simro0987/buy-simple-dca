@@ -53,10 +53,6 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   overview: ({ lang }) => wrap(<OverviewPage lang={lang} />),
   portfolio: ({ lang }) => wrap(<PortfolioPage lang={lang} />),
   dca: ({ lang }) => wrap(<DCAPage lang={lang} />),
-  smart: ({ lang }) => wrap(<SmartAllocPage lang={lang} />),
-  action: ({ lang }) => wrap(<ActionPage lang={lang} />),
-  checklist: ({ lang, prices }) => wrap(<WeeklyChecklist lang={lang} prices={prices} />),
-  execution: ({ lang, prices }) => wrap(<ExecutionTracker lang={lang} prices={prices} />),
   risk: ({ lang, prices, athData, cycleResult }) => wrap(
     <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
   ),

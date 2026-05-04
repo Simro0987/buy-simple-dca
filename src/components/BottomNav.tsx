@@ -1,7 +1,7 @@
 import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet, Home, Calculator as CalcIcon } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'smart' | 'action' | 'checklist' | 'execution' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'allocator' | 'settings';
+export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'allocator' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -15,10 +15,6 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'overview', labelSk: 'Prehľad', labelEn: 'Overview', icon: BarChart3 },
   { id: 'portfolio', labelSk: 'Portfólio', labelEn: 'Portfolio', icon: PieChart },
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
-  { id: 'smart', labelSk: 'Smart', labelEn: 'Smart', icon: Sparkles },
-  { id: 'action', labelSk: 'Akcia', labelEn: 'Action', icon: Zap },
-  { id: 'checklist', labelSk: 'Check', labelEn: 'Check', icon: ClipboardList },
-  { id: 'execution', labelSk: 'Skóre', labelEn: 'Score', icon: Target },
   { id: 'risk', labelSk: 'Riziko', labelEn: 'Risk', icon: Shield },
   { id: 'analysis', labelSk: 'Analýza', labelEn: 'Analysis', icon: Activity },
   { id: 'market', labelSk: 'Trh', labelEn: 'Market', icon: BarChart3 },
