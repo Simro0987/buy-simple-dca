@@ -123,7 +123,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       });
       if (error) throw error;
       toast.success(kind === 'market' ? `${coin} market vykonaný ✓` : `${coin} limit zadaný ⏳`);
-      qc.invalidateQueries({ queryKey: ['dca_executions', currentWeek] });
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
     } catch (e) {
       toast.error('Chyba: ' + (e as Error).message);
