@@ -235,6 +235,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const mBusy = busy === `${c}-market`;
           const lBusy = busy === `${c}-limit`;
 
+          // Aktuálne držané tokeny
+          const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
+          // Množstvo tokenov pre market/limit objednávku
+          const marketQty = price > 0 ? marketUsd / price : 0;
+          const limitQty = limitPrice > 0 ? limitUsd / limitPrice : 0;
+          // Skutočne pridané z executions (ak vykonané/naplnené)
+          const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;
+          const lAddedQty = lFilled ? Number(st?.limit?.quantity ?? 0) : 0;
+          const qtyFmt = (n: number) => c === 'btc' ? n.toFixed(6) : n.toFixed(4);
+
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
               <div className="flex items-center justify-between">
