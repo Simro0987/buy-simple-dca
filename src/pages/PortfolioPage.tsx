@@ -3,6 +3,8 @@ import { Wallet, RefreshCw, TrendingUp, Shield, Landmark, ExternalLink, ChevronD
 import { TOKENS, formatUsd, PriceData } from '@/lib/crypto';
 import { usePrices, useAthData } from '@/hooks/usePrices';
 import { useDefiApys } from '@/hooks/useDefiApys';
+import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
+import { useAppSettings } from '@/hooks/useAppSettings';
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
@@ -12,6 +14,8 @@ import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
 import { ConcentrationWarnings } from '@/components/decision/ConcentrationWarnings';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { HistorySection } from '@/components/portfolio/HistorySection';
+import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
+import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 
 interface Props { lang: Lang; }
 
@@ -43,6 +47,10 @@ export function PortfolioPage({ lang }: Props) {
   const { data: prices, refetch, isFetching } = usePrices();
   const { data: athData } = useAthData();
   const { data: apys } = useDefiApys();
+  const { data: settings } = useAppSettings();
+  const metrics = usePortfolioMetrics(prices);
+  const weeklyCapital = Number(settings?.default_amount ?? 0);
+  const cashReserve = Math.max(0, Number(settings?.total_capital ?? 0) - metrics.totalInvested);
   const [expandedToken, setExpandedToken] = useState<string | null>(null);
   const holdings = useMemo(() => loadHoldings(), []);
 
@@ -86,6 +94,10 @@ export function PortfolioPage({ lang }: Props) {
           <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
         </button>
       </div>
+
+      {/* Synced summary from Home */}
+      <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
+      <AllocationDonut metrics={metrics} />
 
       {/* Total Value Card */}
       <Card className="border-border bg-card overflow-hidden">
