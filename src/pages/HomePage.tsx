@@ -29,10 +29,6 @@ interface HubCard {
 const CARDS: HubCard[] = [
   { id: 'portfolio', label: 'Portfólio', desc: 'Hodnota & alokácia', icon: PieChart, gradient: 'from-primary/20 to-primary/5' },
   { id: 'dca', label: 'DCA', desc: 'Týždenný plán', icon: Calculator, gradient: 'from-emerald-500/20 to-emerald-500/5' },
-  { id: 'smart', label: 'Smart Alloc', desc: 'Inteligentná alokácia', icon: Sparkles, gradient: 'from-violet-500/20 to-violet-500/5' },
-  { id: 'action', label: 'Akcia', desc: 'Dnešné kroky', icon: Zap, gradient: 'from-amber-500/20 to-amber-500/5' },
-  { id: 'checklist', label: 'Checklist', desc: 'Pondelková rutina', icon: ClipboardList, gradient: 'from-blue-500/20 to-blue-500/5' },
-  { id: 'execution', label: 'Skóre', desc: 'Disciplína', icon: Target, gradient: 'from-cyan-500/20 to-cyan-500/5' },
   { id: 'risk', label: 'Riziko', desc: 'BUY/HOLD/EXIT', icon: Shield, gradient: 'from-rose-500/20 to-rose-500/5' },
   { id: 'analysis', label: 'Analýza', desc: 'Technická analýza', icon: Activity, gradient: 'from-indigo-500/20 to-indigo-500/5' },
   { id: 'market', label: 'Trh', desc: 'Cyklus & sentiment', icon: BarChart3, gradient: 'from-teal-500/20 to-teal-500/5' },
