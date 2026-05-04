@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap, Check, Clock } from 'lucide-react';
+import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap, Check, Clock, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUsd, formatPrice, formatLimitPrice, calculateDCA, type PriceData } from '@/lib/crypto';
 import { supabase } from '@/integrations/supabase/client';
@@ -125,6 +125,24 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       toast.success(kind === 'market' ? `${coin} market vykonaný ✓` : `${coin} limit zadaný ⏳`);
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const handleCancelLimit = async (id: string, coin: string) => {
+    if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
+    setBusy(`${coin}-limit`);
+    try {
+      const { error } = await supabase
+        .from('dca_executions')
+        .update({ status: 'CANCELLED' })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success(`${coin} limit zrušený`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
     } catch (e) {
       toast.error('Chyba: ' + (e as Error).message);
     } finally {
@@ -317,6 +335,16 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
               >
                 {filled ? <><Check className="w-3 h-3" /> Naplnené</> : pending ? <><Clock className="w-3 h-3" /> Sleduje</> : (busy === key ? '…' : 'Zadať')}
               </button>
+              {pending && st?.id && (
+                <button
+                  onClick={() => handleCancelLimit(st.id, r.token.symbol)}
+                  disabled={busy === key}
+                  className="px-2 py-1.5 rounded text-[10px] font-bold flex items-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                  aria-label={`Zrušiť limit ${r.token.symbol}`}
+                >
+                  <X className="w-3 h-3" /> Zrušiť
+                </button>
+              )}
             </div>
           );
         })}
