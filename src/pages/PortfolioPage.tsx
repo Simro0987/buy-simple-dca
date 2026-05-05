@@ -16,6 +16,7 @@ import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { HistorySection } from '@/components/portfolio/HistorySection';
 import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
+import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 
 interface Props { lang: Lang; }
 
@@ -98,6 +99,9 @@ export function PortfolioPage({ lang }: Props) {
       {/* Synced summary from Home */}
       <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
       <AllocationDonut metrics={metrics} />
+
+      {/* Manuálne držby & cost basis */}
+      <InitialHoldingsCard />
 
       {/* Total Value Card */}
       <Card className="border-border bg-card overflow-hidden">
