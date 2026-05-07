@@ -29,35 +29,35 @@ export interface AssetStakingConfig {
 export const STAKING_CONFIG: AssetStakingConfig[] = [
   {
     symbol: 'BTC',
-    name: 'Bitcoin (cbBTC → Native BTC)',
+    name: 'Bitcoin — HW Wallet → Babylon → LBTC (Morpho)',
     color: '#F7931A',
     allocation: 64,
     positions: [
-      { label: 'Cold Storage (Native BTC)', type: 'hold', percentage: 64, chain: 'BTC L1', yieldDirection: 'none' },
-      { label: 'Babylon Staking (Native BTC)', type: 'staking', percentage: 22, protocol: 'Babylon', chain: 'BTC L1', apy: 4, yieldDirection: 'compound' },
-      { label: 'LBTC vault (Lombard)', type: 'lending', percentage: 14, protocol: 'Beefy / Lombard', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc' },
+      { label: 'Native HODL (Ledger/Trezor)', type: 'hold', percentage: 42, chain: 'BTC L1', yieldDirection: 'none' },
+      { label: 'Babylon Staking (z HW peňaženky)', type: 'staking', percentage: 22, protocol: 'Babylon', chain: 'BTC L1', apy: 7, yieldDirection: 'compound' },
+      { label: 'Yield Port — LBTC v Morpho Blue', type: 'lending', percentage: 14, protocol: 'Lombard / Morpho Blue (DeFi Saver)', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc' },
     ],
   },
   {
     symbol: 'ETH',
-    name: 'Ethereum (WETH → Native ETH)',
+    name: 'Ethereum — HW Wallet → stETH → weETH (Morpho)',
     color: '#627EEA',
     allocation: 25,
     positions: [
-      { label: 'Native ETH (HODL)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
-      { label: 'stETH (Lido)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
-      { label: 'rETH vault', type: 'lending', percentage: 27, protocol: 'Beefy / Rocket Pool', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
+      { label: 'Native HODL (HW peňaženka)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
+      { label: 'stETH (Lido cez Jumper)', type: 'staking', percentage: 32, protocol: 'Lido', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
+      { label: 'Restaking — weETH v Morpho Blue', type: 'lending', percentage: 27, protocol: 'ether.fi / Morpho Blue (DeFi Saver)', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
     ],
   },
   {
     symbol: 'SOL',
-    name: 'Solana (SOL → Native SOL)',
+    name: 'Solana — HW HODL + Kamino Autopilot',
     color: '#9945FF',
     allocation: 11,
     positions: [
-      { label: 'Native SOL (Phantom HODL)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
-      { label: 'jitoSOL (Staking + MEV)', type: 'staking', percentage: 33, protocol: 'Jito (Jupiter)', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
-      { label: 'jitoSOL Multiply vault', type: 'lending', percentage: 31, protocol: 'Kamino Multiply', chain: 'Solana', apy: 16, yieldDirection: 'btc' },
+      { label: 'Hardware HODL (Native SOL)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
+      { label: 'Kamino Autopilot — jitoSOL (62%)', type: 'staking', percentage: 40, protocol: 'Kamino Lend → Jito', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
+      { label: 'Kamino Autopilot — ezSOL (32%)', type: 'lending', percentage: 24, protocol: 'Kamino Lend → Renzo', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
     ],
   },
 ];
