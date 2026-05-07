@@ -7,6 +7,13 @@ export interface WalletEntry {
   address: string;
 }
 
+export interface PositionDeposit {
+  token: string;       // token user actually deposits (e.g. 'jitoSOL', 'wstETH')
+  ratio: number;       // ratio of position amount → deposit amount (1 = 1:1)
+  protocol: string;    // where to deposit
+  note?: string;       // short Slovak hint
+}
+
 export interface StakingPosition {
   label: string;
   type: 'hold' | 'staking' | 'lending';
@@ -15,6 +22,7 @@ export interface StakingPosition {
   chain?: string;
   apy?: number;
   yieldDirection?: 'btc' | 'restake' | 'compound' | 'none';
+  deposits?: PositionDeposit[];
 }
 
 export interface AssetStakingConfig {
@@ -35,7 +43,8 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     positions: [
       { label: 'HODL (HW peňaženka)', type: 'hold', percentage: 42, chain: 'BTC L1', yieldDirection: 'none' },
       { label: 'Babylon Staking (z HW peňaženky)', type: 'staking', percentage: 22, protocol: 'Babylon', chain: 'BTC L1', apy: 7, yieldDirection: 'compound' },
-      { label: 'Yield Port — LBTC v Morpho Blue', type: 'lending', percentage: 14, protocol: 'Lombard → Morpho Blue', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc' },
+      { label: 'Yield Port — LBTC v Morpho Blue', type: 'lending', percentage: 14, protocol: 'Lombard → Morpho Blue', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc',
+        deposits: [{ token: 'LBTC', ratio: 1, protocol: 'Morpho Blue (ARB)', note: 'BTC → LBTC (Lombard) → vlož do Morpho Blue' }] },
     ],
   },
   {
@@ -45,8 +54,10 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     allocation: 25,
     positions: [
       { label: 'Native HODL (HW peňaženka)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
-      { label: 'stETH (ETH swap cez CoW Swap, Mainnet)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
-      { label: 'wstETH cez DeFi Saver (ARB)', type: 'lending', percentage: 27, protocol: 'wstETH → DeFi Saver', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
+      { label: 'stETH (ETH swap cez CoW Swap, Mainnet)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound',
+        deposits: [{ token: 'stETH', ratio: 1, protocol: 'Lido (drž)', note: 'ETH → stETH cez CoW Swap (Mainnet)' }] },
+      { label: 'wstETH cez DeFi Saver (ARB)', type: 'lending', percentage: 27, protocol: 'wstETH → DeFi Saver', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc',
+        deposits: [{ token: 'wstETH', ratio: 1, protocol: 'DeFi Saver (ARB)', note: 'ETH → wstETH → bridge na ARB → vlož do DeFi Saver (bez páky)' }] },
     ],
   },
   {
@@ -56,8 +67,13 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     allocation: 11,
     positions: [
       { label: 'HODL (peňaženka)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
-      { label: 'jitoSOL (Jito Staking)', type: 'staking', percentage: 32, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
-      { label: 'jitoSOL/SOL LP v Kamino (bez páky)', type: 'lending', percentage: 32, protocol: 'Kamino Liquidity (jitoSOL/SOL)', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
+      { label: 'jitoSOL (Jito Staking)', type: 'staking', percentage: 32, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound',
+        deposits: [{ token: 'jitoSOL', ratio: 1, protocol: 'jito.network (drž)', note: 'SOL → jitoSOL na jito.network' }] },
+      { label: 'jitoSOL/SOL LP v Kamino (bez páky)', type: 'lending', percentage: 32, protocol: 'Kamino Liquidity (jitoSOL/SOL)', chain: 'Solana', apy: 8, yieldDirection: 'btc',
+        deposits: [
+          { token: 'jitoSOL', ratio: 0.5, protocol: 'Kamino LP (jitoSOL/SOL)', note: '50 % časti → jitoSOL stranu páru' },
+          { token: 'SOL', ratio: 0.5, protocol: 'Kamino LP (jitoSOL/SOL)', note: '50 % časti → SOL stranu páru' },
+        ] },
     ],
   },
 ];

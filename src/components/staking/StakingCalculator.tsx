@@ -59,21 +59,48 @@ export function StakingCalculator({ lang }: Props) {
                   {asset.positions.map((pos, i) => {
                     const amount = (total * pos.percentage) / 100;
                     return (
-                      <div key={i} className="flex items-center justify-between text-[11px] bg-background/40 rounded px-2 py-1.5">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-foreground truncate">{pos.label}</div>
-                          {pos.protocol && (
-                            <div className="text-[10px] text-muted-foreground truncate">
-                              {pos.protocol} · {pos.percentage}%
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right shrink-0 ml-2">
-                          <div className="font-bold text-foreground">
-                            {amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                      <div key={i} className="bg-background/40 rounded px-2 py-1.5 space-y-1">
+                        <div className="flex items-center justify-between text-[11px]">
+                          <div className="flex-1 min-w-0">
+                            <div className="font-medium text-foreground truncate">{pos.label}</div>
+                            {pos.protocol && (
+                              <div className="text-[10px] text-muted-foreground truncate">
+                                {pos.protocol} · {pos.percentage}%
+                              </div>
+                            )}
                           </div>
-                          <div className="text-[10px]" style={{ color: asset.color }}>{asset.symbol}</div>
+                          <div className="text-right shrink-0 ml-2">
+                            <div className="font-bold text-foreground">
+                              {amount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                            </div>
+                            <div className="text-[10px]" style={{ color: asset.color }}>{asset.symbol}</div>
+                          </div>
                         </div>
+                        {pos.deposits && pos.deposits.length > 0 && (
+                          <div className="space-y-1 pt-1 border-t border-border/40">
+                            {pos.deposits.map((dep, di) => {
+                              const depAmount = amount * dep.ratio;
+                              return (
+                                <div key={di} className="flex items-center justify-between text-[10px] gap-2">
+                                  <div className="flex-1 min-w-0">
+                                    <div className="text-foreground/90 truncate">
+                                      → vlož <span className="font-semibold">{dep.token}</span> do {dep.protocol}
+                                    </div>
+                                    {dep.note && (
+                                      <div className="text-[9px] text-muted-foreground truncate">{dep.note}</div>
+                                    )}
+                                  </div>
+                                  <div className="text-right shrink-0">
+                                    <div className="font-bold text-foreground">
+                                      {depAmount.toLocaleString(undefined, { maximumFractionDigits: 6 })}
+                                    </div>
+                                    <div className="text-[9px] text-muted-foreground">{dep.token}</div>
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
