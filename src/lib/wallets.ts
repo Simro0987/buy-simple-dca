@@ -43,7 +43,8 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     positions: [
       { label: 'HODL (HW peňaženka)', type: 'hold', percentage: 42, chain: 'BTC L1', yieldDirection: 'none' },
       { label: 'Babylon Staking (z HW peňaženky)', type: 'staking', percentage: 22, protocol: 'Babylon', chain: 'BTC L1', apy: 7, yieldDirection: 'compound' },
-      { label: 'Yield Port — LBTC v Morpho Blue', type: 'lending', percentage: 14, protocol: 'Lombard → Morpho Blue', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc' },
+      { label: 'Yield Port — LBTC v Morpho Blue', type: 'lending', percentage: 14, protocol: 'Lombard → Morpho Blue', chain: 'Arbitrum', apy: 11, yieldDirection: 'btc',
+        deposits: [{ token: 'LBTC', ratio: 1, protocol: 'Morpho Blue (ARB)', note: 'BTC → LBTC (Lombard) → vlož do Morpho Blue' }] },
     ],
   },
   {
