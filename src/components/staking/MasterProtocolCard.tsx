@@ -15,10 +15,10 @@ const ROUTES: Route[] = [
   {
     symbol: 'BTC',
     color: '#F7931A',
-    base: 'BTC (HW peňaženka)',
-    bridge: 'LBTC (Lombard) → Arbitrum → Morpho Blue (DeFi Saver)',
+    base: 'Base → Native BTC',
+    bridge: 'BTC bridge → HW peňaženka · Babylon · LBTC → Morpho Blue (ARB)',
     steps: [
-      { label: 'Native HODL (Ledger/Trezor)', pct: 42, protocol: 'Hardware wallet', chain: 'BTC L1' },
+      { label: 'HODL (HW peňaženka)', pct: 42, protocol: 'Hardware wallet', chain: 'BTC L1' },
       { label: 'Babylon Staking', pct: 22, protocol: 'Babylon (z HW)', apy: '~7 %', chain: 'BTC L1' },
       { label: 'Yield Port — LBTC', pct: 14, protocol: 'Lombard → Morpho Blue', apy: '8–14 %', chain: 'Arbitrum' },
     ],
@@ -26,23 +26,23 @@ const ROUTES: Route[] = [
   {
     symbol: 'ETH',
     color: '#627EEA',
-    base: 'ETH (HW peňaženka)',
-    bridge: 'CoW Swap → Lido stETH | weETH → Morpho Blue (ARB)',
+    base: 'Base → Mainnet ETH',
+    bridge: 'CoW Swap → stETH | wstETH → ether.fi (weETH) → Morpho Blue (ARB)',
     steps: [
       { label: 'Native HODL (HW)', pct: 41, protocol: 'Hardware wallet', chain: 'Ethereum' },
-      { label: 'stETH', pct: 32, protocol: 'Lido (cez CoW Swap)', apy: '~3.2 %', chain: 'Ethereum' },
-      { label: 'Restaking weETH', pct: 27, protocol: 'ether.fi → Morpho Blue', apy: '7–11 %', chain: 'Arbitrum' },
+      { label: 'stETH (CoW Swap, Mainnet)', pct: 32, protocol: 'Lido', apy: '~3.2 %', chain: 'Ethereum' },
+      { label: 'wstETH → weETH v Morpho Blue', pct: 27, protocol: 'ether.fi → Morpho Blue', apy: '7–11 %', chain: 'Arbitrum' },
     ],
   },
   {
     symbol: 'SOL',
     color: '#9945FF',
-    base: 'SOL (HW HODL)',
-    bridge: 'Kamino Autopilot → 62 % jitoSOL + 32 % ezSOL',
+    base: 'Base → Native SOL',
+    bridge: 'jito.network → jitoSOL · Jito Vault Aggregator → ezSOL → Kamino Lend (bez páky)',
     steps: [
-      { label: 'Hardware HODL', pct: 36, protocol: 'HW peňaženka', chain: 'Solana' },
-      { label: 'Kamino Autopilot — jitoSOL', pct: 40, protocol: 'Kamino Lend → Jito (62 %)', apy: '~7.5 %', chain: 'Solana' },
-      { label: 'Kamino Autopilot — ezSOL', pct: 24, protocol: 'Kamino Lend → Renzo (32 %)', apy: '~8 %', chain: 'Solana' },
+      { label: 'HODL (peňaženka)', pct: 36, protocol: 'Wallet', chain: 'Solana' },
+      { label: 'jitoSOL (zvyšok po prelive)', pct: 44, protocol: 'jito.network', apy: '~7.5 %', chain: 'Solana' },
+      { label: 'ezSOL → Kamino Lend (32 % z 64 %)', pct: 20, protocol: 'Jito Vault Aggregator → Kamino', apy: '~8 %', chain: 'Solana' },
     ],
   },
 ];
