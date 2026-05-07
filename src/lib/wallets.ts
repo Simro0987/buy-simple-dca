@@ -45,7 +45,7 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     allocation: 25,
     positions: [
       { label: 'Native HODL (HW peňaženka)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
-      { label: 'stETH (Lido cez Jumper)', type: 'staking', percentage: 32, protocol: 'Lido', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
+      { label: 'stETH (Lido cez CoW Swap)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
       { label: 'Restaking — weETH v Morpho Blue', type: 'lending', percentage: 27, protocol: 'ether.fi / Morpho Blue (DeFi Saver)', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
     ],
   },
