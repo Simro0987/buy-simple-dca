@@ -207,13 +207,13 @@ export function StakingPage({ lang }: Props) {
         </p>
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">
-            • <span className="text-foreground">ETH:</span> rETH vault (Beefy/ARB) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
+            • <span className="text-foreground">BTC:</span> Babylon (compound) + LBTC v Morpho Blue (Lombard Lux + Babylon + Morpho body) → {lang === 'sk' ? 'späť do BTC' : 'back to BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
-            • <span className="text-foreground">SOL:</span> Kamino Multiply (jitoSOL) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
+            • <span className="text-foreground">ETH:</span> stETH (Lido) + weETH v Morpho Blue (ether.fi + EigenLayer + Morpho body) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
-            • <span className="text-foreground">BTC:</span> Babylon (compound) + LBTC vault (Beefy/ARB) → {lang === 'sk' ? 'späť do BTC' : 'back to BTC'}
+            • <span className="text-foreground">SOL:</span> Kamino Autopilot — 62 % jitoSOL + 32 % ezSOL (Jito + Renzo + Kamino body) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
             • {lang === 'sk' ? 'Cieľ: akumulovať 1 BTC cez všetky kanály.' : 'Goal: accumulate 1 BTC across all channels.'}
