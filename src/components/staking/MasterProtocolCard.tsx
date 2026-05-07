@@ -27,10 +27,10 @@ const ROUTES: Route[] = [
     symbol: 'ETH',
     color: '#627EEA',
     base: 'ETH (HW peňaženka)',
-    bridge: 'Jumper → Lido stETH | weETH → Morpho Blue (ARB)',
+    bridge: 'CoW Swap → Lido stETH | weETH → Morpho Blue (ARB)',
     steps: [
       { label: 'Native HODL (HW)', pct: 41, protocol: 'Hardware wallet', chain: 'Ethereum' },
-      { label: 'stETH', pct: 32, protocol: 'Lido (cez Jumper)', apy: '~3.2 %', chain: 'Ethereum' },
+      { label: 'stETH', pct: 32, protocol: 'Lido (cez CoW Swap)', apy: '~3.2 %', chain: 'Ethereum' },
       { label: 'Restaking weETH', pct: 27, protocol: 'ether.fi → Morpho Blue', apy: '7–11 %', chain: 'Arbitrum' },
     ],
   },
