@@ -245,11 +245,11 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
       actions.push({
         type: 'lend',
         label: sk
-          ? `Lend ${needLend.toFixed(2)} ezSOL cez Kamino · ${kaminoApy}% APY`
-          : `Lend ${needLend.toFixed(2)} ezSOL via Kamino · ${kaminoApy}% APY`,
+          ? `Vlož ${needLend.toFixed(2)} SOL do Kamino LP jitoSOL/SOL · ${kaminoApy}% APY`
+          : `Add ${needLend.toFixed(2)} SOL to Kamino LP jitoSOL/SOL · ${kaminoApy}% APY`,
         amount: needLend,
-        symbol: 'ezSOL',
-        protocol: 'Kamino Lend',
+        symbol: 'SOL',
+        protocol: 'Kamino Liquidity (jitoSOL/SOL)',
         priority: 2,
       });
     } else {

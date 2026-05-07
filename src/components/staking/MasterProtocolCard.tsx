@@ -27,22 +27,22 @@ const ROUTES: Route[] = [
     symbol: 'ETH',
     color: '#627EEA',
     base: 'Base → Mainnet ETH',
-    bridge: 'CoW Swap → stETH | wstETH → ether.fi (weETH) → Morpho Blue (ARB)',
+    bridge: 'CoW Swap → stETH | wstETH → DeFi Saver (ARB)',
     steps: [
       { label: 'Native HODL (HW)', pct: 41, protocol: 'Hardware wallet', chain: 'Ethereum' },
       { label: 'stETH (CoW Swap, Mainnet)', pct: 32, protocol: 'Lido', apy: '~3.2 %', chain: 'Ethereum' },
-      { label: 'wstETH → weETH v Morpho Blue', pct: 27, protocol: 'ether.fi → Morpho Blue', apy: '7–11 %', chain: 'Arbitrum' },
+      { label: 'wstETH cez DeFi Saver', pct: 27, protocol: 'DeFi Saver (ARB)', apy: '7–11 %', chain: 'Arbitrum' },
     ],
   },
   {
     symbol: 'SOL',
     color: '#9945FF',
     base: 'Base → Native SOL',
-    bridge: 'jito.network → jitoSOL · Jito Vault Aggregator → ezSOL → Kamino Lend (bez páky)',
+    bridge: 'jito.network → jitoSOL · Kamino Liquidity (jitoSOL/SOL, bez páky)',
     steps: [
       { label: 'HODL (peňaženka)', pct: 36, protocol: 'Wallet', chain: 'Solana' },
       { label: 'jitoSOL (Jito Staking)', pct: 32, protocol: 'jito.network', apy: '~7.5 %', chain: 'Solana' },
-      { label: 'ezSOL → Kamino Lend (bez páky)', pct: 32, protocol: 'Jito Vault Aggregator → Kamino', apy: '~8 %', chain: 'Solana' },
+      { label: 'jitoSOL/SOL LP v Kamino (bez páky)', pct: 32, protocol: 'Kamino Liquidity', apy: '~8 %', chain: 'Solana' },
     ],
   },
 ];

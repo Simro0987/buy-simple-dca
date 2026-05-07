@@ -46,7 +46,7 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     positions: [
       { label: 'Native HODL (HW peňaženka)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
       { label: 'stETH (ETH swap cez CoW Swap, Mainnet)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
-      { label: 'wstETH → weETH v Morpho Blue (ARB)', type: 'lending', percentage: 27, protocol: 'wstETH → ether.fi (weETH) → Morpho Blue', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
+      { label: 'wstETH cez DeFi Saver (ARB)', type: 'lending', percentage: 27, protocol: 'wstETH → DeFi Saver', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
     ],
   },
   {
@@ -57,7 +57,7 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     positions: [
       { label: 'HODL (peňaženka)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
       { label: 'jitoSOL (Jito Staking)', type: 'staking', percentage: 32, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
-      { label: 'ezSOL v Kamino Lend (bez páky)', type: 'lending', percentage: 32, protocol: 'Jito Vault Aggregator → ezSOL → Kamino Lend', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
+      { label: 'jitoSOL/SOL LP v Kamino (bez páky)', type: 'lending', percentage: 32, protocol: 'Kamino Liquidity (jitoSOL/SOL)', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
     ],
   },
 ];
