@@ -41,8 +41,8 @@ const ROUTES: Route[] = [
     bridge: 'jito.network → jitoSOL · Jito Vault Aggregator → ezSOL → Kamino Lend (bez páky)',
     steps: [
       { label: 'HODL (peňaženka)', pct: 36, protocol: 'Wallet', chain: 'Solana' },
-      { label: 'jitoSOL (zvyšok po prelive)', pct: 44, protocol: 'jito.network', apy: '~7.5 %', chain: 'Solana' },
-      { label: 'ezSOL → Kamino Lend (32 % z 64 %)', pct: 20, protocol: 'Jito Vault Aggregator → Kamino', apy: '~8 %', chain: 'Solana' },
+      { label: 'jitoSOL (Jito Staking)', pct: 32, protocol: 'jito.network', apy: '~7.5 %', chain: 'Solana' },
+      { label: 'ezSOL → Kamino Lend (bez páky)', pct: 32, protocol: 'Jito Vault Aggregator → Kamino', apy: '~8 %', chain: 'Solana' },
     ],
   },
 ];
