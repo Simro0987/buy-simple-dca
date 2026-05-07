@@ -201,14 +201,15 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
   const alreadyStaked = holdings.stakedSol ?? 0;
   const alreadyLent = holdings.lentSol ?? 0;
 
-  const targetStake = total * 0.44;
-  const targetJitoHold = total * 0.27;
-  const targetLend = total * 0.19;
+  // Nová alokácia SOL: 36 % HODL, 32 % jitoSOL, 32 % ezSOL v Kamino
+  const targetHold = total * 0.36;
+  const targetStake = total * 0.32;
+  const targetLend = total * 0.32;
 
   const needStake = Math.max(0, targetStake - alreadyStaked);
   const needLend = Math.max(0, targetLend - alreadyLent);
 
-  // Priority 1: Jito staking
+  // Priority 1: jitoSOL staking
   if (needStake > 0) {
     const stakeUsd = needStake * price;
     if (stakeUsd >= MIN_ACTION_USD && GAS_COSTS.sol / stakeUsd <= MAX_FEE_RATIO) {
@@ -216,8 +217,8 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
       actions.push({
         type: 'stake',
         label: sk
-          ? `Stake ${needStake.toFixed(2)} SOL cez Jito · ${jitoApy}% APY`
-          : `Stake ${needStake.toFixed(2)} SOL via Jito · ${jitoApy}% APY`,
+          ? `Stake ${needStake.toFixed(2)} SOL cez Jito → jitoSOL · ${jitoApy}% APY`
+          : `Stake ${needStake.toFixed(2)} SOL via Jito → jitoSOL · ${jitoApy}% APY`,
         amount: needStake,
         symbol: 'SOL',
         protocol: 'Jito',
@@ -236,32 +237,19 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
     }
   }
 
-  // JitoSOL hold
-  if (targetJitoHold > 0 && targetJitoHold * price >= MIN_ACTION_USD) {
-    actions.push({
-      type: 'hold',
-      label: sk
-        ? `Drž ~${targetJitoHold.toFixed(2)} SOL ako JitoSOL`
-        : `Hold ~${targetJitoHold.toFixed(2)} SOL as JitoSOL`,
-      amount: targetJitoHold,
-      symbol: 'JitoSOL',
-      priority: 2,
-    });
-  }
-
-  // Priority 2: Kamino lending
+  // Priority 2: ezSOL v Kamino Lend
   if (needLend > 0) {
     const lendUsd = needLend * price;
     if (lendUsd >= MIN_ACTION_USD && GAS_COSTS.sol / lendUsd <= MAX_FEE_RATIO) {
-      const kaminoApy = apys?.kaminoSol?.toFixed(1) ?? '~4.2';
+      const kaminoApy = apys?.kaminoSol?.toFixed(1) ?? '~8';
       actions.push({
         type: 'lend',
         label: sk
-          ? `Lend ${needLend.toFixed(2)} JitoSOL cez Kamino · ${kaminoApy}% APY`
-          : `Lend ${needLend.toFixed(2)} JitoSOL via Kamino · ${kaminoApy}% APY`,
+          ? `Lend ${needLend.toFixed(2)} ezSOL cez Kamino · ${kaminoApy}% APY`
+          : `Lend ${needLend.toFixed(2)} ezSOL via Kamino · ${kaminoApy}% APY`,
         amount: needLend,
-        symbol: 'JitoSOL',
-        protocol: 'Kamino',
+        symbol: 'ezSOL',
+        protocol: 'Kamino Lend',
         priority: 2,
       });
     } else {
@@ -275,6 +263,20 @@ function computeSolActions(total: number, price: number, holdings: HoldingInput,
         priority: 3,
       });
     }
+  }
+
+  // HODL zvyšok
+  const holdAmount = Math.max(0, targetHold);
+  if (holdAmount > 0 && holdAmount * price >= MIN_ACTION_USD) {
+    actions.push({
+      type: 'hold',
+      label: sk
+        ? `Drž ~${holdAmount.toFixed(2)} SOL v peňaženke (HODL)`
+        : `Hold ~${holdAmount.toFixed(2)} SOL in wallet (HODL)`,
+      amount: holdAmount,
+      symbol: 'SOL',
+      priority: 3,
+    });
   }
 
   if (actions.length === 0) {
