@@ -56,8 +56,8 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     allocation: 11,
     positions: [
       { label: 'HODL (peňaženka)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
-      { label: 'jitoSOL (Jito Staking — zvyšok po prelive)', type: 'staking', percentage: 44, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
-      { label: 'ezSOL v Kamino Lend (32 % z 64 %, bez páky)', type: 'lending', percentage: 20, protocol: 'Jito Vault Aggregator → ezSOL → Kamino Lend', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
+      { label: 'jitoSOL (Jito Staking)', type: 'staking', percentage: 32, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
+      { label: 'ezSOL v Kamino Lend (bez páky)', type: 'lending', percentage: 32, protocol: 'Jito Vault Aggregator → ezSOL → Kamino Lend', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
     ],
   },
 ];
