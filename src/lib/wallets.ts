@@ -67,8 +67,13 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     allocation: 11,
     positions: [
       { label: 'HODL (peňaženka)', type: 'hold', percentage: 36, chain: 'Solana', yieldDirection: 'none' },
-      { label: 'jitoSOL (Jito Staking)', type: 'staking', percentage: 32, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound' },
-      { label: 'jitoSOL/SOL LP v Kamino (bez páky)', type: 'lending', percentage: 32, protocol: 'Kamino Liquidity (jitoSOL/SOL)', chain: 'Solana', apy: 8, yieldDirection: 'btc' },
+      { label: 'jitoSOL (Jito Staking)', type: 'staking', percentage: 32, protocol: 'jito.network', chain: 'Solana', apy: 7.5, yieldDirection: 'compound',
+        deposits: [{ token: 'jitoSOL', ratio: 1, protocol: 'jito.network (drž)', note: 'SOL → jitoSOL na jito.network' }] },
+      { label: 'jitoSOL/SOL LP v Kamino (bez páky)', type: 'lending', percentage: 32, protocol: 'Kamino Liquidity (jitoSOL/SOL)', chain: 'Solana', apy: 8, yieldDirection: 'btc',
+        deposits: [
+          { token: 'jitoSOL', ratio: 0.5, protocol: 'Kamino LP (jitoSOL/SOL)', note: '50 % časti → jitoSOL stranu páru' },
+          { token: 'SOL', ratio: 0.5, protocol: 'Kamino LP (jitoSOL/SOL)', note: '50 % časti → SOL stranu páru' },
+        ] },
     ],
   },
 ];
