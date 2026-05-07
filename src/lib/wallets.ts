@@ -7,6 +7,13 @@ export interface WalletEntry {
   address: string;
 }
 
+export interface PositionDeposit {
+  token: string;       // token user actually deposits (e.g. 'jitoSOL', 'wstETH')
+  ratio: number;       // ratio of position amount → deposit amount (1 = 1:1)
+  protocol: string;    // where to deposit
+  note?: string;       // short Slovak hint
+}
+
 export interface StakingPosition {
   label: string;
   type: 'hold' | 'staking' | 'lending';
@@ -15,6 +22,7 @@ export interface StakingPosition {
   chain?: string;
   apy?: number;
   yieldDirection?: 'btc' | 'restake' | 'compound' | 'none';
+  deposits?: PositionDeposit[];
 }
 
 export interface AssetStakingConfig {
