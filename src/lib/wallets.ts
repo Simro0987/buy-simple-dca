@@ -54,8 +54,10 @@ export const STAKING_CONFIG: AssetStakingConfig[] = [
     allocation: 25,
     positions: [
       { label: 'Native HODL (HW peňaženka)', type: 'hold', percentage: 41, chain: 'Ethereum', yieldDirection: 'none' },
-      { label: 'stETH (ETH swap cez CoW Swap, Mainnet)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound' },
-      { label: 'wstETH cez DeFi Saver (ARB)', type: 'lending', percentage: 27, protocol: 'wstETH → DeFi Saver', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc' },
+      { label: 'stETH (ETH swap cez CoW Swap, Mainnet)', type: 'staking', percentage: 32, protocol: 'Lido (CoW Swap)', chain: 'Ethereum', apy: 3.2, yieldDirection: 'compound',
+        deposits: [{ token: 'stETH', ratio: 1, protocol: 'Lido (drž)', note: 'ETH → stETH cez CoW Swap (Mainnet)' }] },
+      { label: 'wstETH cez DeFi Saver (ARB)', type: 'lending', percentage: 27, protocol: 'wstETH → DeFi Saver', chain: 'Arbitrum', apy: 9, yieldDirection: 'btc',
+        deposits: [{ token: 'wstETH', ratio: 1, protocol: 'DeFi Saver (ARB)', note: 'ETH → wstETH → bridge na ARB → vlož do DeFi Saver (bez páky)' }] },
     ],
   },
   {
