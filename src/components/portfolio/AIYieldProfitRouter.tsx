@@ -211,10 +211,10 @@ export function AIYieldProfitRouter({ lang }: Props) {
           {hasProfit && Object.keys(profitBySymbol).length > 0 && (
             <div className="space-y-1.5 pt-1">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                {sk ? 'Plán predaja (z čoho a koľko)' : 'Sell plan (from what & how much)'}
+                {sk ? 'Plán predaja (z čoho, koľko a kam)' : 'Sell plan (from what, how much & where)'}
               </p>
               {sellPlan.map(p => (
-                <div key={p.symbol} className="rounded-md bg-secondary/60 border border-border/60 px-2.5 py-2 space-y-1">
+                <div key={p.symbol} className="rounded-md bg-secondary/60 border border-border/60 px-2.5 py-2 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <span className="text-[11px] font-bold text-foreground">{p.symbol}</span>
@@ -224,17 +224,54 @@ export function AIYieldProfitRouter({ lang }: Props) {
                       {formatUsd(p.usd)}
                     </span>
                   </div>
-                  <div className="flex items-center justify-between text-[10px]">
-                    <span className="text-muted-foreground">
-                      {sk ? 'Predaj' : 'Sell'}: <span className="font-mono text-foreground">
-                        {p.qty.toFixed(p.symbol === 'BTC' ? 6 : p.symbol === 'ETH' ? 4 : 2)} {p.symbol}
-                      </span>
+                  <div className="text-[10px] text-muted-foreground">
+                    {sk ? 'Predaj' : 'Sell'}: <span className="font-mono text-foreground">
+                      {p.qty.toFixed(p.symbol === 'BTC' ? 6 : p.symbol === 'ETH' ? 4 : 2)} {p.symbol}
                     </span>
-                    <span className="text-muted-foreground">→ {recommended.id}</span>
+                  </div>
+                  <div className="space-y-1 pt-0.5 border-t border-border/40">
+                    {p.splits.map(s => {
+                      const stableQty = s.usd; // 1 stable ≈ $1
+                      return (
+                        <div key={s.id} className="flex items-center justify-between text-[10px]">
+                          <span className="flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: s.color }} />
+                            <span className="text-foreground font-medium">→ {s.id}</span>
+                            <span className="text-muted-foreground">({s.pct.toFixed(0)}%)</span>
+                          </span>
+                          <span className="font-mono text-foreground tabular-nums">
+                            {formatUsd(s.usd)} <span className="text-muted-foreground">≈ {stableQty.toFixed(2)} {s.id}</span>
+                          </span>
+                        </div>
+                      );
+                    })}
                   </div>
                   <p className="text-[10px] text-primary/80">{p.reason}</p>
                 </div>
               ))}
+              {/* Destination totals */}
+              <div className="rounded-md bg-primary/5 border border-primary/20 px-2.5 py-2 mt-2">
+                <p className="text-[10px] uppercase tracking-wide text-primary/80 mb-1">
+                  {sk ? 'Spolu kam presunúť' : 'Total destinations'}
+                </p>
+                {destinationSplit.map(d => {
+                  const total = profitAvailable * (d.pct / 100);
+                  return (
+                    <div key={d.opt.id} className="flex items-center justify-between text-[11px]">
+                      <span className="flex items-center gap-1.5">
+                        <span className="w-2 h-2 rounded-full" style={{ backgroundColor: d.opt.color }} />
+                        <span className="text-foreground font-semibold">{d.opt.id}</span>
+                        <span className="text-[10px] text-muted-foreground">
+                          · {d.opt.network} · {d.opt.apy.toFixed(1)}% APY
+                        </span>
+                      </span>
+                      <span className="font-semibold text-foreground tabular-nums">
+                        {formatUsd(total)} <span className="text-muted-foreground text-[10px]">({d.pct.toFixed(0)}%)</span>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
           {!hasProfit && (
