@@ -1,10 +1,20 @@
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 
 interface Props { lang: Lang; }
+
+const scrollToRouter = () => {
+  const el = document.getElementById('yield-profit-router');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-primary', 'rounded-lg');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'rounded-lg'), 2000);
+  }
+};
 
 export function PnLOverviewCard({ lang }: Props) {
   const sk = lang === 'sk';
@@ -48,6 +58,17 @@ export function PnLOverviewCard({ lang }: Props) {
             <span>{sk ? 'Investované' : 'Invested'}: <span className="text-foreground font-medium">{formatUsd(totalInvested)}</span></span>
             <span>{sk ? 'Hodnota' : 'Value'}: <span className="text-foreground font-medium">{formatUsd(totalValue)}</span></span>
           </div>
+          {isGain && totalPnl > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-8 text-[11px] mt-1 border-gain/40 text-gain hover:bg-gain/10"
+              onClick={scrollToRouter}
+            >
+              {sk ? 'Presunúť celkový zisk → Yield Profit Router' : 'Move total profit → Yield Profit Router'}
+              <ArrowRight className="w-3 h-3 ml-1" />
+            </Button>
+          )}
         </div>
 
         {/* Per-token P/L */}
@@ -61,37 +82,49 @@ export function PnLOverviewCard({ lang }: Props) {
             return (
               <div
                 key={a.symbol}
-                className="flex items-center justify-between rounded-md bg-secondary/30 border border-border/40 px-3 py-2"
+                className="rounded-md bg-secondary/30 border border-border/40 px-3 py-2 space-y-1.5"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-bold text-foreground w-9">{a.symbol}</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold text-foreground w-9">{a.symbol}</span>
+                    {hasInvest ? (
+                      <span className="text-[10px] text-muted-foreground">
+                        {sk ? 'Inv' : 'Inv'} {formatUsd(a.invested)} → {formatUsd(a.value)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">
+                        {sk ? 'bez nákupnej ceny' : 'no cost basis'}
+                      </span>
+                    )}
+                  </div>
                   {hasInvest ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      {sk ? 'Inv' : 'Inv'} {formatUsd(a.invested)} → {formatUsd(a.value)}
-                    </span>
+                    <div className="text-right">
+                      <p className={`text-xs font-bold tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
+                        {aGain ? '+' : ''}{formatUsd(a.pnl)}
+                      </p>
+                      <p className={`text-[10px] tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
+                        {aGain ? '+' : ''}{a.pnlPct.toFixed(2)}%
+                      </p>
+                    </div>
                   ) : (
-                    <span className="text-[10px] text-muted-foreground">
-                      {sk ? 'bez nákupnej ceny' : 'no cost basis'}
-                    </span>
+                    <span className="text-[10px] text-muted-foreground">—</span>
                   )}
                 </div>
-                {hasInvest ? (
-                  <div className="text-right">
-                    <p className={`text-xs font-bold tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
-                      {aGain ? '+' : ''}{formatUsd(a.pnl)}
-                    </p>
-                    <p className={`text-[10px] tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
-                      {aGain ? '+' : ''}{a.pnlPct.toFixed(2)}%
-                    </p>
-                  </div>
-                ) : (
-                  <span className="text-[10px] text-muted-foreground">—</span>
+                {hasInvest && aGain && a.pnl > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-full h-7 text-[10px] text-gain hover:bg-gain/10 hover:text-gain"
+                    onClick={scrollToRouter}
+                  >
+                    {sk ? `Presunúť zisk z ${a.symbol} do Yield Profit Router` : `Move ${a.symbol} profit to Yield Profit Router`}
+                    <ArrowRight className="w-3 h-3 ml-1" />
+                  </Button>
                 )}
               </div>
             );
           })}
         </div>
-
         <p className="text-[10px] text-muted-foreground text-center">
           {sk
             ? 'P/L = aktuálna hodnota − investované (DCA + počiatočná nákupná cena).'
