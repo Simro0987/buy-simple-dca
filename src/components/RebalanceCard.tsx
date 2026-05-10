@@ -210,51 +210,59 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
       </div>
 
       {/* Specific rebalancing actions */}
-      {actions.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-            <AlertTriangle className="w-3.5 h-3.5 text-warning" />
-            {sk ? 'Odporúčané presúvania' : 'Suggested Transfers'}
-          </p>
-          {actions.map((a, i) => (
-            <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-warning/5 border border-warning/20">
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                style={{ backgroundColor: a.fromColor + '20', color: a.fromColor }}
-              >
-                {a.from.slice(0, 2)}
+      {(() => {
+        const filteredActions = selected ? actions.filter(a => a.from === selected || a.to === selected) : actions;
+        if (filteredActions.length === 0) return null;
+        return (
+          <div className="space-y-2">
+            <p className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-warning" />
+              {sk ? 'Odporúčané presúvania' : 'Suggested Transfers'}
+            </p>
+            {filteredActions.map((a, i) => (
+              <div key={i} className="flex items-center gap-2 p-2.5 rounded-lg bg-warning/5 border border-warning/20">
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: a.fromColor + '20', color: a.fromColor }}
+                >
+                  {a.from.slice(0, 2)}
+                </div>
+                <ArrowRight className="w-3.5 h-3.5 text-warning flex-shrink-0" />
+                <div
+                  className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: a.toColor + '20', color: a.toColor }}
+                >
+                  {a.to.slice(0, 2)}
+                </div>
+                <span className="text-xs text-foreground font-medium">
+                  {sk ? `Presuň ${formatUsd(a.amount)} z ${a.from} do ${a.to}` : `Move ${formatUsd(a.amount)} from ${a.from} to ${a.to}`}
+                </span>
               </div>
-              <ArrowRight className="w-3.5 h-3.5 text-warning flex-shrink-0" />
-              <div
-                className="w-6 h-6 rounded-full flex items-center justify-center text-[9px] font-bold flex-shrink-0"
-                style={{ backgroundColor: a.toColor + '20', color: a.toColor }}
-              >
-                {a.to.slice(0, 2)}
-              </div>
-              <span className="text-xs text-foreground font-medium">
-                {sk ? `Presuň ${formatUsd(a.amount)} z ${a.from} do ${a.to}` : `Move ${formatUsd(a.amount)} from ${a.from} to ${a.to}`}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
+            ))}
+          </div>
+        );
+      })()}
 
       {/* DCA adjustment suggestions */}
-      {dcaAdjustments.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-foreground">
-            {sk ? 'Alebo uprav DCA alokáciu' : 'Or adjust DCA allocation'}
-          </p>
-          {dcaAdjustments.map(a => (
-            <p key={a.symbol} className="text-[11px] text-muted-foreground pl-2 border-l-2" style={{ borderColor: a.color }}>
-              {sk
-                ? `Zvýš ${a.symbol} DCA o ~${a.suggestedBoost.toFixed(0)}% na najbližšie 2-4 týždne`
-                : `Boost ${a.symbol} DCA by ~${a.suggestedBoost.toFixed(0)}% for the next 2-4 weeks`
-              }
+      {(() => {
+        const filteredDca = selected ? dcaAdjustments.filter(a => a.symbol === selected) : dcaAdjustments;
+        if (filteredDca.length === 0) return null;
+        return (
+          <div className="space-y-1.5">
+            <p className="text-xs font-semibold text-foreground">
+              {sk ? 'Alebo uprav DCA alokáciu' : 'Or adjust DCA allocation'}
             </p>
-          ))}
-        </div>
-      )}
+            {filteredDca.map(a => (
+              <p key={a.symbol} className="text-[11px] text-muted-foreground pl-2 border-l-2" style={{ borderColor: a.color }}>
+                {sk
+                  ? `Zvýš ${a.symbol} DCA o ~${a.suggestedBoost.toFixed(0)}% na najbližšie 2-4 týždne`
+                  : `Boost ${a.symbol} DCA by ~${a.suggestedBoost.toFixed(0)}% for the next 2-4 weeks`
+                }
+              </p>
+            ))}
+          </div>
+        );
+      })()}
 
       {/* Telegram alert button */}
       <button
