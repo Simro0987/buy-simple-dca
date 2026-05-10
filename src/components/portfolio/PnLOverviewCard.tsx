@@ -1,10 +1,20 @@
-import { TrendingUp, TrendingDown } from 'lucide-react';
+import { TrendingUp, TrendingDown, ArrowRight } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 
 interface Props { lang: Lang; }
+
+const scrollToRouter = () => {
+  const el = document.getElementById('yield-profit-router');
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('ring-2', 'ring-primary', 'rounded-lg');
+    setTimeout(() => el.classList.remove('ring-2', 'ring-primary', 'rounded-lg'), 2000);
+  }
+};
 
 export function PnLOverviewCard({ lang }: Props) {
   const sk = lang === 'sk';
