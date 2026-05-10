@@ -53,12 +53,15 @@ function getHoldings(): Record<string, number> {
 interface Props {
   lang: Lang;
   prices?: PriceData;
+  selected?: 'BTC' | 'ETH' | 'SOL' | null;
 }
 
-export function PortfolioHistoryChart({ lang, prices }: Props) {
+export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
   const [history, setHistory] = useState<HistoryPoint[]>(getHistory);
   const [range, setRange] = useState<7 | 30>(30);
+
+  const selectedTokenId = selected ? TOKENS.find(t => t.symbol === selected)?.id : undefined;
 
   // Record today's value with per-token breakdown
   useEffect(() => {
@@ -93,7 +96,7 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
   if (filtered.length < 1) return null;
   const hasMultiple = filtered.length >= 2;
 
-  const values = filtered.map(p => p.value);
+  const values = filtered.map(p => selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value);
   const latest = values[values.length - 1];
   const first = values[0];
   const changePct = first > 0 ? ((latest - first) / first) * 100 : 0;
@@ -105,9 +108,13 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
 
   const chartData = filtered.map(p => ({
     date: p.date,
-    value: p.value,
+    value: selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value,
     ...p.tokens,
   }));
+
+  const seriesColor = selected
+    ? (TOKENS.find(t => t.symbol === selected)?.color ?? 'hsl(var(--primary))')
+    : (changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))');
 
   return (
     <div className="glass-card p-4 space-y-3">
@@ -117,6 +124,7 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
           <TrendingUp className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">
             {sk ? 'Vývoj portfólia' : 'Portfolio History'}
+            {selected && <span className="ml-1.5 text-[10px] text-muted-foreground">· {selected}</span>}
           </span>
         </div>
         {hasMultiple && (
@@ -157,8 +165,8 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
           <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))'} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))'} stopOpacity={0} />
+                <stop offset="0%" stopColor={seriesColor} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={seriesColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
@@ -182,7 +190,7 @@ export function PortfolioHistoryChart({ lang, prices }: Props) {
             <Area
               type="monotone"
               dataKey="value"
-              stroke={changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))'}
+              stroke={seriesColor}
               strokeWidth={2}
               fill="url(#portfolioGrad)"
               dot={false}

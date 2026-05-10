@@ -109,80 +109,19 @@ function PortfolioPageInner({ lang }: Props) {
 
       {/* Synced summary from Home */}
       <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
-      <AllocationDonut metrics={metrics} />
-
-      {/* AI Yield Profit Router */}
-      <AIYieldProfitRouter lang={lang} />
-
-      {/* Manuálne držby & cost basis */}
-      <InitialHoldingsCard />
-
-      {/* Total Value Card */}
-      <Card className="border-border bg-card overflow-hidden">
-        <div className="h-1 bg-primary" />
-        <CardContent className="p-5">
-          <p className="text-xs text-muted-foreground mb-1">
-            {sk ? 'Celková hodnota portfólia' : 'Total Portfolio Value'}
-          </p>
-          <p className="text-3xl font-bold text-foreground">
-            {hasHoldings ? formatUsd(totalValue) : '$0.00'}
-          </p>
-          {!hasHoldings && (
-            <p className="text-xs text-muted-foreground mt-2">
-              {sk
-                ? 'Zadaj držby pre zobrazenie portfólia'
-                : 'Enter holdings to see portfolio'}
-            </p>
-          )}
-
-          {/* Allocation bar */}
-          {hasHoldings && (
-            <div className="mt-4 space-y-2">
-              <div className="flex h-3 rounded-full overflow-hidden bg-secondary">
-                {tokenData.map(t => {
-                  const pct = (t.valueUsd / totalValue) * 100;
-                  if (pct < 0.5) return null;
-                  return (
-                    <div
-                      key={t.id}
-                      className="h-full transition-all"
-                      style={{ width: `${pct}%`, backgroundColor: t.color }}
-                    />
-                  );
-                })}
-              </div>
-              <div className="flex flex-wrap gap-3">
-                {actualAlloc.map(a => (
-                  <div key={a.symbol} className="flex items-center gap-1.5">
-                    <div
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: TOKENS.find(t => t.symbol === a.symbol)?.color }}
-                    />
-                    <span className="text-[11px] text-foreground font-medium">{a.symbol}</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {a.actual.toFixed(1)}%
-                    </span>
-                    {Math.abs(a.actual - a.target) > 3 && (
-                      <span className="text-[10px] text-yellow-400">
-                        (cieľ {a.target}%)
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      <AllocationDonut metrics={metrics} selected={selected} onSelect={(s) => toggleSelected(s as 'BTC' | 'ETH' | 'SOL')} />
 
       {/* Concentration warnings */}
       <ConcentrationWarnings />
 
-      {/* History chart */}
-      <PortfolioHistoryChart lang={lang} prices={prices} />
-
       {/* Rebalancing suggestions */}
-      <RebalanceCard lang={lang} prices={prices} />
+      <RebalanceCard lang={lang} prices={prices} selected={selected} />
+
+      {/* AI Yield Profit Router */}
+      <AIYieldProfitRouter lang={lang} />
+
+      {/* History chart */}
+      <PortfolioHistoryChart lang={lang} prices={prices} selected={selected} />
 
       {/* Per-token cards */}
       {tokenData.map(t => {
@@ -326,38 +265,8 @@ function PortfolioPageInner({ lang }: Props) {
         );
       })}
 
-      {/* Pie Chart */}
-      {hasHoldings && (
-        <Card className="border-border bg-card">
-          <CardContent className="p-5 flex flex-col items-center">
-            <p className="text-sm font-semibold text-foreground mb-3">
-              {sk ? 'Cieľová vs. skutočná alokácia' : 'Target vs. Actual Allocation'}
-            </p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 w-full">
-              {actualAlloc.map(a => {
-                const diff = a.actual - a.target;
-                const color = TOKENS.find(t => t.symbol === a.symbol)?.color;
-                return (
-                  <div key={a.symbol} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                      <span className="text-xs text-foreground">{a.symbol}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-muted-foreground">{a.actual.toFixed(1)}%</span>
-                      <span className={`text-[10px] font-medium ${
-                        Math.abs(diff) <= 3 ? 'text-muted-foreground' : diff > 0 ? 'text-yellow-400' : 'text-blue-400'
-                      }`}>
-                        ({diff >= 0 ? '+' : ''}{diff.toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Manuálne držby & cost basis (pod per-token kartami) */}
+      <InitialHoldingsCard />
     </div>
   );
 }

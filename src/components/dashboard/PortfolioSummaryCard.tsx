@@ -32,7 +32,7 @@ export function PortfolioSummaryCard({ metrics, weeklyCapital, cashReserve }: Pr
       </div>
       <p className="text-4xl font-bold text-foreground tabular-nums">{formatUsd(metrics.totalValue)}</p>
 
-      <div className="grid grid-cols-2 gap-2 mt-4 text-xs">
+      <div className="grid grid-cols-3 gap-2 mt-4 text-xs">
         <div className="bg-secondary/60 rounded-lg p-2.5">
           <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Investované</p>
           <p className="font-semibold text-foreground tabular-nums">{formatUsd(metrics.totalInvested)}</p>
@@ -42,12 +42,8 @@ export function PortfolioSummaryCard({ metrics, weeklyCapital, cashReserve }: Pr
           <p className="font-semibold text-foreground tabular-nums">{formatUsd(weeklyCapital)}</p>
         </div>
         <div className="bg-secondary/60 rounded-lg p-2.5">
-          <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Hotovostná rezerva</p>
+          <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Hot. rezerva</p>
           <p className="font-semibold text-foreground tabular-nums">{formatUsd(cashReserve)}</p>
-        </div>
-        <div className="bg-secondary/60 rounded-lg p-2.5">
-          <p className="text-[10px] uppercase text-muted-foreground tracking-wide">Týždňov v histórii</p>
-          <p className="font-semibold text-foreground tabular-nums">{metrics.history.length}</p>
         </div>
       </div>
     </div>
