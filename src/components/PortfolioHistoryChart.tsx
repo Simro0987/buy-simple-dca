@@ -60,6 +60,7 @@ interface Props {
 
 export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
+  const { metrics } = usePortfolio();
   const [history, setHistory] = useState<HistoryPoint[]>(getHistory);
   const [range, setRange] = useState<7 | 30>(30);
 
@@ -108,11 +109,20 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   const maxVal = Math.max(...values);
   const padding = (maxVal - minVal) * 0.1 || 10;
 
-  const chartData = filtered.map(p => ({
-    date: p.date,
-    value: selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value,
-    ...p.tokens,
-  }));
+  const dateSet = new Set(filtered.map(p => p.date));
+  const buyDates = new Set(
+    metrics.history.map(h => h.created_at.slice(0, 10)).filter(d => dateSet.has(d))
+  );
+
+  const chartData = filtered.map(p => {
+    const v = selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value;
+    return {
+      date: p.date,
+      value: v,
+      buy: buyDates.has(p.date) ? v : null,
+      ...p.tokens,
+    };
+  });
 
   const seriesColor = selected
     ? (TOKENS.find(t => t.symbol === selected)?.color ?? 'hsl(var(--primary))')
