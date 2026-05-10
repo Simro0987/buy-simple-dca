@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2, ExternalLink } from 'lucide-react';
+import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2, ExternalLink, Info, ChevronDown } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
@@ -94,10 +94,13 @@ function scoreOptions(opts: StableOption[]): Scored[] {
   });
 }
 
+const CG_ID: Record<string, string> = { BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana' };
+
 export function AIYieldProfitRouter({ lang }: Props) {
   const sk = lang === 'sk';
   const [moving, setMoving] = useState(false);
-  const { profitAvailable, profitBySymbol, selected, markProfitMoved } = usePortfolio();
+  const [showWhy, setShowWhy] = useState(false);
+  const { profitAvailable, profitBySymbol, selected, markProfitMoved, prices, metrics } = usePortfolio();
 
   const scored = useMemo(() => {
     const s = scoreOptions(OPTIONS).sort((a, b) => b.score - a.score);
@@ -111,6 +114,34 @@ export function AIYieldProfitRouter({ lang }: Props) {
 
   const recommended = scored[0];
   const hasProfit = profitAvailable > 1;
+
+  // Per-token sell plan: USD amount + token quantity, prioritizing OVERWEIGHT assets first
+  const sellPlan = useMemo(() => {
+    if (!hasProfit) return [] as Array<{ symbol: string; usd: number; qty: number; price: number; reason: string }>;
+    const entries = Object.entries(profitBySymbol)
+      .filter(([sym]) => !selected || sym === selected)
+      .map(([sym, usd]) => {
+        const cgId = CG_ID[sym];
+        const price = prices?.[cgId]?.usd ?? 0;
+        const qty = price > 0 ? usd / price : 0;
+        const asset = metrics.assets.find(a => a.symbol === sym);
+        const dev = asset?.deviationPct ?? 0;
+        const reasonSk = dev > 1
+          ? `nadvážený o +${dev.toFixed(1)}pp → predaj znižuje koncentráciu`
+          : dev < -1
+            ? `mierne podvážený (${dev.toFixed(1)}pp) → preferuj iný zdroj`
+            : 'na cieľovej váhe → neutrálny presun zisku';
+        const reasonEn = dev > 1
+          ? `overweight +${dev.toFixed(1)}pp → selling reduces concentration`
+          : dev < -1
+            ? `underweight (${dev.toFixed(1)}pp) → prefer other source`
+            : 'on target → neutral profit move';
+        return { symbol: sym, usd, qty, price, reason: sk ? reasonSk : reasonEn };
+      })
+      .sort((a, b) => b.usd - a.usd);
+    return entries;
+  }, [profitBySymbol, prices, hasProfit, metrics, selected, sk]);
+
 
   const handleMove = () => {
     setMoving(true);
@@ -153,14 +184,31 @@ export function AIYieldProfitRouter({ lang }: Props) {
             {hasProfit ? formatUsd(profitAvailable) : '$0.00'}
           </p>
           {hasProfit && Object.keys(profitBySymbol).length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {Object.entries(profitBySymbol).map(([sym, val]) => (
-                <span
-                  key={sym}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-foreground border border-border"
-                >
-                  {sym}: <span className="font-semibold">{formatUsd(val)}</span>
-                </span>
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {sk ? 'Plán predaja (z čoho a koľko)' : 'Sell plan (from what & how much)'}
+              </p>
+              {sellPlan.map(p => (
+                <div key={p.symbol} className="rounded-md bg-secondary/60 border border-border/60 px-2.5 py-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-foreground">{p.symbol}</span>
+                      <span className="text-[10px] text-muted-foreground">@ {formatUsd(p.price)}</span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-foreground tabular-nums">
+                      {formatUsd(p.usd)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-muted-foreground">
+                      {sk ? 'Predaj' : 'Sell'}: <span className="font-mono text-foreground">
+                        {p.qty.toFixed(p.symbol === 'BTC' ? 6 : p.symbol === 'ETH' ? 4 : 2)} {p.symbol}
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground">→ {recommended.id}</span>
+                  </div>
+                  <p className="text-[10px] text-primary/80">{p.reason}</p>
+                </div>
               ))}
             </div>
           )}
@@ -227,6 +275,43 @@ export function AIYieldProfitRouter({ lang }: Props) {
               ${recommended.tvlBn.toFixed(1)}B TVL
             </span>
           </div>
+
+          <button
+            onClick={() => setShowWhy(s => !s)}
+            className="w-full flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-foreground pt-1"
+          >
+            <Info className="w-3 h-3" />
+            {showWhy ? (sk ? 'Skryť indikátory' : 'Hide indicators') : (sk ? 'Prečo práve tento token? (indikátory)' : 'Why this token? (indicators)')}
+            <ChevronDown className={`w-3 h-3 transition-transform ${showWhy ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showWhy && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                {sk
+                  ? 'Skóre 0–100 váži 7 indikátorov. Vyhráva token s najvyšším celkovým skóre, istota = odstup od 2. miesta.'
+                  : 'Score 0–100 weights 7 indicators. Winner = highest total; confidence = gap to runner-up.'}
+              </p>
+              {[
+                { k: sk ? 'APY (výnos)' : 'APY (yield)', w: '25%', v: `${recommended.apy.toFixed(1)}%`, d: sk ? 'Anualizovaný výnos protokolu.' : 'Annualized protocol yield.' },
+                { k: sk ? 'Stabilita APY' : 'APY stability', w: '20%', v: `${recommended.apyStability}/100`, d: sk ? 'Ako sa APY mení v čase (vyššie = predvídateľnejšie).' : 'How stable APY is over time.' },
+                { k: sk ? 'Peg stability' : 'Peg stability', w: '20%', v: `${recommended.pegStability}/100`, d: sk ? 'Ako pevne sa stable drží $1.' : 'How tightly the stable holds $1.' },
+                { k: sk ? 'Smart-contract riziko' : 'Smart-contract risk', w: '15%', v: `${recommended.scRisk}/100`, d: sk ? 'Audity, vek protokolu, history exploitov (vyššie = bezpečnejšie).' : 'Audits, age, exploit history (higher = safer).' },
+                { k: sk ? 'Likvidita' : 'Liquidity', w: '10%', v: `${recommended.liquidity}/100`, d: sk ? 'Ako rýchlo vieš vystúpiť bez slippage.' : 'How fast you can exit without slippage.' },
+                { k: 'TVL', w: '5%', v: `$${recommended.tvlBn.toFixed(1)}B`, d: sk ? 'Total Value Locked – väčší = robustnejší.' : 'Total Value Locked – bigger = more robust.' },
+                { k: sk ? 'Funding penále' : 'Funding penalty', w: '5%', v: recommended.fundingRate > 0 ? `${recommended.fundingRate.toFixed(1)}%` : '—', d: sk ? 'Ak APY závisí od futures funding, je riskantnejší.' : 'APY tied to funding rates is riskier.' },
+                { k: sk ? 'Poplatky' : 'Fees', w: '−', v: `${recommended.feeBps} bps`, d: sk ? 'Vstupné/výstupné fee protokolu.' : 'Entry/exit fee of protocol.' },
+              ].map(i => (
+                <div key={i.k} className="flex items-start justify-between gap-2 rounded-md bg-secondary/30 px-2.5 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium text-foreground">{i.k} <span className="text-[9px] text-muted-foreground">· váha {i.w}</span></p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{i.d}</p>
+                  </div>
+                  <span className="text-[11px] font-semibold text-foreground tabular-nums shrink-0">{i.v}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Comparison */}
