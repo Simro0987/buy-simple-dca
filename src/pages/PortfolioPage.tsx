@@ -149,6 +149,13 @@ function PortfolioPageInner({ lang }: Props) {
         const isExpanded = expandedToken === t.symbol;
         const positions = t.config?.positions || [];
         const dimmed = selected !== null && selected !== t.symbol;
+        const assetMetric = metrics.assets.find(a => a.symbol === t.symbol);
+        const invested = assetMetric?.invested ?? 0;
+        const pnl = assetMetric?.pnl ?? 0;
+        const pnlPct = assetMetric?.pnlPct ?? 0;
+        const avgCost = assetMetric && assetMetric.holdings > 0
+          ? invested / assetMetric.holdings
+          : 0;
 
         return (
           <Card
@@ -193,6 +200,16 @@ function PortfolioPageInner({ lang }: Props) {
                       </span>
                     </div>
                   </div>
+                  {invested > 0 && (
+                    <div className="flex items-center justify-between mt-1 text-[10px]">
+                      <span className="text-muted-foreground">
+                        {sk ? 'Avg' : 'Avg'} {formatUsd(avgCost)}
+                      </span>
+                      <span className={`font-semibold tabular-nums ${pnl >= 0 ? 'text-gain' : 'text-loss'}`}>
+                        {pnl >= 0 ? '+' : ''}{formatUsd(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {t.qty > 0 && (
                   isExpanded
