@@ -59,6 +59,10 @@ export function AllocationDonut({ metrics, selected, onSelect }: Props) {
         {data.map(d => {
           const active = selected === d.name;
           const dim = selected && !active;
+          const drift = d.actual - d.target;
+          const driftAbs = Math.abs(drift);
+          const driftColor = driftAbs < 2 ? 'text-muted-foreground' : driftAbs < 5 ? 'text-yellow-400' : 'text-loss';
+          const arrow = driftAbs < 0.5 ? '·' : drift > 0 ? '▲' : '▼';
           return (
             <button
               key={d.name}
@@ -71,6 +75,9 @@ export function AllocationDonut({ metrics, selected, onSelect }: Props) {
               </div>
               <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
                 {d.actual.toFixed(1)}% / <span className="opacity-60">{d.target.toFixed(0)}%</span>
+              </p>
+              <p className={`text-[9px] tabular-nums font-medium ${driftColor}`}>
+                {arrow} {drift >= 0 ? '+' : ''}{drift.toFixed(1)}pp
               </p>
             </button>
           );

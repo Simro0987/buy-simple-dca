@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Lang } from '@/lib/i18n';
 import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, ShoppingCart } from 'lucide-react';
 import {
   ResponsiveContainer,
-  AreaChart,
+  ComposedChart,
   Area,
+  Scatter,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { usePortfolio } from '@/contexts/PortfolioContext';
 
 const STORAGE_KEY = 'portfolio-history-v2';
 const MAX_POINTS = 90;
@@ -58,6 +60,7 @@ interface Props {
 
 export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
+  const { metrics } = usePortfolio();
   const [history, setHistory] = useState<HistoryPoint[]>(getHistory);
   const [range, setRange] = useState<7 | 30>(30);
 
@@ -106,11 +109,20 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   const maxVal = Math.max(...values);
   const padding = (maxVal - minVal) * 0.1 || 10;
 
-  const chartData = filtered.map(p => ({
-    date: p.date,
-    value: selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value,
-    ...p.tokens,
-  }));
+  const dateSet = new Set(filtered.map(p => p.date));
+  const buyDates = new Set(
+    metrics.history.map(h => h.created_at.slice(0, 10)).filter(d => dateSet.has(d))
+  );
+
+  const chartData = filtered.map(p => {
+    const v = selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value;
+    return {
+      date: p.date,
+      value: v,
+      buy: buyDates.has(p.date) ? v : null,
+      ...p.tokens,
+    };
+  });
 
   const seriesColor = selected
     ? (TOKENS.find(t => t.symbol === selected)?.color ?? 'hsl(var(--primary))')
@@ -162,7 +174,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
       {/* Chart */}
       <div className="w-full h-48">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={seriesColor} stopOpacity={0.3} />
@@ -196,9 +208,17 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
               dot={false}
               activeDot={{ r: 4, strokeWidth: 0, fill: 'hsl(var(--primary))' }}
             />
-          </AreaChart>
+            <Scatter dataKey="buy" fill="hsl(var(--gain))" shape="circle" />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
+
+      {buyDates.size > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <ShoppingCart className="w-3 h-3 text-gain" />
+          <span>{sk ? `${buyDates.size} DCA nákupov v tomto období` : `${buyDates.size} DCA buys in range`}</span>
+        </div>
+      )}
 
       {/* Current per-token breakdown */}
       {filtered.length > 0 && Object.keys(filtered[filtered.length - 1].tokens).length > 0 && (

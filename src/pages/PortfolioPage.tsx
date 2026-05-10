@@ -17,6 +17,11 @@ import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 import { AIYieldProfitRouter } from '@/components/portfolio/AIYieldProfitRouter';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { StickyPortfolioHeader } from '@/components/portfolio/StickyPortfolioHeader';
+import { BtcGoalTracker } from '@/components/portfolio/BtcGoalTracker';
+import { HealthScoreCard } from '@/components/portfolio/HealthScoreCard';
+import { NextActionBanner } from '@/components/portfolio/NextActionBanner';
+import { WhatIfSimulator } from '@/components/portfolio/WhatIfSimulator';
+import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
 
 interface Props { lang: Lang; }
 
@@ -107,8 +112,18 @@ function PortfolioPageInner({ lang }: Props) {
         </button>
       </div>
 
+      {/* Next action banner */}
+      <NextActionBanner lang={lang} />
+
+      {/* Cesta k 1 BTC — strategická priorita */}
+      <BtcGoalTracker lang={lang} />
+
       {/* Synced summary from Home */}
       <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
+
+      {/* Zdravie portfólia (drift, diverzifikácia, stake, P/L) */}
+      <HealthScoreCard lang={lang} />
+
       <AllocationDonut metrics={metrics} selected={selected} onSelect={(s) => toggleSelected(s as 'BTC' | 'ETH' | 'SOL')} />
 
       {/* Concentration warnings */}
@@ -120,14 +135,27 @@ function PortfolioPageInner({ lang }: Props) {
       {/* AI Yield Profit Router */}
       <AIYieldProfitRouter lang={lang} />
 
+      {/* Yield zarobený zo stakingu */}
+      <YieldEarnedCard lang={lang} />
+
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} selected={selected} />
+
+      {/* What-if simulátor */}
+      <WhatIfSimulator lang={lang} />
 
       {/* Per-token cards */}
       {tokenData.map(t => {
         const isExpanded = expandedToken === t.symbol;
         const positions = t.config?.positions || [];
         const dimmed = selected !== null && selected !== t.symbol;
+        const assetMetric = metrics.assets.find(a => a.symbol === t.symbol);
+        const invested = assetMetric?.invested ?? 0;
+        const pnl = assetMetric?.pnl ?? 0;
+        const pnlPct = assetMetric?.pnlPct ?? 0;
+        const avgCost = assetMetric && assetMetric.holdings > 0
+          ? invested / assetMetric.holdings
+          : 0;
 
         return (
           <Card
@@ -172,6 +200,16 @@ function PortfolioPageInner({ lang }: Props) {
                       </span>
                     </div>
                   </div>
+                  {invested > 0 && (
+                    <div className="flex items-center justify-between mt-1 text-[10px]">
+                      <span className="text-muted-foreground">
+                        {sk ? 'Avg' : 'Avg'} {formatUsd(avgCost)}
+                      </span>
+                      <span className={`font-semibold tabular-nums ${pnl >= 0 ? 'text-gain' : 'text-loss'}`}>
+                        {pnl >= 0 ? '+' : ''}{formatUsd(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+                      </span>
+                    </div>
+                  )}
                 </div>
                 {t.qty > 0 && (
                   isExpanded
