@@ -137,7 +137,9 @@ function PortfolioPageInner({ lang }: Props) {
       <RebalanceCard lang={lang} prices={prices} selected={selected} />
 
       {/* AI Yield Profit Router */}
-      <AIYieldProfitRouter lang={lang} />
+      <div id="yield-profit-router" className="scroll-mt-20">
+        <AIYieldProfitRouter lang={lang} />
+      </div>
 
       {/* Yield zarobený zo stakingu */}
       <YieldEarnedCard lang={lang} />
