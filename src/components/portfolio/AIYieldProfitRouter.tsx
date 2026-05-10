@@ -275,6 +275,43 @@ export function AIYieldProfitRouter({ lang }: Props) {
               ${recommended.tvlBn.toFixed(1)}B TVL
             </span>
           </div>
+
+          <button
+            onClick={() => setShowWhy(s => !s)}
+            className="w-full flex items-center justify-center gap-1 text-[10px] text-muted-foreground hover:text-foreground pt-1"
+          >
+            <Info className="w-3 h-3" />
+            {showWhy ? (sk ? 'Skryť indikátory' : 'Hide indicators') : (sk ? 'Prečo práve tento token? (indikátory)' : 'Why this token? (indicators)')}
+            <ChevronDown className={`w-3 h-3 transition-transform ${showWhy ? 'rotate-180' : ''}`} />
+          </button>
+
+          {showWhy && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] text-muted-foreground leading-relaxed">
+                {sk
+                  ? 'Skóre 0–100 váži 7 indikátorov. Vyhráva token s najvyšším celkovým skóre, istota = odstup od 2. miesta.'
+                  : 'Score 0–100 weights 7 indicators. Winner = highest total; confidence = gap to runner-up.'}
+              </p>
+              {[
+                { k: sk ? 'APY (výnos)' : 'APY (yield)', w: '25%', v: `${recommended.apy.toFixed(1)}%`, d: sk ? 'Anualizovaný výnos protokolu.' : 'Annualized protocol yield.' },
+                { k: sk ? 'Stabilita APY' : 'APY stability', w: '20%', v: `${recommended.apyStability}/100`, d: sk ? 'Ako sa APY mení v čase (vyššie = predvídateľnejšie).' : 'How stable APY is over time.' },
+                { k: sk ? 'Peg stability' : 'Peg stability', w: '20%', v: `${recommended.pegStability}/100`, d: sk ? 'Ako pevne sa stable drží $1.' : 'How tightly the stable holds $1.' },
+                { k: sk ? 'Smart-contract riziko' : 'Smart-contract risk', w: '15%', v: `${recommended.scRisk}/100`, d: sk ? 'Audity, vek protokolu, history exploitov (vyššie = bezpečnejšie).' : 'Audits, age, exploit history (higher = safer).' },
+                { k: sk ? 'Likvidita' : 'Liquidity', w: '10%', v: `${recommended.liquidity}/100`, d: sk ? 'Ako rýchlo vieš vystúpiť bez slippage.' : 'How fast you can exit without slippage.' },
+                { k: 'TVL', w: '5%', v: `$${recommended.tvlBn.toFixed(1)}B`, d: sk ? 'Total Value Locked – väčší = robustnejší.' : 'Total Value Locked – bigger = more robust.' },
+                { k: sk ? 'Funding penále' : 'Funding penalty', w: '5%', v: recommended.fundingRate > 0 ? `${recommended.fundingRate.toFixed(1)}%` : '—', d: sk ? 'Ak APY závisí od futures funding, je riskantnejší.' : 'APY tied to funding rates is riskier.' },
+                { k: sk ? 'Poplatky' : 'Fees', w: '−', v: `${recommended.feeBps} bps`, d: sk ? 'Vstupné/výstupné fee protokolu.' : 'Entry/exit fee of protocol.' },
+              ].map(i => (
+                <div key={i.k} className="flex items-start justify-between gap-2 rounded-md bg-secondary/30 px-2.5 py-1.5">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] font-medium text-foreground">{i.k} <span className="text-[9px] text-muted-foreground">· váha {i.w}</span></p>
+                    <p className="text-[10px] text-muted-foreground leading-tight">{i.d}</p>
+                  </div>
+                  <span className="text-[11px] font-semibold text-foreground tabular-nums shrink-0">{i.v}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Comparison */}
