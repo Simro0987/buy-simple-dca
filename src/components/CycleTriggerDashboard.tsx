@@ -263,34 +263,6 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
         </div>
       )}
 
-      {/* Re-Entry Signal */}
-      {reEntry?.active && (
-        <div className="glass-card p-4 space-y-2 border-2 border-gain/30 bg-gain/5">
-          <div className="flex items-center gap-2">
-            <ArrowDownCircle className="w-5 h-5 text-gain" />
-            <h3 className="text-sm font-bold text-gain">Re-Entry Signál aktívny!</h3>
-          </div>
-          <p className="text-xs text-foreground">{reEntry.reason}</p>
-          <div className="space-y-1">
-            {reEntry.conditions.map((c, i) => (
-              <p key={i} className="text-[10px] text-muted-foreground">✓ {c}</p>
-            ))}
-          </div>
-          <div className="flex gap-1 mt-2">
-            {[1, 2, 3, 4].map(phase => (
-              <div
-                key={phase}
-                className={`flex-1 h-2 rounded-full ${
-                  phase <= reEntry.phase ? 'bg-gain' : 'bg-secondary'
-                }`}
-              />
-            ))}
-          </div>
-          <p className="text-[10px] text-muted-foreground text-center">
-            Fáza {reEntry.phase}/4 — nasaď 25% stablecoinov na nákup
-          </p>
-        </div>
-      )}
 
       {/* Per-Token Summary */}
       <button
