@@ -71,17 +71,31 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     // Realized profit estimate: per-asset invested × sellPct% × profitPct%
     const executed = getExecutedLevels();
     let realizedProfit = 0;
+    const realizedBySymbol: Record<string, number> = {};
     for (const cfg of PROFIT_CONFIGS) {
       const asset = metrics.assets.find(a => a.symbol.toLowerCase() === cfg.id);
       if (!asset || asset.invested <= 0) continue;
       const tokenLevels = executed.filter(e => e.tokenId === cfg.id);
+      let assetRealized = 0;
       for (const ex of tokenLevels) {
         const lvl = cfg.levels.find(l => l.profitPct === ex.profitPct);
         if (!lvl) continue;
-        realizedProfit += asset.invested * (lvl.sellPct / 100) * (lvl.profitPct / 100);
+        assetRealized += asset.invested * (lvl.sellPct / 100) * (lvl.profitPct / 100);
+      }
+      if (assetRealized > 0) {
+        realizedBySymbol[asset.symbol] = assetRealized;
+        realizedProfit += assetRealized;
       }
     }
     const profitAvailable = Math.max(0, realizedProfit - movedProfit);
+    // proportionally distribute moved across assets
+    const profitBySymbol: Record<string, number> = {};
+    if (realizedProfit > 0) {
+      const ratio = profitAvailable / realizedProfit;
+      for (const [sym, val] of Object.entries(realizedBySymbol)) {
+        profitBySymbol[sym] = val * ratio;
+      }
+    }
 
     const markProfitMoved = (usd: number) => {
       const next = movedProfit + usd;
@@ -100,8 +114,10 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       blendedApy,
       breakdown,
       realizedProfit,
+      realizedBySymbol,
       movedProfit,
       profitAvailable,
+      profitBySymbol,
       markProfitMoved,
       selected,
       setSelected,
