@@ -5,7 +5,8 @@ const corsHeaders = {
 };
 
 const cache = new Map<string, { ts: number; body: string; status: number }>();
-const TTL_MS = 30_000;
+const TTL_MS = 60_000;          // fresh window
+const STALE_MS = 10 * 60_000;   // serve stale up to 10 min on errors
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
@@ -25,10 +26,24 @@ Deno.serve(async (req) => {
       return new Response(cached.body, { status: cached.status, headers: { ...corsHeaders, 'content-type': 'application/json', 'x-cache': 'HIT' } });
     }
 
-    const res = await fetch(target, { headers: { accept: 'application/json' } });
-    const body = await res.text();
-    if (res.ok) cache.set(target, { ts: now, body, status: res.status });
-    return new Response(body, { status: res.status, headers: { ...corsHeaders, 'content-type': 'application/json', 'x-cache': 'MISS' } });
+    try {
+      const res = await fetch(target, { headers: { accept: 'application/json' } });
+      const body = await res.text();
+      if (res.ok) {
+        cache.set(target, { ts: now, body, status: res.status });
+        return new Response(body, { status: res.status, headers: { ...corsHeaders, 'content-type': 'application/json', 'x-cache': 'MISS' } });
+      }
+      // upstream error (e.g. 429): serve stale cache if available
+      if (cached && now - cached.ts < STALE_MS) {
+        return new Response(cached.body, { status: 200, headers: { ...corsHeaders, 'content-type': 'application/json', 'x-cache': 'STALE' } });
+      }
+      return new Response(body, { status: res.status, headers: { ...corsHeaders, 'content-type': 'application/json', 'x-cache': 'MISS' } });
+    } catch (fetchErr) {
+      if (cached && now - cached.ts < STALE_MS) {
+        return new Response(cached.body, { status: 200, headers: { ...corsHeaders, 'content-type': 'application/json', 'x-cache': 'STALE' } });
+      }
+      throw fetchErr;
+    }
   } catch (e) {
     return new Response(JSON.stringify({ error: String(e) }), { status: 500, headers: { ...corsHeaders, 'content-type': 'application/json' } });
   }
