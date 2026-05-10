@@ -94,6 +94,8 @@ function PortfolioPageInner({ lang }: Props) {
 
   return (
     <div className="space-y-4">
+      <StickyPortfolioHeader lang={lang} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">
@@ -113,7 +115,7 @@ function PortfolioPageInner({ lang }: Props) {
       <AllocationDonut metrics={metrics} />
 
       {/* AI Yield Profit Router */}
-      <AIYieldProfitRouter lang={lang} profitAvailable={Math.max(0, metrics.totalPnl)} />
+      <AIYieldProfitRouter lang={lang} />
 
       {/* Manuálne držby & cost basis */}
       <InitialHoldingsCard />
