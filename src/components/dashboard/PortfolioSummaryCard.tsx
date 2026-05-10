@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Wallet } from 'lucide-react';
+import { Wallet } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
 import type { PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { Skeleton } from '@/components/ui/skeleton';
