@@ -13,36 +13,41 @@ interface Props {
 interface StableOption {
   id: 'sUSDe' | 'sUSDS' | 'sDAI';
   name: string;
-  apy: number;          // %
-  apyStability: number; // 0-100 (higher = more stable)
-  fundingRate: number;  // % (relevant for sUSDe)
-  tvlBn: number;        // $ billions
-  pegStability: number; // 0-100
-  liquidity: number;    // 0-100
-  scRisk: number;       // 0-100 (lower = riskier)
-  feeBps: number;       // bps to enter on Base/ARB
+  apy: number;
+  apyStability: number;
+  fundingRate: number;
+  tvlBn: number;
+  pegStability: number;
+  liquidity: number;
+  scRisk: number;
+  feeBps: number;
   color: string;
+  network: 'Base' | 'Arbitrum' | 'Ethereum';
+  protocol: string;
+  url: string;
 }
 
-// Mock real-world style snapshot (would come from API in production)
 const OPTIONS: StableOption[] = [
   {
     id: 'sUSDe', name: 'Ethena sUSDe',
     apy: 12.4, apyStability: 55, fundingRate: 9.8,
     tvlBn: 3.1, pegStability: 78, liquidity: 88, scRisk: 70, feeBps: 8,
-    color: '#8b5cf6',
+    color: '#8b5cf6', network: 'Arbitrum', protocol: 'Ethena',
+    url: 'https://app.ethena.fi/',
   },
   {
     id: 'sUSDS', name: 'Sky sUSDS',
     apy: 7.5, apyStability: 92, fundingRate: 0,
     tvlBn: 1.6, pegStability: 96, liquidity: 82, scRisk: 88, feeBps: 5,
-    color: '#10b981',
+    color: '#10b981', network: 'Base', protocol: 'Sky Protocol',
+    url: 'https://app.sky.money/',
   },
   {
     id: 'sDAI', name: 'MakerDAO sDAI',
     apy: 6.2, apyStability: 95, fundingRate: 0,
     tvlBn: 1.2, pegStability: 97, liquidity: 80, scRisk: 92, feeBps: 6,
-    color: '#f59e0b',
+    color: '#f59e0b', network: 'Base', protocol: 'MakerDAO',
+    url: 'https://spark.fi/',
   },
 ];
 
