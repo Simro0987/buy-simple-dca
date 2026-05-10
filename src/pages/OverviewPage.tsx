@@ -106,5 +106,6 @@ export function OverviewPage({ lang }: Props) {
       {/* Crypto News */}
       <CryptoNewsFeed lang={lang} />
     </div>
+    </PortfolioProvider>
   );
 }
