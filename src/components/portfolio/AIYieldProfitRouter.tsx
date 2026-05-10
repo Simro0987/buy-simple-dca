@@ -138,15 +138,34 @@ export function AIYieldProfitRouter({ lang }: Props) {
         </div>
 
         {/* Profit available */}
-        <div className="rounded-lg bg-secondary/40 p-3">
-          <p className="text-[11px] text-muted-foreground">
-            {sk ? 'Dostupný zisk na presun' : 'Profit available'}
-          </p>
+        <div className="rounded-lg bg-secondary/40 p-3 space-y-2">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[11px] text-muted-foreground">
+              {sk ? 'Dostupný zisk na presun' : 'Profit available'}
+            </p>
+            {hasProfit && (
+              <p className="text-[10px] text-muted-foreground">
+                → {recommended.id} · {recommended.network}
+              </p>
+            )}
+          </div>
           <p className="text-2xl font-bold text-foreground">
             {hasProfit ? formatUsd(profitAvailable) : '$0.00'}
           </p>
+          {hasProfit && Object.keys(profitBySymbol).length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {Object.entries(profitBySymbol).map(([sym, val]) => (
+                <span
+                  key={sym}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-foreground border border-border"
+                >
+                  {sym}: <span className="font-semibold">{formatUsd(val)}</span>
+                </span>
+              ))}
+            </div>
+          )}
           {!hasProfit && (
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-muted-foreground">
               {sk
                 ? 'Zatiaľ žiadny realizovateľný zisk z portfólia.'
                 : 'No realizable profit yet.'}
@@ -173,13 +192,27 @@ export function AIYieldProfitRouter({ lang }: Props) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                {sk ? `Presuň zisk do ${recommended.id}` : `Move profit to ${recommended.id}`}
+                {sk
+                  ? `Presuň ${hasProfit ? formatUsd(profitAvailable) : 'zisk'} do ${recommended.id}`
+                  : `Move ${hasProfit ? formatUsd(profitAvailable) : 'profit'} to ${recommended.id}`}
               </p>
               <p className="text-[11px] text-muted-foreground truncate">
-                {sk ? recommended.reasonSk : recommended.reasonEn}
+                {recommended.protocol} · {recommended.network}
               </p>
             </div>
+            <a
+              href={recommended.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              aria-label="Open protocol"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            {sk ? recommended.reasonSk : recommended.reasonEn}
+          </p>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1">
             <span className="flex items-center gap-1">
               <TrendingUp className="w-3 h-3 text-green-400" />
