@@ -10,6 +10,7 @@ import { CryptoNewsFeed } from '@/components/CryptoNewsFeed';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
 import { HighImpactNewsBanner } from '@/components/HighImpactNewsBanner';
 import { RebalanceCard } from '@/components/RebalanceCard';
+import { PortfolioProvider } from '@/contexts/PortfolioContext';
 import { usePrices, useFearGreed, useAthData, useAltSeason, useSparklines } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
@@ -30,6 +31,7 @@ export function OverviewPage({ lang }: Props) {
   const btcPrice = prices?.bitcoin?.usd ?? 0;
 
   return (
+    <PortfolioProvider>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -104,5 +106,6 @@ export function OverviewPage({ lang }: Props) {
       {/* Crypto News */}
       <CryptoNewsFeed lang={lang} />
     </div>
+    </PortfolioProvider>
   );
 }
