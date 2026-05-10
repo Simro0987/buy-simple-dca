@@ -89,15 +89,15 @@ function scoreOptions(opts: StableOption[]): Scored[] {
   });
 }
 
-export function AIYieldProfitRouter({ lang, profitAvailable }: Props) {
+export function AIYieldProfitRouter({ lang }: Props) {
   const sk = lang === 'sk';
   const [moving, setMoving] = useState(false);
+  const { profitAvailable, selected, markProfitMoved } = usePortfolio();
 
   const scored = useMemo(() => {
     const s = scoreOptions(OPTIONS).sort((a, b) => b.score - a.score);
     const top = s[0].score;
     const second = s[1]?.score ?? 0;
-    // confidence based on gap between #1 and #2
     const gap = top - second;
     const conf = Math.round(Math.min(95, 60 + gap * 2));
     s[0].confidence = conf;
@@ -111,11 +111,12 @@ export function AIYieldProfitRouter({ lang, profitAvailable }: Props) {
     setMoving(true);
     setTimeout(() => {
       setMoving(false);
+      markProfitMoved(profitAvailable);
       toast({
         title: sk ? 'Otvor wallet a potvrď transakciu' : 'Open wallet and confirm',
         description: sk
-          ? `Presúvam ${formatUsd(profitAvailable)} zisk do ${recommended.id}.`
-          : `Moving ${formatUsd(profitAvailable)} profit into ${recommended.id}.`,
+          ? `Presúvam ${formatUsd(profitAvailable)} zisk do ${recommended.id}${selected ? ` (zo ziskov ${selected})` : ''}.`
+          : `Moving ${formatUsd(profitAvailable)} profit into ${recommended.id}${selected ? ` (from ${selected} gains)` : ''}.`,
       });
     }, 700);
   };
