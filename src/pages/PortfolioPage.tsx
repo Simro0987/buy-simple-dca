@@ -195,14 +195,21 @@ function PortfolioPageInner({ lang }: Props) {
       {tokenData.map(t => {
         const isExpanded = expandedToken === t.symbol;
         const positions = t.config?.positions || [];
+        const dimmed = selected !== null && selected !== t.symbol;
 
         return (
-          <Card key={t.id} className="border-border bg-card overflow-hidden">
+          <Card
+            key={t.id}
+            className={`border-border bg-card overflow-hidden transition-opacity ${dimmed ? 'opacity-40' : ''} ${selected === t.symbol ? 'ring-2 ring-primary' : ''}`}
+          >
             <div className="h-0.5" style={{ backgroundColor: t.color }} />
             <CardContent className="p-0">
               {/* Token header - clickable */}
               <button
-                onClick={() => setExpandedToken(isExpanded ? null : t.symbol)}
+                onClick={() => {
+                  setExpandedToken(isExpanded ? null : t.symbol);
+                  toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL');
+                }}
                 className="w-full p-4 flex items-center gap-3"
               >
                 <div
