@@ -97,7 +97,7 @@ function scoreOptions(opts: StableOption[]): Scored[] {
 export function AIYieldProfitRouter({ lang }: Props) {
   const sk = lang === 'sk';
   const [moving, setMoving] = useState(false);
-  const { profitAvailable, selected, markProfitMoved } = usePortfolio();
+  const { profitAvailable, profitBySymbol, selected, markProfitMoved } = usePortfolio();
 
   const scored = useMemo(() => {
     const s = scoreOptions(OPTIONS).sort((a, b) => b.score - a.score);
