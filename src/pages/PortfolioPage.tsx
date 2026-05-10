@@ -22,6 +22,7 @@ import { HealthScoreCard } from '@/components/portfolio/HealthScoreCard';
 import { NextActionBanner } from '@/components/portfolio/NextActionBanner';
 import { WhatIfSimulator } from '@/components/portfolio/WhatIfSimulator';
 import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
+import { PnLOverviewCard } from '@/components/portfolio/PnLOverviewCard';
 
 interface Props { lang: Lang; }
 
