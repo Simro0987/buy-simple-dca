@@ -23,8 +23,10 @@ interface PortfolioCtx {
   blendedApy: number;          // weighted across staking positions
   breakdown: AssetBreakdown[];
   realizedProfit: number;      // sum of executed profit levels in USD
+  realizedBySymbol: Record<string, number>; // per-asset realized USD
   movedProfit: number;
   profitAvailable: number;     // realized − moved
+  profitBySymbol: Record<string, number>; // per-asset available USD
   markProfitMoved: (usd: number) => void;
   selected: AssetFilter;
   setSelected: (s: AssetFilter) => void;
