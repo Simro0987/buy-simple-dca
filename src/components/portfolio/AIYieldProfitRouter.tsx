@@ -94,10 +94,13 @@ function scoreOptions(opts: StableOption[]): Scored[] {
   });
 }
 
+const CG_ID: Record<string, string> = { BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana' };
+
 export function AIYieldProfitRouter({ lang }: Props) {
   const sk = lang === 'sk';
   const [moving, setMoving] = useState(false);
-  const { profitAvailable, profitBySymbol, selected, markProfitMoved } = usePortfolio();
+  const [showWhy, setShowWhy] = useState(false);
+  const { profitAvailable, profitBySymbol, selected, markProfitMoved, prices, metrics } = usePortfolio();
 
   const scored = useMemo(() => {
     const s = scoreOptions(OPTIONS).sort((a, b) => b.score - a.score);
@@ -111,6 +114,34 @@ export function AIYieldProfitRouter({ lang }: Props) {
 
   const recommended = scored[0];
   const hasProfit = profitAvailable > 1;
+
+  // Per-token sell plan: USD amount + token quantity, prioritizing OVERWEIGHT assets first
+  const sellPlan = useMemo(() => {
+    if (!hasProfit) return [] as Array<{ symbol: string; usd: number; qty: number; price: number; reason: string }>;
+    const entries = Object.entries(profitBySymbol)
+      .filter(([sym]) => !selected || sym === selected)
+      .map(([sym, usd]) => {
+        const cgId = CG_ID[sym];
+        const price = prices?.[cgId]?.usd ?? 0;
+        const qty = price > 0 ? usd / price : 0;
+        const asset = metrics.assets.find(a => a.symbol === sym);
+        const dev = asset?.deviationPct ?? 0;
+        const reasonSk = dev > 1
+          ? `nadvážený o +${dev.toFixed(1)}pp → predaj znižuje koncentráciu`
+          : dev < -1
+            ? `mierne podvážený (${dev.toFixed(1)}pp) → preferuj iný zdroj`
+            : 'na cieľovej váhe → neutrálny presun zisku';
+        const reasonEn = dev > 1
+          ? `overweight +${dev.toFixed(1)}pp → selling reduces concentration`
+          : dev < -1
+            ? `underweight (${dev.toFixed(1)}pp) → prefer other source`
+            : 'on target → neutral profit move';
+        return { symbol: sym, usd, qty, price, reason: sk ? reasonSk : reasonEn };
+      })
+      .sort((a, b) => b.usd - a.usd);
+    return entries;
+  }, [profitBySymbol, prices, hasProfit, metrics, selected, sk]);
+
 
   const handleMove = () => {
     setMoving(true);
