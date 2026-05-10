@@ -124,6 +124,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
           <TrendingUp className="w-4 h-4 text-primary" />
           <span className="text-sm font-semibold text-foreground">
             {sk ? 'Vývoj portfólia' : 'Portfolio History'}
+            {selected && <span className="ml-1.5 text-[10px] text-muted-foreground">· {selected}</span>}
           </span>
         </div>
         {hasMultiple && (
