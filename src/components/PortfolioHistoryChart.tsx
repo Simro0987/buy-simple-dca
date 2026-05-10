@@ -53,12 +53,15 @@ function getHoldings(): Record<string, number> {
 interface Props {
   lang: Lang;
   prices?: PriceData;
+  selected?: 'BTC' | 'ETH' | 'SOL' | null;
 }
 
-export function PortfolioHistoryChart({ lang, prices }: Props) {
+export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
   const [history, setHistory] = useState<HistoryPoint[]>(getHistory);
   const [range, setRange] = useState<7 | 30>(30);
+
+  const selectedTokenId = selected ? TOKENS.find(t => t.symbol === selected)?.id : undefined;
 
   // Record today's value with per-token breakdown
   useEffect(() => {
