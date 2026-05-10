@@ -4,10 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
+import { usePortfolio } from '@/contexts/PortfolioContext';
 
 interface Props {
   lang: Lang;
-  profitAvailable: number;
 }
 
 interface StableOption {
