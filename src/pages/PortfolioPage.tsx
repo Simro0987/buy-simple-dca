@@ -17,6 +17,7 @@ import { HistorySection } from '@/components/portfolio/HistorySection';
 import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
+import { AIYieldProfitRouter } from '@/components/portfolio/AIYieldProfitRouter';
 
 interface Props { lang: Lang; }
 
@@ -99,6 +100,9 @@ export function PortfolioPage({ lang }: Props) {
       {/* Synced summary from Home */}
       <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
       <AllocationDonut metrics={metrics} />
+
+      {/* AI Yield Profit Router */}
+      <AIYieldProfitRouter lang={lang} profitAvailable={Math.max(0, metrics.totalPnl)} />
 
       {/* Manuálne držby & cost basis */}
       <InitialHoldingsCard />
