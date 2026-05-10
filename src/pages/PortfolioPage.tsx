@@ -101,6 +101,9 @@ export function PortfolioPage({ lang }: Props) {
       <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
       <AllocationDonut metrics={metrics} />
 
+      {/* AI Yield Profit Router */}
+      <AIYieldProfitRouter lang={lang} profitAvailable={Math.max(0, metrics.totalPnl)} />
+
       {/* Manuálne držby & cost basis */}
       <InitialHoldingsCard />
 
