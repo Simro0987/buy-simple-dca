@@ -22,6 +22,7 @@ import { HealthScoreCard } from '@/components/portfolio/HealthScoreCard';
 import { NextActionBanner } from '@/components/portfolio/NextActionBanner';
 import { WhatIfSimulator } from '@/components/portfolio/WhatIfSimulator';
 import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
+import { PnLOverviewCard } from '@/components/portfolio/PnLOverviewCard';
 
 interface Props { lang: Lang; }
 
@@ -120,6 +121,9 @@ function PortfolioPageInner({ lang }: Props) {
 
       {/* Synced summary from Home */}
       <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
+
+      {/* P/L prehľad — celkový + per-token */}
+      <PnLOverviewCard lang={lang} />
 
       {/* Zdravie portfólia (drift, diverzifikácia, stake, P/L) */}
       <HealthScoreCard lang={lang} />
