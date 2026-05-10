@@ -166,7 +166,12 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
 
       {/* Drift overview */}
       <div className="space-y-2">
-        {drifts.map(d => (
+        {filteredDrifts.length === 0 && (
+          <p className="text-[11px] text-muted-foreground">
+            {sk ? `Žiadny drift pre ${selected}.` : `No drift for ${selected}.`}
+          </p>
+        )}
+        {filteredDrifts.map(d => (
           <div key={d.symbol} className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50">
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
