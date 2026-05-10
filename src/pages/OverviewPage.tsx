@@ -31,6 +31,7 @@ export function OverviewPage({ lang }: Props) {
   const btcPrice = prices?.bitcoin?.usd ?? 0;
 
   return (
+    <PortfolioProvider>
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
