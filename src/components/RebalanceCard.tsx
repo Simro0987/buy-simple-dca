@@ -33,7 +33,7 @@ interface Drift {
   adjustUsd: number;
 }
 
-export function RebalanceCard({ lang, prices }: Props) {
+export function RebalanceCard({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
   const holdings = getHoldings();
   const [sending, setSending] = useState(false);
