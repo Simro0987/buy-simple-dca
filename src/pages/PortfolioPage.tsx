@@ -47,6 +47,15 @@ function typeColor(type: string) {
 }
 
 export function PortfolioPage({ lang }: Props) {
+  return (
+    <PortfolioProvider>
+      <PortfolioPageInner lang={lang} />
+    </PortfolioProvider>
+  );
+}
+
+function PortfolioPageInner({ lang }: Props) {
+  const { selected, toggleSelected } = usePortfolio();
   const sk = lang === 'sk';
   const { data: prices, refetch, isFetching } = usePrices();
   const { data: athData } = useAthData();
