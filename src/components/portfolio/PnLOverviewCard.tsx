@@ -125,42 +125,6 @@ export function PnLOverviewCard({ lang }: Props) {
             );
           })}
         </div>
-            const aGain = a.pnl >= 0;
-            const hasInvest = a.invested > 0;
-            return (
-              <div
-                key={a.symbol}
-                className="flex items-center justify-between rounded-md bg-secondary/30 border border-border/40 px-3 py-2"
-              >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-xs font-bold text-foreground w-9">{a.symbol}</span>
-                  {hasInvest ? (
-                    <span className="text-[10px] text-muted-foreground">
-                      {sk ? 'Inv' : 'Inv'} {formatUsd(a.invested)} → {formatUsd(a.value)}
-                    </span>
-                  ) : (
-                    <span className="text-[10px] text-muted-foreground">
-                      {sk ? 'bez nákupnej ceny' : 'no cost basis'}
-                    </span>
-                  )}
-                </div>
-                {hasInvest ? (
-                  <div className="text-right">
-                    <p className={`text-xs font-bold tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
-                      {aGain ? '+' : ''}{formatUsd(a.pnl)}
-                    </p>
-                    <p className={`text-[10px] tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
-                      {aGain ? '+' : ''}{a.pnlPct.toFixed(2)}%
-                    </p>
-                  </div>
-                ) : (
-                  <span className="text-[10px] text-muted-foreground">—</span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-
         <p className="text-[10px] text-muted-foreground text-center">
           {sk
             ? 'P/L = aktuálna hodnota − investované (DCA + počiatočná nákupná cena).'
