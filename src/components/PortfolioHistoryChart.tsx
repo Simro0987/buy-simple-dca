@@ -96,7 +96,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   if (filtered.length < 1) return null;
   const hasMultiple = filtered.length >= 2;
 
-  const values = filtered.map(p => p.value);
+  const values = filtered.map(p => selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value);
   const latest = values[values.length - 1];
   const first = values[0];
   const changePct = first > 0 ? ((latest - first) / first) * 100 : 0;
@@ -108,9 +108,13 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
 
   const chartData = filtered.map(p => ({
     date: p.date,
-    value: p.value,
+    value: selectedTokenId ? (p.tokens?.[selectedTokenId] ?? 0) : p.value,
     ...p.tokens,
   }));
+
+  const seriesColor = selected
+    ? (TOKENS.find(t => t.symbol === selected)?.color ?? 'hsl(var(--primary))')
+    : (changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))');
 
   return (
     <div className="glass-card p-4 space-y-3">
