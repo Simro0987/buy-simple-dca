@@ -58,6 +58,17 @@ export function PnLOverviewCard({ lang }: Props) {
             <span>{sk ? 'Investované' : 'Invested'}: <span className="text-foreground font-medium">{formatUsd(totalInvested)}</span></span>
             <span>{sk ? 'Hodnota' : 'Value'}: <span className="text-foreground font-medium">{formatUsd(totalValue)}</span></span>
           </div>
+          {isGain && totalPnl > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="w-full h-8 text-[11px] mt-1 border-gain/40 text-gain hover:bg-gain/10"
+              onClick={scrollToRouter}
+            >
+              {sk ? 'Presunúť celkový zisk → Yield Profit Router' : 'Move total profit → Yield Profit Router'}
+              <ArrowRight className="w-3 h-3 ml-1" />
+            </Button>
+          )}
         </div>
 
         {/* Per-token P/L */}
@@ -66,6 +77,54 @@ export function PnLOverviewCard({ lang }: Props) {
             {sk ? 'Podľa tokenu' : 'By token'}
           </p>
           {assets.map(a => {
+            const aGain = a.pnl >= 0;
+            const hasInvest = a.invested > 0;
+            return (
+              <div
+                key={a.symbol}
+                className="rounded-md bg-secondary/30 border border-border/40 px-3 py-2 space-y-1.5"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-xs font-bold text-foreground w-9">{a.symbol}</span>
+                    {hasInvest ? (
+                      <span className="text-[10px] text-muted-foreground">
+                        {sk ? 'Inv' : 'Inv'} {formatUsd(a.invested)} → {formatUsd(a.value)}
+                      </span>
+                    ) : (
+                      <span className="text-[10px] text-muted-foreground">
+                        {sk ? 'bez nákupnej ceny' : 'no cost basis'}
+                      </span>
+                    )}
+                  </div>
+                  {hasInvest ? (
+                    <div className="text-right">
+                      <p className={`text-xs font-bold tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
+                        {aGain ? '+' : ''}{formatUsd(a.pnl)}
+                      </p>
+                      <p className={`text-[10px] tabular-nums ${aGain ? 'text-gain' : 'text-loss'}`}>
+                        {aGain ? '+' : ''}{a.pnlPct.toFixed(2)}%
+                      </p>
+                    </div>
+                  ) : (
+                    <span className="text-[10px] text-muted-foreground">—</span>
+                  )}
+                </div>
+                {hasInvest && aGain && a.pnl > 0 && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="w-full h-7 text-[10px] text-gain hover:bg-gain/10 hover:text-gain"
+                    onClick={scrollToRouter}
+                  >
+                    {sk ? `Presunúť zisk z ${a.symbol} do Yield Profit Router` : `Move ${a.symbol} profit to Yield Profit Router`}
+                    <ArrowRight className="w-3 h-3 ml-1" />
+                  </Button>
+                )}
+              </div>
+            );
+          })}
+        </div>
             const aGain = a.pnl >= 0;
             const hasInvest = a.invested > 0;
             return (
