@@ -1,16 +1,18 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Lang } from '@/lib/i18n';
 import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
-import { TrendingUp } from 'lucide-react';
+import { TrendingUp, ShoppingCart } from 'lucide-react';
 import {
   ResponsiveContainer,
-  AreaChart,
+  ComposedChart,
   Area,
+  Scatter,
   XAxis,
   YAxis,
   Tooltip,
   CartesianGrid,
 } from 'recharts';
+import { usePortfolio } from '@/contexts/PortfolioContext';
 
 const STORAGE_KEY = 'portfolio-history-v2';
 const MAX_POINTS = 90;
