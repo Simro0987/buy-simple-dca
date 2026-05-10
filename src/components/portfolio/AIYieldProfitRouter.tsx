@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
