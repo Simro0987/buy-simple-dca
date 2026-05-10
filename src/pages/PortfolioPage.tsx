@@ -18,6 +18,8 @@ import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCar
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 import { AIYieldProfitRouter } from '@/components/portfolio/AIYieldProfitRouter';
+import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
+import { StickyPortfolioHeader } from '@/components/portfolio/StickyPortfolioHeader';
 
 interface Props { lang: Lang; }
 
