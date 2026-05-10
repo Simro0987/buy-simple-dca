@@ -165,8 +165,8 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
           <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))'} stopOpacity={0.3} />
-                <stop offset="100%" stopColor={changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))'} stopOpacity={0} />
+                <stop offset="0%" stopColor={seriesColor} stopOpacity={0.3} />
+                <stop offset="100%" stopColor={seriesColor} stopOpacity={0} />
               </linearGradient>
             </defs>
             <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
@@ -190,7 +190,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
             <Area
               type="monotone"
               dataKey="value"
-              stroke={changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))'}
+              stroke={seriesColor}
               strokeWidth={2}
               fill="url(#portfolioGrad)"
               dot={false}
