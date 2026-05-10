@@ -79,6 +79,9 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
 
   drifts.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
 
+  // Filter by selected asset (show only drifts/actions involving it)
+  const filteredDrifts = selected ? drifts.filter(d => d.symbol === selected) : drifts;
+
   const hasActionable = drifts.some(d => Math.abs(d.diff) >= ACTION_THRESHOLD);
   const overweighted = drifts.filter(d => d.diff > 0);
   const underweighted = drifts.filter(d => d.diff < 0);
