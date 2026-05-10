@@ -115,9 +115,28 @@ export function AIYieldProfitRouter({ lang }: Props) {
   const recommended = scored[0];
   const hasProfit = profitAvailable > 1;
 
-  // Per-token sell plan: USD amount + token quantity, prioritizing OVERWEIGHT assets first
+  // Destination split: diverzifikuj medzi 2 najlepšie protokoly (sUSDS + sUSDe)
+  // — bezpečnejší (sUSDS) dostane väčší podiel, vyšší výnos (sUSDe) menší
+  const destinationSplit = useMemo(() => {
+    const safe = scored.find(s => s.id === 'sUSDS') ?? scored[0];
+    const yieldOpt = scored.find(s => s.id === 'sUSDe') ?? scored[1] ?? scored[0];
+    // váhy podľa skóre, ale držíme min 30% pre yield optionu pre diverzifikáciu
+    const total = safe.score + yieldOpt.score;
+    let safePct = total > 0 ? (safe.score / total) * 100 : 60;
+    safePct = Math.min(75, Math.max(55, safePct)); // 55–75% safety bias
+    const yieldPct = 100 - safePct;
+    return [
+      { opt: safe, pct: safePct },
+      { opt: yieldOpt, pct: yieldPct },
+    ];
+  }, [scored]);
+
+  // Per-token sell plan: USD amount + token quantity + per-destination split
   const sellPlan = useMemo(() => {
-    if (!hasProfit) return [] as Array<{ symbol: string; usd: number; qty: number; price: number; reason: string }>;
+    if (!hasProfit) return [] as Array<{
+      symbol: string; usd: number; qty: number; price: number; reason: string;
+      splits: Array<{ id: string; color: string; usd: number; pct: number }>;
+    }>;
     const entries = Object.entries(profitBySymbol)
       .filter(([sym]) => !selected || sym === selected)
       .map(([sym, usd]) => {
@@ -136,11 +155,17 @@ export function AIYieldProfitRouter({ lang }: Props) {
           : dev < -1
             ? `underweight (${dev.toFixed(1)}pp) → prefer other source`
             : 'on target → neutral profit move';
-        return { symbol: sym, usd, qty, price, reason: sk ? reasonSk : reasonEn };
+        const splits = destinationSplit.map(d => ({
+          id: d.opt.id,
+          color: d.opt.color,
+          usd: usd * (d.pct / 100),
+          pct: d.pct,
+        }));
+        return { symbol: sym, usd, qty, price, reason: sk ? reasonSk : reasonEn, splits };
       })
       .sort((a, b) => b.usd - a.usd);
     return entries;
-  }, [profitBySymbol, prices, hasProfit, metrics, selected, sk]);
+  }, [profitBySymbol, prices, hasProfit, metrics, selected, sk, destinationSplit]);
 
 
   const handleMove = () => {
