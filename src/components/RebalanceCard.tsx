@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 interface Props {
   lang: Lang;
   prices?: PriceData;
+  selected?: 'BTC' | 'ETH' | 'SOL' | null;
 }
 
 const TARGET: Record<string, number> = { BTC: 64, ETH: 25, SOL: 11 };
