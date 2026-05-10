@@ -175,16 +175,12 @@ function PortfolioPageInner({ lang }: Props) {
         </CardContent>
       </Card>
 
-      {/* Decision layer: risk deltas + concentration */}
-      <RiskChangeBadges />
+      {/* Concentration warnings */}
       <ConcentrationWarnings />
-      <ContextCTAs actions={['optimize_staking', 'reduce_exposure', 'move_to_yield']} />
 
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} />
 
-      {/* DCA history + stats + cost basis chart + exports */}
-      <HistorySection />
       {/* Rebalancing suggestions */}
       <RebalanceCard lang={lang} prices={prices} />
 
