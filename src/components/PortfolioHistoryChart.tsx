@@ -164,7 +164,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
       {/* Chart */}
       <div className="w-full h-48">
         <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+          <ComposedChart data={chartData} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
             <defs>
               <linearGradient id="portfolioGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor={seriesColor} stopOpacity={0.3} />
@@ -198,9 +198,17 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
               dot={false}
               activeDot={{ r: 4, strokeWidth: 0, fill: 'hsl(var(--primary))' }}
             />
-          </AreaChart>
+            <Scatter dataKey="buy" fill="hsl(var(--gain))" shape="circle" />
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
+
+      {buyDates.size > 0 && (
+        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+          <ShoppingCart className="w-3 h-3 text-gain" />
+          <span>{sk ? `${buyDates.size} DCA nákupov v tomto období` : `${buyDates.size} DCA buys in range`}</span>
+        </div>
+      )}
 
       {/* Current per-token breakdown */}
       {filtered.length > 0 && Object.keys(filtered[filtered.length - 1].tokens).length > 0 && (
