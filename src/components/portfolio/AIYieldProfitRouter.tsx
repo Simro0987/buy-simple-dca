@@ -184,14 +184,31 @@ export function AIYieldProfitRouter({ lang }: Props) {
             {hasProfit ? formatUsd(profitAvailable) : '$0.00'}
           </p>
           {hasProfit && Object.keys(profitBySymbol).length > 0 && (
-            <div className="flex flex-wrap gap-1.5 pt-1">
-              {Object.entries(profitBySymbol).map(([sym, val]) => (
-                <span
-                  key={sym}
-                  className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-foreground border border-border"
-                >
-                  {sym}: <span className="font-semibold">{formatUsd(val)}</span>
-                </span>
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+                {sk ? 'Plán predaja (z čoho a koľko)' : 'Sell plan (from what & how much)'}
+              </p>
+              {sellPlan.map(p => (
+                <div key={p.symbol} className="rounded-md bg-secondary/60 border border-border/60 px-2.5 py-2 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-bold text-foreground">{p.symbol}</span>
+                      <span className="text-[10px] text-muted-foreground">@ {formatUsd(p.price)}</span>
+                    </div>
+                    <span className="text-[11px] font-semibold text-foreground tabular-nums">
+                      {formatUsd(p.usd)}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="text-muted-foreground">
+                      {sk ? 'Predaj' : 'Sell'}: <span className="font-mono text-foreground">
+                        {p.qty.toFixed(p.symbol === 'BTC' ? 6 : p.symbol === 'ETH' ? 4 : 2)} {p.symbol}
+                      </span>
+                    </span>
+                    <span className="text-muted-foreground">→ {recommended.id}</span>
+                  </div>
+                  <p className="text-[10px] text-primary/80">{p.reason}</p>
+                </div>
               ))}
             </div>
           )}
