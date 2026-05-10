@@ -1,4 +1,4 @@
-import { TrendingUp, TrendingDown, Sparkles, X } from 'lucide-react';
+import { Sparkles, X } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { formatUsd } from '@/lib/crypto';
 import { TOKENS } from '@/lib/crypto';
@@ -10,10 +10,6 @@ export function StickyPortfolioHeader({ lang }: { lang: Lang }) {
     metrics, totalStakedValue, blendedApy,
     profitAvailable, selected, setSelected, toggleSelected,
   } = usePortfolio();
-
-  const pnl = metrics.totalPnl;
-  const pnlPct = metrics.totalPnlPct;
-  const positive = pnl >= 0;
 
   return (
     <div className="sticky top-0 z-30 -mx-4 px-4 py-2 bg-background/85 backdrop-blur border-b border-border">
@@ -27,10 +23,6 @@ export function StickyPortfolioHeader({ lang }: { lang: Lang }) {
           </p>
         </div>
         <div className="text-right">
-          <p className={`text-xs font-semibold flex items-center gap-1 justify-end ${positive ? 'text-gain' : 'text-loss'}`}>
-            {positive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-            {positive ? '+' : ''}{formatUsd(pnl)} ({pnlPct.toFixed(1)}%)
-          </p>
           <p className="text-[10px] text-muted-foreground">
             {sk ? 'Stake' : 'Staked'} {formatUsd(totalStakedValue)} · ~{blendedApy.toFixed(1)}% APY
           </p>
