@@ -2,9 +2,13 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import type { PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 
-interface Props { metrics: PortfolioMetrics; }
+interface Props {
+  metrics: PortfolioMetrics;
+  selected?: 'BTC' | 'ETH' | 'SOL' | null;
+  onSelect?: (s: 'BTC' | 'ETH' | 'SOL') => void;
+}
 
-export function AllocationDonut({ metrics }: Props) {
+export function AllocationDonut({ metrics, selected, onSelect }: Props) {
   const data = metrics.assets.map(a => {
     const t = TOKENS.find(x => x.symbol === a.symbol)!;
     return { name: a.symbol, value: a.value, color: t.color, target: a.targetPct * 100, actual: a.actualPct * 100 };
