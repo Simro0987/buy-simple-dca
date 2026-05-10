@@ -17,6 +17,7 @@ import { HistorySection } from '@/components/portfolio/HistorySection';
 import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
+import { AIYieldProfitRouter } from '@/components/portfolio/AIYieldProfitRouter';
 
 interface Props { lang: Lang; }
 
