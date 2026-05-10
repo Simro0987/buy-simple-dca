@@ -10,10 +10,7 @@ import { STAKING_CONFIG } from '@/lib/wallets';
 import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
 import { RebalanceCard } from '@/components/RebalanceCard';
 import { Card, CardContent } from '@/components/ui/card';
-import { RiskChangeBadges } from '@/components/decision/RiskChangeBadges';
 import { ConcentrationWarnings } from '@/components/decision/ConcentrationWarnings';
-import { ContextCTAs } from '@/components/decision/ContextCTAs';
-import { HistorySection } from '@/components/portfolio/HistorySection';
 import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCard';
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
@@ -178,16 +175,12 @@ function PortfolioPageInner({ lang }: Props) {
         </CardContent>
       </Card>
 
-      {/* Decision layer: risk deltas + concentration */}
-      <RiskChangeBadges />
+      {/* Concentration warnings */}
       <ConcentrationWarnings />
-      <ContextCTAs actions={['optimize_staking', 'reduce_exposure', 'move_to_yield']} />
 
       {/* History chart */}
       <PortfolioHistoryChart lang={lang} prices={prices} />
 
-      {/* DCA history + stats + cost basis chart + exports */}
-      <HistorySection />
       {/* Rebalancing suggestions */}
       <RebalanceCard lang={lang} prices={prices} />
 

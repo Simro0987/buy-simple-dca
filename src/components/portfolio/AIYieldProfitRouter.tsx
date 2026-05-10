@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
@@ -13,36 +13,41 @@ interface Props {
 interface StableOption {
   id: 'sUSDe' | 'sUSDS' | 'sDAI';
   name: string;
-  apy: number;          // %
-  apyStability: number; // 0-100 (higher = more stable)
-  fundingRate: number;  // % (relevant for sUSDe)
-  tvlBn: number;        // $ billions
-  pegStability: number; // 0-100
-  liquidity: number;    // 0-100
-  scRisk: number;       // 0-100 (lower = riskier)
-  feeBps: number;       // bps to enter on Base/ARB
+  apy: number;
+  apyStability: number;
+  fundingRate: number;
+  tvlBn: number;
+  pegStability: number;
+  liquidity: number;
+  scRisk: number;
+  feeBps: number;
   color: string;
+  network: 'Base' | 'Arbitrum' | 'Ethereum';
+  protocol: string;
+  url: string;
 }
 
-// Mock real-world style snapshot (would come from API in production)
 const OPTIONS: StableOption[] = [
   {
     id: 'sUSDe', name: 'Ethena sUSDe',
     apy: 12.4, apyStability: 55, fundingRate: 9.8,
     tvlBn: 3.1, pegStability: 78, liquidity: 88, scRisk: 70, feeBps: 8,
-    color: '#8b5cf6',
+    color: '#8b5cf6', network: 'Arbitrum', protocol: 'Ethena',
+    url: 'https://app.ethena.fi/',
   },
   {
     id: 'sUSDS', name: 'Sky sUSDS',
     apy: 7.5, apyStability: 92, fundingRate: 0,
     tvlBn: 1.6, pegStability: 96, liquidity: 82, scRisk: 88, feeBps: 5,
-    color: '#10b981',
+    color: '#10b981', network: 'Base', protocol: 'Sky Protocol',
+    url: 'https://app.sky.money/',
   },
   {
     id: 'sDAI', name: 'MakerDAO sDAI',
     apy: 6.2, apyStability: 95, fundingRate: 0,
     tvlBn: 1.2, pegStability: 97, liquidity: 80, scRisk: 92, feeBps: 6,
-    color: '#f59e0b',
+    color: '#f59e0b', network: 'Base', protocol: 'MakerDAO',
+    url: 'https://spark.fi/',
   },
 ];
 
@@ -92,7 +97,7 @@ function scoreOptions(opts: StableOption[]): Scored[] {
 export function AIYieldProfitRouter({ lang }: Props) {
   const sk = lang === 'sk';
   const [moving, setMoving] = useState(false);
-  const { profitAvailable, selected, markProfitMoved } = usePortfolio();
+  const { profitAvailable, profitBySymbol, selected, markProfitMoved } = usePortfolio();
 
   const scored = useMemo(() => {
     const s = scoreOptions(OPTIONS).sort((a, b) => b.score - a.score);
@@ -133,15 +138,34 @@ export function AIYieldProfitRouter({ lang }: Props) {
         </div>
 
         {/* Profit available */}
-        <div className="rounded-lg bg-secondary/40 p-3">
-          <p className="text-[11px] text-muted-foreground">
-            {sk ? 'Dostupný zisk na presun' : 'Profit available'}
-          </p>
+        <div className="rounded-lg bg-secondary/40 p-3 space-y-2">
+          <div className="flex items-baseline justify-between">
+            <p className="text-[11px] text-muted-foreground">
+              {sk ? 'Dostupný zisk na presun' : 'Profit available'}
+            </p>
+            {hasProfit && (
+              <p className="text-[10px] text-muted-foreground">
+                → {recommended.id} · {recommended.network}
+              </p>
+            )}
+          </div>
           <p className="text-2xl font-bold text-foreground">
             {hasProfit ? formatUsd(profitAvailable) : '$0.00'}
           </p>
+          {hasProfit && Object.keys(profitBySymbol).length > 0 && (
+            <div className="flex flex-wrap gap-1.5 pt-1">
+              {Object.entries(profitBySymbol).map(([sym, val]) => (
+                <span
+                  key={sym}
+                  className="text-[10px] px-2 py-0.5 rounded-full bg-secondary text-foreground border border-border"
+                >
+                  {sym}: <span className="font-semibold">{formatUsd(val)}</span>
+                </span>
+              ))}
+            </div>
+          )}
           {!hasProfit && (
-            <p className="text-[11px] text-muted-foreground mt-1">
+            <p className="text-[11px] text-muted-foreground">
               {sk
                 ? 'Zatiaľ žiadny realizovateľný zisk z portfólia.'
                 : 'No realizable profit yet.'}
@@ -168,13 +192,27 @@ export function AIYieldProfitRouter({ lang }: Props) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-foreground">
-                {sk ? `Presuň zisk do ${recommended.id}` : `Move profit to ${recommended.id}`}
+                {sk
+                  ? `Presuň ${hasProfit ? formatUsd(profitAvailable) : 'zisk'} do ${recommended.id}`
+                  : `Move ${hasProfit ? formatUsd(profitAvailable) : 'profit'} to ${recommended.id}`}
               </p>
               <p className="text-[11px] text-muted-foreground truncate">
-                {sk ? recommended.reasonSk : recommended.reasonEn}
+                {recommended.protocol} · {recommended.network}
               </p>
             </div>
+            <a
+              href={recommended.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-muted-foreground hover:text-foreground shrink-0"
+              aria-label="Open protocol"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+            </a>
           </div>
+          <p className="text-[11px] text-muted-foreground">
+            {sk ? recommended.reasonSk : recommended.reasonEn}
+          </p>
           <div className="flex items-center gap-3 text-[11px] text-muted-foreground pt-1">
             <span className="flex items-center gap-1">
               <TrendingUp className="w-3 h-3 text-green-400" />
