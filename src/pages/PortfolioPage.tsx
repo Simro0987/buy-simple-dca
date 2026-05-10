@@ -18,6 +18,8 @@ import { PortfolioSummaryCard } from '@/components/dashboard/PortfolioSummaryCar
 import { AllocationDonut } from '@/components/dashboard/AllocationDonut';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 import { AIYieldProfitRouter } from '@/components/portfolio/AIYieldProfitRouter';
+import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
+import { StickyPortfolioHeader } from '@/components/portfolio/StickyPortfolioHeader';
 
 interface Props { lang: Lang; }
 
@@ -45,6 +47,15 @@ function typeColor(type: string) {
 }
 
 export function PortfolioPage({ lang }: Props) {
+  return (
+    <PortfolioProvider>
+      <PortfolioPageInner lang={lang} />
+    </PortfolioProvider>
+  );
+}
+
+function PortfolioPageInner({ lang }: Props) {
+  const { selected, toggleSelected } = usePortfolio();
   const sk = lang === 'sk';
   const { data: prices, refetch, isFetching } = usePrices();
   const { data: athData } = useAthData();
@@ -83,6 +94,8 @@ export function PortfolioPage({ lang }: Props) {
 
   return (
     <div className="space-y-4">
+      <StickyPortfolioHeader lang={lang} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">
@@ -102,7 +115,7 @@ export function PortfolioPage({ lang }: Props) {
       <AllocationDonut metrics={metrics} />
 
       {/* AI Yield Profit Router */}
-      <AIYieldProfitRouter lang={lang} profitAvailable={Math.max(0, metrics.totalPnl)} />
+      <AIYieldProfitRouter lang={lang} />
 
       {/* Manuálne držby & cost basis */}
       <InitialHoldingsCard />
@@ -182,14 +195,21 @@ export function PortfolioPage({ lang }: Props) {
       {tokenData.map(t => {
         const isExpanded = expandedToken === t.symbol;
         const positions = t.config?.positions || [];
+        const dimmed = selected !== null && selected !== t.symbol;
 
         return (
-          <Card key={t.id} className="border-border bg-card overflow-hidden">
+          <Card
+            key={t.id}
+            className={`border-border bg-card overflow-hidden transition-opacity ${dimmed ? 'opacity-40' : ''} ${selected === t.symbol ? 'ring-2 ring-primary' : ''}`}
+          >
             <div className="h-0.5" style={{ backgroundColor: t.color }} />
             <CardContent className="p-0">
               {/* Token header - clickable */}
               <button
-                onClick={() => setExpandedToken(isExpanded ? null : t.symbol)}
+                onClick={() => {
+                  setExpandedToken(isExpanded ? null : t.symbol);
+                  toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL');
+                }}
                 className="w-full p-4 flex items-center gap-3"
               >
                 <div
