@@ -265,38 +265,8 @@ function PortfolioPageInner({ lang }: Props) {
         );
       })}
 
-      {/* Pie Chart */}
-      {hasHoldings && (
-        <Card className="border-border bg-card">
-          <CardContent className="p-5 flex flex-col items-center">
-            <p className="text-sm font-semibold text-foreground mb-3">
-              {sk ? 'Cieľová vs. skutočná alokácia' : 'Target vs. Actual Allocation'}
-            </p>
-            <div className="grid grid-cols-2 gap-x-6 gap-y-2 w-full">
-              {actualAlloc.map(a => {
-                const diff = a.actual - a.target;
-                const color = TOKENS.find(t => t.symbol === a.symbol)?.color;
-                return (
-                  <div key={a.symbol} className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: color }} />
-                      <span className="text-xs text-foreground">{a.symbol}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <span className="text-xs text-muted-foreground">{a.actual.toFixed(1)}%</span>
-                      <span className={`text-[10px] font-medium ${
-                        Math.abs(diff) <= 3 ? 'text-muted-foreground' : diff > 0 ? 'text-yellow-400' : 'text-blue-400'
-                      }`}>
-                        ({diff >= 0 ? '+' : ''}{diff.toFixed(1)}%)
-                      </span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Manuálne držby & cost basis (pod per-token kartami) */}
+      <InitialHoldingsCard />
     </div>
   );
 }
