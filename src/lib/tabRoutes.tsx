@@ -20,7 +20,7 @@ const AllocationCalculatorPage = lazy(() => import('@/pages/AllocationCalculator
 const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })));
 const ExecutionTracker = lazy(() => import('@/components/ExecutionTracker').then(m => ({ default: m.ExecutionTracker })));
 const WeeklyChecklist = lazy(() => import('@/components/WeeklyChecklist').then(m => ({ default: m.WeeklyChecklist })));
-const RiskDashboard = lazy(() => import('@/components/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
+
 
 export interface TabContext {
   lang: Lang;
