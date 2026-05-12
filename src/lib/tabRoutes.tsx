@@ -13,7 +13,7 @@ const PortfolioProfitPage = lazy(() => import('@/pages/PortfolioProfitPage').the
 const ActionPage = lazy(() => import('@/pages/ActionPage').then(m => ({ default: m.ActionPage })));
 const SmartAllocPage = lazy(() => import('@/pages/SmartAllocPage').then(m => ({ default: m.SmartAllocPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
-const AnalysisMarketPage = lazy(() => import('@/pages/AnalysisMarketPage').then(m => ({ default: m.AnalysisMarketPage })));
+const AnalysisRiskPage = lazy(() => import('@/pages/AnalysisRiskPage').then(m => ({ default: m.AnalysisRiskPage })));
 const StakingPage = lazy(() => import('@/pages/StakingPage').then(m => ({ default: m.StakingPage })));
 const WalletsPage = lazy(() => import('@/pages/WalletsPage').then(m => ({ default: m.WalletsPage })));
 const AllocationCalculatorPage = lazy(() => import('@/pages/AllocationCalculatorPage').then(m => ({ default: m.AllocationCalculatorPage })));
@@ -54,10 +54,14 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   ),
   dca: ({ lang }) => wrap(<DCAPage lang={lang} />),
   risk: ({ lang, prices, athData, cycleResult }) => wrap(
-    <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
+    <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
   ),
-  analysis: ({ lang }) => wrap(<AnalysisMarketPage lang={lang} />),
-  market: ({ lang }) => wrap(<AnalysisMarketPage lang={lang} />),
+  analysis: ({ lang, prices, athData, cycleResult }) => wrap(
+    <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
+  ),
+  market: ({ lang, prices, athData, cycleResult }) => wrap(
+    <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
+  ),
   profit: ({ lang, prices, athData, cycleResult, advancedMarketData }) => wrap(
     <PortfolioProfitPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedMarketData={advancedMarketData} />
   ),
