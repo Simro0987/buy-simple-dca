@@ -133,10 +133,6 @@ export interface DCAResult {
 }
 
 export function calculateDCA(weeklyBudget: number, prices: PriceData): DCAResult[] {
-  // Lazy import aby sme sa vyhli cyklickej závislosti pri inicializácii
-  // (dynamicLimits importuje TOKENS z tohto súboru).
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const { getEffectiveLimitDiscount } = require('./dynamicLimits') as typeof import('./dynamicLimits');
   return TOKENS.map(token => {
     const totalUsd = weeklyBudget * token.allocation;
     const marketUsd = totalUsd * MARKET_SPLIT;
