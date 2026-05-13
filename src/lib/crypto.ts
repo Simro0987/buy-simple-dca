@@ -26,6 +26,7 @@ export interface PriceData {
 }
 
 import { cgFetch } from './coingecko';
+import { getEffectiveLimitDiscount } from './dynamicLimits';
 
 export async function fetchPrices(): Promise<PriceData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
@@ -137,7 +138,8 @@ export function calculateDCA(weeklyBudget: number, prices: PriceData): DCAResult
     const marketUsd = totalUsd * MARKET_SPLIT;
     const limitUsd = totalUsd * LIMIT_SPLIT;
     const currentPrice = prices[token.coingeckoId]?.usd || 0;
-    const limitPrice = currentPrice * token.limitDiscount;
+    const effectiveDiscount = getEffectiveLimitDiscount(token);
+    const limitPrice = currentPrice * effectiveDiscount;
     const marketQuantity = currentPrice > 0 ? marketUsd / currentPrice : 0;
     const limitQuantity = limitPrice > 0 ? limitUsd / limitPrice : 0;
 

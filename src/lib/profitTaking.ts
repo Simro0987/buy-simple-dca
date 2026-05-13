@@ -1,4 +1,5 @@
 import { TOKENS } from '@/lib/crypto';
+import { getEffectiveLimitDiscount } from '@/lib/dynamicLimits';
 
 export interface ProfitLevel {
   profitPct: number;   // e.g. 20 means +20%
@@ -178,7 +179,7 @@ export function importFromExecutionHistory(prices: Record<string, { usd: number 
         const limit = week.limits?.find((l: { symbol: string; filled?: boolean; limitPrice?: number }) => l.symbol === token.symbol);
         if (limit?.filled) {
           const limitUsd = allocUsd * 0.40;
-          const limitPrice = limit.limitPrice || price * token.limitDiscount;
+          const limitPrice = limit.limitPrice || price * getEffectiveLimitDiscount(token);
           addDcaPurchase({
             tokenId: token.id,
             quantity: limitUsd / limitPrice,

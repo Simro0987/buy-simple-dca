@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from 'react';
 import { Lang } from '@/lib/i18n';
 import { TOKENS } from '@/lib/crypto';
+import { getEffectiveLimitDiscount } from '@/lib/dynamicLimits';
 import { CheckCircle, AlertTriangle, XCircle, Target, TrendingUp, Send } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -45,7 +46,7 @@ export function ExecutionTracker({ lang, prices }: Props) {
     const map: Record<string, number> = {};
     TOKENS.forEach(t => {
       const p = prices?.[t.coingeckoId]?.usd ?? 0;
-      map[t.symbol] = p * t.limitDiscount;
+      map[t.symbol] = p * getEffectiveLimitDiscount(t);
     });
     return map;
   }, [prices]);

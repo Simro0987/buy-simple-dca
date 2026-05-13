@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Lang } from '@/lib/i18n';
 import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, formatPrice, formatLimitPrice, formatUsd, formatQuantity, calculateDCA, PriceData } from '@/lib/crypto';
+import { getEffectiveLimitDiscount, getEffectiveLimitInfo } from '@/lib/dynamicLimits';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { CheckCircle, XCircle, Circle, ClipboardList, ShoppingCart, TrendingDown, Layers, Target } from 'lucide-react';
 import { CopyButton } from '@/components/CopyButton';
@@ -176,7 +177,8 @@ export function WeeklyChecklist({ lang, prices }: Props) {
 
         {TOKENS.map(token => {
           const price = prices?.[token.coingeckoId]?.usd ?? 0;
-          const limitPrice = price * token.limitDiscount;
+          const info = getEffectiveLimitInfo(token);
+          const limitPrice = price * info.discountFrac;
           const distance = price > 0 ? ((price - limitPrice) / price * 100) : 0;
           const isNear = distance <= 3;
 
@@ -186,8 +188,11 @@ export function WeeklyChecklist({ lang, prices }: Props) {
             }`}>
               <div>
                 <span className="font-medium text-foreground text-sm">{token.symbol}</span>
+                <span className="text-[9px] ml-2 px-1.5 py-0.5 rounded-full bg-primary/15 text-primary font-medium">
+                  −{info.discountPct.toFixed(1)}% {info.source === 'dynamic' ? '⚡dyn' : ''}
+                </span>
                 {isNear && (
-                  <span className="text-[9px] ml-2 px-1.5 py-0.5 rounded-full bg-warning/20 text-warning font-medium">
+                  <span className="text-[9px] ml-1 px-1.5 py-0.5 rounded-full bg-warning/20 text-warning font-medium">
                     ⚡ {distance.toFixed(1)}%
                   </span>
                 )}
