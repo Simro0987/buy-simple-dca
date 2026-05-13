@@ -9,6 +9,7 @@ import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePr
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { useAdvancedMarket } from '@/hooks/useAdvancedMarket';
 import { usePriceAlerts } from '@/hooks/usePriceAlerts';
+import { useDynamicLimits } from '@/hooks/useDynamicLimits';
 import { useUnreadHighImpact } from '@/hooks/useUnreadHighImpact';
 import { TOKENS } from '@/lib/crypto';
 import { TAB_ROUTES } from '@/lib/tabRoutes';
@@ -31,6 +32,7 @@ const Index = () => {
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
   const { data: advancedMarketData } = useAdvancedMarket();
   usePriceAlerts(prices, lang);
+  useDynamicLimits(); // počíta a publikuje dynamické limit zľavy podľa volatility
   const unreadNewsCount = useUnreadHighImpact(lang);
 
   const [now, setNow] = useState(new Date());
