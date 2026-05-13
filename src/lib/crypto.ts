@@ -26,6 +26,7 @@ export interface PriceData {
 }
 
 import { cgFetch } from './coingecko';
+import { getEffectiveLimitDiscount } from './dynamicLimits';
 
 export async function fetchPrices(): Promise<PriceData> {
   const ids = TOKENS.map(t => t.coingeckoId).join(',');
