@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { PriceData, TOKENS } from '@/lib/crypto';
+import { getEffectiveLimitDiscount } from '@/lib/dynamicLimits';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
 import { getNotificationPrefs } from '@/lib/notificationPrefs';
@@ -99,7 +100,7 @@ export function usePriceAlerts(prices: PriceData | undefined, lang: Lang) {
       const currentPrice = prices[token.coingeckoId]?.usd;
       if (!currentPrice) continue;
 
-      const limitPrice = currentPrice * token.limitDiscount;
+      const limitPrice = currentPrice * getEffectiveLimitDiscount(token);
 
       if (currentPrice <= limitPrice) {
         const lastAlert = alerted[token.symbol] || 0;

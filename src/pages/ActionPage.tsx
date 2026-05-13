@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { calculateDCA, formatUsd, formatPrice, formatQuantity, TOKENS, PriceData } from '@/lib/crypto';
+import { getEffectiveLimitInfo } from '@/lib/dynamicLimits';
 import { CopyButton } from '@/components/CopyButton';
 import { usePrices, useFearGreed, useAthData } from '@/hooks/usePrices';
 import { useAdvancedMarket } from '@/hooks/useAdvancedMarket';
@@ -102,7 +103,7 @@ function generateSmartActions(
       quantity: r.limitQuantity,
       price: r.currentPrice,
       limitPrice: r.limitPrice,
-      label: `Nastav ${r.token.symbol} limit na ${formatPrice(r.limitPrice)} (${((1 - r.token.limitDiscount) * 100).toFixed(0)}% zľava)`,
+      label: `Nastav ${r.token.symbol} limit na ${formatPrice(r.limitPrice)} (${getEffectiveLimitInfo(r.token).discountPct.toFixed(1)}% zľava)`,
       reason: `Limit objednávka na nižšiu cenu pre lepší vstup`,
       priority: 'medium',
       deepLink: generateHyperliquidLink(r.token.symbol, 'buy'),
