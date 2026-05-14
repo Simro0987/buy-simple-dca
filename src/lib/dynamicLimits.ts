@@ -88,10 +88,40 @@ export function getEffectiveLimitInfo(token: TokenConfig): DynamicLimitInfo {
   };
 }
 
+/**
+ * Minimálne rozdiely v % oproti BTC limit zľave.
+ * ETH musí byť aspoň +1 %, SOL aspoň +2 % vyššia zľava ako BTC.
+ */
+const MIN_SPREAD_VS_BTC: Record<string, number> = {
+  eth: 1,
+  sol: 2,
+};
+
 export function computeAllDynamicLimits(sparklines?: SparklineData): Record<string, DynamicLimitInfo> {
   const out: Record<string, DynamicLimitInfo> = {};
   for (const t of TOKENS) {
     out[t.id] = computeDynamicLimit(t, sparklines?.[t.coingeckoId]);
   }
+
+  // Vynútime, aby ETH a SOL mali väčšiu zľavu ako BTC o predpísaný spread.
+  const btc = out['btc'];
+  if (btc) {
+    for (const t of TOKENS) {
+      const spread = MIN_SPREAD_VS_BTC[t.id];
+      if (!spread) continue;
+      const b = BOUNDS[t.id];
+      const required = btc.discountPct + spread;
+      const current = out[t.id]?.discountPct ?? 0;
+      if (current < required) {
+        const adjusted = b ? clamp(required, b.minPct, b.maxPct) : required;
+        out[t.id] = {
+          discountPct: adjusted,
+          discountFrac: 1 - adjusted / 100,
+          source: out[t.id]?.source ?? 'dynamic',
+        };
+      }
+    }
+  }
+
   return out;
 }
