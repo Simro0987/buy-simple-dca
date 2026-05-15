@@ -417,8 +417,15 @@ export function buildPlan(
   const marketUsd = investableUsd * MARKET_SPLIT;
   const limitUsd = investableUsd * LIMIT_SPLIT;
 
-  const limitDiscountPct = limitDiscountFor(regime, tuning?.limitDiscountDefaultPct);
-  const limitMultiplier = 1 - limitDiscountPct / 100;
+  // Regime-based baseline discount (applied to BTC; ETH/SOL get +1pp/+2pp minimum spread).
+  const regimeBaselinePct = limitDiscountFor(regime, tuning?.limitDiscountDefaultPct);
+
+  // Minimálne spready oproti BTC — musí korešpondovať s dynamicLimits.ts
+  const MIN_SPREAD_VS_BTC: Record<string, number> = { btc: 0, eth: 1, sol: 2 };
+
+  // BTC efektívny discount = max(regime baseline, dynamický z volatility)
+  const btcDynPct = getEffectiveLimitInfo(TOKENS[0]).discountPct;
+  const btcDiscountPct = Math.max(regimeBaselinePct, btcDynPct);
 
   const perAsset: AssetPlan[] = TOKENS.map(t => {
     const assetMarket = marketUsd * t.allocation;
@@ -427,6 +434,14 @@ export function buildPlan(
     const currentPrice = livePrice && livePrice > 0
       ? livePrice
       : (t.coingeckoId === 'bitcoin' ? inputs.btcPrice : 0);
+
+    // Per-asset dynamický discount + vynútený spread vs BTC
+    const dynPct = getEffectiveLimitInfo(t).discountPct;
+    const spread = MIN_SPREAD_VS_BTC[t.id] ?? 0;
+    const minRequired = btcDiscountPct + spread;
+    const assetDiscountPct = Math.max(dynPct, minRequired);
+
+    const limitMultiplier = 1 - assetDiscountPct / 100;
     const limitPrice = currentPrice * limitMultiplier;
     return {
       symbol: t.symbol,
@@ -438,11 +453,14 @@ export function buildPlan(
       limitUsd: assetLimit,
       currentPrice,
       limitPrice,
-      limitDiscountPct,
+      limitDiscountPct: Math.round(assetDiscountPct * 10) / 10,
       marketQty: currentPrice > 0 ? assetMarket / currentPrice : 0,
       limitQty: limitPrice > 0 ? assetLimit / limitPrice : 0,
     };
   });
+
+  // Top-level limitDiscountPct = BTC reference (per-asset hodnoty sú v perAsset)
+  const limitDiscountPct = Math.round(btcDiscountPct * 10) / 10;
 
   // Legacy band mapping — kept for back-compat (history exports/UI fallbacks).
   const band: ValuationBand =
