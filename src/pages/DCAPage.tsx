@@ -583,7 +583,7 @@ export function DCAPage({ lang: _lang }: Props) {
                 <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(plan.marketUsd)}</p>
               </div>
               <div className="rounded-lg p-2.5 bg-secondary/40">
-                <p className="text-[10px] uppercase text-muted-foreground">Limit 40% −{plan.limitDiscountPct}%</p>
+                <p className="text-[10px] uppercase text-muted-foreground">Limit 40% · BTC −{plan.limitDiscountPct}% (dyn)</p>
                 <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(plan.limitUsd)}</p>
               </div>
             </div>
@@ -603,7 +603,7 @@ export function DCAPage({ lang: _lang }: Props) {
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(a.marketUsd + a.limitUsd)}</p>
                     <p className="text-[10px] text-muted-foreground tabular-nums">
-                      M {formatUsd(a.marketUsd)} · L {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)}
+                      M {formatUsd(a.marketUsd)} · L {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)} <span className="text-primary">(−{a.limitDiscountPct}%)</span>
                     </p>
                   </div>
                 </div>
