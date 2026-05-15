@@ -8,6 +8,7 @@
 // Lower final score  = cheaper / attractive → higher allocation.
 
 import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, type PriceData } from './crypto';
+import { getEffectiveLimitInfo } from './dynamicLimits';
 
 export type Regime = 'bull' | 'bear' | 'sideways' | 'panic' | 'euphoria';
 
