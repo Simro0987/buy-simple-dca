@@ -199,6 +199,25 @@ export function calcUnifiedExecution(
   for (const c of coins) {
     out[c] = calcCoinExecution(c, score, metrics[c] ?? { volatility30d: 0, momentum30d: 0 }, sharedMomAdj);
   }
+
+  // Vynútený minimálny spread limit distance vs BTC: ETH ≥ +1pp, SOL ≥ +2pp.
+  // Distance je záporné (napr. -3 = 3% pod trhom), takže "väčšia zľava" = nižšia hodnota.
+  const MIN_SPREAD_VS_BTC: Record<CoinKey, number> = { btc: 0, eth: 1, sol: 2 };
+  const btcDist = out.btc.limitDistancePct;
+  for (const c of coins) {
+    const spread = MIN_SPREAD_VS_BTC[c];
+    if (!spread) continue;
+    const required = btcDist - spread; // napr. -3 - 1 = -4
+    if (out[c].limitDistancePct > required) {
+      const adjusted = Math.round(Math.max(-10, required) * 10) / 10;
+      out[c] = {
+        ...out[c],
+        limitDistancePct: adjusted,
+        rationale: `${out[c].rationale} Spread vs BTC vynútený (${c.toUpperCase()} ≥ BTC +${spread}pp) → ${adjusted.toFixed(1)}%.`,
+      };
+    }
+  }
+
   // Všetky majú rovnaký marketPct/limitPct
   const shared = out.btc;
   return {
