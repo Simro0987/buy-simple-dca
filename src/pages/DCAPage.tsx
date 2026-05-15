@@ -603,7 +603,7 @@ export function DCAPage({ lang: _lang }: Props) {
                   <div className="text-right">
                     <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(a.marketUsd + a.limitUsd)}</p>
                     <p className="text-[10px] text-muted-foreground tabular-nums">
-                      M {formatUsd(a.marketUsd)} · L {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)}
+                      M {formatUsd(a.marketUsd)} · L {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)} <span className="text-primary">(−{a.limitDiscountPct}%)</span>
                     </p>
                   </div>
                 </div>
