@@ -117,6 +117,25 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     }
   };
 
+  const handleMarkExpired = async (id: string, coin: string) => {
+    if (!confirm(`Označiť ${coin} limit ako nenaplnený (EXPIRED)?`)) return;
+    setBusy(`${coin.toLowerCase()}-limit`);
+    try {
+      const { error } = await supabase
+        .from('dca_executions')
+        .update({ status: 'EXPIRED', filled_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success(`${coin} označený ako nenaplnený`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['limit-fill-rates'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
 
   const result = useMemo(() => {
     if (!metrics) {
@@ -348,13 +367,23 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                       : (lBusy ? '…' : 'Zadať limit')}
                   </button>
                   {lPending && st?.limit?.id && (
-                    <button
-                      onClick={() => handleCancelLimit(st.limit.id, symU)}
-                      disabled={lBusy}
-                      className="mt-1 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
-                    >
-                      <X className="w-3 h-3" /> Zrušiť limit
-                    </button>
+                    <div className="mt-1 grid grid-cols-2 gap-1">
+                      <button
+                        onClick={() => handleMarkExpired(st.limit.id, symU)}
+                        disabled={lBusy}
+                        className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 active:scale-95 disabled:opacity-70"
+                        title="Limit sa nenaplnil — zarátaj do fill-rate"
+                      >
+                        <Clock className="w-3 h-3" /> Nenaplnil sa
+                      </button>
+                      <button
+                        onClick={() => handleCancelLimit(st.limit.id, symU)}
+                        disabled={lBusy}
+                        className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                      >
+                        <X className="w-3 h-3" /> Zrušiť
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
