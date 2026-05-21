@@ -236,6 +236,7 @@ export function calcCoinExecution(
 export function calcUnifiedExecution(
   score: number,
   metrics: Record<CoinKey, CoinMetrics>,
+  fillRates: FillRates = { eth: 0.5, sol: 0.5 },
 ): {
   executions: Record<CoinKey, CoinExecution>;
   sharedMarketPct: number;
@@ -254,23 +255,37 @@ export function calcUnifiedExecution(
     out[c] = calcCoinExecution(c, score, metrics[c] ?? { volatility30d: 0, momentum30d: 0 }, sharedMomAdj);
   }
 
-  // Vynútený minimálny spread limit distance vs BTC: ETH ≥ +1pp, SOL ≥ +2pp.
-  // Distance je záporné (napr. -3 = 3% pod trhom), takže "väčšia zľava" = nižšia hodnota.
-  const MIN_SPREAD_VS_BTC: Record<CoinKey, number> = { btc: 0, eth: 1, sol: 2 };
-  const btcDist = out.btc.limitDistancePct;
-  for (const c of coins) {
-    const spread = MIN_SPREAD_VS_BTC[c];
-    if (!spread) continue;
-    const required = btcDist - spread; // napr. -3 - 1 = -4
-    if (out[c].limitDistancePct > required) {
-      const adjusted = Math.round(Math.max(-10, required) * 10) / 10;
-      out[c] = {
-        ...out[c],
-        limitDistancePct: adjusted,
-        rationale: `${out[c].rationale} Spread vs BTC vynútený (${c.toUpperCase()} ≥ BTC +${spread}pp) → ${adjusted.toFixed(1)}%.`,
-      };
-    }
-  }
+  // Executive formula override for ETH & SOL — limit distance je odvodené od BTC distance
+  // násobeného multiplierom z trendu, volatility ratio a fill-rate feedback loop.
+  const btcDist = out.btc.limitDistancePct; // negatívne, napr. -3
+  const btcVol = metrics.btc?.volatility30d ?? 0;
+
+  const applyMultiplier = (
+    c: 'eth' | 'sol',
+    bd: MultiplierBreakdown,
+  ) => {
+    const raw = btcDist * bd.total; // -3 * 1.20 = -3.6
+    const distance = Math.round(Math.max(-15, Math.min(-1.5, raw)) * 10) / 10;
+    const trendLabel = bd.T === 1 ? 'bull' : bd.T === -1 ? 'bear' : 'neutral';
+    out[c] = {
+      ...out[c],
+      limitDistancePct: distance,
+      multiplierBreakdown: bd,
+      rationale:
+        `Trend ${trendLabel} (base ×${bd.base.toFixed(2)}) · ` +
+        `VR ${bd.VR.toFixed(2)} (vol ×${bd.vol.toFixed(3)}) · ` +
+        `fill ${(bd.fill * 100).toFixed(0)}% (fb ×${bd.fb.toFixed(3)}) ` +
+        `→ mult ×${bd.total.toFixed(3)} × BTC ${btcDist.toFixed(1)}% = ${distance.toFixed(1)}%.`,
+    };
+  };
+
+  const ethT = getTrendTier(metrics.eth?.momentum30d ?? 0);
+  const ethVR = getVolatilityRatio(metrics.eth?.volatility30d ?? 0, btcVol);
+  applyMultiplier('eth', ethMultiplier(ethT, ethVR, fillRates.eth));
+
+  const solT = getTrendTier(metrics.sol?.momentum30d ?? 0);
+  const solVR = getVolatilityRatio(metrics.sol?.volatility30d ?? 0, btcVol);
+  applyMultiplier('sol', solMultiplier(solT, solVR, fillRates.sol));
 
   // Všetky majú rovnaký marketPct/limitPct
   const shared = out.btc;
