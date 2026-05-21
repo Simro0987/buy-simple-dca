@@ -117,6 +117,25 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     }
   };
 
+  const handleMarkExpired = async (id: string, coin: string) => {
+    if (!confirm(`Označiť ${coin} limit ako nenaplnený (EXPIRED)?`)) return;
+    setBusy(`${coin.toLowerCase()}-limit`);
+    try {
+      const { error } = await supabase
+        .from('dca_executions')
+        .update({ status: 'EXPIRED', filled_at: new Date().toISOString() })
+        .eq('id', id);
+      if (error) throw error;
+      toast.success(`${coin} označený ako nenaplnený`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['limit-fill-rates'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
 
   const result = useMemo(() => {
     if (!metrics) {
