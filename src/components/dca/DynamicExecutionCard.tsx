@@ -379,6 +379,34 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
 
 
+              {/* Multiplier breakdown — len pre ETH/SOL */}
+              {e.multiplierBreakdown && (
+                <div className="bg-background/40 rounded px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Final {e.symbol} Limit (BTC × mult)
+                    </p>
+                    <span className="text-[10px] tabular-nums font-bold text-foreground">
+                      ×{e.multiplierBreakdown.total.toFixed(3)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-[9px] tabular-nums">
+                    <div className="bg-secondary/40 rounded px-1.5 py-1">
+                      <p className="text-muted-foreground">Base (T={e.multiplierBreakdown.T})</p>
+                      <p className="text-foreground font-semibold">×{e.multiplierBreakdown.base.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded px-1.5 py-1">
+                      <p className="text-muted-foreground">Vol (VR {e.multiplierBreakdown.VR.toFixed(2)})</p>
+                      <p className="text-foreground font-semibold">×{e.multiplierBreakdown.vol.toFixed(3)}</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded px-1.5 py-1">
+                      <p className="text-muted-foreground">Fb ({(e.multiplierBreakdown.fill * 100).toFixed(0)}%)</p>
+                      <p className="text-foreground font-semibold">×{e.multiplierBreakdown.fb.toFixed(3)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
                 {e.rationale}
