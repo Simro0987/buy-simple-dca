@@ -497,6 +497,42 @@ export type Database = {
         }
         Relationships: []
       }
+      weekly_fill_snapshots: {
+        Row: {
+          cancelled: number
+          coin: string
+          created_at: string
+          expired: number
+          fill_rate: number
+          filled: number
+          id: string
+          total_closed: number
+          week_number: number
+        }
+        Insert: {
+          cancelled?: number
+          coin: string
+          created_at?: string
+          expired?: number
+          fill_rate?: number
+          filled?: number
+          id?: string
+          total_closed?: number
+          week_number: number
+        }
+        Update: {
+          cancelled?: number
+          coin?: string
+          created_at?: string
+          expired?: number
+          fill_rate?: number
+          filled?: number
+          id?: string
+          total_closed?: number
+          week_number?: number
+        }
+        Relationships: []
+      }
       weekly_scores: {
         Row: {
           base_allocation: number | null
