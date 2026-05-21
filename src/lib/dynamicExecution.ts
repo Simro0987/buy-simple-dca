@@ -6,6 +6,16 @@
 
 export type CoinKey = 'btc' | 'eth' | 'sol';
 
+export interface MultiplierBreakdown {
+  T: -1 | 0 | 1;          // trend: 1 bull, 0 neutral, -1 bear
+  VR: number;             // volatility ratio vs BTC (>=0)
+  fill: number;           // historical fill rate 0..1
+  base: number;           // base multiplier (trend tier)
+  vol: number;            // volatility adjustment factor
+  fb: number;             // feedback-loop factor
+  total: number;          // base * vol * fb
+}
+
 export interface CoinExecution {
   coin: CoinKey;
   symbol: 'BTC' | 'ETH' | 'SOL';
@@ -20,6 +30,50 @@ export interface CoinExecution {
   volatilityMultiplier: number;
   momentumAdjustment: number;
   rationale: string;
+  /** Set for ETH/SOL when computed via executive multiplier formulas. */
+  multiplierBreakdown?: MultiplierBreakdown;
+}
+
+export interface FillRates {
+  eth: number; // 0..1
+  sol: number; // 0..1
+}
+
+/** Trend tier from 14D momentum: >+3% bull, <-3% bear, else neutral. */
+export function getTrendTier(momentum30d: number): -1 | 0 | 1 {
+  if (momentum30d > 3) return 1;
+  if (momentum30d < -3) return -1;
+  return 0;
+}
+
+/** Volatility ratio vs BTC, floored at 0 (asset = BTC → 0, asset = 2×BTC → 1). */
+export function getVolatilityRatio(assetVol: number, btcVol: number): number {
+  if (!btcVol || btcVol <= 0) return 0;
+  return Math.max(0, assetVol / btcVol - 1);
+}
+
+/**
+ * ETH multiplier:
+ *   base = T==1 ? 1.20 : T==0 ? 1.25 : 1.28
+ *   total = base * (1 + VR*0.05) * (1 + (0.50 - ETH_Fill) * 0.2)
+ */
+export function ethMultiplier(T: -1 | 0 | 1, VR: number, ethFill: number): MultiplierBreakdown {
+  const base = T === 1 ? 1.20 : T === 0 ? 1.25 : 1.28;
+  const vol = 1 + VR * 0.05;
+  const fb = 1 + (0.50 - ethFill) * 0.2;
+  return { T, VR, fill: ethFill, base, vol, fb, total: base * vol * fb };
+}
+
+/**
+ * SOL multiplier:
+ *   base = T==1 ? 1.35 : T==0 ? 1.50 : 1.55
+ *   total = base * (1 + VR*0.08) * (1 + (0.50 - SOL_Fill) * 0.3)
+ */
+export function solMultiplier(T: -1 | 0 | 1, VR: number, solFill: number): MultiplierBreakdown {
+  const base = T === 1 ? 1.35 : T === 0 ? 1.50 : 1.55;
+  const vol = 1 + VR * 0.08;
+  const fb = 1 + (0.50 - solFill) * 0.3;
+  return { T, VR, fill: solFill, base, vol, fb, total: base * vol * fb };
 }
 
 export interface BaseSplit {
