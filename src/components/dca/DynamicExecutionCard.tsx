@@ -134,8 +134,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         base: { marketPct: 60, limitPct: 40, distance: -4 },
       };
     }
-    return calcUnifiedExecution(score, metrics);
-  }, [metrics, score]);
+    return calcUnifiedExecution(score, metrics, fillRates ?? { eth: 0.5, sol: 0.5 });
+  }, [metrics, score, fillRates]);
 
   const { executions, sharedMarketPct, sharedLimitPct, sharedMomentumAvg, sharedMomentumAdj, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
