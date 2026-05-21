@@ -5,6 +5,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
+import { useLimitFillRates } from '@/hooks/useLimitFillRates';
 import {
   calcUnifiedExecution,
   fixedExecution,
@@ -54,6 +55,7 @@ const COIN_LABEL_WEIGHT: Record<CoinKey, string> = {
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
   const { data: settings } = useAppSettings();
+  const { data: fillRates } = useLimitFillRates();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
@@ -132,8 +134,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         base: { marketPct: 60, limitPct: 40, distance: -4 },
       };
     }
-    return calcUnifiedExecution(score, metrics);
-  }, [metrics, score]);
+    return calcUnifiedExecution(score, metrics, fillRates ?? { eth: 0.5, sol: 0.5 });
+  }, [metrics, score, fillRates]);
 
   const { executions, sharedMarketPct, sharedLimitPct, sharedMomentumAvg, sharedMomentumAdj, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
@@ -376,6 +378,34 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
               </div>
 
 
+
+              {/* Multiplier breakdown — len pre ETH/SOL */}
+              {e.multiplierBreakdown && (
+                <div className="bg-background/40 rounded px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Final {e.symbol} Limit (BTC × mult)
+                    </p>
+                    <span className="text-[10px] tabular-nums font-bold text-foreground">
+                      ×{e.multiplierBreakdown.total.toFixed(3)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1 text-[9px] tabular-nums">
+                    <div className="bg-secondary/40 rounded px-1.5 py-1">
+                      <p className="text-muted-foreground">Base (T={e.multiplierBreakdown.T})</p>
+                      <p className="text-foreground font-semibold">×{e.multiplierBreakdown.base.toFixed(2)}</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded px-1.5 py-1">
+                      <p className="text-muted-foreground">Vol (VR {e.multiplierBreakdown.VR.toFixed(2)})</p>
+                      <p className="text-foreground font-semibold">×{e.multiplierBreakdown.vol.toFixed(3)}</p>
+                    </div>
+                    <div className="bg-secondary/40 rounded px-1.5 py-1">
+                      <p className="text-muted-foreground">Fb ({(e.multiplierBreakdown.fill * 100).toFixed(0)}%)</p>
+                      <p className="text-foreground font-semibold">×{e.multiplierBreakdown.fb.toFixed(3)}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
