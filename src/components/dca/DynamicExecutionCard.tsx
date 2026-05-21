@@ -367,13 +367,23 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                       : (lBusy ? '…' : 'Zadať limit')}
                   </button>
                   {lPending && st?.limit?.id && (
-                    <button
-                      onClick={() => handleCancelLimit(st.limit.id, symU)}
-                      disabled={lBusy}
-                      className="mt-1 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
-                    >
-                      <X className="w-3 h-3" /> Zrušiť limit
-                    </button>
+                    <div className="mt-1 grid grid-cols-2 gap-1">
+                      <button
+                        onClick={() => handleMarkExpired(st.limit.id, symU)}
+                        disabled={lBusy}
+                        className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 active:scale-95 disabled:opacity-70"
+                        title="Limit sa nenaplnil — zarátaj do fill-rate"
+                      >
+                        <Clock className="w-3 h-3" /> Nenaplnil sa
+                      </button>
+                      <button
+                        onClick={() => handleCancelLimit(st.limit.id, symU)}
+                        disabled={lBusy}
+                        className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                      >
+                        <X className="w-3 h-3" /> Zrušiť
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>
