@@ -348,9 +348,6 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
 
-      {/* LIMIT EXPLAINER — ako sa počíta limit % (dynamika + min spread vs BTC) */}
-      <LimitExplainerCard />
-
       {/* SELF-LEARNING ENGINE — adaptívne parametre + história výkonu */}
       <LearningEngineCard />
 
