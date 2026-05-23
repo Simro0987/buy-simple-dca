@@ -233,20 +233,23 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         {coins.map(c => {
           const e = executions[c];
           const price = prices?.[COIN_PRICE_KEY[c]]?.usd ?? 0;
-          const limitPrice = price * (1 + e.limitDistancePct / 100);
+          const symU = e.symbol.toUpperCase();
+          const st = execStatus.get(symU);
+          const mDone = st?.market?.status === 'EXECUTED';
+          const lFilled = st?.limit?.status === 'FILLED';
+          const lPending = st?.limit?.status === 'PENDING';
+          // Keď je limit zadaný (PENDING) alebo naplnený → cena/suma sa zamknú a nemenia sa kým ho nezrušíš
+          const lockedLimitPrice = (lPending || lFilled) ? Number(st?.limit?.target_price ?? 0) : 0;
+          const lockedLimitUsd = (lPending || lFilled) ? Number(st?.limit?.amount_usd ?? 0) : 0;
+          const limitPrice = lockedLimitPrice > 0 ? lockedLimitPrice : price * (1 + e.limitDistancePct / 100);
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
           // Suma pre tento token podľa cieľovej váhy v portfóliu
           const coinUsd = investableUsd * TARGET_WEIGHTS[c];
           const marketUsd = coinUsd * (e.marketPct / 100);
-          const limitUsd = coinUsd * (e.limitPct / 100);
+          const limitUsd = lockedLimitUsd > 0 ? lockedLimitUsd : coinUsd * (e.limitPct / 100);
 
-          const symU = e.symbol.toUpperCase();
-          const st = execStatus.get(symU);
-          const mDone = st?.market?.status === 'EXECUTED';
-          const lFilled = st?.limit?.status === 'FILLED';
-          const lPending = st?.limit?.status === 'PENDING';
           const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
           const lBg = lFilled
             ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
@@ -265,6 +268,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;
           const lAddedQty = lFilled ? Number(st?.limit?.quantity ?? 0) : 0;
           const qtyFmt = (n: number) => c === 'btc' ? n.toFixed(6) : n.toFixed(4);
+          // Zamknuté % distancie pri pendingu (na zobrazenie)
+          const displayLimitDistPct = lockedLimitPrice > 0 && price > 0
+            ? ((lockedLimitPrice / price) - 1) * 100
+            : e.limitDistancePct;
 
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
