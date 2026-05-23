@@ -79,6 +79,8 @@ export function PnLOverviewCard({ lang }: Props) {
           {assets.map(a => {
             const aGain = a.pnl >= 0;
             const hasInvest = a.invested > 0;
+            const sellTokens = aGain && a.currentPrice > 0 ? a.pnl / a.currentPrice : 0;
+            const tokenDecimals = a.symbol === 'BTC' ? 6 : a.symbol === 'ETH' ? 5 : 3;
             return (
               <div
                 key={a.symbol}
@@ -110,6 +112,21 @@ export function PnLOverviewCard({ lang }: Props) {
                     <span className="text-[10px] text-muted-foreground">—</span>
                   )}
                 </div>
+                {hasInvest && aGain && a.pnl > 0 && sellTokens > 0 && (
+                  <div className="rounded bg-gain/10 border border-gain/30 px-2 py-1.5 flex items-center justify-between gap-2">
+                    <span className="text-[10px] text-muted-foreground">
+                      {sk ? 'Predaj na zafixovanie zisku' : 'Sell to lock profit'}
+                    </span>
+                    <div className="text-right">
+                      <p className="text-xs font-bold tabular-nums text-gain">
+                        {sellTokens.toFixed(tokenDecimals)} {a.symbol}
+                      </p>
+                      <p className="text-[10px] tabular-nums text-gain/80">
+                        ≈ {formatUsd(a.pnl)} @ {formatUsd(a.currentPrice)}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 {hasInvest && aGain && a.pnl > 0 && (
                   <Button
                     size="sm"
