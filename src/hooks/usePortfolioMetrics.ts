@@ -160,5 +160,5 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
       history: rows,
       capitalEntries: capitalEntries ?? [],
     };
-  }, [purchases, capitalEntries, settings, prices, l1, l2, l3]);
+  }, [purchases, capitalEntries, settings, prices, reservoir.sells, l1, l2, l3]);
 }
