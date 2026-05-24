@@ -23,6 +23,7 @@ import { NextActionBanner } from '@/components/portfolio/NextActionBanner';
 import { WhatIfSimulator } from '@/components/portfolio/WhatIfSimulator';
 import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
 import { PnLOverviewCard } from '@/components/portfolio/PnLOverviewCard';
+import { DynamicTakeProfitCard } from '@/components/portfolio/DynamicTakeProfitCard';
 
 interface Props { lang: Lang; }
 
@@ -124,6 +125,9 @@ function PortfolioPageInner({ lang }: Props) {
 
       {/* P/L prehľad — celkový + per-token */}
       <PnLOverviewCard lang={lang} />
+
+      {/* Dynamický Take Profit → Stablecoins */}
+      <DynamicTakeProfitCard lang={lang} />
 
       {/* Zdravie portfólia (drift, diverzifikácia, stake, P/L) */}
       <HealthScoreCard lang={lang} />
