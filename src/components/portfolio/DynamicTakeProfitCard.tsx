@@ -88,17 +88,20 @@ export function DynamicTakeProfitCard({ lang }: Props) {
     <Card className="border-border bg-card overflow-hidden">
       <div className="h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500" />
       <CardContent className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-amber-400" />
             <h3 className="text-sm font-semibold text-foreground">
               {sk ? 'Dynamický Take Profit' : 'Dynamic Take Profit'}
             </h3>
           </div>
-          <Badge variant="secondary" className="text-[10px]">
-            {sk ? 'Stables' : 'Stables'}: <span className="ml-1 font-mono tabular-nums text-foreground">{formatUsd(stable)}</span>
-          </Badge>
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/30">
+            <Wallet className="w-3 h-3 text-emerald-400" />
+            <span className="text-[10px] text-muted-foreground">{sk ? 'Rezervoár' : 'Reservoir'}:</span>
+            <span className="text-[11px] font-mono tabular-nums font-bold text-emerald-300">{formatUsd(reservoir.stable)}</span>
+          </div>
         </div>
+
 
         {!anyProfit && (
           <p className="text-xs text-center text-muted-foreground py-3">
