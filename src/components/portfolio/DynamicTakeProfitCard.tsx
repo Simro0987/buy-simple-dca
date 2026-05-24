@@ -1,30 +1,13 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Check, Target, History as HistoryIcon, ChevronDown, ChevronUp } from 'lucide-react';
+import { Copy, Check, Target, History as HistoryIcon, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePortfolio } from '@/contexts/PortfolioContext';
+import { useProfitReservoir, addTakeProfit, resetReservoir } from '@/lib/profitReservoir';
 import { toast } from 'sonner';
-
-const SELLS_KEY = 'dynamic-take-profit-sells-v1';      // { BTC: number tokens, ETH: ..., SOL: ... }
-const STABLE_KEY = 'dynamic-take-profit-stable-v1';    // USD number
-const LOG_KEY = 'dynamic-take-profit-log-v1';          // array
-
-interface LogEntry {
-  ts: number;
-  symbol: string;
-  tokens: number;
-  usd: number;
-  price: number;
-  pct: number;
-}
-
-function loadJSON<T>(k: string, fallback: T): T {
-  try { const r = localStorage.getItem(k); return r ? JSON.parse(r) as T : fallback; } catch { return fallback; }
-}
-function saveJSON(k: string, v: unknown) { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } }
 
 const TOKEN_DECIMALS: Record<string, number> = { BTC: 6, ETH: 5, SOL: 3 };
 
@@ -53,22 +36,16 @@ interface Props { lang: Lang; }
 export function DynamicTakeProfitCard({ lang }: Props) {
   const sk = lang === 'sk';
   const { metrics } = usePortfolio();
-
-  const [sells, setSells] = useState<Record<string, number>>(() => loadJSON(SELLS_KEY, {}));
-  const [stable, setStable] = useState<number>(() => loadJSON(STABLE_KEY, 0));
-  const [log, setLog] = useState<LogEntry[]>(() => loadJSON(LOG_KEY, []));
+  const reservoir = useProfitReservoir();
   const [busy, setBusy] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
 
-  useEffect(() => { saveJSON(SELLS_KEY, sells); }, [sells]);
-  useEffect(() => { saveJSON(STABLE_KEY, stable); }, [stable]);
-  useEffect(() => { saveJSON(LOG_KEY, log); }, [log]);
-
   const rows = useMemo(() => {
     return metrics.assets.map(a => {
-      const sold = Number(sells[a.symbol] ?? 0);
-      const adjHoldings = Math.max(0, a.holdings - sold);
-      const avgCost = a.holdings > 0 ? a.invested / a.holdings : 0; // FROZEN avg buy price
+      // metrics.assets.holdings already reflects reservoir.sells (subtracted in usePortfolioMetrics)
+      const adjHoldings = a.holdings;
+      const originalHoldings = adjHoldings + Number(reservoir.sells[a.symbol] ?? 0);
+      const avgCost = originalHoldings > 0 ? a.invested / originalHoldings : 0; // FROZEN avg buy price
       const costBasisRemaining = avgCost * adjHoldings;
       const value = adjHoldings * a.currentPrice;
       const pnl = value - costBasisRemaining;
@@ -81,20 +58,10 @@ export function DynamicTakeProfitCard({ lang }: Props) {
       if (sellTokens > adjHoldings) sellTokens = adjHoldings;
       if (sellTokens < 0 || !Number.isFinite(sellTokens)) sellTokens = 0;
 
-      return {
-        symbol: a.symbol,
-        holdings: adjHoldings,
-        avgCost,
-        price: a.currentPrice,
-        pnl,
-        pnlPct,
-        eligible,
-        sellPct,
-        sellUsd,
-        sellTokens,
-      };
+      return { symbol: a.symbol, holdings: adjHoldings, avgCost, price: a.currentPrice,
+        pnl, pnlPct, eligible, sellPct, sellUsd, sellTokens };
     });
-  }, [metrics.assets, sells]);
+  }, [metrics.assets, reservoir.sells]);
 
   const anyProfit = rows.some(r => r.eligible);
 
@@ -102,18 +69,20 @@ export function DynamicTakeProfitCard({ lang }: Props) {
     if (!r.eligible || r.sellTokens <= 0) return;
     if (busy === r.symbol) return;
     setBusy(r.symbol);
-    const prevSold = Number(sells[r.symbol] ?? 0);
-    setSells({ ...sells, [r.symbol]: prevSold + r.sellTokens });
-    setStable(stable + r.sellUsd);
-    setLog([{ ts: Date.now(), symbol: r.symbol, tokens: r.sellTokens, usd: r.sellUsd, price: r.price, pct: r.sellPct }, ...log].slice(0, 100));
-    toast.success(sk ? `Zaznamenané: predaj ${r.sellTokens.toFixed(TOKEN_DECIMALS[r.symbol] ?? 4)} ${r.symbol}` : `Logged: sell ${r.sellTokens} ${r.symbol}`);
+    addTakeProfit(r.symbol, r.sellTokens, r.sellUsd, r.price, r.sellPct);
+    toast.success(sk
+      ? `Zaznamenané: predaj ${r.sellTokens.toFixed(TOKEN_DECIMALS[r.symbol] ?? 4)} ${r.symbol} → +${formatUsd(r.sellUsd)} do rezervoáru`
+      : `Logged: sell ${r.sellTokens} ${r.symbol}`);
     setTimeout(() => setBusy(null), 800);
   };
 
   const resetLog = () => {
     if (!confirm(sk ? 'Vymazať históriu a vrátiť späť všetky predaje?' : 'Clear history and reset?')) return;
-    setSells({}); setStable(0); setLog([]);
+    resetReservoir();
   };
+
+  const log = reservoir.log.filter(e => e.kind === 'TAKE_PROFIT');
+
 
   return (
     <Card className="border-border bg-card overflow-hidden">
