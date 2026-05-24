@@ -346,6 +346,15 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* CAPITAL INPUT — set weekly DCA capital from total + horizon */}
       <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
 
+      {/* BTC DCA — Dynamic Funding Splitter (Profit Reservoir ⇄ Regular Stables) */}
+      <BtcFundingSplitterCard
+        score={effectiveScore}
+        btcPrice={prices?.bitcoin?.usd ?? inputs.btcPrice ?? 0}
+        prices={prices}
+        defaultAmount={Math.round(plan.investableUsd * 0.64) || 100}
+      />
+
+
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
 
