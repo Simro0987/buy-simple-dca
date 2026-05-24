@@ -90,6 +90,7 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
   const { data: purchases, isLoading: l1 } = useDcaPurchases();
   const { data: capitalEntries, isLoading: l2 } = useCapitalEntries();
   const { data: settings, isLoading: l3 } = useAppSettings();
+  const reservoir = useProfitReservoir();
 
   return useMemo<PortfolioMetrics>(() => {
     const rows = purchases ?? [];
