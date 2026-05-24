@@ -113,9 +113,11 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
       const key = TOKEN_KEY[sym];
       const manualAmt = Number(manual[key] ?? 0);
       const useManual = manualAmt > 0;
-      // Holdings: manual override else aggregated DCA
-      const holdings = useManual ? manualAmt : aggHoldings[sym];
-      // Invested = DCA cost + initial cost basis (USD spent before tracking)
+      // Holdings: manual override else aggregated DCA — then subtract take-profit sells
+      const rawHoldings = useManual ? manualAmt : aggHoldings[sym];
+      const sold = Number(reservoir.sells[sym] ?? 0);
+      const holdings = Math.max(0, rawHoldings - sold);
+      // Invested = DCA cost + initial cost basis (USD spent before tracking) — FROZEN, take-profit does not reduce it
       const initialCostUsd = Number(initialCost[key] ?? 0);
       const invested = aggInvested[sym] + initialCostUsd;
       const currentPrice = prices?.[t.coingeckoId]?.usd ?? 0;
