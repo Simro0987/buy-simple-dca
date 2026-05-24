@@ -72,21 +72,15 @@ function getSnapshot() { return state; }
 // ── Mutations ────────────────────────────────────────────────────────────────
 export function addTakeProfit(symbol: string, tokens: number, usd: number, price: number, pct: number) {
   const sells = { ...state.sells, [symbol]: (state.sells[symbol] ?? 0) + tokens };
-  state = {
-    stable: state.stable + usd,
-    sells,
-    log: [{ ts: Date.now(), kind: 'TAKE_PROFIT', symbol, tokens, usd, price, pct }, ...state.log].slice(0, 200),
-  };
+  const entry: ProfitLogEntry = { ts: Date.now(), kind: 'TAKE_PROFIT', symbol, tokens, usd, price, pct };
+  state = { stable: state.stable + usd, sells, log: [entry, ...state.log].slice(0, 200) };
   emit();
 }
 
 export function deductReservoir(usd: number, note?: string) {
   const next = Math.max(0, state.stable - usd);
-  state = {
-    ...state,
-    stable: next,
-    log: [{ ts: Date.now(), kind: 'DCA_SPLIT', symbol: 'BTC', usd, note }, ...state.log].slice(0, 200),
-  };
+  const entry: ProfitLogEntry = { ts: Date.now(), kind: 'DCA_SPLIT', symbol: 'BTC', usd, note };
+  state = { ...state, stable: next, log: [entry, ...state.log].slice(0, 200) };
   emit();
 }
 
