@@ -3,6 +3,7 @@ import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, Tr
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
+import { BtcFundingSplitterCard } from '@/components/dca/BtcFundingSplitterCard';
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
