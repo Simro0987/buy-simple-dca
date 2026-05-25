@@ -1,17 +1,31 @@
 import { useMemo, useState } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
+import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
 import {
   calcUnifiedExecution,
   fixedExecution,
   type CoinKey,
 } from '@/lib/dynamicExecution';
-import { formatPrice, formatLimitPrice, type PriceData } from '@/lib/crypto';
+import { formatPrice, formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
+
+// BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
+function btcReservoirPct(score: number): number {
+  if (score <= 30) return 70;   // Deep Value
+  if (score <= 60) return 50;   // Neutral
+  return 15;                    // Overheated
+}
+function btcBandLabel(score: number): string {
+  if (score <= 30) return 'Deep Value';
+  if (score <= 60) return 'Neutral';
+  return 'Overheated';
+}
+
 
 function getMondayWeek(d = new Date()): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
