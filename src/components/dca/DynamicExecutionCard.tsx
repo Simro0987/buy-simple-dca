@@ -70,9 +70,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
+  const reservoir = useProfitReservoir();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+
 
   const { data: executionsRows } = useQuery({
     queryKey: ['dca_executions', week],
@@ -98,7 +100,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     return m;
   }, [executionsRows]);
 
-  const handleExecute = async (coin: CoinKey, kind: 'market'|'limit', amount: number, price: number) => {
+  const handleExecute = async (
+    coin: CoinKey,
+    kind: 'market'|'limit',
+    amount: number,
+    price: number,
+    fromReservoir = 0,
+  ) => {
     const key = `${coin}-${kind}`;
     setBusy(key);
     try {
@@ -106,6 +114,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         body: { coin, kind, amount_usd: amount, target_price: price },
       });
       if (error) throw error;
+      if (coin === 'btc' && fromReservoir > 0) {
+        deductReservoir(
+          fromReservoir,
+          `BTC ${kind.toUpperCase()} · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`,
+        );
+      }
       toast.success(kind === 'market' ? `${coin.toUpperCase()} market vykonaný ✓` : `${coin.toUpperCase()} limit zadaný ⏳`);
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
@@ -115,6 +129,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       setBusy(null);
     }
   };
+
 
   const handleCancelLimit = async (id: string, coin: string) => {
     if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
