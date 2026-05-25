@@ -1,17 +1,31 @@
 import { useMemo, useState } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote } from 'lucide-react';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
+import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
 import {
   calcUnifiedExecution,
   fixedExecution,
   type CoinKey,
 } from '@/lib/dynamicExecution';
-import { formatPrice, formatLimitPrice, type PriceData } from '@/lib/crypto';
+import { formatPrice, formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
+
+// BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
+function btcReservoirPct(score: number): number {
+  if (score <= 30) return 70;   // Deep Value
+  if (score <= 60) return 50;   // Neutral
+  return 15;                    // Overheated
+}
+function btcBandLabel(score: number): string {
+  if (score <= 30) return 'Deep Value';
+  if (score <= 60) return 'Neutral';
+  return 'Overheated';
+}
+
 
 function getMondayWeek(d = new Date()): number {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -56,9 +70,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
+  const reservoir = useProfitReservoir();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+
 
   const { data: executionsRows } = useQuery({
     queryKey: ['dca_executions', week],
@@ -84,7 +100,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     return m;
   }, [executionsRows]);
 
-  const handleExecute = async (coin: CoinKey, kind: 'market'|'limit', amount: number, price: number) => {
+  const handleExecute = async (
+    coin: CoinKey,
+    kind: 'market'|'limit',
+    amount: number,
+    price: number,
+    fromReservoir = 0,
+  ) => {
     const key = `${coin}-${kind}`;
     setBusy(key);
     try {
@@ -92,6 +114,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         body: { coin, kind, amount_usd: amount, target_price: price },
       });
       if (error) throw error;
+      if (coin === 'btc' && fromReservoir > 0) {
+        deductReservoir(
+          fromReservoir,
+          `BTC ${kind.toUpperCase()} · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`,
+        );
+      }
       toast.success(kind === 'market' ? `${coin.toUpperCase()} market vykonaný ✓` : `${coin.toUpperCase()} limit zadaný ⏳`);
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
@@ -101,6 +129,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       setBusy(null);
     }
   };
+
 
   const handleCancelLimit = async (id: string, coin: string) => {
     if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
@@ -250,6 +279,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const marketUsd = coinUsd * (e.marketPct / 100);
           const limitUsd = lockedLimitUsd > 0 ? lockedLimitUsd : coinUsd * (e.limitPct / 100);
 
+          // BTC-only funding split: Profit Reservoir vs Regular Capital (dynamic by Final Score)
+          const isBtc = c === 'btc';
+          const btcResPctTarget = isBtc ? btcReservoirPct(score) : 0;
+          const btcDesiredFromReservoir = isBtc ? (coinUsd * btcResPctTarget) / 100 : 0;
+          const btcFromReservoir = isBtc ? Math.min(btcDesiredFromReservoir, Math.max(0, reservoir.stable)) : 0;
+          const btcFromRegular = isBtc ? Math.max(0, coinUsd - btcFromReservoir) : 0;
+          const btcReservoirShare = isBtc && coinUsd > 0 ? btcFromReservoir / coinUsd : 0;
+          const btcReservoirCapped = isBtc && btcDesiredFromReservoir > btcFromReservoir + 0.005;
+
+
           const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
           const lBg = lFilled
             ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
@@ -302,11 +341,55 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </p>
               </div>
 
+              {/* BTC funding breakdown — Profit Reservoir vs Regular Capital */}
+              {isBtc && coinUsd > 0 && (
+                <div className="bg-background/40 rounded px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Zdroj financovania BTC
+                    </p>
+                    <span className="text-[9px] text-muted-foreground">
+                      Score {score} · {btcBandLabel(score)} · cieľ {btcResPctTarget}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-1">
+                      <div className="flex items-center gap-1 text-[9px] text-emerald-300">
+                        <Wallet className="w-3 h-3" /> Profit Reservoir
+                      </div>
+                      <p className="text-xs font-bold tabular-nums text-emerald-200">
+                        {formatUsd(btcFromReservoir)}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground tabular-nums">
+                        dostupné {formatUsd(reservoir.stable)}
+                      </p>
+                    </div>
+                    <div className="rounded bg-secondary/60 border border-border px-2 py-1">
+                      <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                        <Banknote className="w-3 h-3" /> Regular Capital
+                      </div>
+                      <p className="text-xs font-bold tabular-nums text-foreground">
+                        {formatUsd(btcFromRegular)}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground tabular-nums">
+                        {(btcReservoirShare * 100).toFixed(0)}% / {(100 - btcReservoirShare * 100).toFixed(0)}%
+                      </p>
+                    </div>
+                  </div>
+                  {btcReservoirCapped && (
+                    <p className="text-[9px] text-amber-400 leading-snug">
+                      ⚠ Rezervoár nemá dosť — strop nastavený na dostupný zostatok, rozdiel sa presunie do Regular Capital.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Market / Limit rozdelenie sumy */}
               <div className="grid grid-cols-2 gap-1.5">
                 <div className={`rounded p-2 ${mBg}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-primary font-semibold">MARKET {e.marketPct}%</p>
+
                     <button
                       onClick={() => copy(marketUsd.toFixed(2))}
                       className="p-0.5 rounded text-primary hover:bg-primary/20 active:scale-95"
@@ -328,7 +411,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   )}
                   <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
                   <button
-                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price)}
+                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price, isBtc ? marketUsd * btcReservoirShare : 0)}
                     disabled={mDone || mBusy || marketUsd <= 0 || price <= 0}
                     className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
                       mDone ? 'bg-emerald-500 text-background' : 'bg-primary text-primary-foreground'
@@ -364,7 +447,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     {lockedLimitPrice > 0 && <span className="ml-1 text-amber-400">🔒 ${formatLimitPrice(lockedLimitPrice)}</span>}
                   </p>
                   <button
-                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice)}
+                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice, isBtc ? limitUsd * btcReservoirShare : 0)}
                     disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
                     className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
                       lFilled ? 'bg-emerald-500 text-background'
