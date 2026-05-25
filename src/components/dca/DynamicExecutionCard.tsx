@@ -279,6 +279,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const marketUsd = coinUsd * (e.marketPct / 100);
           const limitUsd = lockedLimitUsd > 0 ? lockedLimitUsd : coinUsd * (e.limitPct / 100);
 
+          // BTC-only funding split: Profit Reservoir vs Regular Capital (dynamic by Final Score)
+          const isBtc = c === 'btc';
+          const btcResPctTarget = isBtc ? btcReservoirPct(score) : 0;
+          const btcDesiredFromReservoir = isBtc ? (coinUsd * btcResPctTarget) / 100 : 0;
+          const btcFromReservoir = isBtc ? Math.min(btcDesiredFromReservoir, Math.max(0, reservoir.stable)) : 0;
+          const btcFromRegular = isBtc ? Math.max(0, coinUsd - btcFromReservoir) : 0;
+          const btcReservoirShare = isBtc && coinUsd > 0 ? btcFromReservoir / coinUsd : 0;
+          const btcReservoirCapped = isBtc && btcDesiredFromReservoir > btcFromReservoir + 0.005;
+
+
           const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
           const lBg = lFilled
             ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
@@ -331,11 +341,55 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </p>
               </div>
 
+              {/* BTC funding breakdown — Profit Reservoir vs Regular Capital */}
+              {isBtc && coinUsd > 0 && (
+                <div className="bg-background/40 rounded px-2 py-1.5 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                      Zdroj financovania BTC
+                    </p>
+                    <span className="text-[9px] text-muted-foreground">
+                      Score {score} · {btcBandLabel(score)} · cieľ {btcResPctTarget}%
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="rounded bg-emerald-500/10 border border-emerald-500/30 px-2 py-1">
+                      <div className="flex items-center gap-1 text-[9px] text-emerald-300">
+                        <Wallet className="w-3 h-3" /> Profit Reservoir
+                      </div>
+                      <p className="text-xs font-bold tabular-nums text-emerald-200">
+                        {formatUsd(btcFromReservoir)}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground tabular-nums">
+                        dostupné {formatUsd(reservoir.stable)}
+                      </p>
+                    </div>
+                    <div className="rounded bg-secondary/60 border border-border px-2 py-1">
+                      <div className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                        <Banknote className="w-3 h-3" /> Regular Capital
+                      </div>
+                      <p className="text-xs font-bold tabular-nums text-foreground">
+                        {formatUsd(btcFromRegular)}
+                      </p>
+                      <p className="text-[9px] text-muted-foreground tabular-nums">
+                        {(btcReservoirShare * 100).toFixed(0)}% / {(100 - btcReservoirShare * 100).toFixed(0)}%
+                      </p>
+                    </div>
+                  </div>
+                  {btcReservoirCapped && (
+                    <p className="text-[9px] text-amber-400 leading-snug">
+                      ⚠ Rezervoár nemá dosť — strop nastavený na dostupný zostatok, rozdiel sa presunie do Regular Capital.
+                    </p>
+                  )}
+                </div>
+              )}
+
               {/* Market / Limit rozdelenie sumy */}
               <div className="grid grid-cols-2 gap-1.5">
                 <div className={`rounded p-2 ${mBg}`}>
                   <div className="flex items-center justify-between">
                     <p className="text-[10px] text-primary font-semibold">MARKET {e.marketPct}%</p>
+
                     <button
                       onClick={() => copy(marketUsd.toFixed(2))}
                       className="p-0.5 rounded text-primary hover:bg-primary/20 active:scale-95"
