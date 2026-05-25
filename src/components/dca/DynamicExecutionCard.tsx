@@ -411,7 +411,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   )}
                   <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
                   <button
-                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price)}
+                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price, isBtc ? marketUsd * btcReservoirShare : 0)}
                     disabled={mDone || mBusy || marketUsd <= 0 || price <= 0}
                     className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
                       mDone ? 'bg-emerald-500 text-background' : 'bg-primary text-primary-foreground'
@@ -447,7 +447,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     {lockedLimitPrice > 0 && <span className="ml-1 text-amber-400">🔒 ${formatLimitPrice(lockedLimitPrice)}</span>}
                   </p>
                   <button
-                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice)}
+                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice, isBtc ? limitUsd * btcReservoirShare : 0)}
                     disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
                     className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
                       lFilled ? 'bg-emerald-500 text-background'
