@@ -18,12 +18,14 @@ import { AIYieldProfitRouter } from '@/components/portfolio/AIYieldProfitRouter'
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { StickyPortfolioHeader } from '@/components/portfolio/StickyPortfolioHeader';
 import { BtcGoalTracker } from '@/components/portfolio/BtcGoalTracker';
+import { HalvingCycleTracker } from '@/components/portfolio/HalvingCycleTracker';
 import { HealthScoreCard } from '@/components/portfolio/HealthScoreCard';
 import { NextActionBanner } from '@/components/portfolio/NextActionBanner';
 import { WhatIfSimulator } from '@/components/portfolio/WhatIfSimulator';
 import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
 import { PnLOverviewCard } from '@/components/portfolio/PnLOverviewCard';
 import { DynamicTakeProfitCard } from '@/components/portfolio/DynamicTakeProfitCard';
+
 
 interface Props { lang: Lang; }
 
@@ -99,6 +101,9 @@ function PortfolioPageInner({ lang }: Props) {
   return (
     <div className="space-y-4">
       <StickyPortfolioHeader lang={lang} />
+
+      {/* Bitcoin Halving Cycle Tracker */}
+      <HalvingCycleTracker lang={lang} />
 
       {/* Header */}
       <div className="flex items-center justify-between">
