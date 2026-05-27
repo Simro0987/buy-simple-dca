@@ -102,6 +102,9 @@ function PortfolioPageInner({ lang }: Props) {
     <div className="space-y-4">
       <StickyPortfolioHeader lang={lang} />
 
+      {/* Bitcoin Halving Cycle Tracker */}
+      <HalvingCycleTracker lang={lang} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">
