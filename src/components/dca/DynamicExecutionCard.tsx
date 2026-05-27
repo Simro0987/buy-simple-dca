@@ -376,7 +376,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                       </p>
                     </div>
                   </div>
-                  {btcReservoirCapped && (
+                  {btcReservoirCapped && reservoir.stable > 0 && (
                     <p className="text-[9px] text-amber-400 leading-snug">
                       ⚠ Rezervoár nemá dosť — strop nastavený na dostupný zostatok, rozdiel sa presunie do Regular Capital.
                     </p>
@@ -420,65 +420,93 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     {mDone ? <><Check className="w-3 h-3" /> Vykonané</> : (mBusy ? '…' : 'Vykonať')}
                   </button>
                 </div>
-                <div className={`rounded p-2 ${lBg}`}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] text-emerald-400 font-semibold">LIMIT {e.limitPct}%</p>
-                    <button
-                      onClick={() => copy(limitUsd.toFixed(2))}
-                      className="p-0.5 rounded text-emerald-400 hover:bg-emerald-500/20 active:scale-95"
-                      aria-label={`Kopíruj limit USD ${e.symbol}`}
-                    >
-                      <Copy className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <p className="text-sm font-bold text-foreground tabular-nums">
-                    ${limitUsd.toFixed(2)}
-                  </p>
-                  <p className="text-[9px] text-foreground/70 tabular-nums">
-                    ≈ {qtyFmt(limitQty)} {e.symbol}
-                  </p>
-                  {lFilled && lAddedQty > 0 && (
-                    <p className="text-[9px] text-emerald-400 tabular-nums">
-                      +{qtyFmt(lAddedQty)} {e.symbol} pridané
-                    </p>
-                  )}
-                  <p className="text-[9px] text-muted-foreground">
-                    limit @ {displayLimitDistPct.toFixed(1)}%
-                    {lockedLimitPrice > 0 && <span className="ml-1 text-amber-400">🔒 ${formatLimitPrice(lockedLimitPrice)}</span>}
-                  </p>
-                  <button
-                    onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice, isBtc ? limitUsd * btcReservoirShare : 0)}
-                    disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
-                    className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
-                      lFilled ? 'bg-emerald-500 text-background'
-                      : lPending ? 'bg-amber-500 text-background'
-                      : 'bg-emerald-500/80 text-background'
-                    }`}
-                  >
-                    {lFilled ? <><Check className="w-3 h-3" /> Naplnené</>
-                      : lPending ? <><Clock className="w-3 h-3" /> Sleduje</>
-                      : (lBusy ? '…' : 'Zadať limit')}
-                  </button>
-                  {lPending && st?.limit?.id && (
-                    <div className="mt-1 grid grid-cols-2 gap-1">
+                {(() => {
+                  // Live progress: how close current price is to triggering the limit
+                  const liveDistPct = price > 0 && limitPrice > 0 ? ((price - limitPrice) / price) * 100 : 0;
+                  const triggered = price > 0 && price <= limitPrice;
+                  const initialBand = Math.max(0.1, Math.abs(displayLimitDistPct));
+                  const progress = triggered
+                    ? 100
+                    : Math.max(0, Math.min(100, (1 - liveDistPct / initialBand) * 100));
+                  const barColor = triggered
+                    ? 'bg-emerald-500'
+                    : progress >= 60
+                    ? 'bg-amber-400'
+                    : 'bg-emerald-500/40';
+                  const cardBg = triggered
+                    ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50'
+                    : lBg;
+                  return (
+                    <div className={`rounded p-2 relative overflow-hidden ${cardBg}`}>
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] text-emerald-400 font-semibold">LIMIT {e.limitPct}%</p>
+                        <button
+                          onClick={() => copy(limitUsd.toFixed(2))}
+                          className="p-0.5 rounded text-emerald-400 hover:bg-emerald-500/20 active:scale-95"
+                          aria-label={`Kopíruj limit USD ${e.symbol}`}
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      </div>
+                      <p className="text-sm font-bold text-foreground tabular-nums">
+                        ${limitUsd.toFixed(2)}
+                      </p>
+                      <p className="text-[9px] text-foreground/70 tabular-nums">
+                        ≈ {qtyFmt(limitQty)} {e.symbol}
+                      </p>
+                      {lFilled && lAddedQty > 0 && (
+                        <p className="text-[9px] text-emerald-400 tabular-nums">
+                          +{qtyFmt(lAddedQty)} {e.symbol} pridané
+                        </p>
+                      )}
+                      <p className="text-[9px] text-muted-foreground">
+                        limit @ {displayLimitDistPct.toFixed(1)}%
+                        {lockedLimitPrice > 0 && <span className="ml-1 text-amber-400">🔒 ${formatLimitPrice(lockedLimitPrice)}</span>}
+                      </p>
                       <button
-                        onClick={() => handleMarkExpired(st.limit.id, symU)}
-                        disabled={lBusy}
-                        className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 active:scale-95 disabled:opacity-70"
-                        title="Limit sa nenaplnil — zarátaj do fill-rate"
+                        onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice, isBtc ? limitUsd * btcReservoirShare : 0)}
+                        disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
+                        className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
+                          lFilled ? 'bg-emerald-500 text-background'
+                          : lPending ? (triggered ? 'bg-emerald-500 text-background' : 'bg-amber-500 text-background')
+                          : (triggered ? 'bg-emerald-500 text-background' : 'bg-emerald-500/80 text-background')
+                        }`}
                       >
-                        <Clock className="w-3 h-3" /> Nenaplnil sa
+                        {lFilled ? <><Check className="w-3 h-3" /> Naplnené</>
+                          : lPending ? <><Clock className="w-3 h-3" /> {triggered ? 'Pripravené' : 'Sleduje'}</>
+                          : (lBusy ? '…' : (triggered ? 'Pripravené — zadať' : 'Zadať limit'))}
                       </button>
-                      <button
-                        onClick={() => handleCancelLimit(st.limit.id, symU)}
-                        disabled={lBusy}
-                        className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
-                      >
-                        <X className="w-3 h-3" /> Zrušiť
-                      </button>
+                      {lPending && st?.limit?.id && (
+                        <div className="mt-1 grid grid-cols-2 gap-1">
+                          <button
+                            onClick={() => handleMarkExpired(st.limit.id, symU)}
+                            disabled={lBusy}
+                            className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-amber-500/20 text-amber-400 hover:bg-amber-500/30 active:scale-95 disabled:opacity-70"
+                            title="Limit sa nenaplnil — zarátaj do fill-rate"
+                          >
+                            <Clock className="w-3 h-3" /> Nenaplnil sa
+                          </button>
+                          <button
+                            onClick={() => handleCancelLimit(st.limit.id, symU)}
+                            disabled={lBusy}
+                            className="px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-rose-500/20 text-rose-400 hover:bg-rose-500/30 active:scale-95 disabled:opacity-70"
+                          >
+                            <X className="w-3 h-3" /> Zrušiť
+                          </button>
+                        </div>
+                      )}
+                      {/* Progress bar: fills as market price approaches limit */}
+                      {price > 0 && !lFilled && (
+                        <div className="mt-1.5 h-1 rounded-full bg-background/60 overflow-hidden">
+                          <div
+                            className={`h-full ${barColor} transition-all duration-500`}
+                            style={{ width: `${progress}%` }}
+                          />
+                        </div>
+                      )}
                     </div>
-                  )}
-                </div>
+                  );
+                })()}
               </div>
 
               {/* Limit cena (kopírovateľná) + live market distance */}
