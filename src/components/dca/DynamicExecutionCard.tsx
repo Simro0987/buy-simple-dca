@@ -481,22 +481,52 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               </div>
 
-              {/* Limit cena (kopírovateľná) */}
-              <div className="flex items-center justify-between gap-2 bg-background/40 rounded px-2 py-1.5">
-                <div>
-                  <p className="text-[10px] text-muted-foreground">Limit cena ({e.limitDistancePct.toFixed(1)}%)</p>
-                  <p className="text-sm font-semibold text-foreground tabular-nums">
-                    {price > 0 ? formatLimitPrice(limitPrice) : '—'}
-                  </p>
+              {/* Limit cena (kopírovateľná) + live market distance */}
+              <div className="bg-background/40 rounded px-2 py-1.5 space-y-1">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Limit cena ({e.limitDistancePct.toFixed(1)}%)</p>
+                    <p className="text-sm font-semibold text-foreground tabular-nums">
+                      {price > 0 ? formatLimitPrice(limitPrice) : '—'}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => price > 0 && copy(limitPrice.toFixed(4))}
+                    disabled={price <= 0}
+                    className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
+                    aria-label={`Kopíruj limit cenu ${e.symbol}`}
+                  >
+                    <Copy className="w-3.5 h-3.5" />
+                  </button>
                 </div>
-                <button
-                  onClick={() => price > 0 && copy(limitPrice.toFixed(4))}
-                  disabled={price <= 0}
-                  className="p-1.5 rounded bg-primary/10 text-primary hover:bg-primary/20 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                  aria-label={`Kopíruj limit cenu ${e.symbol}`}
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                </button>
+                {/* Live market price + distance tracker */}
+                {price > 0 && (
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="text-[9px] text-muted-foreground tabular-nums">
+                      Trh: {formatLimitPrice(price)}
+                    </span>
+                    {(() => {
+                      const distancePct = ((price - limitPrice) / price) * 100;
+                      const isTriggered = price <= limitPrice;
+                      const isClose = !isTriggered && distancePct <= 8 && distancePct >= 0.1;
+                      const badgeColor = isTriggered
+                        ? 'bg-gain/15 text-gain border-gain/30'
+                        : isClose
+                        ? 'bg-warning/15 text-warning border-warning/30'
+                        : 'bg-muted/40 text-muted-foreground border-border';
+                      const label = isTriggered
+                        ? 'Pripravené'
+                        : isClose
+                        ? `-${distancePct.toFixed(2)}%`
+                        : `-${distancePct.toFixed(2)}%`;
+                      return (
+                        <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border tabular-nums ${badgeColor}`}>
+                          {label}
+                        </span>
+                      );
+                    })()}
+                  </div>
+                )}
               </div>
 
 
