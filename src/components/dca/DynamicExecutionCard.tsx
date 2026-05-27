@@ -376,7 +376,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                       </p>
                     </div>
                   </div>
-                  {btcReservoirCapped && (
+                  {btcReservoirCapped && reservoir.stable > 0 && (
                     <p className="text-[9px] text-amber-400 leading-snug">
                       ⚠ Rezervoár nemá dosť — strop nastavený na dostupný zostatok, rozdiel sa presunie do Regular Capital.
                     </p>
