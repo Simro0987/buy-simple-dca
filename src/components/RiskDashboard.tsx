@@ -35,6 +35,16 @@ function getMaxDownside(athPct: number): number {
 export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
   const sk = lang === 'sk';
   const signal = cycleResult ? getSignal(cycleResult.score, sk) : null;
+  // subscribe to liq store + compute statuses (BTC/SOL per spec; ETH allowed too if recorded)
+  useLiquidationLevels();
+  const liqStatusMap = (() => {
+    const map: Partial<Record<LiqSymbol, number>> = {
+      BTC: prices?.['bitcoin']?.usd,
+      ETH: prices?.['ethereum']?.usd,
+      SOL: prices?.['solana']?.usd,
+    };
+    return new Map(evaluateLiquidations(map).map(s => [s.symbol, s]));
+  })();
 
   const isLoading = !prices || Object.keys(prices).length === 0;
 
