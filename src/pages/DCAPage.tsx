@@ -347,6 +347,9 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* CAPITAL INPUT — set weekly DCA capital from total + horizon */}
       <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
 
+      {/* SMART DCA — Base Network router comparison (Odos vs Velora) */}
+      <SmartDcaBaseCard />
+
 
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
