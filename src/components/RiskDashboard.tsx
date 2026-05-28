@@ -3,6 +3,8 @@ import { TOKENS, PriceData, AthData, formatPrice } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { Shield, TrendingDown, TrendingUp, AlertTriangle, ArrowDown, ArrowUp } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LiquidationLevelsCard } from '@/components/risk/LiquidationLevelsCard';
+import { useLiquidationLevels, evaluateLiquidations, type LiqSymbol } from '@/lib/liquidationLevels';
 
 interface Props {
   lang: Lang;
