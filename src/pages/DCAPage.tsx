@@ -7,6 +7,7 @@ import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
+import { SmartDcaBaseCard } from '@/components/dca/SmartDcaBaseCard';
 
 
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
