@@ -3,6 +3,8 @@ import { TOKENS, PriceData, AthData, formatPrice } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { Shield, TrendingDown, TrendingUp, AlertTriangle, ArrowDown, ArrowUp } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { LiquidationLevelsCard } from '@/components/risk/LiquidationLevelsCard';
+import { useLiquidationLevels, evaluateLiquidations, type LiqSymbol } from '@/lib/liquidationLevels';
 
 interface Props {
   lang: Lang;
@@ -33,6 +35,16 @@ function getMaxDownside(athPct: number): number {
 export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
   const sk = lang === 'sk';
   const signal = cycleResult ? getSignal(cycleResult.score, sk) : null;
+  // subscribe to liq store + compute statuses (BTC/SOL per spec; ETH allowed too if recorded)
+  useLiquidationLevels();
+  const liqStatusMap = (() => {
+    const map: Partial<Record<LiqSymbol, number>> = {
+      BTC: prices?.['bitcoin']?.usd,
+      ETH: prices?.['ethereum']?.usd,
+      SOL: prices?.['solana']?.usd,
+    };
+    return new Map(evaluateLiquidations(map).map(s => [s.symbol, s]));
+  })();
 
   const isLoading = !prices || Object.keys(prices).length === 0;
 
@@ -120,9 +132,16 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
           const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
           const maxDownside = getMaxDownside(athPct);
           const uptoPotential = athPrice > 0 && price > 0 ? ((athPrice / price - 1) * 100) : 0;
+          const liq = liqStatusMap.get(token.symbol as LiqSymbol);
+          const liqCritical = !!liq?.critical;
 
           return (
-            <div key={token.symbol} className="glass-card p-4 space-y-2">
+            <div
+              key={token.symbol}
+              className={`glass-card p-4 space-y-2 transition-colors ${
+                liqCritical ? 'border-rose-500/60 bg-rose-500/10 ring-1 ring-rose-500/60 animate-pulse' : ''
+              }`}
+            >
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div
@@ -179,10 +198,18 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
                   <p className="text-xs font-bold text-foreground">{formatPrice(athPrice)}</p>
                 </div>
               </div>
+              {liq && (
+                <div className={`text-[10px] tabular-nums flex items-center justify-between rounded px-2 py-1 ${liqCritical ? 'bg-rose-500/20 text-rose-200' : 'bg-secondary/40 text-muted-foreground'}`}>
+                  <span>{sk ? 'Likvidácia' : 'Liquidation'}: <span className="font-bold">{formatPrice(liq.liqPrice)}</span></span>
+                  <span className="font-bold">{liq.distancePct >= 0 ? '+' : ''}{liq.distancePct.toFixed(1)}%</span>
+                </div>
+              )}
             </div>
           );
         })}
       </div>
+
+      <LiquidationLevelsCard lang={lang} />
 
       {/* Cycle Indicators */}
       {cycleResult && (

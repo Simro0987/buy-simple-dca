@@ -2,6 +2,7 @@ import { PieChart, Calculator, Shield, Activity, BarChart3, DollarSign, Coins, S
 import { TabId } from '@/components/BottomNav';
 import { AssetCardsRow } from '@/components/dashboard/AssetCardsRow';
 import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChart';
+import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { Lang } from '@/lib/i18n';
@@ -38,6 +39,7 @@ export function HomePage({ onNavigate, lang }: Props) {
 
   return (
     <div className="space-y-3">
+      <LiquidationAlertBanner lang={lang} />
       <AssetCardsRow metrics={metrics} prices={prices} />
       <PerformanceLineChart metrics={metrics} prices={prices} />
 
