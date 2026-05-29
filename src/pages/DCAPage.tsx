@@ -8,6 +8,7 @@ import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
 import { SmartDcaBaseCard } from '@/components/dca/SmartDcaBaseCard';
+import { SwapCrossChainCard } from '@/components/dca/SwapCrossChainCard';
 
 
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
@@ -357,6 +358,11 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* SELF-LEARNING ENGINE — adaptívne parametre + história výkonu */}
       <LearningEngineCard />
+
+      {/* SWAP — Cross-Chain Native Optimizer */}
+      <SwapCrossChainCard />
+
+
 
 
       {/* AUTO BTC SIGNALS */}
