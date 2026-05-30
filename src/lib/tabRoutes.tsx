@@ -18,6 +18,7 @@ const StakingPage = lazy(() => import('@/pages/StakingPage').then(m => ({ defaul
 const WalletsPage = lazy(() => import('@/pages/WalletsPage').then(m => ({ default: m.WalletsPage })));
 const AllocationCalculatorPage = lazy(() => import('@/pages/AllocationCalculatorPage').then(m => ({ default: m.AllocationCalculatorPage })));
 const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })));
+const SwapPage = lazy(() => import('@/pages/SwapPage').then(m => ({ default: m.SwapPage })));
 const ExecutionTracker = lazy(() => import('@/components/ExecutionTracker').then(m => ({ default: m.ExecutionTracker })));
 const WeeklyChecklist = lazy(() => import('@/components/WeeklyChecklist').then(m => ({ default: m.WeeklyChecklist })));
 
@@ -53,6 +54,7 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
     <PortfolioProfitPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedMarketData={advancedMarketData} />
   ),
   dca: ({ lang }) => wrap(<DCAPage lang={lang} />),
+  swap: ({ lang }) => wrap(<SwapPage lang={lang} />),
   risk: ({ lang, prices, athData, cycleResult }) => wrap(
     <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
   ),
