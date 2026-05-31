@@ -1,16 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play, ShieldAlert } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   CHAINS, CHAIN_ORDER, ChainId, TOKENS, TokenMeta, getQuotes, tokenKey, tokenUsdPrice,
-  formatTokenAmount, formatUsd, formatMin, detectSwapType,
+  formatTokenAmount, formatUsd, formatMin, detectSwapType, involvesPrivacy,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
 
 interface Props { lang: Lang; }
+
+const REFRESH_MS = 15_000;
 
 function tokensByChain(chain: ChainId) {
   return TOKENS.filter(t => t.chain === chain);
@@ -55,28 +57,75 @@ function AssetSelector({
   );
 }
 
+function CountdownRing({ progress, paused }: { progress: number; paused: boolean }) {
+  // progress: 0 -> 1 fills clockwise
+  const size = 22;
+  const stroke = 2.5;
+  const r = (size - stroke) / 2;
+  const c = 2 * Math.PI * r;
+  const offset = c * (1 - progress);
+  return (
+    <svg width={size} height={size} className="shrink-0" aria-hidden>
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke="hsl(var(--border))" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none"
+        stroke={paused ? 'hsl(var(--muted-foreground))' : 'hsl(var(--primary))'}
+        strokeWidth={stroke} strokeLinecap="round"
+        strokeDasharray={c} strokeDashoffset={offset}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        style={{ transition: 'stroke-dashoffset 250ms linear' }} />
+    </svg>
+  );
+}
+
 export function SwapPage({ lang }: Props) {
   const { data: prices } = usePrices();
   const [from, setFrom] = useState<TokenMeta>(TOKENS.find(t => t.chain === 'base' && t.symbol === 'USDC')!);
   const [to, setTo] = useState<TokenMeta>(TOKENS.find(t => t.chain === 'base' && t.symbol === 'cbBTC')!);
   const [amountStr, setAmountStr] = useState<string>('100');
-  const [scanning, setScanning] = useState(false);
+  const [initialScanning, setInitialScanning] = useState(false);
   const [tick, setTick] = useState(0);
+  const [paused, setPaused] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
 
+  // Polling countdown
+  const [elapsed, setElapsed] = useState(0); // ms within current cycle
+  const lastRef = useRef<number>(performance.now());
   useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 60_000);
-    return () => clearInterval(id);
-  }, []);
+    let raf = 0;
+    const loop = (now: number) => {
+      const dt = now - lastRef.current;
+      lastRef.current = now;
+      if (!paused) {
+        setElapsed(prev => {
+          const next = prev + dt;
+          if (next >= REFRESH_MS) {
+            setTick(t => t + 1);
+            return 0;
+          }
+          return next;
+        });
+      } else {
+        // keep clock anchored to "now" while paused so resume is smooth
+      }
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, [paused]);
 
+  // Brief scan placeholder ONLY for input/token changes (not refresh ticks).
   useEffect(() => {
-    setScanning(true);
-    const id = setTimeout(() => setScanning(false), 700);
+    setInitialScanning(true);
+    const id = setTimeout(() => setInitialScanning(false), 600);
     return () => clearTimeout(id);
   }, [amountStr, from, to]);
 
+  // Reset countdown when user changes inputs so they get a fresh window.
+  useEffect(() => { setElapsed(0); }, [amountStr, from, to]);
+
   const amount = parseFloat(amountStr) || 0;
-  const { quotes, best, swapType } = useMemo(
+  const { quotes, best, swapType, privacyRoute } = useMemo(
     () => getQuotes({ from, to, amount, prices, freshnessTick: tick }),
     [from, to, amount, prices, tick],
   );
@@ -84,11 +133,11 @@ export function SwapPage({ lang }: Props) {
   const fromUsd = tokenUsdPrice(from, prices) * amount;
   const sameToken = from.chain === to.chain && from.symbol === to.symbol;
   const liveSwapType = detectSwapType(from, to);
+  const livePrivacy = involvesPrivacy(from, to);
 
-  const handleSwitch = () => {
-    setFrom(to);
-    setTo(from);
-  };
+  const handleSwitch = () => { setFrom(to); setTo(from); };
+  const progress = Math.min(1, elapsed / REFRESH_MS);
+  const secondsLeft = Math.max(0, Math.ceil((REFRESH_MS - elapsed) / 1000));
 
   const t = lang === 'sk'
     ? {
@@ -102,6 +151,11 @@ export function SwapPage({ lang }: Props) {
         invalid: 'Vyber dva rôzne tokeny.', enter: 'Zadaj sumu pre skenovanie protokolov.',
         sameChain: 'Same-Chain Swap', crossChain: 'Cross-Chain Bridge',
         notSupported: 'Nepodporuje túto trasu',
+        notSupportedClass: 'Nepodporované pre túto triedu aktív',
+        nextIn: 'Ďalšia obnova o',
+        live: 'LIVE', pausedTxt: 'POZASTAVENÉ',
+        privacyTitle: 'Privacy / pomalá trasa',
+        privacyNote: 'Bitcoin LN a Monero majú minimálne sumy (~10–25 USD) a deposit times môžu trvať 5–60 min. Použi Houdiniswap, Trocador alebo Swapspace. EVM agregátory (Odos, CoW, ParaSwap) túto triedu aktív nepodporujú.',
       }
     : {
         title: 'SWAP Scanner',
@@ -114,6 +168,11 @@ export function SwapPage({ lang }: Props) {
         invalid: 'Pick two different tokens.', enter: 'Enter an amount to scan protocols.',
         sameChain: 'Same-Chain Swap', crossChain: 'Cross-Chain Bridge',
         notSupported: 'Not Supported for this route',
+        notSupportedClass: 'Not Supported for this asset class',
+        nextIn: 'Next refresh in',
+        live: 'LIVE', pausedTxt: 'PAUSED',
+        privacyTitle: 'Privacy / slow route',
+        privacyNote: 'Bitcoin LN and Monero require minimum amounts (~$10–$25) and deposit times can take 5–60 min. Use Houdiniswap, Trocador or Swapspace. Pure EVM aggregators (Odos, CoW, ParaSwap) do not support this asset class.',
       };
 
   const SwapTypeBadge = ({ type }: { type: typeof swapType }) => (
@@ -180,19 +239,47 @@ export function SwapPage({ lang }: Props) {
         </div>
 
         {!sameToken && (
-          <div className="flex items-center justify-between pt-1 border-t border-border/40">
-            <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Route type</span>
+          <div className="flex items-center justify-between pt-1 border-t border-border/40 gap-2">
             <SwapTypeBadge type={liveSwapType} />
+            <div className="flex items-center gap-1.5">
+              <CountdownRing progress={progress} paused={paused} />
+              <span className="text-[10px] font-mono tabular-nums text-muted-foreground">
+                {paused ? t.pausedTxt : `${t.nextIn} ${secondsLeft}s`}
+              </span>
+              <button
+                onClick={() => setPaused(p => !p)}
+                className="h-6 w-6 rounded-md border border-border bg-background/60 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors"
+                aria-label={paused ? 'play' : 'pause'}
+              >
+                {paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+              </button>
+              <span className={`text-[9px] font-bold tracking-wider ${paused ? 'text-muted-foreground' : 'text-emerald-400'}`}>
+                {paused ? '' : t.live}
+              </span>
+            </div>
           </div>
         )}
       </Card>
+
+      {/* Privacy / LN warning */}
+      {livePrivacy && !sameToken && (
+        <Card className="p-3 border-amber-500/40 bg-amber-500/10">
+          <div className="flex items-start gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="text-[11px] font-bold text-amber-400 uppercase tracking-wider">{t.privacyTitle}</div>
+              <p className="text-[11px] leading-snug text-foreground/80">{t.privacyNote}</p>
+            </div>
+          </div>
+        </Card>
+      )}
 
       {/* Result */}
       {sameToken ? (
         <Card className="p-4 text-center text-xs text-muted-foreground">{t.invalid}</Card>
       ) : !amount ? (
         <Card className="p-4 text-center text-xs text-muted-foreground">{t.enter}</Card>
-      ) : scanning ? (
+      ) : initialScanning ? (
         <div className="space-y-2">
           <Card className="p-4 space-y-2">
             <div className="flex items-center justify-between">
@@ -225,7 +312,7 @@ export function SwapPage({ lang }: Props) {
               <span className="text-lg font-bold text-foreground">{best.platformName}</span>
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{best.type}</span>
             </div>
-            <div className="font-mono text-2xl font-bold text-emerald-400 leading-tight">
+            <div className="font-mono text-2xl font-bold text-emerald-400 leading-tight transition-all">
               {formatTokenAmount(best.netOut)} <span className="text-sm text-muted-foreground">{to.symbol}</span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-muted-foreground">
@@ -269,7 +356,7 @@ export function SwapPage({ lang }: Props) {
                         )}
                         {!q.supported && (
                           <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-amber-400 uppercase tracking-wider">
-                            <Ban className="w-2.5 h-2.5" />{t.notSupported}
+                            <Ban className="w-2.5 h-2.5" />{privacyRoute ? t.notSupportedClass : t.notSupported}
                           </span>
                         )}
                       </div>
