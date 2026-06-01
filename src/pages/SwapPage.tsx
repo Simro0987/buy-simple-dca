@@ -383,19 +383,76 @@ export function SwapPage({ lang }: Props) {
 
   const copySummary = async () => {
     if (!best) return;
+    const path = best.hops
+      .map(h => h.kind === 'asset' ? `${h.label}${h.sub ? '·' + h.sub : ''}` : h.label)
+      .join(' ➔ ');
     const summary =
       `Swap Order Summary: ${orderType === 'limit' ? 'Limit' : 'Market'} ` +
       `Exchange ${amount} ${from.symbol} (${CHAINS[from.chain].name}) → ` +
       `${formatTokenAmount(best.netOut)} ${to.symbol} (${CHAINS[to.chain].name}) via ${best.platformName}. ` +
       `Expected Net Output: ${formatUsd(best.netOutUsd)} ` +
       `[MEV Protected: ${best.mevProtected ? 'Yes' : 'No'}] ` +
-      `[Execution: ${best.offchainGasless && orderType === 'limit' ? 'Off-chain' : 'On-chain'}]`;
+      `[Execution: ${best.offchainGasless && orderType === 'limit' ? 'Off-chain' : 'On-chain'}] ` +
+      `[Path: ${path}]`;
     try {
       await navigator.clipboard.writeText(summary);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch { /* ignore */ }
   };
+
+  // Protocol-alert badge (red) — surfaces health issues.
+  const HealthBadge = ({ q, compact = false }: { q: Quote; compact?: boolean }) => {
+    if (!q.health || q.health === 'ok') return null;
+    return (
+      <span
+        title={q.healthNote ?? q.health}
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-red-500/50 bg-red-500/15 text-red-400"
+      >
+        <Activity className="w-2.5 h-2.5" />
+        {compact ? (q.healthNote ?? q.health) : `⚠️ ${t.protocolAlert}: ${q.healthNote ?? q.health}`}
+      </span>
+    );
+  };
+
+  // Price-variance badge (amber) — surfaces oracle deviation > 2%.
+  const VarianceBadge = ({ q }: { q: Quote }) => {
+    if (!q.priceVarianceFlag) return null;
+    return (
+      <span
+        title={t.priceVarianceT}
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-amber-500/50 bg-amber-500/15 text-amber-400"
+      >
+        <AlertTriangle className="w-2.5 h-2.5" />
+        {t.priceVariance} · {q.priceVariancePct.toFixed(2)}%
+      </span>
+    );
+  };
+
+  // Renders the explicit multi-hop chain for the best route.
+  const HopChain = ({ hops }: { hops: RouteHop[] }) => (
+    <div className="flex items-center gap-1 text-[11px] font-semibold overflow-x-auto pb-0.5">
+      {hops.map((h, idx) => (
+        <span key={idx} className="inline-flex items-center gap-1 shrink-0">
+          {h.kind === 'asset' ? (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 whitespace-nowrap">
+              {h.icon && <span>{h.icon}</span>}
+              <span>{h.label}</span>
+              {h.sub && <span className="text-emerald-400/70 text-[9px]">{h.sub}</span>}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-primary whitespace-nowrap">
+              <Sparkles className="w-2.5 h-2.5" />
+              <span>{h.label}</span>
+            </span>
+          )}
+          {idx < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
+        </span>
+      ))}
+    </div>
+  );
+
+
 
   // =====================================================================
   // Render
