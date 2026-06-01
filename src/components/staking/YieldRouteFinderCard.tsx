@@ -95,6 +95,7 @@ export function YieldRouteFinderCard({ lang }: Props) {
     excludeUnhealthy: true,
   });
   const [tick, setTick] = useState(0);
+  const [depositAmount, setDepositAmount] = useState<string>('1');
 
   const focusRef = useRef<HTMLElement | null>(null);
   useEffect(() => {
@@ -110,6 +111,16 @@ export function YieldRouteFinderCard({ lang }: Props) {
     () => scanYieldRoutes({ asset, network, strategy, filters, tick }),
     [asset, network, strategy, filters, tick]
   );
+
+  const recommended: RecommendedRoute[] = useMemo(
+    () => getRecommendedRoutes(asset, tick, isSk ? 'sk' : 'en'),
+    [asset, tick, isSk]
+  );
+
+  const depositUsd = useMemo(() => {
+    const amt = parseFloat(depositAmount.replace(',', '.')) || 0;
+    return amt * (ASSET_USD_PRICE[asset] ?? 0);
+  }, [depositAmount, asset]);
 
   const toggleLabels: { key: keyof ScannerFilters; sk: string; en: string }[] = [
     { key: 'noLockup',         sk: 'Bez časového lockupu',                  en: 'No Temporal Lockup' },
