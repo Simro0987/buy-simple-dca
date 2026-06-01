@@ -190,6 +190,11 @@ export function SwapPage({ lang }: Props) {
         impact: 'Price Impact',
         impactWarn: 'High Price Impact',
         impactUnsafe: 'High Price Impact / Unsafe',
+        scanSubmarine: 'Calculating Submarine Swap Routes…',
+        fixedRateBadge: 'Guaranteed Fixed Rate',
+        submarineBadge: 'Submarine Route',
+        submarineTitle: 'Submarine Swap (LN ↔ Polygon stables)',
+        submarineNote: 'These routes use direct internal liquidity desks (no AMM). Boltz, Exolix and FixedFloat offer a locked rate with ~0% price impact and a flat 0.5–1% processing fee.',
       };
 
   const ImpactBadge = ({ q, compact = false }: { q: Quote; compact?: boolean }) => {
