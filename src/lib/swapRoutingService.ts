@@ -155,9 +155,6 @@ export interface Platform {
   bridgeFeeBps?: number;
   estTimeMin: number;
   // Approximate effective liquidity (USD) used to simulate price impact.
-  // Higher = deeper pools = lower impact for the same trade size.
-  liquidityUsd: number;
-  // Approximate effective liquidity (USD) used to simulate price impact.
   // Higher = deeper pools = lower impact for the same trade size. Optional;
   // platforms that don't set it fall back to DEFAULT_LIQUIDITY_USD.
   liquidityUsd?: number;
