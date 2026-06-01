@@ -377,28 +377,39 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
 
     if (privacyRoute) {
       // LN / XMR: only privacy aggregators should win.
-      if (['houdini', 'trocador', 'swapspace'].includes(p.id)) {
+      if (['fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace'].includes(p.id)) {
         priorityEdge = 0.0035; prioritized = true;
+      }
+    } else if (involvesBitcoin(from, to) && swapType === 'cross-chain') {
+      // Native BTC <-> ETH/AVAX/SOL/EVM: THORSwap & Maya at the top, plus deBridge & Jumper.
+      if (['thorswap', 'maya'].includes(p.id)) {
+        priorityEdge = 0.0018; prioritized = true;
+      } else if (['debridge', 'jumper'].includes(p.id)) {
+        priorityEdge = 0.0014; prioritized = true;
       }
     } else if (solInvolved) {
       if (p.id === 'jupiter') { priorityEdge = 0.0025; prioritized = true; }
       else if (p.id === 'jumper' || p.id === 'debridge') { priorityEdge = 0.0008; prioritized = true; }
     } else if (evmCross) {
-      // LI.FI-style: Jumper, Across, deBridge to the top for EVM<->EVM bridging.
-      if (['jumper', 'across', 'debridge'].includes(p.id)) {
+      // LI.FI-style: Jumper, Across, deBridge, Bungee to the top for EVM<->EVM bridging.
+      if (['jumper', 'across', 'debridge', 'bungee'].includes(p.id)) {
         priorityEdge = 0.0014; prioritized = true;
       } else if (['symbiosis', 'velora'].includes(p.id)) {
         priorityEdge = 0.0006; prioritized = true;
       }
     } else if (swapType === 'same-chain' && isEvm(from.chain)) {
-      if (['odos', 'matcha', 'paraswap', 'cowswap', 'kyberswap'].includes(p.id)) {
-        priorityEdge = 0.0007; prioritized = true;
+      // 1inch, Odos, ParaSwap heavily optimized for same-chain EVM.
+      if (['1inch', 'odos', 'paraswap'].includes(p.id)) {
+        priorityEdge = 0.0012; prioritized = true;
+      } else if (['matcha', 'cowswap', 'kyberswap', 'openocean'].includes(p.id)) {
+        priorityEdge = 0.0006; prioritized = true;
       }
     } else if (swapType === 'cross-chain') {
       if (['jumper', 'symbiosis', 'trocador', 'houdini', 'swapspace'].includes(p.id)) {
         priorityEdge = 0.0006; prioritized = true;
       }
     }
+
 
     const edgeAdj = p.edge + priorityEdge + variance * 0.0020;
     const feeBpsAdj = Math.max(0, p.feeBps + (variance > 0 ? variance * 4 : variance * 1));
