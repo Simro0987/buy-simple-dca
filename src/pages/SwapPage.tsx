@@ -318,6 +318,11 @@ export function SwapPage({ lang }: Props) {
         kycRisk: 'KYC Risk / Registration Required', mevRisk: 'No MEV protection',
         requiresOnchain: 'Requires On-chain Lock/Gas', noLimitProto: 'No limit-order protocol',
         notLimitChain: 'Limit requires smart-contract chain',
+        fHealthy: 'Hide risky protocols', fHealthyT: 'Filters out protocols with incidents, paused pools or known exploits.',
+        protocolAlert: 'Protocol Alert',
+        priceVariance: 'Price Variance Warning',
+        priceVarianceT: 'Quote deviates >2% from verified oracle baseline (LI.FI / Jupiter).',
+        hopChain: 'Multi-hop route',
       };
 
   // =====================================================================
