@@ -496,6 +496,22 @@ export interface Quote {
   unsupportedReason?: string;
   // USD saved versus the median supported alternative (only on #1).
   savedVsMedianUsd?: number;
+  // Protocol health surfaced from Platform.
+  health: NonNullable<Platform['health']>;
+  healthNote?: string;
+  // Live cross-verification: how far the simulated rate deviates from the
+  // oracle baseline (LI.FI / Jupiter style). Flag when |deviation| > 2%.
+  priceVariancePct: number;
+  priceVarianceFlag: boolean;
+  // Explicit hop chain for the multi-hop route visualizer.
+  hops: RouteHop[];
+}
+
+export interface RouteHop {
+  kind: 'asset' | 'protocol';
+  label: string;       // e.g. "USDC" or "Across Protocol"
+  sub?: string;        // e.g. chain short name "BASE"
+  icon?: string;
 }
 
 function seededVariance(seed: string): number {
