@@ -231,9 +231,21 @@ export function YieldRouteFinderCard({ lang }: Props) {
         </div>
       </div>
 
+      {/* Dynamic Target-Driven Best Route */}
+      <BestTargetSection
+        asset={asset}
+        network={network}
+        strategy={strategy}
+        tick={tick}
+        depositUsd={depositUsd}
+        isSk={isSk}
+        lang={lang}
+      />
+
       {/* Autonomous Recommended Routes */}
       {recommended.length > 0 && (
         <div className="space-y-2">
+
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-primary" />
             {isSk
