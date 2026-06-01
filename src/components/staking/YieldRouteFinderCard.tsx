@@ -3,10 +3,13 @@ import { Lang } from '@/lib/i18n';
 import {
   scanYieldRoutes, YieldAsset, YieldNetwork, Strategy,
   ScannerFilters, YieldQuote, RouteHop,
+  assessQuoteRisk,
 } from '@/lib/stakeRoutingService';
 import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { RiskShield } from './RiskShield';
+
 
 interface Props { lang: Lang; }
 
