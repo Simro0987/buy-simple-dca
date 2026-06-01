@@ -374,7 +374,80 @@ export const PLATFORMS: Platform[] = [
     edge: 0.0008, feeBps: 9, extraGasUsd: 0.3, bridgeFeeBps: 14, estTimeMin: 6,
     supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain) && !involvesBitcoin(f, t),
     customRecipient: true },
+
+  // ===== Verified cross-chain bridges (Custom Recipient support) =====
+  { id: 'stargate', name: 'Stargate Finance', type: 'bridge',
+    buildUrl: () => `https://stargate.finance/transfer`,
+    edge: 0.0009, feeBps: 6, extraGasUsd: 0.35, bridgeFeeBps: 8, estTimeMin: 3,
+    supports: (f, t, type) => type === 'cross-chain' && isEvm(f.chain) && isEvm(t.chain),
+    customRecipient: true, gasRefuel: true },
+  { id: 'squid', name: 'Squid Router', type: 'bridge',
+    buildUrl: () => `https://app.squidrouter.com/`,
+    edge: 0.0008, feeBps: 7, extraGasUsd: 0.30, bridgeFeeBps: 10, estTimeMin: 3.5,
+    supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain) && !involvesBitcoin(f, t),
+    customRecipient: true, gasRefuel: true },
+  { id: 'hop', name: 'Hop Protocol', type: 'bridge',
+    buildUrl: () => `https://app.hop.exchange/#/send`,
+    edge: 0.0007, feeBps: 5, extraGasUsd: 0.20, bridgeFeeBps: 9, estTimeMin: 4,
+    supports: (f, t, type) => type === 'cross-chain' && isL2(f.chain) && isL2(t.chain),
+    customRecipient: true },
+  { id: 'synapse', name: 'Synapse Protocol', type: 'bridge',
+    buildUrl: () => `https://synapseprotocol.com/`,
+    edge: 0.0006, feeBps: 8, extraGasUsd: 0.40, bridgeFeeBps: 12, estTimeMin: 5,
+    supports: (f, t, type) => type === 'cross-chain' && isEvm(f.chain) && isEvm(t.chain),
+    customRecipient: true },
+  { id: 'owlto', name: 'Owlto Finance', type: 'bridge',
+    buildUrl: () => `https://owlto.finance/`,
+    edge: 0.0012, feeBps: 4, extraGasUsd: 0.10, bridgeFeeBps: 6, estTimeMin: 1.5,
+    supports: (f, t, type) => type === 'cross-chain' && isL2(f.chain) && isL2(t.chain),
+    customRecipient: true },
+  { id: 'dln', name: 'DLN / deBridge Intent', type: 'bridge',
+    buildUrl: () => `https://app.dln.trade/`,
+    edge: 0.0010, feeBps: 5, extraGasUsd: 0.25, bridgeFeeBps: 8, estTimeMin: 2.5,
+    supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain) && !involvesBitcoin(f, t),
+    customRecipient: true, mevProtected: true, gasRefuel: true },
 ];
+
+// ============= Anti-phishing: verified official domains =============
+// Hardcoded mapping of platform id -> verified domain. Always rendered as
+// "Verified: <domain>" and used to gate redirect targets.
+const OFFICIAL_URLS: Record<string, string> = {
+  jumper:     'jumper.xyz',
+  velora:     'velora.xyz',
+  paraswap:   'paraswap.io',
+  across:     'across.to',
+  jupiter:    'jup.ag',
+  odos:       'odos.xyz',
+  kyberswap:  'kyberswap.com',
+  symbiosis:  'symbiosis.finance',
+  cowswap:    'cow.fi',
+  debridge:   'debridge.finance',
+  matcha:     'matcha.xyz',
+  trocador:   'trocador.app',
+  houdini:    'houdiniswap.com',
+  swapspace:  'swapspace.co',
+  thorswap:   'thorswap.finance',
+  '1inch':    '1inch.io',
+  openocean:  'openocean.finance',
+  bungee:     'bungee.exchange',
+  fixedfloat: 'fixedfloat.com',
+  changenow:  'changenow.io',
+  sideshift:  'sideshift.ai',
+  maya:       'mayaprotocol.com',
+  orbiter:    'orbiter.finance',
+  rubic:      'rubic.exchange',
+  boltz:      'boltz.exchange',
+  exolix:     'exolix.com',
+  stargate:   'stargate.finance',
+  squid:      'squidrouter.com',
+  hop:        'hop.exchange',
+  synapse:    'synapseprotocol.com',
+  owlto:      'owlto.finance',
+  dln:        'dln.trade',
+};
+for (const p of PLATFORMS) {
+  p.officialUrl = OFFICIAL_URLS[p.id] ?? p.officialUrl;
+}
 
 // ============= Protocol Health overrides =============
 // Live status flags surfaced as red badges in the UI. Tuned periodically
