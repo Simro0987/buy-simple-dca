@@ -716,10 +716,38 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       : priceImpactPct >= PRICE_IMPACT_WARN_PCT ? 'warn'
       : 'ok';
 
+    // ---- Cross-verification vs oracle baseline ----
+    // Simulate LI.FI (EVM) / Jupiter (Solana) oracle baseline as the in-USD
+    // mid-market quote. priceVariancePct = |grossOut - baseOut| / baseOut.
+    // Routes that deviate >2% from the verified baseline are flagged.
+    const priceVariancePct = baseOut > 0 ? Math.abs(grossOut - baseOut) / baseOut * 100 : 0;
+    const priceVarianceFlag = priceVariancePct > 2.0;
+
+    // ---- Health penalty (% of netOutUsd) ----
+    const healthPenaltyUsd = netOutUsd * (HEALTH_PENALTY[p.health ?? 'ok'] * 0.01);
+
     // Ultimate ranking value — exactly the formula from the spec.
     // Higher = better. Time penalty only matters for cross-chain.
     const timePenaltyUsd = swapType === 'cross-chain' ? estTimeMin * 0.02 : 0;
-    const rankValue = netOutUsd - timePenaltyUsd;
+    const variancePenaltyUsd = priceVarianceFlag ? netOutUsd * 0.05 : 0;
+    const rankValue = netOutUsd - timePenaltyUsd - healthPenaltyUsd - variancePenaltyUsd;
+
+    // ---- Build multi-hop visualizer path ----
+    const fromChainMeta = CHAINS[from.chain];
+    const toChainMeta = CHAINS[to.chain];
+    const hops: RouteHop[] = swapType === 'same-chain'
+      ? [
+          { kind: 'asset',    label: from.symbol, sub: fromChainMeta.short, icon: fromChainMeta.icon },
+          { kind: 'protocol', label: p.name },
+          { kind: 'asset',    label: to.symbol,   sub: toChainMeta.short,   icon: toChainMeta.icon },
+        ]
+      : [
+          { kind: 'asset',    label: from.symbol, sub: fromChainMeta.short, icon: fromChainMeta.icon },
+          { kind: 'protocol', label: p.type === 'bridge' || p.type === 'privacy' ? `${p.name} (Bridge)` : `${p.name} (Router)` },
+          { kind: 'asset',    label: '↔',          sub: `${fromChainMeta.short}→${toChainMeta.short}` },
+          { kind: 'protocol', label: p.type === 'aggregator' ? `${p.name} (DEX Router)` : `${p.name} (Settlement)` },
+          { kind: 'asset',    label: to.symbol,   sub: toChainMeta.short,   icon: toChainMeta.icon },
+        ];
 
     return {
       platformId: p.id,
@@ -751,20 +779,26 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       limitOrders: p.limitOrders,
       gasRefuel: p.gasRefuel,
       unsupportedReason,
+      health: p.health ?? 'ok',
+      healthNote: p.healthNote,
+      priceVariancePct,
+      priceVarianceFlag,
+      hops,
     };
   });
 
-  // Sort: supported first; within supported, unsafe-impact routes pushed
-  // to the bottom; otherwise highest rankValue wins.
+  // Sort: supported first; within supported, unsafe-impact + bad-health
+  // routes get pushed to the bottom; otherwise highest rankValue wins.
   const sorted = all.sort((a, b) => {
     if (a.supported !== b.supported) return a.supported ? -1 : 1;
-    const aUnsafe = a.impactLevel === 'unsafe' ? 1 : 0;
-    const bUnsafe = b.impactLevel === 'unsafe' ? 1 : 0;
-    if (aUnsafe !== bUnsafe) return aUnsafe - bUnsafe;
+    const aBad = (a.impactLevel === 'unsafe' || a.health === 'paused' || a.health === 'security_risk') ? 1 : 0;
+    const bBad = (b.impactLevel === 'unsafe' || b.health === 'paused' || b.health === 'security_risk') ? 1 : 0;
+    if (aBad !== bBad) return aBad - bBad;
     return b.rankValue - a.rankValue;
   });
 
   const best =
+    sorted.find(q => q.supported && q.impactLevel !== 'unsafe' && q.health === 'ok' && !q.priceVarianceFlag) ??
     sorted.find(q => q.supported && q.impactLevel !== 'unsafe') ??
     sorted.find(q => q.supported) ??
     null;
