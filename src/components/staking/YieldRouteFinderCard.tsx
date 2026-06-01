@@ -226,7 +226,7 @@ export function YieldRouteFinderCard({ lang }: Props) {
                   <p className="text-sm font-bold text-foreground truncate">{q.protocolName}</p>
                   <HealthBadge q={q} />
                 </div>
-                <p className="text-[10px] text-emerald-400/90">Verified: {q.officialUrl}</p>
+                <p className="text-[10px] text-emerald-400/90">Verified: {displayOfficialUrl(q.officialUrl)}</p>
               </div>
               <div className="text-right shrink-0">
                 <p className="text-base font-bold text-gain">{q.apy.toFixed(2)}%</p>
