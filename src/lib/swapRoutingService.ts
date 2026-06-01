@@ -136,6 +136,24 @@ export function involvesBitcoin(from: TokenMeta, to: TokenMeta): boolean {
   return from.chain === 'bitcoin' || to.chain === 'bitcoin';
 }
 
+// Submarine swap detection: Lightning <-> Polygon stables (USDC/USDT).
+// These routes are fixed-rate (locked before execution) so they bypass AMM math.
+const POLYGON_STABLES = ['USDC', 'USDT', 'USDC.e'];
+export function isSubmarineRoute(from: TokenMeta, to: TokenMeta): boolean {
+  const lnToPolyStable =
+    from.chain === 'lightning' && to.chain === 'polygon' && POLYGON_STABLES.includes(to.symbol);
+  const polyStableToLn =
+    to.chain === 'lightning' && from.chain === 'polygon' && POLYGON_STABLES.includes(from.symbol);
+  return lnToPolyStable || polyStableToLn;
+}
+
+// Providers that route LN <-> Polygon stables via submarine swaps / fixed-rate desks.
+export const SUBMARINE_PROVIDERS = [
+  'boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace',
+];
+// Subset that explicitly advertises a guaranteed fixed-rate quote.
+export const FIXED_RATE_PROVIDERS = ['boltz', 'exolix', 'fixedfloat'];
+
 // ============= Slippage & Price Impact constants =============
 // Hardcoded conservative max slippage (0.5%) applied uniformly to every route.
 export const MAX_SLIPPAGE_BPS = 50;                // 0.5%
@@ -301,6 +319,19 @@ export const PLATFORMS: Platform[] = [
       && !isPrivacy(f.chain) && !isPrivacy(t.chain)
       && f.chain !== 'solana' && t.chain !== 'solana'
       && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)) },
+
+  // Boltz: trustless Submarine Swaps — gold standard for Lightning <-> on-chain (incl. Polygon stables).
+  { id: 'boltz', name: 'Boltz.exchange', type: 'privacy',
+    buildUrl: () => `https://boltz.exchange/`,
+    edge: 0.0012, feeBps: 50, extraGasUsd: 0.2, bridgeFeeBps: 0, estTimeMin: 5,
+    // Lightning-centric cross-chain routes only.
+    supports: (f, t, type) => type === 'cross-chain' && (f.chain === 'lightning' || t.chain === 'lightning') },
+
+  // Exolix: fixed-rate instant swap desk — rate locked before execution, simulates 0% impact.
+  { id: 'exolix', name: 'Exolix', type: 'privacy',
+    buildUrl: (f, t, a) => `https://exolix.com/?coin_from=${f.symbol.toUpperCase()}&coin_to=${t.symbol.toUpperCase()}&amount=${a}`,
+    edge: 0.0009, feeBps: 70, extraGasUsd: 0.3, bridgeFeeBps: 0, estTimeMin: 10,
+    supports: (_f, _t, type) => type === 'cross-chain' },
 ];
 
 
@@ -353,6 +384,9 @@ export interface Quote {
   isBest?: boolean;
   supported: boolean;
   prioritized?: boolean;
+  // Submarine swap / fixed-rate metadata (Lightning <-> Polygon stables routes).
+  submarine?: boolean;   // route uses internal liquidity / submarine swap (no AMM impact)
+  fixedRate?: boolean;   // rate is locked before execution → "Guaranteed Fixed Rate"
 }
 
 function seededVariance(seed: string): number {
@@ -383,6 +417,7 @@ export interface QuoteResult {
 export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: QuoteParams): QuoteResult {
   const swapType = detectSwapType(from, to);
   const privacyRoute = involvesPrivacy(from, to);
+  const submarineRoute = isSubmarineRoute(from, to);
   if (!amount || amount <= 0 || !prices) return { swapType, quotes: [], best: null, privacyRoute };
 
   const fromUsd = tokenUsdPrice(from, prices);
@@ -404,9 +439,18 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
     let priorityEdge = 0;
     let prioritized = false;
 
-    if (privacyRoute) {
+    if (submarineRoute) {
+      // LN <-> Polygon stables: Boltz & FixedFloat & Exolix fixed-rate desks dominate.
+      if (['boltz', 'fixedfloat'].includes(p.id)) {
+        priorityEdge = 0.0060; prioritized = true;
+      } else if (p.id === 'exolix') {
+        priorityEdge = 0.0050; prioritized = true;
+      } else if (['sideshift', 'changenow', 'houdini', 'trocador', 'swapspace'].includes(p.id)) {
+        priorityEdge = 0.0030; prioritized = true;
+      }
+    } else if (privacyRoute) {
       // LN / XMR: only privacy aggregators should win.
-      if (['fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace'].includes(p.id)) {
+      if (['boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace'].includes(p.id)) {
         priorityEdge = 0.0035; prioritized = true;
       }
     } else if (involvesBitcoin(from, to) && swapType === 'cross-chain') {
@@ -444,22 +488,51 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
     const feeBpsAdj = Math.max(0, p.feeBps + (variance > 0 ? variance * 4 : variance * 1));
 
     const grossOut = baseOut * (1 + edgeAdj);
-    const protocolFeeUsd = (grossOut * toUsd) * (feeBpsAdj / 10000);
-    const bridgeFeeUsd = swapType === 'cross-chain' && p.bridgeFeeBps
-      ? (grossOut * toUsd) * (p.bridgeFeeBps / 10000)
-      : 0;
-    const gasUsd = chainGas + p.extraGasUsd * (1 + variance * 0.2);
 
-    // ---- Price impact simulation ----
-    // impactPct ≈ tradeSize / effectiveLiquidity * 100, plus small variance.
-    // Thin-liquidity / privacy routes inherently show higher impact for large amounts.
-    const liquidityUsd = p.liquidityUsd ?? DEFAULT_LIQUIDITY_USD[p.type];
-    const rawImpactPct = (grossInUsd / liquidityUsd) * 100 + variance * 0.15;
-    const priceImpactPct = Math.max(0, rawImpactPct);
+    // ---- Submarine swap / fixed-rate override (LN <-> Polygon stables) ----
+    // Boltz, Exolix, FixedFloat & friends route through direct internal liquidity
+    // (submarine swaps / OTC desks), so the generic AMM impact + bps fee math
+    // does not apply. We replace it with a flat processing fee (0.5–1%) and a
+    // hard-capped near-zero price impact (0.05–0.2%).
+    const isSubmarineProvider =
+      submarineRoute && supported && SUBMARINE_PROVIDERS.includes(p.id);
+    const isFixedRateProvider =
+      isSubmarineProvider && FIXED_RATE_PROVIDERS.includes(p.id);
+
+    let protocolFeeUsd: number;
+    let bridgeFeeUsd: number;
+    let priceImpactPct: number;
+
+    if (isSubmarineProvider) {
+      // Flat processing fee 0.5–1.0% (fixed-rate desks at the low end).
+      const baseFeePct = isFixedRateProvider ? 0.5 : 0.7;
+      const feePct = baseFeePct + ((variance + 1) / 2) * 0.5; // 0.5..1.0 / 0.7..1.2
+      const clampedFeePct = Math.min(1.0, Math.max(0.5, feePct));
+      protocolFeeUsd = (grossInUsd * clampedFeePct) / 100;
+      bridgeFeeUsd = 0;
+      // Near-zero impact: fixed-rate desks 0.05–0.10%, others 0.10–0.20%.
+      const impactBase = isFixedRateProvider ? 0.05 : 0.10;
+      const impactSpread = isFixedRateProvider ? 0.05 : 0.10;
+      priceImpactPct = impactBase + ((variance + 1) / 2) * impactSpread;
+    } else {
+      protocolFeeUsd = (grossOut * toUsd) * (feeBpsAdj / 10000);
+      bridgeFeeUsd = swapType === 'cross-chain' && p.bridgeFeeBps
+        ? (grossOut * toUsd) * (p.bridgeFeeBps / 10000)
+        : 0;
+      // ---- Price impact simulation (AMM) ----
+      const liquidityUsd = p.liquidityUsd ?? DEFAULT_LIQUIDITY_USD[p.type];
+      const rawImpactPct = (grossInUsd / liquidityUsd) * 100 + variance * 0.15;
+      priceImpactPct = Math.max(0, rawImpactPct);
+    }
     const priceImpactUsd = (grossInUsd * priceImpactPct) / 100;
 
+    const gasUsd = chainGas + p.extraGasUsd * (1 + variance * 0.2);
+
     // ---- Slippage buffer (hard-locked 0.5%) ----
-    const slippageBufferUsd = (grossInUsd * MAX_SLIPPAGE_PCT) / 100;
+    // Submarine / fixed-rate routes have no slippage — the rate is locked.
+    const slippageBufferUsd = isSubmarineProvider
+      ? 0
+      : (grossInUsd * MAX_SLIPPAGE_PCT) / 100;
 
     const totalCostUsd = protocolFeeUsd + bridgeFeeUsd + gasUsd;
     const grossOutUsdValue = grossOut * toUsd;
@@ -468,8 +541,10 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
     const netOut = netOutUsd / toUsd;
     const estTimeMin = Math.max(0.5, p.estTimeMin * (1 + variance * 0.15));
 
+    // Submarine / fixed-rate routes always render as safe (green).
     const impactLevel: PriceImpactLevel =
-      priceImpactPct >= PRICE_IMPACT_UNSAFE_PCT ? 'unsafe'
+      isSubmarineProvider ? 'ok'
+      : priceImpactPct >= PRICE_IMPACT_UNSAFE_PCT ? 'unsafe'
       : priceImpactPct >= PRICE_IMPACT_WARN_PCT ? 'warn'
       : 'ok';
 
@@ -493,11 +568,13 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
       priceImpactPct,
       priceImpactUsd,
       slippageBufferUsd,
-      slippagePct: MAX_SLIPPAGE_PCT,
+      slippagePct: isSubmarineProvider ? 0 : MAX_SLIPPAGE_PCT,
       impactLevel,
       rankValue,
       supported,
       prioritized,
+      submarine: isSubmarineProvider,
+      fixedRate: isFixedRateProvider,
     };
   });
 

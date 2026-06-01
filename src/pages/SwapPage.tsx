@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play, ShieldAlert, ShieldCheck, AlertTriangle } from 'lucide-react';
+import { ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play, ShieldAlert, ShieldCheck, AlertTriangle, Lock } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   CHAINS, CHAIN_ORDER, ChainId, TOKENS, TokenMeta, getQuotes, tokenKey, tokenUsdPrice,
-  formatTokenAmount, formatUsd, formatMin, detectSwapType, involvesPrivacy,
+  formatTokenAmount, formatUsd, formatMin, detectSwapType, involvesPrivacy, isSubmarineRoute,
   MAX_SLIPPAGE_PCT, PRICE_IMPACT_WARN_PCT, PRICE_IMPACT_UNSAFE_PCT, type Quote,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
@@ -135,6 +135,7 @@ export function SwapPage({ lang }: Props) {
   const sameToken = from.chain === to.chain && from.symbol === to.symbol;
   const liveSwapType = detectSwapType(from, to);
   const livePrivacy = involvesPrivacy(from, to);
+  const liveSubmarine = isSubmarineRoute(from, to);
 
   const handleSwitch = () => { setFrom(to); setTo(from); };
   const progress = Math.min(1, elapsed / REFRESH_MS);
@@ -162,6 +163,11 @@ export function SwapPage({ lang }: Props) {
         impact: 'Cenový dopad',
         impactWarn: 'Vysoký dopad',
         impactUnsafe: 'Vysoký dopad / Nebezpečné',
+        scanSubmarine: 'Počítam Submarine Swap trasy…',
+        fixedRateBadge: 'Garantovaný fixný kurz',
+        submarineBadge: 'Submarine Route',
+        submarineTitle: 'Submarine Swap (LN ↔ Polygon stables)',
+        submarineNote: 'Tieto trasy používajú priame interné likvidné desky (žiadne AMM). Boltz, Exolix a FixedFloat ponúkajú zamknutý kurz s ~0% price impact a paušálnym poplatkom 0.5–1%.',
       }
     : {
         title: 'SWAP Scanner',
@@ -184,10 +190,25 @@ export function SwapPage({ lang }: Props) {
         impact: 'Price Impact',
         impactWarn: 'High Price Impact',
         impactUnsafe: 'High Price Impact / Unsafe',
+        scanSubmarine: 'Calculating Submarine Swap Routes…',
+        fixedRateBadge: 'Guaranteed Fixed Rate',
+        submarineBadge: 'Submarine Route',
+        submarineTitle: 'Submarine Swap (LN ↔ Polygon stables)',
+        submarineNote: 'These routes use direct internal liquidity desks (no AMM). Boltz, Exolix and FixedFloat offer a locked rate with ~0% price impact and a flat 0.5–1% processing fee.',
       };
 
   const ImpactBadge = ({ q, compact = false }: { q: Quote; compact?: boolean }) => {
     if (!q.supported) return null;
+    // Submarine / fixed-rate routes get a green guarantee badge instead of impact %.
+    if (q.submarine) {
+      const isFixed = q.fixedRate;
+      return (
+        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-emerald-500/50 bg-emerald-500/15 text-emerald-400">
+          <Lock className="w-2.5 h-2.5" />
+          {isFixed ? t.fixedRateBadge : t.submarineBadge} · {q.priceImpactPct.toFixed(2)}%
+        </span>
+      );
+    }
     const pct = q.priceImpactPct;
     const cls =
       q.impactLevel === 'unsafe'
@@ -303,8 +324,21 @@ export function SwapPage({ lang }: Props) {
         </div>
       </Card>
 
-      {/* Privacy / LN warning */}
-      {livePrivacy && !sameToken && (
+      {/* Submarine swap info (LN <-> Polygon stables) */}
+      {liveSubmarine && !sameToken && (
+        <Card className="p-3 border-emerald-500/40 bg-emerald-500/10">
+          <div className="flex items-start gap-2">
+            <Lock className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">{t.submarineTitle}</div>
+              <p className="text-[11px] leading-snug text-foreground/80">{t.submarineNote}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Privacy / LN warning (suppressed for submarine routes — those have their own banner) */}
+      {livePrivacy && !liveSubmarine && !sameToken && (
         <Card className="p-3 border-amber-500/40 bg-amber-500/10">
           <div className="flex items-start gap-2">
             <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
@@ -327,7 +361,7 @@ export function SwapPage({ lang }: Props) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-primary">
                 <Search className="w-3.5 h-3.5 animate-pulse" />
-                <span className="font-semibold animate-pulse">{t.scan}</span>
+                <span className="font-semibold animate-pulse">{liveSubmarine ? t.scanSubmarine : t.scan}</span>
               </div>
               <SwapTypeBadge type={liveSwapType} />
             </div>
@@ -360,7 +394,7 @@ export function SwapPage({ lang }: Props) {
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <ImpactBadge q={best} />
               <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
-                <ShieldCheck className="w-2.5 h-2.5" /> Slippage {MAX_SLIPPAGE_PCT.toFixed(1)}%
+                <ShieldCheck className="w-2.5 h-2.5" /> Slippage {best.slippagePct.toFixed(1)}%{best.submarine ? ' · Locked' : ''}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-muted-foreground">
