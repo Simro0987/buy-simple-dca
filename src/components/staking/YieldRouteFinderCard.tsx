@@ -371,7 +371,14 @@ export function YieldRouteFinderCard({ lang }: Props) {
               <RiskShield risk={risk} lang={lang} />
             </div>
 
-            <HopChain hops={q.hops} risk={risk} />
+            <HopChain hops={q.hops} risk={risk} tick={tick} />
+
+            {quoteDepegs.map(p => (
+              <div key={p.asset} className="flex items-start gap-2 p-2 rounded border border-loss/60 bg-loss/15 animate-pulse">
+                <AlertTriangle className="w-3.5 h-3.5 text-loss mt-0.5 shrink-0" />
+                <p className="text-[10px] text-loss leading-snug font-semibold">{depegAlertMessage(isSk ? 'sk' : 'en', p)}</p>
+              </div>
+            ))}
 
             <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
               <span className="px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{q.category}</span>
