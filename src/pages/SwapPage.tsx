@@ -660,29 +660,13 @@ export function SwapPage({ lang }: Props) {
         </div>
       ) : best ? (
         <>
-          {/* Route Visualizer */}
+          {/* Multi-hop Route Visualizer */}
           <Card className="p-2.5 bg-card/40 border-border/60">
             <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground mb-1">
-              <span>{t.routeViz}</span>
+              <GitBranch className="w-2.5 h-2.5" />
+              <span>{swapType === 'cross-chain' ? t.hopChain : t.routeViz}</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold overflow-x-auto">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-background/60 whitespace-nowrap">
-                <span>{CHAINS[from.chain].icon}</span>
-                <span className="text-foreground">{from.symbol}</span>
-                <span className="text-muted-foreground text-[9px]">{CHAINS[from.chain].short}</span>
-              </span>
-              <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-primary whitespace-nowrap">
-                <Sparkles className="w-2.5 h-2.5" />
-                {best.platformName}
-              </span>
-              <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 whitespace-nowrap">
-                <span>{CHAINS[to.chain].icon}</span>
-                <span>{to.symbol}</span>
-                <span className="text-emerald-400/70 text-[9px]">{CHAINS[to.chain].short}</span>
-              </span>
-            </div>
+            <HopChain hops={best.hops} />
           </Card>
 
           {/* Hero card */}
