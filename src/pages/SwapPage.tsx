@@ -13,6 +13,7 @@ import {
   isLimitOrderChain, getGasTokenSymbol, needsGasRefuel,
   MAX_SLIPPAGE_PCT, PRICE_IMPACT_WARN_PCT, PRICE_IMPACT_UNSAFE_PCT,
   type Quote, type OrderType, type QuoteFilters, type RouteHop,
+  evaluateMevRisk, evaluateGasEater,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
