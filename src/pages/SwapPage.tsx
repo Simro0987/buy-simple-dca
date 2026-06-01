@@ -135,6 +135,7 @@ export function SwapPage({ lang }: Props) {
   const sameToken = from.chain === to.chain && from.symbol === to.symbol;
   const liveSwapType = detectSwapType(from, to);
   const livePrivacy = involvesPrivacy(from, to);
+  const liveSubmarine = isSubmarineRoute(from, to);
 
   const handleSwitch = () => { setFrom(to); setTo(from); };
   const progress = Math.min(1, elapsed / REFRESH_MS);
