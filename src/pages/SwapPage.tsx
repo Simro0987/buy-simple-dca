@@ -430,24 +430,32 @@ export function SwapPage({ lang }: Props) {
   };
 
   // Renders the explicit multi-hop chain for the best route.
+  // Clean, wrapping flex layout. Each hop is a legible chip; arrows are
+  // standalone flex items so wrapping does not break the sequence.
   const HopChain = ({ hops }: { hops: RouteHop[] }) => (
-    <div className="flex items-center gap-1 text-[11px] font-semibold overflow-x-auto pb-0.5">
+    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1.5 text-xs font-semibold leading-none">
       {hops.map((h, idx) => (
-        <span key={idx} className="inline-flex items-center gap-1 shrink-0">
+        <React.Fragment key={idx}>
           {h.kind === 'asset' ? (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 whitespace-nowrap">
-              {h.icon && <span>{h.icon}</span>}
-              <span>{h.label}</span>
-              {h.sub && <span className="text-emerald-400/70 text-[9px]">{h.sub}</span>}
+            <span className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 whitespace-nowrap max-w-full">
+              {h.icon && <span className="text-[11px]">{h.icon}</span>}
+              <span className="truncate">{h.label}</span>
+              {h.sub && (
+                <span className="text-emerald-400/70 text-[10px] font-medium">
+                  {h.sub}
+                </span>
+              )}
             </span>
           ) : (
-            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-primary whitespace-nowrap">
-              <Sparkles className="w-2.5 h-2.5" />
-              <span>{h.label}</span>
+            <span className="inline-flex items-center gap-1 px-2 py-1.5 rounded-md border border-primary/40 bg-primary/15 text-primary whitespace-nowrap max-w-full">
+              <Sparkles className="w-3 h-3 shrink-0" />
+              <span className="truncate">{h.label}</span>
             </span>
           )}
-          {idx < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
-        </span>
+          {idx < hops.length - 1 && (
+            <ArrowRight className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          )}
+        </React.Fragment>
       ))}
     </div>
   );
