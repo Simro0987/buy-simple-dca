@@ -189,6 +189,11 @@ export interface Platform {
   // ===== Protocol health =====
   health?: 'ok' | 'congested' | 'degraded' | 'security_risk' | 'paused';
   healthNote?: string;         // Short alert reason for UI
+  // ===== Anti-phishing =====
+  // Hardcoded verified official domain. Always rendered in the UI and used
+  // as the destination for the "Go to Platform" button. Never load any URL
+  // outside this domain to prevent search-ad / phishing hijacks.
+  officialUrl?: string;
 }
 
 // Health rank used for ranking penalty (higher = worse).
