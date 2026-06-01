@@ -394,7 +394,7 @@ export function SwapPage({ lang }: Props) {
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <ImpactBadge q={best} />
               <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
-                <ShieldCheck className="w-2.5 h-2.5" /> Slippage {MAX_SLIPPAGE_PCT.toFixed(1)}%
+                <ShieldCheck className="w-2.5 h-2.5" /> Slippage {best.slippagePct.toFixed(1)}%{best.submarine ? ' · Locked' : ''}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-muted-foreground">
