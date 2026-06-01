@@ -173,14 +173,19 @@ export interface Platform {
   bridgeFeeBps?: number;
   estTimeMin: number;
   // Approximate effective liquidity (USD) used to simulate price impact.
-  // Higher = deeper pools = lower impact for the same trade size. Optional;
-  // platforms that don't set it fall back to DEFAULT_LIQUIDITY_USD.
   liquidityUsd?: number;
   supports: (from: TokenMeta, to: TokenMeta, type: SwapType) => boolean;
+  // ===== Capability flags (used by Pro-Filter Suite) =====
+  customRecipient?: boolean;   // App lets user pick a different destination wallet
+  noKyc?: boolean;             // No registration / no KYC walls
+  noWallet?: boolean;          // Deposit-address based, no Web3 wallet connection
+  mevProtected?: boolean;      // Private RPC / batch auctions / intent architecture
+  offchainGasless?: boolean;   // EIP-712 signature-based, gasless limit orders
+  limitOrders?: boolean;       // Native limit-order protocol support
+  gasRefuel?: boolean;         // Can deliver native gas on destination chain
 }
 
 // Default liquidity tiers used when a platform doesn't override liquidityUsd.
-// Major aggregators -> deep; bridges -> medium; privacy/instant -> thin.
 const DEFAULT_LIQUIDITY_USD: Record<Platform['type'], number> = {
   aggregator: 80_000_000,
   dex:        45_000_000,
@@ -192,147 +197,203 @@ const EVM_CHAINS: ChainId[] = ['ethereum', 'base', 'arbitrum', 'polygon', 'avala
 const isEvm = (c: ChainId) => EVM_CHAINS.includes(c);
 const isPrivacy = (c: ChainId) => PRIVACY_CHAINS.includes(c);
 
+// L2-to-L2 chains (Orbiter sweet spot).
+const L2_CHAINS: ChainId[] = ['base', 'arbitrum', 'polygon'];
+const isL2 = (c: ChainId) => L2_CHAINS.includes(c);
+
 export const PLATFORMS: Platform[] = [
-  // LI.FI-powered universal aggregator (EVM + SOL + BTC). No LN/XMR.
+  // ===== LI.FI universal aggregator =====
   { id: 'jumper', name: 'Jumper.xyz', type: 'aggregator',
     buildUrl: (f, t, a) => `https://jumper.exchange/?fromChain=${chainQuery(f.chain)}&toChain=${chainQuery(t.chain)}&fromToken=${encodeURIComponent(f.symbol)}&toToken=${encodeURIComponent(t.symbol)}&fromAmount=${a}`,
     edge: 0.0015, feeBps: 5, extraGasUsd: 0.0, bridgeFeeBps: 8, estTimeMin: 3,
-    supports: (f, t) => !isPrivacy(f.chain) && !isPrivacy(t.chain) },
+    supports: (f, t) => !isPrivacy(f.chain) && !isPrivacy(t.chain),
+    customRecipient: true, mevProtected: true, gasRefuel: true },
 
-  // Same-chain EVM aggregators
+  // ===== Same-chain EVM aggregators =====
   { id: 'odos', name: 'Odos.xyz', type: 'aggregator',
     buildUrl: (f, t) => `https://app.odos.xyz/?inputCurrency=${f.symbol}&outputCurrency=${t.symbol}&chainId=${chainNumericId(f.chain)}`,
     edge: 0.0017, feeBps: 5, extraGasUsd: 0.0, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain) },
+    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain),
+    mevProtected: true, limitOrders: true },
   { id: 'paraswap', name: 'ParaSwap', type: 'aggregator',
     buildUrl: (f, t) => `https://app.paraswap.io/#/${f.symbol}-${t.symbol}/SELL?network=${chainQuery(f.chain)}`,
     edge: 0.0011, feeBps: 6, extraGasUsd: 0.02, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain) },
+    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain),
+    mevProtected: true, offchainGasless: true, limitOrders: true },
   { id: 'cowswap', name: 'CoW Swap', type: 'dex',
     buildUrl: (f, t) => `https://swap.cow.fi/#/${chainNumericId(f.chain)}/swap/${f.symbol}/${t.symbol}`,
     edge: 0.0019, feeBps: 3, extraGasUsd: 0.0, estTimeMin: 3,
-    // Same-chain EVM only (Eth/Arb/Base/Polygon). Not Avalanche, no cross-chain, no Solana/BTC/LN/XMR.
-    supports: (f, t, type) => type === 'same-chain' && ['ethereum', 'arbitrum', 'base', 'polygon'].includes(f.chain) },
+    supports: (f, t, type) => type === 'same-chain' && ['ethereum', 'arbitrum', 'base', 'polygon'].includes(f.chain),
+    mevProtected: true, offchainGasless: true, limitOrders: true },
   { id: 'matcha', name: 'Matcha.xyz', type: 'aggregator',
     buildUrl: (f, t) => `https://matcha.xyz/markets/${chainNumericId(f.chain)}/${f.symbol}`,
     edge: 0.0013, feeBps: 6, extraGasUsd: 0.03, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain) },
+    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain),
+    offchainGasless: true, limitOrders: true },
   { id: 'kyberswap', name: 'KyberSwap', type: 'aggregator',
     buildUrl: (f, t) => `https://kyberswap.com/swap/${chainQuery(f.chain)}/${f.symbol}-to-${t.symbol}`,
     edge: 0.0010, feeBps: 7, extraGasUsd: 0.04, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain) },
+    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain),
+    limitOrders: true },
 
-  // Solana-centric
+  // ===== Solana =====
   { id: 'jupiter', name: 'Jupiter AG', type: 'aggregator',
     buildUrl: (f, t, a) => `https://jup.ag/swap/${f.symbol}-${t.symbol}?amount=${a}`,
     edge: 0.0028, feeBps: 4, extraGasUsd: 0.0, estTimeMin: 1,
-    supports: (f, t) => f.chain === 'solana' && t.chain === 'solana' },
+    supports: (f, t) => f.chain === 'solana' && t.chain === 'solana',
+    limitOrders: true },
 
-  // Cross-chain bridges / aggregators (EVM-focused)
+  // ===== Cross-chain bridges / aggregators (EVM-focused) =====
   { id: 'across', name: 'Across Protocol', type: 'bridge',
     buildUrl: (f, t, a) => `https://app.across.to/bridge?fromChain=${chainQuery(f.chain)}&toChain=${chainQuery(t.chain)}&inputToken=${f.symbol}&outputToken=${t.symbol}&inputAmount=${a}`,
     edge: 0.0008, feeBps: 4, extraGasUsd: 0.3, bridgeFeeBps: 6, estTimeMin: 2,
-    // Across: EVM <-> EVM only (Eth/Base/Arb/Polygon). No Avalanche L1, no BTC, no Solana, no LN/XMR.
     supports: (f, t, type) => type === 'cross-chain'
       && ['ethereum', 'base', 'arbitrum', 'polygon'].includes(f.chain)
-      && ['ethereum', 'base', 'arbitrum', 'polygon'].includes(t.chain) },
+      && ['ethereum', 'base', 'arbitrum', 'polygon'].includes(t.chain),
+    customRecipient: true },
   { id: 'symbiosis', name: 'Symbiosis Finance', type: 'bridge',
     buildUrl: () => `https://app.symbiosis.finance/swap`,
     edge: 0.0006, feeBps: 8, extraGasUsd: 0.6, bridgeFeeBps: 14, estTimeMin: 6,
-    supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain) },
+    supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain),
+    customRecipient: true },
   { id: 'debridge', name: 'deBridge.com', type: 'bridge',
     buildUrl: () => `https://app.debridge.finance/`,
     edge: 0.0007, feeBps: 6, extraGasUsd: 0.4, bridgeFeeBps: 12, estTimeMin: 4,
-    // EVM <-> EVM and EVM <-> Solana. No BTC, no LN, no XMR.
-    supports: (f, t, type) => type === 'cross-chain' && !involvesBitcoin(f, t) && !isPrivacy(f.chain) && !isPrivacy(t.chain) },
+    supports: (f, t, type) => type === 'cross-chain' && !involvesBitcoin(f, t) && !isPrivacy(f.chain) && !isPrivacy(t.chain),
+    customRecipient: true },
   { id: 'velora', name: 'Velora.xyz', type: 'aggregator',
     buildUrl: () => `https://velora.xyz/`,
     edge: 0.0009, feeBps: 8, extraGasUsd: 0.05, bridgeFeeBps: 10, estTimeMin: 5,
     supports: (f, t, type) => type === 'cross-chain' && !involvesBitcoin(f, t) && !isPrivacy(f.chain) && !isPrivacy(t.chain) },
 
-  // Privacy / instant cross-chain — these ARE the ones that support LN & XMR
+  // ===== Privacy / instant cross-chain =====
   { id: 'trocador', name: 'Trocador.app', type: 'privacy',
     buildUrl: (f, t, a) => `https://trocador.app/en/?ticker_from=${f.symbol.toLowerCase()}&ticker_to=${t.symbol.toLowerCase()}&network_from=${f.chain}&network_to=${t.chain}&amount=${a}`,
     edge: 0.0004, feeBps: 25, extraGasUsd: 0.8, bridgeFeeBps: 30, estTimeMin: 15,
-    supports: (_f, _t, type) => type === 'cross-chain' },
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
   { id: 'houdini', name: 'Houdiniswap.com', type: 'privacy',
     buildUrl: () => `https://houdiniswap.com/`,
     edge: 0.0002, feeBps: 30, extraGasUsd: 1.0, bridgeFeeBps: 40, estTimeMin: 20,
-    supports: (_f, _t, type) => type === 'cross-chain' },
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
   { id: 'swapspace', name: 'Swapspace.co', type: 'aggregator',
     buildUrl: (f, t) => `https://swapspace.co/exchange/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
     edge: 0.0005, feeBps: 25, extraGasUsd: 0.5, bridgeFeeBps: 25, estTimeMin: 12,
-    supports: (_f, _t, type) => type === 'cross-chain' },
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
 
-  // ============= 8 new premium integrations =============
-  // THORSwap: native BTC/ETH/AVAX cross-chain via THORChain
+  // ===== Premium integrations =====
   { id: 'thorswap', name: 'THORSwap', type: 'bridge',
     buildUrl: (f, t) => `https://app.thorswap.finance/swap?input=${f.chain}.${f.symbol}&output=${t.chain}.${t.symbol}`,
     edge: 0.0010, feeBps: 10, extraGasUsd: 0.5, bridgeFeeBps: 15, estTimeMin: 8,
-    // Native-asset cross-chain only (BTC/ETH/AVAX and major EVM). No LN/XMR/Solana.
     supports: (f, t, type) => type === 'cross-chain'
       && !isPrivacy(f.chain) && !isPrivacy(t.chain)
       && f.chain !== 'solana' && t.chain !== 'solana'
-      && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)) },
-
-  // 1inch: same-chain EVM aggregator (top tier)
+      && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)),
+    customRecipient: true },
   { id: '1inch', name: '1inch', type: 'aggregator',
     buildUrl: (f, t) => `https://app.1inch.io/#/${chainNumericId(f.chain)}/simple/swap/${f.symbol}/${t.symbol}`,
     edge: 0.0018, feeBps: 4, extraGasUsd: 0.0, estTimeMin: 1,
-    supports: (f, _t, type) => type === 'same-chain' && isEvm(f.chain) },
-
-  // OpenOcean: multi-chain EVM + Solana aggregator
+    supports: (f, _t, type) => type === 'same-chain' && isEvm(f.chain),
+    mevProtected: true, offchainGasless: true, limitOrders: true },
   { id: 'openocean', name: 'OpenOcean', type: 'aggregator',
     buildUrl: (f, t) => `https://app.openocean.finance/classic#/${(CHAINS[f.chain].short || '').toUpperCase()}/${f.symbol}/${t.symbol}`,
     edge: 0.0012, feeBps: 6, extraGasUsd: 0.03, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && (isEvm(f.chain) || f.chain === 'solana') },
-
-  // Bungee (Socket): cross-chain EVM bridge aggregator
+    supports: (f, t, type) => type === 'same-chain' && (isEvm(f.chain) || f.chain === 'solana'),
+    limitOrders: true },
   { id: 'bungee', name: 'Bungee.exchange', type: 'bridge',
     buildUrl: (f, t, a) => `https://www.bungee.exchange/?fromChainId=${chainNumericId(f.chain)}&toChainId=${chainNumericId(t.chain)}&fromTokenSymbol=${f.symbol}&toTokenSymbol=${t.symbol}&amount=${a}`,
     edge: 0.0009, feeBps: 5, extraGasUsd: 0.25, bridgeFeeBps: 10, estTimeMin: 4,
-    supports: (f, t, type) => type === 'cross-chain' && isEvm(f.chain) && isEvm(t.chain) },
-
-  // FixedFloat: privacy-friendly instant swap; great for LN & XMR
+    supports: (f, t, type) => type === 'cross-chain' && isEvm(f.chain) && isEvm(t.chain),
+    customRecipient: true, mevProtected: true, gasRefuel: true },
   { id: 'fixedfloat', name: 'FixedFloat', type: 'privacy',
     buildUrl: (f, t) => `https://fixedfloat.com/?from=${f.symbol.toUpperCase()}&to=${t.symbol.toUpperCase()}`,
     edge: 0.0006, feeBps: 20, extraGasUsd: 0.4, bridgeFeeBps: 20, estTimeMin: 10,
-    supports: (_f, _t, type) => type === 'cross-chain' },
-
-  // ChangeNOW: instant non-custodial (BTC/XMR/EVM)
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
   { id: 'changenow', name: 'ChangeNOW', type: 'privacy',
     buildUrl: (f, t, a) => `https://changenow.io/?from=${f.symbol.toLowerCase()}&to=${t.symbol.toLowerCase()}&amount=${a}`,
     edge: 0.0005, feeBps: 22, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
-    supports: (_f, _t, type) => type === 'cross-chain' },
-
-  // SideShift: instant swap with LN/BTC/SOL/XMR support
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
   { id: 'sideshift', name: 'SideShift.ai', type: 'privacy',
     buildUrl: (f, t) => `https://sideshift.ai/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
     edge: 0.0007, feeBps: 20, extraGasUsd: 0.3, bridgeFeeBps: 18, estTimeMin: 8,
-    supports: (_f, _t, type) => type === 'cross-chain' },
-
-  // Maya Protocol: native cross-chain liquidity (BTC/ETH/AVAX)
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
   { id: 'maya', name: 'Maya Protocol', type: 'bridge',
     buildUrl: () => `https://app.mayaprotocol.com/`,
     edge: 0.0009, feeBps: 12, extraGasUsd: 0.5, bridgeFeeBps: 16, estTimeMin: 9,
     supports: (f, t, type) => type === 'cross-chain'
       && !isPrivacy(f.chain) && !isPrivacy(t.chain)
       && f.chain !== 'solana' && t.chain !== 'solana'
-      && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)) },
-
-  // Boltz: trustless Submarine Swaps — gold standard for Lightning <-> on-chain (incl. Polygon stables).
+      && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)),
+    customRecipient: true },
   { id: 'boltz', name: 'Boltz.exchange', type: 'privacy',
     buildUrl: () => `https://boltz.exchange/`,
     edge: 0.0012, feeBps: 50, extraGasUsd: 0.2, bridgeFeeBps: 0, estTimeMin: 5,
-    // Lightning-centric cross-chain routes only.
-    supports: (f, t, type) => type === 'cross-chain' && (f.chain === 'lightning' || t.chain === 'lightning') },
-
-  // Exolix: fixed-rate instant swap desk — rate locked before execution, simulates 0% impact.
+    supports: (f, t, type) => type === 'cross-chain' && (f.chain === 'lightning' || t.chain === 'lightning'),
+    customRecipient: true, noKyc: true, noWallet: true },
   { id: 'exolix', name: 'Exolix', type: 'privacy',
     buildUrl: (f, t, a) => `https://exolix.com/?coin_from=${f.symbol.toUpperCase()}&coin_to=${t.symbol.toUpperCase()}&amount=${a}`,
     edge: 0.0009, feeBps: 70, extraGasUsd: 0.3, bridgeFeeBps: 0, estTimeMin: 10,
-    supports: (_f, _t, type) => type === 'cross-chain' },
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
+
+  // ===== L2-to-L2 + multi-chain newcomers =====
+  // Orbiter Finance: ultra-fast L2 <-> L2 bridge (Base/Arb/Polygon/zkSync/Linea/etc.)
+  { id: 'orbiter', name: 'Orbiter Finance', type: 'bridge',
+    buildUrl: (f, t) => `https://www.orbiter.finance/?source=${chainQuery(f.chain)}&dest=${chainQuery(t.chain)}&token=${f.symbol}`,
+    edge: 0.0014, feeBps: 4, extraGasUsd: 0.1, bridgeFeeBps: 5, estTimeMin: 1.5,
+    supports: (f, t, type) => type === 'cross-chain' && isL2(f.chain) && isL2(t.chain),
+    customRecipient: true },
+  // Rubic Exchange: multi-chain aggregator for EVM + Solana
+  { id: 'rubic', name: 'Rubic Exchange', type: 'aggregator',
+    buildUrl: () => `https://app.rubic.exchange/`,
+    edge: 0.0008, feeBps: 9, extraGasUsd: 0.3, bridgeFeeBps: 14, estTimeMin: 6,
+    supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain) && !involvesBitcoin(f, t),
+    customRecipient: true },
 ];
+
+// ============= Order types & filters =============
+export type OrderType = 'market' | 'limit';
+
+export interface QuoteFilters {
+  customRecipient?: boolean;   // Toggle 1
+  noKyc?: boolean;             // Toggle 2 (Privacy Mode)
+  noWallet?: boolean;          // Toggle 3
+  mevProtected?: boolean;      // Toggle 4
+  offchainGasless?: boolean;   // Limit-mode "Off-chain only"
+}
+
+// Chains that natively support limit orders (smart-contract chains only).
+const LIMIT_ORDER_CHAINS: ChainId[] = ['ethereum', 'base', 'arbitrum', 'polygon', 'avalanche', 'solana'];
+export const isLimitOrderChain = (c: ChainId) => LIMIT_ORDER_CHAINS.includes(c);
+
+// Native gas-token symbol per chain (used for "Gas Refuel" warning).
+export function getGasTokenSymbol(c: ChainId): string {
+  switch (c) {
+    case 'ethereum':
+    case 'base':
+    case 'arbitrum':   return 'ETH';
+    case 'polygon':    return 'POL';
+    case 'avalanche':  return 'AVAX';
+    case 'solana':     return 'SOL';
+    case 'bitcoin':    return 'BTC';
+    case 'lightning':  return 'sats';
+    case 'monero':     return 'XMR';
+  }
+}
+
+// True when delivering `to` likely requires native gas the user may lack.
+// Skip when destination is BTC/LN/XMR (no separate gas) or the swap delivers
+// the native gas token itself.
+export function needsGasRefuel(to: TokenMeta): boolean {
+  if (['bitcoin', 'lightning', 'monero'].includes(to.chain)) return false;
+  const gas = getGasTokenSymbol(to.chain);
+  return to.symbol.toUpperCase() !== gas.toUpperCase();
+}
 
 
 function chainQuery(c: ChainId): string {
