@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play,
   ShieldAlert, ShieldCheck, AlertTriangle, Lock, Copy, Check, Wallet, EyeOff,
-  Shield, Fuel, Flame, ArrowRight,
+  Shield, Fuel, Flame, ArrowRight, Activity, GitBranch,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   formatTokenAmount, formatUsd, formatMin, detectSwapType, involvesPrivacy, isSubmarineRoute,
   isLimitOrderChain, getGasTokenSymbol, needsGasRefuel,
   MAX_SLIPPAGE_PCT, PRICE_IMPACT_WARN_PCT, PRICE_IMPACT_UNSAFE_PCT,
-  type Quote, type OrderType, type QuoteFilters,
+  type Quote, type OrderType, type QuoteFilters, type RouteHop,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
