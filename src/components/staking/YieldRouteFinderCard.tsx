@@ -7,6 +7,7 @@ import {
   getRecommendedRoutes, evaluateGasGuard,
   buildOfficialLink, displayOfficialUrl,
   ASSET_USD_PRICE, RecommendedRoute,
+  isDerivative, getPegStatus, detectRouteDepegs, depegAlertMessage, PegStatus,
 } from '@/lib/stakeRoutingService';
 import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap, Sparkles, Fuel } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
@@ -26,7 +27,7 @@ const STRATEGIES: { value: Strategy; label: string }[] = [
   { value: 'liquidity',      label: 'Liquidity Pools' },
 ];
 
-function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stakeRoutingService').RiskAssessment }) {
+function HopChain({ hops, risk, tick = 0 }: { hops: RouteHop[]; risk?: import('@/lib/stakeRoutingService').RiskAssessment; tick?: number }) {
   // attach the risk badge to the last protocol hop
   const lastProtocolIdx = (() => {
     for (let i = hops.length - 1; i >= 0; i--) if (hops[i].kind === 'protocol') return i;
@@ -42,17 +43,27 @@ function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stake
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {hops.map((h, i) => (
+      {hops.map((h, i) => {
+        const peg = h.kind === 'asset' && isDerivative(h.label) ? getPegStatus(h.label, tick) : null;
+        const pegCritical = peg?.severity === 'critical';
+        return (
         <React.Fragment key={i}>
           <div
             className={`flex flex-col items-start px-2 py-1.5 rounded border text-xs max-w-full ${
               h.kind === 'asset'
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                ? pegCritical
+                  ? 'border-loss/60 bg-loss/10 text-loss animate-pulse'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 : 'border-primary/40 bg-primary/15 text-foreground'
             }`}
           >
             <span className="font-medium truncate">{h.label}</span>
             {h.sublabel && <span className="text-[10px] text-muted-foreground truncate">{h.sublabel}</span>}
+            {peg && (
+              <span className={`mt-0.5 text-[9px] font-semibold ${pegCritical ? 'text-loss' : 'text-gain'}`}>
+                {pegCritical ? '🔴' : '🟢'} {pegCritical ? 'Depeg' : 'Parity'}: {peg.ratio.toFixed(4)}x
+              </span>
+            )}
             {risk && riskCfg && i === lastProtocolIdx && (
               <span className={`mt-0.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded border text-[9px] font-semibold ${riskCfg.wrap}`}>
                 {riskCfg.emoji} {risk.score}/10
@@ -61,7 +72,8 @@ function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stake
           </div>
           {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
         </React.Fragment>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -238,8 +250,9 @@ export function YieldRouteFinderCard({ lang }: Props) {
               lang: isSk ? 'sk' : 'en',
             });
             const primary = r.steps[0];
+            const depegs = detectRouteDepegs(r.hops, tick);
             return (
-              <div key={r.tier} className={`rounded-lg border p-3 space-y-2 ${tierBorder}`}>
+              <div key={r.tier} className={`rounded-lg border p-3 space-y-2 ${tierBorder} ${depegs.length ? 'ring-2 ring-loss/60' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">
@@ -279,7 +292,14 @@ export function YieldRouteFinderCard({ lang }: Props) {
                   ))}
                 </div>
 
-                <HopChain hops={r.hops} risk={r.risk} />
+                <HopChain hops={r.hops} risk={r.risk} tick={tick} />
+
+                {depegs.map(p => (
+                  <div key={p.asset} className="flex items-start gap-2 p-2 rounded border border-loss/60 bg-loss/15 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-loss mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-loss leading-snug font-semibold">{depegAlertMessage(isSk ? 'sk' : 'en', p)}</p>
+                  </div>
+                ))}
 
                 {gas && (
                   <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10">
@@ -320,13 +340,14 @@ export function YieldRouteFinderCard({ lang }: Props) {
 
         {quotes.map((q, idx) => {
           const risk = assessQuoteRisk(q, isSk ? 'sk' : 'en');
+          const quoteDepegs = detectRouteDepegs(q.hops, tick);
           const verdictBorder =
             risk.level === 'low' ? 'border-gain/30 bg-gain/5 text-gain/90' :
             risk.level === 'medium' ? 'border-amber-500/30 bg-amber-500/5 text-amber-300/90' :
             'border-loss/30 bg-loss/5 text-loss/90';
           return (
           <div key={q.protocolId + idx}
-               className={`rounded-lg p-3 space-y-2 border ${idx === 0 ? 'border-primary/40 bg-primary/5' : 'border-border/40 bg-secondary/30'}`}>
+               className={`rounded-lg p-3 space-y-2 border ${idx === 0 ? 'border-primary/40 bg-primary/5' : 'border-border/40 bg-secondary/30'} ${quoteDepegs.length ? 'ring-2 ring-loss/60' : ''}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -350,7 +371,14 @@ export function YieldRouteFinderCard({ lang }: Props) {
               <RiskShield risk={risk} lang={lang} />
             </div>
 
-            <HopChain hops={q.hops} risk={risk} />
+            <HopChain hops={q.hops} risk={risk} tick={tick} />
+
+            {quoteDepegs.map(p => (
+              <div key={p.asset} className="flex items-start gap-2 p-2 rounded border border-loss/60 bg-loss/15 animate-pulse">
+                <AlertTriangle className="w-3.5 h-3.5 text-loss mt-0.5 shrink-0" />
+                <p className="text-[10px] text-loss leading-snug font-semibold">{depegAlertMessage(isSk ? 'sk' : 'en', p)}</p>
+              </div>
+            ))}
 
             <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
               <span className="px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{q.category}</span>

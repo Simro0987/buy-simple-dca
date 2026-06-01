@@ -683,3 +683,82 @@ export function getRecommendedRoutes(asset: YieldAsset, tick = 0, lang: 'en' | '
   });
 }
 
+// ============= Derivative LST / LRT Depeg Engine =============
+
+export type DerivativeAsset = 'stETH' | 'wstETH' | 'weETH' | 'JitoSOL' | 'mSOL' | 'bSOL' | 'LBTC';
+
+export const DERIVATIVE_ASSETS: DerivativeAsset[] = ['stETH','wstETH','weETH','JitoSOL','mSOL','bSOL','LBTC'];
+
+export const DERIVATIVE_TO_BASE: Record<DerivativeAsset, 'ETH' | 'SOL' | 'BTC'> = {
+  stETH: 'ETH', wstETH: 'ETH', weETH: 'ETH',
+  JitoSOL: 'SOL', mSOL: 'SOL', bSOL: 'SOL',
+  LBTC: 'BTC',
+};
+
+// Deterministic synthetic price-parity oscillators (amplitude in % deviation).
+// Some derivatives (weETH, JitoSOL) intentionally cross the 1% line during certain ticks
+// to surface the alert UX during normal operation.
+const DEPEG_OSCILLATORS: Record<DerivativeAsset, { amp: number; phase: number; freq: number }> = {
+  stETH:   { amp: 0.004, phase: 0.7, freq: 0.6 },
+  wstETH:  { amp: 0.005, phase: 1.3, freq: 0.55 },
+  weETH:   { amp: 0.014, phase: 0.4, freq: 0.42 },   // can spike past 1.0%
+  JitoSOL: { amp: 0.013, phase: 2.1, freq: 0.48 },   // can spike past 1.0%
+  mSOL:    { amp: 0.006, phase: 1.8, freq: 0.62 },
+  bSOL:    { amp: 0.008, phase: 0.9, freq: 0.5 },
+  LBTC:    { amp: 0.007, phase: 2.5, freq: 0.45 },
+};
+
+export type PegSeverity = 'healthy' | 'critical';
+
+export interface PegStatus {
+  asset: DerivativeAsset;
+  base: 'ETH' | 'SOL' | 'BTC';
+  ratio: number;          // e.g. 0.9912, 1.0034
+  deviationPct: number;   // signed %
+  severity: PegSeverity;
+}
+
+export function isDerivative(label: string): label is DerivativeAsset {
+  return (DERIVATIVE_ASSETS as string[]).includes(label);
+}
+
+export function getPegStatus(asset: DerivativeAsset, tick = 0): PegStatus {
+  const cfg = DEPEG_OSCILLATORS[asset];
+  const ratio = 1 + cfg.amp * Math.sin(tick * cfg.freq + cfg.phase);
+  const deviationPct = (ratio - 1) * 100;
+  const severity: PegSeverity = Math.abs(deviationPct) > 1.0 ? 'critical' : 'healthy';
+  return { asset, base: DERIVATIVE_TO_BASE[asset], ratio, deviationPct, severity };
+}
+
+/** Returns every derivative asset in the hop chain that is currently depegged > 1%. */
+export function detectRouteDepegs(hops: RouteHop[], tick = 0): PegStatus[] {
+  const seen = new Set<string>();
+  const out: PegStatus[] = [];
+  for (const h of hops) {
+    if (h.kind !== 'asset') continue;
+    if (!isDerivative(h.label)) continue;
+    if (seen.has(h.label)) continue;
+    seen.add(h.label);
+    const s = getPegStatus(h.label, tick);
+    if (s.severity === 'critical') out.push(s);
+  }
+  return out;
+}
+
+/** Map a planner sub-allocation apyKey to the derivative asset it ultimately holds (if any). */
+export const PLANNER_APYKEY_TO_DERIVATIVE: Partial<Record<PlannerSubAllocation['apyKey'], DerivativeAsset>> = {
+  btcStake: 'LBTC',
+  btcLst:   'LBTC',
+  ethStake: 'stETH',
+  ethL2:    'wstETH',
+  solStake: 'JitoSOL',
+  solLp:    'JitoSOL',
+};
+
+export function depegAlertMessage(lang: 'en' | 'sk', peg: PegStatus): string {
+  const abs = Math.abs(peg.deviationPct).toFixed(2);
+  return lang === 'sk'
+    ? `🚨 KRITICKÝ DEPEG ALERT: ${peg.asset} odchýlka ${abs}% od ${peg.base}! Vysoké riziko likvidácie v aktívnych Layer 3 lending / liquidity pooloch. Mimoriadnu opatrnosť.`
+    : `🚨 CRITICAL DEPEG ALERT: ${peg.asset} discount ${abs}% vs ${peg.base}! High liquidation risk detected in active Layer 3 lending/liquidity pools. Exercise extreme caution.`;
+}
+

@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Lang } from '@/lib/i18n';
-import { PLANNER_ASSETS, getLiveApyMap, PlannerAsset, assessPlannerRisk } from '@/lib/stakeRoutingService';
-import { Wallet, ShieldCheck, TrendingUp } from 'lucide-react';
+import {
+  PLANNER_ASSETS, getLiveApyMap, PlannerAsset, assessPlannerRisk,
+  PLANNER_APYKEY_TO_DERIVATIVE, getPegStatus, depegAlertMessage,
+} from '@/lib/stakeRoutingService';
+import { Wallet, ShieldCheck, TrendingUp, AlertTriangle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
 import { RiskShield } from './RiskShield';
@@ -131,13 +134,21 @@ export function YieldPlannerCard({ lang }: Props) {
                   risk.level === 'low' ? 'border-gain/30 bg-gain/5 text-gain/90' :
                   risk.level === 'medium' ? 'border-amber-500/30 bg-amber-500/5 text-amber-300/90' :
                   'border-loss/30 bg-loss/5 text-loss/90';
+                const derivative = PLANNER_APYKEY_TO_DERIVATIVE[s.apyKey];
+                const peg = derivative ? getPegStatus(derivative, tick) : null;
+                const depegged = peg?.severity === 'critical';
                 return (
-                  <div key={s.key} className="bg-background/40 rounded p-2 space-y-1.5">
+                  <div key={s.key} className={`bg-background/40 rounded p-2 space-y-1.5 ${depegged ? 'ring-2 ring-loss/60' : ''}`}>
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-[11px] font-medium text-foreground truncate">{s.label}</p>
                         <p className="text-[10px] text-muted-foreground truncate">{s.protocol}</p>
                         <p className="text-[10px] text-emerald-400/90 truncate">Verified: {s.officialUrl}</p>
+                        {peg && (
+                          <p className={`text-[10px] font-semibold ${depegged ? 'text-loss' : 'text-gain'}`}>
+                            {depegged ? '🔴' : '🟢'} {depegged ? 'Depeg' : 'Parity'}: {peg.ratio.toFixed(4)}x ({peg.asset}/{peg.base})
+                          </p>
+                        )}
                       </div>
                       <div className="text-right shrink-0">
                         <p className="text-[11px] font-bold text-foreground">{sPct}%</p>
@@ -149,6 +160,14 @@ export function YieldPlannerCard({ lang }: Props) {
                         </p>
                       </div>
                     </div>
+                    {depegged && peg && (
+                      <div className="flex items-start gap-2 p-1.5 rounded border border-loss/60 bg-loss/15 animate-pulse">
+                        <AlertTriangle className="w-3 h-3 text-loss mt-0.5 shrink-0" />
+                        <p className="text-[10px] text-loss leading-snug font-semibold">
+                          {depegAlertMessage(isSk ? 'sk' : 'en', peg)}
+                        </p>
+                      </div>
+                    )}
                     <div className={`text-[10px] leading-snug px-2 py-1 rounded border ${verdictBorder}`}>
                       {risk.verdict}
                     </div>
