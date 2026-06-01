@@ -513,8 +513,35 @@ export function getQuotes(params: QuoteParams): QuoteResult {
   const evmCross = swapType === 'cross-chain' && isEvm(from.chain) && isEvm(to.chain);
 
   const all: Quote[] = PLATFORMS.map(p => {
-    const supported = p.supports(from, to, swapType);
-    const seed = `${p.id}:${from.chain}:${from.symbol}:${to.chain}:${to.symbol}:${freshnessTick}`;
+    // ---- Baseline support + order-type + filter gating ----
+    let supported = p.supports(from, to, swapType);
+    let unsupportedReason: string | undefined;
+
+    if (!supported) {
+      unsupportedReason = 'Not Supported for this route';
+    } else if (orderType === 'limit') {
+      // Limit orders require a smart-contract chain AND native limit-order support.
+      if (!isLimitOrderChain(from.chain) || !isLimitOrderChain(to.chain)) {
+        supported = false; unsupportedReason = 'Limit orders require smart-contract chains';
+      } else if (!p.limitOrders) {
+        supported = false; unsupportedReason = 'No limit-order protocol';
+      } else if (filters.offchainGasless && !p.offchainGasless) {
+        supported = false; unsupportedReason = 'Requires On-chain Lock/Gas';
+      }
+    }
+    if (supported) {
+      if (filters.customRecipient && !p.customRecipient) {
+        supported = false; unsupportedReason = 'Requires Same Wallet';
+      } else if (filters.noKyc && !p.noKyc) {
+        supported = false; unsupportedReason = 'KYC Risk / Registration Required';
+      } else if (filters.noWallet && !p.noWallet) {
+        supported = false; unsupportedReason = 'Requires Wallet Connection';
+      } else if (filters.mevProtected && !p.mevProtected) {
+        supported = false; unsupportedReason = 'No MEV protection (sandwich risk)';
+      }
+    }
+
+    const seed = `${p.id}:${from.chain}:${from.symbol}:${to.chain}:${to.symbol}:${orderType}:${freshnessTick}`;
     const variance = seededVariance(seed);
 
     let priorityEdge = 0;
