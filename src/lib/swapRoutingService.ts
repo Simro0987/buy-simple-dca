@@ -572,10 +572,12 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       if (p.id === 'jupiter') { priorityEdge = 0.0025; prioritized = true; }
       else if (p.id === 'jumper' || p.id === 'debridge') { priorityEdge = 0.0008; prioritized = true; }
     } else if (evmCross) {
-      // LI.FI-style: Jumper, Across, deBridge, Bungee to the top for EVM<->EVM bridging.
-      if (['jumper', 'across', 'debridge', 'bungee'].includes(p.id)) {
+      // L2 <-> L2: Orbiter is the fast-path king.
+      if (p.id === 'orbiter' && isL2(from.chain) && isL2(to.chain)) {
+        priorityEdge = 0.0020; prioritized = true;
+      } else if (['jumper', 'across', 'debridge', 'bungee'].includes(p.id)) {
         priorityEdge = 0.0014; prioritized = true;
-      } else if (['symbiosis', 'velora'].includes(p.id)) {
+      } else if (['symbiosis', 'velora', 'rubic'].includes(p.id)) {
         priorityEdge = 0.0006; prioritized = true;
       }
     } else if (swapType === 'same-chain' && isEvm(from.chain)) {
@@ -584,6 +586,10 @@ export function getQuotes(params: QuoteParams): QuoteResult {
         priorityEdge = 0.0012; prioritized = true;
       } else if (['matcha', 'cowswap', 'kyberswap', 'openocean'].includes(p.id)) {
         priorityEdge = 0.0006; prioritized = true;
+      }
+      // Ethereum mainnet + MEV-protection toggle ⇒ heavily boost CoW & 1inch Fusion.
+      if (from.chain === 'ethereum' && filters.mevProtected && ['cowswap', '1inch'].includes(p.id)) {
+        priorityEdge += 0.0020; prioritized = true;
       }
     } else if (swapType === 'cross-chain') {
       if (['jumper', 'symbiosis', 'trocador', 'houdini', 'swapspace'].includes(p.id)) {
