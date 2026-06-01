@@ -199,6 +199,16 @@ export function SwapPage({ lang }: Props) {
 
   const ImpactBadge = ({ q, compact = false }: { q: Quote; compact?: boolean }) => {
     if (!q.supported) return null;
+    // Submarine / fixed-rate routes get a green guarantee badge instead of impact %.
+    if (q.submarine) {
+      const isFixed = q.fixedRate;
+      return (
+        <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-emerald-500/50 bg-emerald-500/15 text-emerald-400">
+          <Lock className="w-2.5 h-2.5" />
+          {isFixed ? t.fixedRateBadge : t.submarineBadge} · {q.priceImpactPct.toFixed(2)}%
+        </span>
+      );
+    }
     const pct = q.priceImpactPct;
     const cls =
       q.impactLevel === 'unsafe'
