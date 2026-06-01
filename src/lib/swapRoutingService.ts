@@ -478,6 +478,8 @@ export interface QuoteParams {
   amount: number;
   prices: PriceData | undefined;
   freshnessTick?: number;
+  orderType?: OrderType;
+  filters?: QuoteFilters;
 }
 
 export interface QuoteResult {
@@ -485,17 +487,23 @@ export interface QuoteResult {
   quotes: Quote[];
   best: Quote | null;
   privacyRoute: boolean;
+  submarineRoute: boolean;
+  orderType: OrderType;
 }
 
-export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: QuoteParams): QuoteResult {
+export function getQuotes(params: QuoteParams): QuoteResult {
+  const { from, to, amount, prices, freshnessTick = 0 } = params;
+  const orderType: OrderType = params.orderType ?? 'market';
+  const filters: QuoteFilters = params.filters ?? {};
   const swapType = detectSwapType(from, to);
   const privacyRoute = involvesPrivacy(from, to);
   const submarineRoute = isSubmarineRoute(from, to);
-  if (!amount || amount <= 0 || !prices) return { swapType, quotes: [], best: null, privacyRoute };
+  const empty: QuoteResult = { swapType, quotes: [], best: null, privacyRoute, submarineRoute, orderType };
+  if (!amount || amount <= 0 || !prices) return empty;
 
   const fromUsd = tokenUsdPrice(from, prices);
   const toUsd = tokenUsdPrice(to, prices);
-  if (fromUsd <= 0 || toUsd <= 0) return { swapType, quotes: [], best: null, privacyRoute };
+  if (fromUsd <= 0 || toUsd <= 0) return empty;
 
   const grossInUsd = amount * fromUsd;
   const baseOut = grossInUsd / toUsd;
