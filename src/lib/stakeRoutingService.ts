@@ -45,6 +45,9 @@ export const PROTOCOLS: YieldProtocol[] = [
     unbondingDays: 0, health: 'ok', layer: 1, category: 'LST' },
 
   // ===== SOL — Layer 2 / 3 =====
+  { id: 'jito_restaking', name: 'Jito Restaking', officialUrl: 'jito.network/restaking', strategies: ['restaking'], networks: ['Solana'],
+    inputs: ['SOL', 'JitoSOL'], baseApy: 9.4, tvlUsdM: 720, auditedYears: 2, mevBoost: true,
+    unbondingDays: 2, health: 'ok', layer: 2, category: 'Restaking' },
   { id: 'solayer', name: 'Solayer', officialUrl: 'solayer.org', strategies: ['restaking'], networks: ['Solana'],
     inputs: ['SOL', 'JitoSOL', 'mSOL', 'bSOL'], baseApy: 9.1, tvlUsdM: 480, auditedYears: 1, mevBoost: true,
     unbondingDays: 2, health: 'congested', healthNote: 'High demand — slot wait', layer: 2, category: 'Restaking' },
