@@ -7,9 +7,11 @@ import {
   getRecommendedRoutes, evaluateGasGuard,
   buildOfficialLink, displayOfficialUrl,
   ASSET_USD_PRICE, RecommendedRoute,
-  isDerivative, getPegStatus, detectRouteDepegs, depegAlertMessage, PegStatus,
+  isDerivative, getPegStatus, detectRouteDepegs, depegAlertMessage,
+  getBestTargetRoute, evaluateSuitability, SuitabilityVerdict,
 } from '@/lib/stakeRoutingService';
-import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap, Sparkles, Fuel } from 'lucide-react';
+import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap, Sparkles, Fuel, Target } from 'lucide-react';
+
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
