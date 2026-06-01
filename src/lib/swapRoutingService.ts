@@ -62,6 +62,8 @@ export const TOKENS: TokenMeta[] = [
   // Ethereum Mainnet
   { symbol: 'ETH',         name: 'Ether (Native)',              chain: 'ethereum',  priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'stETH',       name: 'Lido Staked ETH',             chain: 'ethereum',  priceRef: 'eth', multiplier: 0.999, decimals: 18 },
+  { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'ethereum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
+  { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'ethereum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
   // Base Network
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'base',      priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'base',      priceRef: 'usd', decimals: 6 },
@@ -72,6 +74,7 @@ export const TOKENS: TokenMeta[] = [
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
+  { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
   // Polygon
   { symbol: 'USDC',        name: 'USD Coin (native)',           chain: 'polygon',   priceRef: 'usd', decimals: 6 },
   { symbol: 'USDC.e',      name: 'USD Coin (bridged)',          chain: 'polygon',   priceRef: 'usd', multiplier: 0.998, decimals: 6 },
