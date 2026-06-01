@@ -269,6 +269,11 @@ export function SwapPage({ lang }: Props) {
         kycRisk: 'Riziko KYC / registrácie', mevRisk: 'Bez MEV ochrany',
         requiresOnchain: 'Vyžaduje on-chain lock / gas', noLimitProto: 'Bez limit-order protokolu',
         notLimitChain: 'Limit vyžaduje smart-contract sieť',
+        fHealthy: 'Skryť rizikové', fHealthyT: 'Vyfiltruje protokoly s incidentmi, pauzou likvidity alebo známym exploitom.',
+        protocolAlert: 'Protocol Alert',
+        priceVariance: 'Price Variance Warning',
+        priceVarianceT: 'Kurz sa odchýlil >2% od overenej oracle ceny (LI.FI / Jupiter).',
+        hopChain: 'Multi-hop trasa',
       }
     : {
         title: 'SWAP Scanner',
