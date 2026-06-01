@@ -384,6 +384,9 @@ export interface Quote {
   isBest?: boolean;
   supported: boolean;
   prioritized?: boolean;
+  // Submarine swap / fixed-rate metadata (Lightning <-> Polygon stables routes).
+  submarine?: boolean;   // route uses internal liquidity / submarine swap (no AMM impact)
+  fixedRate?: boolean;   // rate is locked before execution → "Guaranteed Fixed Rate"
 }
 
 function seededVariance(seed: string): number {
