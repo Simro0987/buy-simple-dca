@@ -580,7 +580,7 @@ export function SwapPage({ lang }: Props) {
           <Shield className="w-3 h-3 text-primary" />
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t.filters}</span>
         </div>
-        <div className={`grid gap-1.5 ${orderType === 'limit' ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
+        <div className={`grid gap-1.5 ${orderType === 'limit' ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-5'}`}>
           <FilterToggle icon={Wallet} label={t.fCustomRecipient} tooltip={t.fCustomRecipientT}
             active={!!filters.customRecipient} onToggle={() => toggleFilter('customRecipient')} />
           <FilterToggle icon={EyeOff} label={t.fNoKyc} tooltip={t.fNoKycT}
@@ -589,6 +589,8 @@ export function SwapPage({ lang }: Props) {
             active={!!filters.noWallet} onToggle={() => toggleFilter('noWallet')} />
           <FilterToggle icon={Shield} label={t.fMev} tooltip={t.fMevT}
             active={!!filters.mevProtected} onToggle={() => toggleFilter('mevProtected')} />
+          <FilterToggle icon={Activity} label={t.fHealthy} tooltip={t.fHealthyT}
+            active={!!filters.healthyOnly} onToggle={() => toggleFilter('healthyOnly')} />
           {orderType === 'limit' && (
             <FilterToggle icon={Lock} label={t.fOffchain} tooltip={t.fOffchainT}
               active={!!filters.offchainGasless} onToggle={() => toggleFilter('offchainGasless')} />
