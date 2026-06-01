@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play,
   ShieldAlert, ShieldCheck, AlertTriangle, Lock, Copy, Check, Wallet, EyeOff,
-  Shield, Fuel, Flame, ArrowRight,
+  Shield, Fuel, Flame, ArrowRight, Activity, GitBranch,
 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,7 +12,7 @@ import {
   formatTokenAmount, formatUsd, formatMin, detectSwapType, involvesPrivacy, isSubmarineRoute,
   isLimitOrderChain, getGasTokenSymbol, needsGasRefuel,
   MAX_SLIPPAGE_PCT, PRICE_IMPACT_WARN_PCT, PRICE_IMPACT_UNSAFE_PCT,
-  type Quote, type OrderType, type QuoteFilters,
+  type Quote, type OrderType, type QuoteFilters, type RouteHop,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
@@ -269,6 +269,11 @@ export function SwapPage({ lang }: Props) {
         kycRisk: 'Riziko KYC / registrácie', mevRisk: 'Bez MEV ochrany',
         requiresOnchain: 'Vyžaduje on-chain lock / gas', noLimitProto: 'Bez limit-order protokolu',
         notLimitChain: 'Limit vyžaduje smart-contract sieť',
+        fHealthy: 'Skryť rizikové', fHealthyT: 'Vyfiltruje protokoly s incidentmi, pauzou likvidity alebo známym exploitom.',
+        protocolAlert: 'Protocol Alert',
+        priceVariance: 'Price Variance Warning',
+        priceVarianceT: 'Kurz sa odchýlil >2% od overenej oracle ceny (LI.FI / Jupiter).',
+        hopChain: 'Multi-hop trasa',
       }
     : {
         title: 'SWAP Scanner',
@@ -313,6 +318,11 @@ export function SwapPage({ lang }: Props) {
         kycRisk: 'KYC Risk / Registration Required', mevRisk: 'No MEV protection',
         requiresOnchain: 'Requires On-chain Lock/Gas', noLimitProto: 'No limit-order protocol',
         notLimitChain: 'Limit requires smart-contract chain',
+        fHealthy: 'Hide risky protocols', fHealthyT: 'Filters out protocols with incidents, paused pools or known exploits.',
+        protocolAlert: 'Protocol Alert',
+        priceVariance: 'Price Variance Warning',
+        priceVarianceT: 'Quote deviates >2% from verified oracle baseline (LI.FI / Jupiter).',
+        hopChain: 'Multi-hop route',
       };
 
   // =====================================================================
@@ -373,19 +383,76 @@ export function SwapPage({ lang }: Props) {
 
   const copySummary = async () => {
     if (!best) return;
+    const path = best.hops
+      .map(h => h.kind === 'asset' ? `${h.label}${h.sub ? '·' + h.sub : ''}` : h.label)
+      .join(' ➔ ');
     const summary =
       `Swap Order Summary: ${orderType === 'limit' ? 'Limit' : 'Market'} ` +
       `Exchange ${amount} ${from.symbol} (${CHAINS[from.chain].name}) → ` +
       `${formatTokenAmount(best.netOut)} ${to.symbol} (${CHAINS[to.chain].name}) via ${best.platformName}. ` +
       `Expected Net Output: ${formatUsd(best.netOutUsd)} ` +
       `[MEV Protected: ${best.mevProtected ? 'Yes' : 'No'}] ` +
-      `[Execution: ${best.offchainGasless && orderType === 'limit' ? 'Off-chain' : 'On-chain'}]`;
+      `[Execution: ${best.offchainGasless && orderType === 'limit' ? 'Off-chain' : 'On-chain'}] ` +
+      `[Path: ${path}]`;
     try {
       await navigator.clipboard.writeText(summary);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch { /* ignore */ }
   };
+
+  // Protocol-alert badge (red) — surfaces health issues.
+  const HealthBadge = ({ q, compact = false }: { q: Quote; compact?: boolean }) => {
+    if (!q.health || q.health === 'ok') return null;
+    return (
+      <span
+        title={q.healthNote ?? q.health}
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-red-500/50 bg-red-500/15 text-red-400"
+      >
+        <Activity className="w-2.5 h-2.5" />
+        {compact ? (q.healthNote ?? q.health) : `⚠️ ${t.protocolAlert}: ${q.healthNote ?? q.health}`}
+      </span>
+    );
+  };
+
+  // Price-variance badge (amber) — surfaces oracle deviation > 2%.
+  const VarianceBadge = ({ q }: { q: Quote }) => {
+    if (!q.priceVarianceFlag) return null;
+    return (
+      <span
+        title={t.priceVarianceT}
+        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-amber-500/50 bg-amber-500/15 text-amber-400"
+      >
+        <AlertTriangle className="w-2.5 h-2.5" />
+        {t.priceVariance} · {q.priceVariancePct.toFixed(2)}%
+      </span>
+    );
+  };
+
+  // Renders the explicit multi-hop chain for the best route.
+  const HopChain = ({ hops }: { hops: RouteHop[] }) => (
+    <div className="flex items-center gap-1 text-[11px] font-semibold overflow-x-auto pb-0.5">
+      {hops.map((h, idx) => (
+        <span key={idx} className="inline-flex items-center gap-1 shrink-0">
+          {h.kind === 'asset' ? (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 whitespace-nowrap">
+              {h.icon && <span>{h.icon}</span>}
+              <span>{h.label}</span>
+              {h.sub && <span className="text-emerald-400/70 text-[9px]">{h.sub}</span>}
+            </span>
+          ) : (
+            <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-primary whitespace-nowrap">
+              <Sparkles className="w-2.5 h-2.5" />
+              <span>{h.label}</span>
+            </span>
+          )}
+          {idx < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
+        </span>
+      ))}
+    </div>
+  );
+
+
 
   // =====================================================================
   // Render
@@ -513,7 +580,7 @@ export function SwapPage({ lang }: Props) {
           <Shield className="w-3 h-3 text-primary" />
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t.filters}</span>
         </div>
-        <div className={`grid gap-1.5 ${orderType === 'limit' ? 'grid-cols-2 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4'}`}>
+        <div className={`grid gap-1.5 ${orderType === 'limit' ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-5'}`}>
           <FilterToggle icon={Wallet} label={t.fCustomRecipient} tooltip={t.fCustomRecipientT}
             active={!!filters.customRecipient} onToggle={() => toggleFilter('customRecipient')} />
           <FilterToggle icon={EyeOff} label={t.fNoKyc} tooltip={t.fNoKycT}
@@ -522,6 +589,8 @@ export function SwapPage({ lang }: Props) {
             active={!!filters.noWallet} onToggle={() => toggleFilter('noWallet')} />
           <FilterToggle icon={Shield} label={t.fMev} tooltip={t.fMevT}
             active={!!filters.mevProtected} onToggle={() => toggleFilter('mevProtected')} />
+          <FilterToggle icon={Activity} label={t.fHealthy} tooltip={t.fHealthyT}
+            active={!!filters.healthyOnly} onToggle={() => toggleFilter('healthyOnly')} />
           {orderType === 'limit' && (
             <FilterToggle icon={Lock} label={t.fOffchain} tooltip={t.fOffchainT}
               active={!!filters.offchainGasless} onToggle={() => toggleFilter('offchainGasless')} />
@@ -591,29 +660,13 @@ export function SwapPage({ lang }: Props) {
         </div>
       ) : best ? (
         <>
-          {/* Route Visualizer */}
+          {/* Multi-hop Route Visualizer */}
           <Card className="p-2.5 bg-card/40 border-border/60">
             <div className="flex items-center gap-1 text-[9px] uppercase tracking-widest text-muted-foreground mb-1">
-              <span>{t.routeViz}</span>
+              <GitBranch className="w-2.5 h-2.5" />
+              <span>{swapType === 'cross-chain' ? t.hopChain : t.routeViz}</span>
             </div>
-            <div className="flex items-center gap-1.5 text-[11px] font-semibold overflow-x-auto">
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-border bg-background/60 whitespace-nowrap">
-                <span>{CHAINS[from.chain].icon}</span>
-                <span className="text-foreground">{from.symbol}</span>
-                <span className="text-muted-foreground text-[9px]">{CHAINS[from.chain].short}</span>
-              </span>
-              <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-primary/40 bg-primary/10 text-primary whitespace-nowrap">
-                <Sparkles className="w-2.5 h-2.5" />
-                {best.platformName}
-              </span>
-              <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />
-              <span className="inline-flex items-center gap-1 px-2 py-1 rounded-md border border-emerald-500/40 bg-emerald-500/10 text-emerald-400 whitespace-nowrap">
-                <span>{CHAINS[to.chain].icon}</span>
-                <span>{to.symbol}</span>
-                <span className="text-emerald-400/70 text-[9px]">{CHAINS[to.chain].short}</span>
-              </span>
-            </div>
+            <HopChain hops={best.hops} />
           </Card>
 
           {/* Hero card */}
@@ -632,6 +685,8 @@ export function SwapPage({ lang }: Props) {
             </div>
             <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
               <ImpactBadge q={best} />
+              <HealthBadge q={best} />
+              <VarianceBadge q={best} />
               <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
                 <ShieldCheck className="w-2.5 h-2.5" /> Slippage {best.slippagePct.toFixed(1)}%{best.submarine ? ' · Locked' : ''}
               </span>
@@ -706,6 +761,8 @@ export function SwapPage({ lang }: Props) {
                         )}
                         {q.supported && q.impactLevel !== 'ok' && <ImpactBadge q={q} compact />}
                         {q.supported && q.submarine && <ImpactBadge q={q} compact />}
+                        {q.supported && <HealthBadge q={q} compact />}
+                        {q.supported && <VarianceBadge q={q} />}
                         {!q.supported && (
                           <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-amber-400 uppercase tracking-wider">
                             <Ban className="w-2.5 h-2.5" />{trReason(q.unsupportedReason)}

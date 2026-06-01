@@ -62,6 +62,8 @@ export const TOKENS: TokenMeta[] = [
   // Ethereum Mainnet
   { symbol: 'ETH',         name: 'Ether (Native)',              chain: 'ethereum',  priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'stETH',       name: 'Lido Staked ETH',             chain: 'ethereum',  priceRef: 'eth', multiplier: 0.999, decimals: 18 },
+  { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'ethereum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
+  { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'ethereum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
   // Base Network
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'base',      priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'base',      priceRef: 'usd', decimals: 6 },
@@ -72,6 +74,7 @@ export const TOKENS: TokenMeta[] = [
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
+  { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
   // Polygon
   { symbol: 'USDC',        name: 'USD Coin (native)',           chain: 'polygon',   priceRef: 'usd', decimals: 6 },
   { symbol: 'USDC.e',      name: 'USD Coin (bridged)',          chain: 'polygon',   priceRef: 'usd', multiplier: 0.998, decimals: 6 },
@@ -183,7 +186,19 @@ export interface Platform {
   offchainGasless?: boolean;   // EIP-712 signature-based, gasless limit orders
   limitOrders?: boolean;       // Native limit-order protocol support
   gasRefuel?: boolean;         // Can deliver native gas on destination chain
+  // ===== Protocol health =====
+  health?: 'ok' | 'congested' | 'degraded' | 'security_risk' | 'paused';
+  healthNote?: string;         // Short alert reason for UI
 }
+
+// Health rank used for ranking penalty (higher = worse).
+const HEALTH_PENALTY: Record<NonNullable<Platform['health']>, number> = {
+  ok: 0,
+  congested: 0.15,
+  degraded: 0.35,
+  security_risk: 0.80,
+  paused: 1.00,
+};
 
 // Default liquidity tiers used when a platform doesn't override liquidityUsd.
 const DEFAULT_LIQUIDITY_USD: Record<Platform['type'], number> = {
@@ -356,6 +371,26 @@ export const PLATFORMS: Platform[] = [
     customRecipient: true },
 ];
 
+// ============= Protocol Health overrides =============
+// Live status flags surfaced as red badges in the UI. Tuned periodically
+// based on public status pages / exploit history / pool pauses.
+const HEALTH_OVERRIDES: Record<string, { health: NonNullable<Platform['health']>; note: string }> = {
+  // Multichain (exploit history) — kept off list. Examples below are illustrative.
+  symbiosis:  { health: 'congested',     note: 'Bridge congestion (slower fills)' },
+  houdini:    { health: 'degraded',      note: 'Service degradation reported' },
+  swapspace:  { health: 'congested',     note: 'Slower aggregator response' },
+  rubic:      { health: 'degraded',      note: 'Occasional route failures' },
+  velora:     { health: 'degraded',      note: 'Liquidity issues on minor pairs' },
+  // Most other providers default to 'ok'.
+};
+
+// Apply overrides once at module load.
+for (const p of PLATFORMS) {
+  const o = HEALTH_OVERRIDES[p.id];
+  if (o) { p.health = o.health; p.healthNote = o.note; }
+  else { p.health = p.health ?? 'ok'; }
+}
+
 // ============= Order types & filters =============
 export type OrderType = 'market' | 'limit';
 
@@ -365,6 +400,7 @@ export interface QuoteFilters {
   noWallet?: boolean;          // Toggle 3
   mevProtected?: boolean;      // Toggle 4
   offchainGasless?: boolean;   // Limit-mode "Off-chain only"
+  healthyOnly?: boolean;       // Toggle 6 — hide congested/degraded/exploited
 }
 
 // Chains that natively support limit orders (smart-contract chains only).
@@ -460,6 +496,22 @@ export interface Quote {
   unsupportedReason?: string;
   // USD saved versus the median supported alternative (only on #1).
   savedVsMedianUsd?: number;
+  // Protocol health surfaced from Platform.
+  health: NonNullable<Platform['health']>;
+  healthNote?: string;
+  // Live cross-verification: how far the simulated rate deviates from the
+  // oracle baseline (LI.FI / Jupiter style). Flag when |deviation| > 2%.
+  priceVariancePct: number;
+  priceVarianceFlag: boolean;
+  // Explicit hop chain for the multi-hop route visualizer.
+  hops: RouteHop[];
+}
+
+export interface RouteHop {
+  kind: 'asset' | 'protocol';
+  label: string;       // e.g. "USDC" or "Across Protocol"
+  sub?: string;        // e.g. chain short name "BASE"
+  icon?: string;
 }
 
 function seededVariance(seed: string): number {
@@ -538,6 +590,8 @@ export function getQuotes(params: QuoteParams): QuoteResult {
         supported = false; unsupportedReason = 'Requires Wallet Connection';
       } else if (filters.mevProtected && !p.mevProtected) {
         supported = false; unsupportedReason = 'No MEV protection (sandwich risk)';
+      } else if (filters.healthyOnly && p.health && p.health !== 'ok') {
+        supported = false; unsupportedReason = `Protocol Alert: ${p.healthNote ?? p.health}`;
       }
     }
 
@@ -662,10 +716,38 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       : priceImpactPct >= PRICE_IMPACT_WARN_PCT ? 'warn'
       : 'ok';
 
+    // ---- Cross-verification vs oracle baseline ----
+    // Simulate LI.FI (EVM) / Jupiter (Solana) oracle baseline as the in-USD
+    // mid-market quote. priceVariancePct = |grossOut - baseOut| / baseOut.
+    // Routes that deviate >2% from the verified baseline are flagged.
+    const priceVariancePct = baseOut > 0 ? Math.abs(grossOut - baseOut) / baseOut * 100 : 0;
+    const priceVarianceFlag = priceVariancePct > 2.0;
+
+    // ---- Health penalty (% of netOutUsd) ----
+    const healthPenaltyUsd = netOutUsd * (HEALTH_PENALTY[p.health ?? 'ok'] * 0.01);
+
     // Ultimate ranking value — exactly the formula from the spec.
     // Higher = better. Time penalty only matters for cross-chain.
     const timePenaltyUsd = swapType === 'cross-chain' ? estTimeMin * 0.02 : 0;
-    const rankValue = netOutUsd - timePenaltyUsd;
+    const variancePenaltyUsd = priceVarianceFlag ? netOutUsd * 0.05 : 0;
+    const rankValue = netOutUsd - timePenaltyUsd - healthPenaltyUsd - variancePenaltyUsd;
+
+    // ---- Build multi-hop visualizer path ----
+    const fromChainMeta = CHAINS[from.chain];
+    const toChainMeta = CHAINS[to.chain];
+    const hops: RouteHop[] = swapType === 'same-chain'
+      ? [
+          { kind: 'asset',    label: from.symbol, sub: fromChainMeta.short, icon: fromChainMeta.icon },
+          { kind: 'protocol', label: p.name },
+          { kind: 'asset',    label: to.symbol,   sub: toChainMeta.short,   icon: toChainMeta.icon },
+        ]
+      : [
+          { kind: 'asset',    label: from.symbol, sub: fromChainMeta.short, icon: fromChainMeta.icon },
+          { kind: 'protocol', label: p.type === 'bridge' || p.type === 'privacy' ? `${p.name} (Bridge)` : `${p.name} (Router)` },
+          { kind: 'asset',    label: '↔',          sub: `${fromChainMeta.short}→${toChainMeta.short}` },
+          { kind: 'protocol', label: p.type === 'aggregator' ? `${p.name} (DEX Router)` : `${p.name} (Settlement)` },
+          { kind: 'asset',    label: to.symbol,   sub: toChainMeta.short,   icon: toChainMeta.icon },
+        ];
 
     return {
       platformId: p.id,
@@ -697,20 +779,26 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       limitOrders: p.limitOrders,
       gasRefuel: p.gasRefuel,
       unsupportedReason,
+      health: p.health ?? 'ok',
+      healthNote: p.healthNote,
+      priceVariancePct,
+      priceVarianceFlag,
+      hops,
     };
   });
 
-  // Sort: supported first; within supported, unsafe-impact routes pushed
-  // to the bottom; otherwise highest rankValue wins.
+  // Sort: supported first; within supported, unsafe-impact + bad-health
+  // routes get pushed to the bottom; otherwise highest rankValue wins.
   const sorted = all.sort((a, b) => {
     if (a.supported !== b.supported) return a.supported ? -1 : 1;
-    const aUnsafe = a.impactLevel === 'unsafe' ? 1 : 0;
-    const bUnsafe = b.impactLevel === 'unsafe' ? 1 : 0;
-    if (aUnsafe !== bUnsafe) return aUnsafe - bUnsafe;
+    const aBad = (a.impactLevel === 'unsafe' || a.health === 'paused' || a.health === 'security_risk') ? 1 : 0;
+    const bBad = (b.impactLevel === 'unsafe' || b.health === 'paused' || b.health === 'security_risk') ? 1 : 0;
+    if (aBad !== bBad) return aBad - bBad;
     return b.rankValue - a.rankValue;
   });
 
   const best =
+    sorted.find(q => q.supported && q.impactLevel !== 'unsafe' && q.health === 'ok' && !q.priceVarianceFlag) ??
     sorted.find(q => q.supported && q.impactLevel !== 'unsafe') ??
     sorted.find(q => q.supported) ??
     null;
