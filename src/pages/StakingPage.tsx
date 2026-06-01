@@ -128,6 +128,12 @@ export function StakingPage({ lang }: Props) {
 
       <StakingTimingCard lang={lang} amountUsd={500} />
 
+      {/* MODULE 1: Master Portfolio Yield Planner */}
+      <YieldPlannerCard lang={lang} />
+
+      {/* MODULE 2: Yield Route Finder & Scanner */}
+      <YieldRouteFinderCard lang={lang} />
+
       <StakingCalculator lang={lang} />
 
       <MasterProtocolCard lang={lang} />
