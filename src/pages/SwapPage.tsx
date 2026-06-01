@@ -361,7 +361,7 @@ export function SwapPage({ lang }: Props) {
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 text-xs text-primary">
                 <Search className="w-3.5 h-3.5 animate-pulse" />
-                <span className="font-semibold animate-pulse">{t.scan}</span>
+                <span className="font-semibold animate-pulse">{liveSubmarine ? t.scanSubmarine : t.scan}</span>
               </div>
               <SwapTypeBadge type={liveSwapType} />
             </div>
