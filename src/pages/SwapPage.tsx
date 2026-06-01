@@ -685,7 +685,14 @@ export function SwapPage({ lang }: Props) {
               <span className="ml-auto"><SwapTypeBadge type={swapType} /></span>
             </div>
             <div className="flex items-baseline justify-between mb-1">
-              <span className="text-lg font-bold text-foreground">{best.platformName}</span>
+              <div className="min-w-0">
+                <div className="text-lg font-bold text-foreground truncate">{best.platformName}</div>
+                {best.officialUrl && (
+                  <div className="text-[9px] font-medium text-emerald-500/80 tracking-wide">
+                    Verified: {best.officialUrl}
+                  </div>
+                )}
+              </div>
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{best.type}</span>
             </div>
             <div className="font-mono text-2xl font-bold text-emerald-400 leading-tight transition-all">
@@ -731,7 +738,7 @@ export function SwapPage({ lang }: Props) {
               )}
             </div>
             <div className="mt-3 grid grid-cols-[1fr_auto] gap-1.5">
-              <a href={best.url} target="_blank" rel="noopener noreferrer"
+              <a href={best.officialUrl ? `https://${best.officialUrl}` : best.url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-1.5 h-10 rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-bold transition-colors">
                 {t.cta} {best.platformName} <ExternalLink className="w-3.5 h-3.5" />
               </a>
@@ -777,6 +784,11 @@ export function SwapPage({ lang }: Props) {
                           </span>
                         )}
                       </div>
+                      {q.officialUrl && (
+                        <div className="text-[9px] font-medium text-emerald-500/80 tracking-wide truncate">
+                          Verified: {q.officialUrl}
+                        </div>
+                      )}
                       <div className="text-[10px] text-muted-foreground">
                         {q.supported
                           ? (swapType === 'cross-chain'
@@ -814,7 +826,7 @@ export function SwapPage({ lang }: Props) {
                   </>
                 );
                 return q.supported ? (
-                  <a key={q.platformId} href={q.url} target="_blank" rel="noopener noreferrer" className={baseCls}>{inner}</a>
+                  <a key={q.platformId} href={q.officialUrl ? `https://${q.officialUrl}` : q.url} target="_blank" rel="noopener noreferrer" className={baseCls}>{inner}</a>
                 ) : (
                   <div key={q.platformId} className={baseCls} aria-disabled="true">{inner}</div>
                 );
