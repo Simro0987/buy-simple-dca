@@ -689,11 +689,19 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       prioritized,
       submarine: isSubmarineProvider,
       fixedRate: isFixedRateProvider,
+      customRecipient: p.customRecipient,
+      noKyc: p.noKyc,
+      noWallet: p.noWallet,
+      mevProtected: p.mevProtected,
+      offchainGasless: p.offchainGasless,
+      limitOrders: p.limitOrders,
+      gasRefuel: p.gasRefuel,
+      unsupportedReason,
     };
   });
 
   // Sort: supported first; within supported, unsafe-impact routes pushed
-  // to the bottom; otherwise highest rankValue (= max net output after all friction) wins.
+  // to the bottom; otherwise highest rankValue wins.
   const sorted = all.sort((a, b) => {
     if (a.supported !== b.supported) return a.supported ? -1 : 1;
     const aUnsafe = a.impactLevel === 'unsafe' ? 1 : 0;
@@ -702,13 +710,21 @@ export function getQuotes(params: QuoteParams): QuoteResult {
     return b.rankValue - a.rankValue;
   });
 
-
   const best =
     sorted.find(q => q.supported && q.impactLevel !== 'unsafe') ??
     sorted.find(q => q.supported) ??
     null;
-  if (best) best.isBest = true;
-  return { swapType, quotes: sorted, best, privacyRoute };
+  if (best) {
+    best.isBest = true;
+    // Savings vs median of the other supported routes — honest, not cherry-picked.
+    const others = sorted.filter(q => q.supported && q.platformId !== best.platformId).map(q => q.netOutUsd);
+    if (others.length) {
+      const sortedOthers = [...others].sort((a, b) => a - b);
+      const median = sortedOthers[Math.floor(sortedOthers.length / 2)];
+      best.savedVsMedianUsd = Math.max(0, best.netOutUsd - median);
+    }
+  }
+  return { swapType, quotes: sorted, best, privacyRoute, submarineRoute, orderType };
 }
 
 export function formatTokenAmount(n: number, _decimals = 6): string {
