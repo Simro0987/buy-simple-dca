@@ -313,3 +313,119 @@ export function getLiveApyMap(tick: number): Record<PlannerSubAllocation['apyKey
     solLp:    jitter(8.1, tick, 6),
   };
 }
+
+// ============= Institutional Risk-Scoring Engine =============
+
+export type RiskLevel = 'low' | 'medium' | 'high';
+export type RiskFactor = 'Low' | 'Medium' | 'High' | 'N/A';
+
+export interface RiskVectors {
+  smartContract: RiskFactor;
+  depeg: RiskFactor;
+  lockup: RiskFactor;
+}
+
+export interface RiskAssessment {
+  score: number;        // 1..10
+  level: RiskLevel;
+  vectors: RiskVectors;
+  verdict: string;      // expert recommendation snippet
+}
+
+const VERDICTS_EN: Record<RiskLevel, string> = {
+  low:    '💡 Protocol Verdict: Highly conservative. Ideal for core long-term generational wealth preservation with negligible smart-contract exposure.',
+  medium: '💡 Protocol Verdict: Balanced allocation recommended. Standard smart-contract counterparty risk present. Monitor liquidity thresholds periodically.',
+  high:   '⚠️ Protocol Verdict: Aggressive yield layering. Subject to compounding smart-contract composability risks and potential cascade liquidations. Deploy only speculatory risk capital.',
+};
+
+const VERDICTS_SK: Record<RiskLevel, string> = {
+  low:    '💡 Verdikt: Vysoko konzervatívne. Ideálne pre dlhodobé generačné uchovanie hodnoty s minimálnou expozíciou voči smart-contract rizikám.',
+  medium: '💡 Verdikt: Vyvážená alokácia. Štandardné smart-contract riziko prítomné. Pravidelne monitoruj likviditné prahy.',
+  high:   '⚠️ Verdikt: Agresívne vrstvenie výnosov. Kompozične násobené smart-contract riziká a potenciálne kaskádové likvidácie. Nasaď iba špekulatívny kapitál.',
+};
+
+const LST_LIKE = new Set<string>(['stETH','wstETH','weETH','JitoSOL','mSOL','bSOL','LBTC','cbBTC','WBTC']);
+
+interface RiskInput {
+  tvlUsdM: number;
+  auditedYears: number;
+  layer: 1 | 2 | 3;
+  strategy?: Strategy;
+  unbondingDays: number;
+  isolatedMarkets?: boolean;
+  hopsCount?: number;
+  involvesLst?: boolean;
+}
+
+function assessRisk(i: RiskInput, lang: 'en' | 'sk' = 'en'): RiskAssessment {
+  let score = 1;
+
+  // Smart-contract maturity (TVL + audit duration)
+  let sc: RiskFactor;
+  if (i.tvlUsdM < 300 || i.auditedYears < 2) { score += 3; sc = 'High'; }
+  else if (i.tvlUsdM < 2000 || i.auditedYears < 4) { score += 2; sc = 'Medium'; }
+  else { score += 1; sc = 'Low'; }
+
+  // Layer composability
+  if (i.layer === 2) score += 2;
+  if (i.layer === 3) score += 2;
+
+  // Composability — many hops compound risk
+  if ((i.hopsCount ?? 0) >= 4) score += 1;
+
+  // Lending isolation discount
+  if (i.strategy === 'lending' && i.isolatedMarkets) score -= 1;
+
+  // Lockup risk
+  let lockup: RiskFactor = 'Low';
+  if (i.unbondingDays >= 7) { score += 2; lockup = 'High'; }
+  else if (i.unbondingDays > 0) { score += 1; lockup = 'Medium'; }
+
+  // Depeg / wrapped-asset risk
+  let depeg: RiskFactor = 'N/A';
+  if (i.involvesLst) {
+    if (i.layer >= 2) { score += 1; depeg = 'Medium'; }
+    else depeg = 'Low';
+  }
+
+  score = Math.max(1, Math.min(10, score));
+  const level: RiskLevel = score <= 3 ? 'low' : score <= 6 ? 'medium' : 'high';
+  const verdict = (lang === 'sk' ? VERDICTS_SK : VERDICTS_EN)[level];
+
+  return { score, level, vectors: { smartContract: sc, depeg, lockup }, verdict };
+}
+
+export function assessQuoteRisk(q: YieldQuote, lang: 'en' | 'sk' = 'en'): RiskAssessment {
+  const involvesLst = q.hops.some(h => h.kind === 'asset' && LST_LIKE.has(h.label));
+  return assessRisk({
+    tvlUsdM: q.tvlUsdM,
+    auditedYears: PROTOCOLS.find(p => p.id === q.protocolId)?.auditedYears ?? 2,
+    layer: q.layer,
+    strategy: q.strategy,
+    unbondingDays: q.unbondingDays,
+    isolatedMarkets: q.isolatedMarkets,
+    hopsCount: q.hops.length,
+    involvesLst,
+  }, lang);
+}
+
+/** Risk for a planner sub-allocation (HODL is risk-free baseline). */
+export function assessPlannerRisk(apyKey: PlannerSubAllocation['apyKey'], lang: 'en' | 'sk' = 'en'): RiskAssessment {
+  if (apyKey === 'hodl') {
+    return {
+      score: 1, level: 'low',
+      vectors: { smartContract: 'N/A', depeg: 'N/A', lockup: 'Low' },
+      verdict: (lang === 'sk' ? VERDICTS_SK : VERDICTS_EN).low,
+    };
+  }
+  const map: Record<string, RiskInput> = {
+    btcStake: { tvlUsdM: 5800, auditedYears: 1, layer: 1, unbondingDays: 7 },
+    btcLst:   { tvlUsdM: 1700, auditedYears: 1, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4 },
+    ethStake: { tvlUsdM: 32000, auditedYears: 5, layer: 1, unbondingDays: 0 },
+    ethL2:    { tvlUsdM: 3200, auditedYears: 2, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4, strategy: 'lending', isolatedMarkets: true },
+    solStake: { tvlUsdM: 2800, auditedYears: 3, layer: 1, unbondingDays: 0 },
+    solLp:    { tvlUsdM: 2100, auditedYears: 2, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4, strategy: 'liquidity' },
+  };
+  return assessRisk(map[apyKey] ?? map.ethStake, lang);
+}
+

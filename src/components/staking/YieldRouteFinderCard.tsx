@@ -3,10 +3,13 @@ import { Lang } from '@/lib/i18n';
 import {
   scanYieldRoutes, YieldAsset, YieldNetwork, Strategy,
   ScannerFilters, YieldQuote, RouteHop,
+  assessQuoteRisk,
 } from '@/lib/stakeRoutingService';
 import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { RiskShield } from './RiskShield';
+
 
 interface Props { lang: Lang; }
 
@@ -19,7 +22,20 @@ const STRATEGIES: { value: Strategy; label: string }[] = [
   { value: 'liquidity',      label: 'Liquidity Pools' },
 ];
 
-function HopChain({ hops }: { hops: RouteHop[] }) {
+function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stakeRoutingService').RiskAssessment }) {
+  // attach the risk badge to the last protocol hop
+  const lastProtocolIdx = (() => {
+    for (let i = hops.length - 1; i >= 0; i--) if (hops[i].kind === 'protocol') return i;
+    return -1;
+  })();
+  const riskCfg = risk
+    ? risk.level === 'low'
+      ? { wrap: 'bg-gain/15 text-gain border-gain/40', emoji: '🟢' }
+      : risk.level === 'medium'
+        ? { wrap: 'bg-amber-500/15 text-amber-400 border-amber-500/40', emoji: '🟡' }
+        : { wrap: 'bg-loss/15 text-loss border-loss/40', emoji: '🔴' }
+    : null;
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {hops.map((h, i) => (
@@ -33,6 +49,11 @@ function HopChain({ hops }: { hops: RouteHop[] }) {
           >
             <span className="font-medium truncate">{h.label}</span>
             {h.sublabel && <span className="text-[10px] text-muted-foreground truncate">{h.sublabel}</span>}
+            {risk && riskCfg && i === lastProtocolIdx && (
+              <span className={`mt-0.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded border text-[9px] font-semibold ${riskCfg.wrap}`}>
+                {riskCfg.emoji} {risk.score}/10
+              </span>
+            )}
           </div>
           {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
         </React.Fragment>
@@ -40,6 +61,7 @@ function HopChain({ hops }: { hops: RouteHop[] }) {
     </div>
   );
 }
+
 
 function HealthBadge({ q }: { q: YieldQuote }) {
   if (q.health === 'ok') {
@@ -173,12 +195,18 @@ export function YieldRouteFinderCard({ lang }: Props) {
           </div>
         )}
 
-        {quotes.map((q, idx) => (
+        {quotes.map((q, idx) => {
+          const risk = assessQuoteRisk(q, isSk ? 'sk' : 'en');
+          const verdictBorder =
+            risk.level === 'low' ? 'border-gain/30 bg-gain/5 text-gain/90' :
+            risk.level === 'medium' ? 'border-amber-500/30 bg-amber-500/5 text-amber-300/90' :
+            'border-loss/30 bg-loss/5 text-loss/90';
+          return (
           <div key={q.protocolId + idx}
                className={`rounded-lg p-3 space-y-2 border ${idx === 0 ? 'border-primary/40 bg-primary/5' : 'border-border/40 bg-secondary/30'}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {idx === 0 && <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary text-primary-foreground font-bold">#1</span>}
                   <p className="text-sm font-bold text-foreground truncate">{q.protocolName}</p>
                   <HealthBadge q={q} />
@@ -191,7 +219,15 @@ export function YieldRouteFinderCard({ lang }: Props) {
               </div>
             </div>
 
-            <HopChain hops={q.hops} />
+            <div className={`text-[10px] leading-snug px-2 py-1.5 rounded border ${verdictBorder}`}>
+              {risk.verdict}
+            </div>
+
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <RiskShield risk={risk} lang={lang} />
+            </div>
+
+            <HopChain hops={q.hops} risk={risk} />
 
             <div className="flex flex-wrap items-center gap-1.5 text-[10px]">
               <span className="px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">{q.category}</span>
@@ -216,7 +252,9 @@ export function YieldRouteFinderCard({ lang }: Props) {
               {isSk ? 'Otvoriť' : 'Open'} {q.officialUrl} <ExternalLink className="w-3 h-3" />
             </a>
           </div>
-        ))}
+          );
+        })}
+
       </div>
     </div>
   );

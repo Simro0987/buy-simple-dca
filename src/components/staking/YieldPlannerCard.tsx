@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Lang } from '@/lib/i18n';
-import { PLANNER_ASSETS, getLiveApyMap, PlannerAsset } from '@/lib/stakeRoutingService';
+import { PLANNER_ASSETS, getLiveApyMap, PlannerAsset, assessPlannerRisk } from '@/lib/stakeRoutingService';
 import { Wallet, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { RiskShield } from './RiskShield';
+
 
 interface Props { lang: Lang; }
 
@@ -124,6 +126,11 @@ export function YieldPlannerCard({ lang }: Props) {
                 const sPct = subPct[asset.symbol][s.key] ?? 0;
                 const subUsd = bucketUsd * sPct / 100;
                 const liveApy = apys[s.apyKey];
+                const risk = assessPlannerRisk(s.apyKey, isSk ? 'sk' : 'en');
+                const verdictBorder =
+                  risk.level === 'low' ? 'border-gain/30 bg-gain/5 text-gain/90' :
+                  risk.level === 'medium' ? 'border-amber-500/30 bg-amber-500/5 text-amber-300/90' :
+                  'border-loss/30 bg-loss/5 text-loss/90';
                 return (
                   <div key={s.key} className="bg-background/40 rounded p-2 space-y-1.5">
                     <div className="flex items-center justify-between gap-2">
@@ -142,10 +149,15 @@ export function YieldPlannerCard({ lang }: Props) {
                         </p>
                       </div>
                     </div>
+                    <div className={`text-[10px] leading-snug px-2 py-1 rounded border ${verdictBorder}`}>
+                      {risk.verdict}
+                    </div>
+                    <RiskShield risk={risk} lang={lang} compact />
                     <Slider min={0} max={100} step={1} value={[sPct]} onValueChange={v => updateSub(asset, s.key, v[0])} />
                   </div>
                 );
               })}
+
             </div>
           </div>
         );
