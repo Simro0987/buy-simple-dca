@@ -259,12 +259,12 @@ export function YieldRouteFinderCard({ lang }: Props) {
             )}
 
             <a
-              href={`https://${q.officialUrl}`}
+              href={buildOfficialLink(q.officialUrl)}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-1.5 mt-1 h-9 rounded-md bg-primary text-primary-foreground text-xs font-semibold active:opacity-80"
             >
-              {isSk ? 'Otvoriť' : 'Open'} {q.officialUrl} <ExternalLink className="w-3 h-3" />
+              {isSk ? 'Otvoriť' : 'Open'} {displayOfficialUrl(q.officialUrl)} <ExternalLink className="w-3 h-3" />
             </a>
           </div>
           );
