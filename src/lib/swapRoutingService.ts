@@ -319,6 +319,19 @@ export const PLATFORMS: Platform[] = [
       && !isPrivacy(f.chain) && !isPrivacy(t.chain)
       && f.chain !== 'solana' && t.chain !== 'solana'
       && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)) },
+
+  // Boltz: trustless Submarine Swaps — gold standard for Lightning <-> on-chain (incl. Polygon stables).
+  { id: 'boltz', name: 'Boltz.exchange', type: 'privacy',
+    buildUrl: () => `https://boltz.exchange/`,
+    edge: 0.0012, feeBps: 50, extraGasUsd: 0.2, bridgeFeeBps: 0, estTimeMin: 5,
+    // Lightning-centric cross-chain routes only.
+    supports: (f, t, type) => type === 'cross-chain' && (f.chain === 'lightning' || t.chain === 'lightning') },
+
+  // Exolix: fixed-rate instant swap desk — rate locked before execution, simulates 0% impact.
+  { id: 'exolix', name: 'Exolix', type: 'privacy',
+    buildUrl: (f, t, a) => `https://exolix.com/?coin_from=${f.symbol.toUpperCase()}&coin_to=${t.symbol.toUpperCase()}&amount=${a}`,
+    edge: 0.0009, feeBps: 70, extraGasUsd: 0.3, bridgeFeeBps: 0, estTimeMin: 10,
+    supports: (_f, _t, type) => type === 'cross-chain' },
 ];
 
 
