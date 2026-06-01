@@ -512,7 +512,10 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
   });
 
 
-  const best = sorted.find(q => q.supported) ?? null;
+  const best =
+    sorted.find(q => q.supported && q.impactLevel !== 'unsafe') ??
+    sorted.find(q => q.supported) ??
+    null;
   if (best) best.isBest = true;
   return { swapType, quotes: sorted, best, privacyRoute };
 }
