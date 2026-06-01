@@ -761,6 +761,8 @@ export function SwapPage({ lang }: Props) {
                         )}
                         {q.supported && q.impactLevel !== 'ok' && <ImpactBadge q={q} compact />}
                         {q.supported && q.submarine && <ImpactBadge q={q} compact />}
+                        {q.supported && <HealthBadge q={q} compact />}
+                        {q.supported && <VarianceBadge q={q} />}
                         {!q.supported && (
                           <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-amber-400 uppercase tracking-wider">
                             <Ban className="w-2.5 h-2.5" />{trReason(q.unsupportedReason)}
