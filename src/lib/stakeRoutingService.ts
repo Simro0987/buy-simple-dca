@@ -762,3 +762,130 @@ export function depegAlertMessage(lang: 'en' | 'sk', peg: PegStatus): string {
     : `🚨 CRITICAL DEPEG ALERT: ${peg.asset} discount ${abs}% vs ${peg.base}! High liquidation risk detected in active Layer 3 lending/liquidity pools. Exercise extreme caution.`;
 }
 
+// ============= Dynamic Target-Driven Routing + Suitability Engine =============
+
+export interface BestTargetRoute {
+  route: RecommendedRoute;
+  globalDeployPct: number;
+  bufferPct: number;
+  capitalRecommendation: string;
+}
+
+export function getBestTargetRoute(
+  asset: YieldAsset,
+  strategy: Strategy,
+  tick = 0,
+  lang: 'en' | 'sk' = 'en',
+): BestTargetRoute | null {
+  const all = getRecommendedRoutes(asset, tick, lang);
+  if (all.length === 0) return null;
+
+  const matches = all.filter(r =>
+    r.steps.some(s => {
+      const p = PROTOCOLS.find(x => x.id === s.protocolId);
+      return p?.strategies.includes(strategy);
+    })
+  );
+  const pool = matches.length > 0 ? matches : all;
+  const route = pool.reduce((a, b) => (b.blendedApy > a.blendedApy ? b : a));
+
+  const globalDeployPct =
+    route.risk.level === 'low' ? 100 :
+    route.risk.level === 'medium' ? 80 :
+    60;
+  const bufferPct = 100 - globalDeployPct;
+
+  const capitalRecommendation = lang === 'sk'
+    ? `Nasadiť ${globalDeployPct}% objemu | Ponechať ${bufferPct}% v bezpečnom HODL bufferi`
+    : `Deploy ${globalDeployPct}% of entered volume | Keep ${bufferPct}% in secure HODL buffer`;
+
+  return { route, globalDeployPct, bufferPct, capitalRecommendation };
+}
+
+export type SuitabilityLevel = 'opportune' | 'caution' | 'critical';
+
+export interface SuitabilityVerdict {
+  level: SuitabilityLevel;
+  emoji: string;
+  title: string;
+  text: string;
+  reasons: string[];
+}
+
+const SUITABILITY_COPY = {
+  en: {
+    opportune: {
+      title: '🟢 SUITABILITY VERDICT: MARKET ENTRY OPTIMAL',
+      text: 'Baseline contract health is excellent and network parameters favor execution now.',
+    },
+    caution: {
+      title: '⚠️ SUITABILITY VERDICT: PROCEED WITH CAUTION',
+      text: 'Conditions are sub-optimal. Minor temporal locks or gas overhead may dilute initial capital efficiency.',
+    },
+    critical: {
+      title: '🚨 CRITICAL WARNING: DO NOT ENTER STRATEGY NOW',
+      text: 'Extreme risk vectors detected (composability threats, asset peg instability, or cascading liquidation risks). It is highly recommended to KEEP CAPITAL IN SECURE HODL until market stabilizers trigger.',
+    },
+  },
+  sk: {
+    opportune: {
+      title: '🟢 VERDIKT VHODNOSTI: VSTUP NA TRH OPTIMÁLNY',
+      text: 'Základné zdravie kontraktov je vynikajúce a sieťové parametre podporujú okamžitú exekúciu.',
+    },
+    caution: {
+      title: '⚠️ VERDIKT VHODNOSTI: POSTUPUJ S OPATRNOSŤOU',
+      text: 'Podmienky sú sub-optimálne. Drobné časové zámky alebo gas náklady môžu znížiť počiatočnú kapitálovú efektivitu.',
+    },
+    critical: {
+      title: '🚨 KRITICKÉ VAROVANIE: NEVSTUPUJ DO STRATÉGIE TERAZ',
+      text: 'Detekované extrémne rizikové vektory (kompozičné hrozby, nestabilita pegov, kaskádové likvidácie). Dôrazne odporúčame PONECHAŤ KAPITÁL V BEZPEČNOM HODL kým sa trh stabilizuje.',
+    },
+  },
+};
+
+export function evaluateSuitability(args: {
+  route: RecommendedRoute;
+  network: YieldNetwork;
+  depositUsd: number;
+  tick?: number;
+  lang?: 'en' | 'sk';
+}): SuitabilityVerdict {
+  const { route, network, depositUsd, tick = 0, lang = 'en' } = args;
+  const reasons: string[] = [];
+
+  const depegs = detectRouteDepegs(route.hops, tick);
+  const gas = evaluateGasGuard({ network, depositUsd, multiHop: route.multiHop, lang });
+
+  const congested = route.steps.some(s => {
+    const p = PROTOCOLS.find(x => x.id === s.protocolId);
+    return p?.health === 'congested' || p?.health === 'degraded';
+  });
+  const exploited = route.steps.some(s => {
+    const p = PROTOCOLS.find(x => x.id === s.protocolId);
+    return p?.health === 'security_risk' || p?.health === 'paused';
+  });
+
+  let level: SuitabilityLevel = 'opportune';
+  if (depegs.length > 0 || exploited || route.risk.level === 'high') {
+    level = 'critical';
+    if (depegs.length) reasons.push(lang === 'sk' ? `Depeg ${depegs.map(d => d.asset).join(', ')}` : `Depeg on ${depegs.map(d => d.asset).join(', ')}`);
+    if (exploited) reasons.push(lang === 'sk' ? 'Aktívne exploit mitigácie' : 'Active exploit mitigations');
+    if (route.risk.level === 'high') reasons.push(lang === 'sk' ? 'Vysoké kompozičné riziko' : 'High composability risk');
+  } else if (gas || congested || route.risk.level === 'medium') {
+    level = 'caution';
+    if (gas) reasons.push(lang === 'sk' ? 'Gas overhead na Mainnete' : 'Mainnet gas overhead');
+    if (congested) reasons.push(lang === 'sk' ? 'Zvýšená utilizácia siete' : 'Elevated network utilization');
+    if (route.risk.level === 'medium') reasons.push(lang === 'sk' ? 'Stredné smart-contract riziko' : 'Medium smart-contract risk');
+  }
+
+  const copy = SUITABILITY_COPY[lang][level];
+  return {
+    level,
+    emoji: level === 'opportune' ? '🟢' : level === 'caution' ? '🟡' : '🛑',
+    title: copy.title,
+    text: copy.text,
+    reasons,
+  };
+}
+
+
