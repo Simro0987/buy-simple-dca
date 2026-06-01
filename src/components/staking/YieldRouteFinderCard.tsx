@@ -4,10 +4,14 @@ import {
   scanYieldRoutes, YieldAsset, YieldNetwork, Strategy,
   ScannerFilters, YieldQuote, RouteHop,
   assessQuoteRisk,
+  getRecommendedRoutes, evaluateGasGuard,
+  buildOfficialLink, displayOfficialUrl,
+  ASSET_USD_PRICE, RecommendedRoute,
 } from '@/lib/stakeRoutingService';
-import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
+import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap, Sparkles, Fuel } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { RiskShield } from './RiskShield';
 
 
