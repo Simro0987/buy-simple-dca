@@ -340,13 +340,14 @@ export function YieldRouteFinderCard({ lang }: Props) {
 
         {quotes.map((q, idx) => {
           const risk = assessQuoteRisk(q, isSk ? 'sk' : 'en');
+          const quoteDepegs = detectRouteDepegs(q.hops, tick);
           const verdictBorder =
             risk.level === 'low' ? 'border-gain/30 bg-gain/5 text-gain/90' :
             risk.level === 'medium' ? 'border-amber-500/30 bg-amber-500/5 text-amber-300/90' :
             'border-loss/30 bg-loss/5 text-loss/90';
           return (
           <div key={q.protocolId + idx}
-               className={`rounded-lg p-3 space-y-2 border ${idx === 0 ? 'border-primary/40 bg-primary/5' : 'border-border/40 bg-secondary/30'}`}>
+               className={`rounded-lg p-3 space-y-2 border ${idx === 0 ? 'border-primary/40 bg-primary/5' : 'border-border/40 bg-secondary/30'} ${quoteDepegs.length ? 'ring-2 ring-loss/60' : ''}`}>
             <div className="flex items-center justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 flex-wrap">
