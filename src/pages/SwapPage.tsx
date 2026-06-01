@@ -685,7 +685,14 @@ export function SwapPage({ lang }: Props) {
               <span className="ml-auto"><SwapTypeBadge type={swapType} /></span>
             </div>
             <div className="flex items-baseline justify-between mb-1">
-              <span className="text-lg font-bold text-foreground">{best.platformName}</span>
+              <div className="min-w-0">
+                <div className="text-lg font-bold text-foreground truncate">{best.platformName}</div>
+                {best.officialUrl && (
+                  <div className="text-[9px] font-medium text-emerald-500/80 tracking-wide">
+                    Verified: {best.officialUrl}
+                  </div>
+                )}
+              </div>
               <span className="text-[10px] uppercase tracking-wide text-muted-foreground">{best.type}</span>
             </div>
             <div className="font-mono text-2xl font-bold text-emerald-400 leading-tight transition-all">
