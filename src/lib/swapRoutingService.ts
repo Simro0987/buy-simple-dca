@@ -568,11 +568,13 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
       priceImpactPct,
       priceImpactUsd,
       slippageBufferUsd,
-      slippagePct: MAX_SLIPPAGE_PCT,
+      slippagePct: isSubmarineProvider ? 0 : MAX_SLIPPAGE_PCT,
       impactLevel,
       rankValue,
       supported,
       prioritized,
+      submarine: isSubmarineProvider,
+      fixedRate: isFixedRateProvider,
     };
   });
 
