@@ -446,8 +446,20 @@ export interface Quote {
   supported: boolean;
   prioritized?: boolean;
   // Submarine swap / fixed-rate metadata (Lightning <-> Polygon stables routes).
-  submarine?: boolean;   // route uses internal liquidity / submarine swap (no AMM impact)
-  fixedRate?: boolean;   // rate is locked before execution → "Guaranteed Fixed Rate"
+  submarine?: boolean;
+  fixedRate?: boolean;
+  // Capability flags surfaced for UI badges (mirrors Platform).
+  customRecipient?: boolean;
+  noKyc?: boolean;
+  noWallet?: boolean;
+  mevProtected?: boolean;
+  offchainGasless?: boolean;
+  limitOrders?: boolean;
+  gasRefuel?: boolean;
+  // When `supported = false`, this explains why ("Requires Wallet Connection", etc.).
+  unsupportedReason?: string;
+  // USD saved versus the median supported alternative (only on #1).
+  savedVsMedianUsd?: number;
 }
 
 function seededVariance(seed: string): number {
