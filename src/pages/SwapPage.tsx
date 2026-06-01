@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play, ShieldAlert } from 'lucide-react';
+import { ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play, ShieldAlert, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   CHAINS, CHAIN_ORDER, ChainId, TOKENS, TokenMeta, getQuotes, tokenKey, tokenUsdPrice,
   formatTokenAmount, formatUsd, formatMin, detectSwapType, involvesPrivacy,
+  MAX_SLIPPAGE_PCT, PRICE_IMPACT_WARN_PCT, PRICE_IMPACT_UNSAFE_PCT, type Quote,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
@@ -146,7 +147,7 @@ export function SwapPage({ lang }: Props) {
         from: 'Z (zdroj)', to: 'Na (cieľ)', amount: 'Suma', best: 'NAJLEPŠÍ KURZ / NAJNIŽŠÍ POPLATOK',
         scan: 'Skenujem protokoly…', expected: 'Očakávaný výstup', netFee: 'Sieť + gas',
         bridgeFee: 'Bridge fee', time: 'Čas', cta: 'Otvoriť',
-        all: 'Všetky platformy (zoradené podľa čistého výstupu)',
+        all: 'Všetky platformy (zoradené podľa čistého výstupu po fee, impact a slippage)',
         info: 'Tento nástroj skenuje agregátory a bridge protokoly, aby našiel najlepší kurz. Kliknutím na tlačidlo budeš bezpečne presmerovaný na vybranú platformu, kde swap dokončíš vlastnou peňaženkou. Žiadne transakcie sa tu nevykonávajú.',
         invalid: 'Vyber dva rôzne tokeny.', enter: 'Zadaj sumu pre skenovanie protokolov.',
         sameChain: 'Same-Chain Swap', crossChain: 'Cross-Chain Bridge',
@@ -156,6 +157,11 @@ export function SwapPage({ lang }: Props) {
         live: 'LIVE', pausedTxt: 'POZASTAVENÉ',
         privacyTitle: 'Privacy / pomalá trasa',
         privacyNote: 'Bitcoin LN a Monero majú minimálne sumy (~10–25 USD) a deposit times môžu trvať 5–60 min. Použi Houdiniswap, Trocador alebo Swapspace. EVM agregátory (Odos, CoW, ParaSwap) túto triedu aktív nepodporujú.',
+        slippageLock: `Slippage: ${MAX_SLIPPAGE_PCT.toFixed(1)}% (Max Protection)`,
+        slippageNote: 'Všetky kurzy sú prepočítané s tvrdou ochranou proti sandwich útokom.',
+        impact: 'Cenový dopad',
+        impactWarn: 'Vysoký dopad',
+        impactUnsafe: 'Vysoký dopad / Nebezpečné',
       }
     : {
         title: 'SWAP Scanner',
@@ -163,7 +169,7 @@ export function SwapPage({ lang }: Props) {
         from: 'From (source)', to: 'To (destination)', amount: 'Amount', best: 'BEST VALUE / LOWEST FEE',
         scan: 'Scanning protocols…', expected: 'Expected output', netFee: 'Network + gas',
         bridgeFee: 'Bridge fee', time: 'Time', cta: 'Go to',
-        all: 'All platforms (sorted by net output)',
+        all: 'All platforms (sorted by net output after fees, impact & slippage)',
         info: 'This tool scans aggregators and bridges to find the best rate. Clicking the button will securely redirect you to the selected platform to complete the swap using your own wallet. No transactions happen here.',
         invalid: 'Pick two different tokens.', enter: 'Enter an amount to scan protocols.',
         sameChain: 'Same-Chain Swap', crossChain: 'Cross-Chain Bridge',
@@ -173,7 +179,36 @@ export function SwapPage({ lang }: Props) {
         live: 'LIVE', pausedTxt: 'PAUSED',
         privacyTitle: 'Privacy / slow route',
         privacyNote: 'Bitcoin LN and Monero require minimum amounts (~$10–$25) and deposit times can take 5–60 min. Use Houdiniswap, Trocador or Swapspace. Pure EVM aggregators (Odos, CoW, ParaSwap) do not support this asset class.',
+        slippageLock: `Slippage: ${MAX_SLIPPAGE_PCT.toFixed(1)}% (Max Protection)`,
+        slippageNote: 'All quotes are computed with hard sandwich-attack protection.',
+        impact: 'Price Impact',
+        impactWarn: 'High Price Impact',
+        impactUnsafe: 'High Price Impact / Unsafe',
       };
+
+  const ImpactBadge = ({ q, compact = false }: { q: Quote; compact?: boolean }) => {
+    if (!q.supported) return null;
+    const pct = q.priceImpactPct;
+    const cls =
+      q.impactLevel === 'unsafe'
+        ? 'border-red-500/50 bg-red-500/15 text-red-400'
+        : q.impactLevel === 'warn'
+        ? 'border-amber-500/50 bg-amber-500/15 text-amber-400'
+        : 'border-border bg-muted/30 text-muted-foreground';
+    const label =
+      q.impactLevel === 'unsafe'
+        ? `${t.impactUnsafe} · ${pct.toFixed(2)}%`
+        : q.impactLevel === 'warn'
+        ? `${t.impactWarn} · ${pct.toFixed(2)}%`
+        : `${compact ? '' : t.impact + ': '}${pct.toFixed(2)}%`;
+    return (
+      <span className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border ${cls}`}>
+        {q.impactLevel !== 'ok' && <AlertTriangle className="w-2.5 h-2.5" />}
+        {label}
+      </span>
+    );
+  };
+
 
   const SwapTypeBadge = ({ type }: { type: typeof swapType }) => (
     <span
@@ -259,6 +294,13 @@ export function SwapPage({ lang }: Props) {
             </div>
           </div>
         )}
+
+        {/* Locked slippage protection indicator */}
+        <div className="flex items-center gap-1.5 pt-1 border-t border-border/40">
+          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">{t.slippageLock}</span>
+          <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">· {t.slippageNote}</span>
+        </div>
       </Card>
 
       {/* Privacy / LN warning */}
@@ -315,6 +357,12 @@ export function SwapPage({ lang }: Props) {
             <div className="font-mono text-2xl font-bold text-emerald-400 leading-tight transition-all">
               {formatTokenAmount(best.netOut)} <span className="text-sm text-muted-foreground">{to.symbol}</span>
             </div>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              <ImpactBadge q={best} />
+              <span className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-emerald-500/40 bg-emerald-500/10 text-emerald-400">
+                <ShieldCheck className="w-2.5 h-2.5" /> Slippage {MAX_SLIPPAGE_PCT.toFixed(1)}%
+              </span>
+            </div>
             <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 mt-1.5 text-[10px] text-muted-foreground">
               <span>{t.expected}: <span className="text-foreground/80">{formatUsd(best.netOutUsd)}</span></span>
               <span>{t.netFee}: {formatUsd(best.gasUsd + best.feeUsd)}</span>
@@ -354,6 +402,7 @@ export function SwapPage({ lang }: Props) {
                         {q.prioritized && q.supported && !q.isBest && (
                           <span className="text-[8px] font-bold text-primary uppercase tracking-wider">priority</span>
                         )}
+                        {q.supported && q.impactLevel !== 'ok' && <ImpactBadge q={q} compact />}
                         {!q.supported && (
                           <span className="inline-flex items-center gap-0.5 text-[8px] font-bold text-amber-400 uppercase tracking-wider">
                             <Ban className="w-2.5 h-2.5" />{privacyRoute ? t.notSupportedClass : t.notSupported}
@@ -376,6 +425,16 @@ export function SwapPage({ lang }: Props) {
                           </div>
                           <div className={`text-[10px] font-medium ${q.isBest ? 'text-emerald-400' : 'text-muted-foreground'}`}>
                             {q.isBest ? '✓ best' : `${deltaPct.toFixed(2)}%`}
+                          </div>
+                          <div
+                            className={`text-[9px] font-mono tabular-nums ${
+                              q.impactLevel === 'unsafe' ? 'text-red-400'
+                              : q.impactLevel === 'warn' ? 'text-amber-400'
+                              : 'text-muted-foreground/70'
+                            }`}
+                            title={`${t.impact}: ${q.priceImpactPct.toFixed(2)}% (warn ≥${PRICE_IMPACT_WARN_PCT}%, unsafe ≥${PRICE_IMPACT_UNSAFE_PCT}%)`}
+                          >
+                            impact {q.priceImpactPct.toFixed(2)}%
                           </div>
                         </>
                       ) : (

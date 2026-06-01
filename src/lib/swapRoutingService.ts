@@ -136,6 +136,13 @@ export function involvesBitcoin(from: TokenMeta, to: TokenMeta): boolean {
   return from.chain === 'bitcoin' || to.chain === 'bitcoin';
 }
 
+// ============= Slippage & Price Impact constants =============
+// Hardcoded conservative max slippage (0.5%) applied uniformly to every route.
+export const MAX_SLIPPAGE_BPS = 50;                // 0.5%
+export const MAX_SLIPPAGE_PCT = MAX_SLIPPAGE_BPS / 100;
+export const PRICE_IMPACT_WARN_PCT = 1.5;          // yellow badge above this
+export const PRICE_IMPACT_UNSAFE_PCT = 3.0;        // red badge + push to bottom
+
 // ============= Platforms =============
 export interface Platform {
   id: string;
@@ -147,8 +154,21 @@ export interface Platform {
   extraGasUsd: number;
   bridgeFeeBps?: number;
   estTimeMin: number;
+  // Approximate effective liquidity (USD) used to simulate price impact.
+  // Higher = deeper pools = lower impact for the same trade size. Optional;
+  // platforms that don't set it fall back to DEFAULT_LIQUIDITY_USD.
+  liquidityUsd?: number;
   supports: (from: TokenMeta, to: TokenMeta, type: SwapType) => boolean;
 }
+
+// Default liquidity tiers used when a platform doesn't override liquidityUsd.
+// Major aggregators -> deep; bridges -> medium; privacy/instant -> thin.
+const DEFAULT_LIQUIDITY_USD: Record<Platform['type'], number> = {
+  aggregator: 80_000_000,
+  dex:        45_000_000,
+  bridge:     25_000_000,
+  privacy:    1_200_000,
+};
 
 const EVM_CHAINS: ChainId[] = ['ethereum', 'base', 'arbitrum', 'polygon', 'avalanche'];
 const isEvm = (c: ChainId) => EVM_CHAINS.includes(c);
@@ -309,6 +329,8 @@ function chainNumericId(c: ChainId): string {
 }
 
 // ============= Quotes =============
+export type PriceImpactLevel = 'ok' | 'warn' | 'unsafe';
+
 export interface Quote {
   platformId: string;
   platformName: string;
@@ -321,6 +343,13 @@ export interface Quote {
   netOutUsd: number;
   estTimeMin: number;
   url: string;
+  // Safety metrics
+  priceImpactPct: number;     // simulated price impact (%)
+  priceImpactUsd: number;     // USD value lost to price impact at current trade size
+  slippageBufferUsd: number;  // worst-case USD lost to 0.5% slippage tolerance
+  slippagePct: number;        // = MAX_SLIPPAGE_PCT, exposed for UI consistency
+  impactLevel: PriceImpactLevel;
+  rankValue: number;          // final ranking score (see formula in getQuotes)
   isBest?: boolean;
   supported: boolean;
   prioritized?: boolean;
@@ -421,10 +450,33 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
       : 0;
     const gasUsd = chainGas + p.extraGasUsd * (1 + variance * 0.2);
 
+    // ---- Price impact simulation ----
+    // impactPct ≈ tradeSize / effectiveLiquidity * 100, plus small variance.
+    // Thin-liquidity / privacy routes inherently show higher impact for large amounts.
+    const liquidityUsd = p.liquidityUsd ?? DEFAULT_LIQUIDITY_USD[p.type];
+    const rawImpactPct = (grossInUsd / liquidityUsd) * 100 + variance * 0.15;
+    const priceImpactPct = Math.max(0, rawImpactPct);
+    const priceImpactUsd = (grossInUsd * priceImpactPct) / 100;
+
+    // ---- Slippage buffer (hard-locked 0.5%) ----
+    const slippageBufferUsd = (grossInUsd * MAX_SLIPPAGE_PCT) / 100;
+
     const totalCostUsd = protocolFeeUsd + bridgeFeeUsd + gasUsd;
-    const netOutUsd = Math.max(0, grossOut * toUsd - totalCostUsd);
+    const grossOutUsdValue = grossOut * toUsd;
+    // Net output reflects ALL friction points (fees + impact + slippage buffer).
+    const netOutUsd = Math.max(0, grossOutUsdValue - totalCostUsd - priceImpactUsd - slippageBufferUsd);
     const netOut = netOutUsd / toUsd;
     const estTimeMin = Math.max(0.5, p.estTimeMin * (1 + variance * 0.15));
+
+    const impactLevel: PriceImpactLevel =
+      priceImpactPct >= PRICE_IMPACT_UNSAFE_PCT ? 'unsafe'
+      : priceImpactPct >= PRICE_IMPACT_WARN_PCT ? 'warn'
+      : 'ok';
+
+    // Ultimate ranking value — exactly the formula from the spec.
+    // Higher = better. Time penalty only matters for cross-chain.
+    const timePenaltyUsd = swapType === 'cross-chain' ? estTimeMin * 0.02 : 0;
+    const rankValue = netOutUsd - timePenaltyUsd;
 
     return {
       platformId: p.id,
@@ -438,22 +490,32 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
       netOutUsd,
       estTimeMin,
       url: p.buildUrl(from, to, amount),
+      priceImpactPct,
+      priceImpactUsd,
+      slippageBufferUsd,
+      slippagePct: MAX_SLIPPAGE_PCT,
+      impactLevel,
+      rankValue,
       supported,
       prioritized,
     };
   });
 
+  // Sort: supported first; within supported, unsafe-impact routes pushed
+  // to the bottom; otherwise highest rankValue (= max net output after all friction) wins.
   const sorted = all.sort((a, b) => {
     if (a.supported !== b.supported) return a.supported ? -1 : 1;
-    if (swapType === 'cross-chain') {
-      const aScore = a.netOutUsd - a.estTimeMin * 0.02;
-      const bScore = b.netOutUsd - b.estTimeMin * 0.02;
-      return bScore - aScore;
-    }
-    return b.netOut - a.netOut;
+    const aUnsafe = a.impactLevel === 'unsafe' ? 1 : 0;
+    const bUnsafe = b.impactLevel === 'unsafe' ? 1 : 0;
+    if (aUnsafe !== bUnsafe) return aUnsafe - bUnsafe;
+    return b.rankValue - a.rankValue;
   });
 
-  const best = sorted.find(q => q.supported) ?? null;
+
+  const best =
+    sorted.find(q => q.supported && q.impactLevel !== 'unsafe') ??
+    sorted.find(q => q.supported) ??
+    null;
   if (best) best.isBest = true;
   return { swapType, quotes: sorted, best, privacyRoute };
 }
