@@ -22,7 +22,20 @@ const STRATEGIES: { value: Strategy; label: string }[] = [
   { value: 'liquidity',      label: 'Liquidity Pools' },
 ];
 
-function HopChain({ hops }: { hops: RouteHop[] }) {
+function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stakeRoutingService').RiskAssessment }) {
+  // attach the risk badge to the last protocol hop
+  const lastProtocolIdx = (() => {
+    for (let i = hops.length - 1; i >= 0; i--) if (hops[i].kind === 'protocol') return i;
+    return -1;
+  })();
+  const riskCfg = risk
+    ? risk.level === 'low'
+      ? { wrap: 'bg-gain/15 text-gain border-gain/40', emoji: '🟢' }
+      : risk.level === 'medium'
+        ? { wrap: 'bg-amber-500/15 text-amber-400 border-amber-500/40', emoji: '🟡' }
+        : { wrap: 'bg-loss/15 text-loss border-loss/40', emoji: '🔴' }
+    : null;
+
   return (
     <div className="flex flex-wrap items-center gap-1.5">
       {hops.map((h, i) => (
@@ -36,6 +49,11 @@ function HopChain({ hops }: { hops: RouteHop[] }) {
           >
             <span className="font-medium truncate">{h.label}</span>
             {h.sublabel && <span className="text-[10px] text-muted-foreground truncate">{h.sublabel}</span>}
+            {risk && riskCfg && i === lastProtocolIdx && (
+              <span className={`mt-0.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded border text-[9px] font-semibold ${riskCfg.wrap}`}>
+                {riskCfg.emoji} {risk.score}/10
+              </span>
+            )}
           </div>
           {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
         </React.Fragment>
@@ -43,6 +61,7 @@ function HopChain({ hops }: { hops: RouteHop[] }) {
     </div>
   );
 }
+
 
 function HealthBadge({ q }: { q: YieldQuote }) {
   if (q.health === 'ok') {
