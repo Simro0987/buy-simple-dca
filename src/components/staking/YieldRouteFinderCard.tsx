@@ -250,8 +250,9 @@ export function YieldRouteFinderCard({ lang }: Props) {
               lang: isSk ? 'sk' : 'en',
             });
             const primary = r.steps[0];
+            const depegs = detectRouteDepegs(r.hops, tick);
             return (
-              <div key={r.tier} className={`rounded-lg border p-3 space-y-2 ${tierBorder}`}>
+              <div key={r.tier} className={`rounded-lg border p-3 space-y-2 ${tierBorder} ${depegs.length ? 'ring-2 ring-loss/60' : ''}`}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <p className="text-sm font-bold text-foreground">
