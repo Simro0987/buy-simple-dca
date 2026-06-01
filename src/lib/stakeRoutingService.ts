@@ -432,3 +432,254 @@ export function assessPlannerRisk(apyKey: PlannerSubAllocation['apyKey'], lang: 
   return assessRisk(map[apyKey] ?? map.ethStake, lang);
 }
 
+// ============= Anti-phishing URL helpers =============
+
+/** Build the canonical https:// link for a verified domain (handles deep links). */
+export function buildOfficialLink(url: string): string {
+  if (!url) return '#';
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  // Deep link (has a path) — pin to www. and ensure trailing slash for safety
+  if (url.includes('/')) {
+    const trimmed = url.replace(/\/$/, '');
+    return `https://www.${trimmed}/`;
+  }
+  return `https://${url}`;
+}
+
+/** Render-safe display version of a verified domain (with trailing slash for deep links). */
+export function displayOfficialUrl(url: string): string {
+  if (!url) return '';
+  const stripped = url.replace(/^https?:\/\//, '').replace(/^www\./, '');
+  return stripped.includes('/') ? stripped.replace(/\/$/, '') + '/' : stripped;
+}
+
+// ============= Autonomous Recommended Route Engine =============
+
+export type RouteRiskTier = 'conservative' | 'balanced' | 'aggressive';
+
+export interface RouteStep {
+  pct: number;                  // % of capital allocated at this step
+  protocolId: string;
+  protocolName: string;
+  officialUrl: string;
+  apy: number;                  // live-jittered apy for this protocol
+  layer: 1 | 2 | 3;
+  note?: string;
+}
+
+export interface RecommendedRoute {
+  tier: RouteRiskTier;
+  emoji: string;
+  title: { en: string; sk: string };
+  network: YieldNetwork;
+  baseHopProtocolId?: string;   // optional Layer-1 staking hop before splits
+  steps: RouteStep[];           // splits at the yielding layer
+  blendedApy: number;
+  hops: RouteHop[];
+  risk: RiskAssessment;
+  multiHop: boolean;
+}
+
+// Approximate USD prices (for retail gas-fee guard only)
+export const ASSET_USD_PRICE: Record<YieldAsset, number> = {
+  BTC: 95000, cbBTC: 95000, WBTC: 95000, LBTC: 95000,
+  ETH: 3500, stETH: 3500, wstETH: 4100, weETH: 3700,
+  SOL: 200, JitoSOL: 220, mSOL: 215, bSOL: 210,
+};
+
+/** Smart Gas Fee Layering — returns warning when retail user is exposed to Ethereum mainnet multi-hop fees. */
+export function evaluateGasGuard(args: {
+  network: YieldNetwork;
+  depositUsd: number;
+  multiHop: boolean;
+  lang?: 'en' | 'sk';
+}): { warn: boolean; message: string } | null {
+  const { network, depositUsd, multiHop, lang = 'en' } = args;
+  if (network !== 'Ethereum') return null;
+  if (!multiHop) return null;
+  if (depositUsd >= 500) return null;
+  const msg =
+    lang === 'sk'
+      ? '⚠️ Upozornenie na gas: Viacvrstvové operácie na Ethereum Mainnet môžu výrazne pohltiť tvoje krátkodobé výnosy. Zváž migráciu na Arbitrum alebo Base L2 stratégie pre nižšie gas náklady.'
+      : '⚠️ Gas Fee Notice: Multi-layer execution fees on Ethereum Mainnet may severely impact your short-term yields. Consider migrating to Arbitrum or Base L2 strategies for lower gas overhead.';
+  return { warn: true, message: msg };
+}
+
+interface RecipeStep { pct: number; protocolId: string }
+interface Recipe {
+  tier: RouteRiskTier;
+  network: YieldNetwork;
+  baseProtocolId?: string;
+  steps: RecipeStep[];
+}
+
+const RECIPES: Partial<Record<YieldAsset, Recipe[]>> = {
+  SOL: [
+    { tier: 'conservative', network: 'Solana', steps: [{ pct: 100, protocolId: 'jito' }] },
+    { tier: 'balanced',     network: 'Solana', baseProtocolId: 'jito',
+      steps: [{ pct: 70, protocolId: 'jito_restaking' }, { pct: 30, protocolId: 'kamino' }] },
+    { tier: 'aggressive',   network: 'Solana', baseProtocolId: 'jito',
+      steps: [{ pct: 50, protocolId: 'solayer' }, { pct: 50, protocolId: 'kamino' }] },
+  ],
+  JitoSOL: [
+    { tier: 'conservative', network: 'Solana', steps: [{ pct: 100, protocolId: 'kamino' }] },
+    { tier: 'balanced',     network: 'Solana',
+      steps: [{ pct: 70, protocolId: 'jito_restaking' }, { pct: 30, protocolId: 'kamino' }] },
+    { tier: 'aggressive',   network: 'Solana',
+      steps: [{ pct: 50, protocolId: 'solayer' }, { pct: 50, protocolId: 'drift' }] },
+  ],
+  mSOL: [
+    { tier: 'conservative', network: 'Solana', steps: [{ pct: 100, protocolId: 'marginfi' }] },
+    { tier: 'balanced',     network: 'Solana',
+      steps: [{ pct: 70, protocolId: 'solayer' }, { pct: 30, protocolId: 'kamino' }] },
+    { tier: 'aggressive',   network: 'Solana',
+      steps: [{ pct: 50, protocolId: 'solayer' }, { pct: 50, protocolId: 'drift' }] },
+  ],
+  bSOL: [
+    { tier: 'conservative', network: 'Solana', steps: [{ pct: 100, protocolId: 'kamino' }] },
+    { tier: 'balanced',     network: 'Solana',
+      steps: [{ pct: 70, protocolId: 'solayer' }, { pct: 30, protocolId: 'kamino' }] },
+  ],
+  ETH: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'lido' }] },
+    { tier: 'balanced',     network: 'Ethereum', baseProtocolId: 'lido',
+      steps: [{ pct: 70, protocolId: 'eigenlayer' }, { pct: 30, protocolId: 'aave' }] },
+    { tier: 'aggressive',   network: 'Ethereum', baseProtocolId: 'etherfi',
+      steps: [{ pct: 50, protocolId: 'symbiotic' }, { pct: 50, protocolId: 'pendle' }] },
+  ],
+  stETH: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'aave' }] },
+    { tier: 'balanced',     network: 'Ethereum',
+      steps: [{ pct: 70, protocolId: 'eigenlayer' }, { pct: 30, protocolId: 'morpho' }] },
+    { tier: 'aggressive',   network: 'Ethereum',
+      steps: [{ pct: 50, protocolId: 'karak' }, { pct: 50, protocolId: 'pendle' }] },
+  ],
+  wstETH: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'aave' }] },
+    { tier: 'balanced',     network: 'Ethereum',
+      steps: [{ pct: 70, protocolId: 'eigenlayer' }, { pct: 30, protocolId: 'morpho' }] },
+    { tier: 'aggressive',   network: 'Ethereum',
+      steps: [{ pct: 50, protocolId: 'karak' }, { pct: 50, protocolId: 'pendle' }] },
+  ],
+  weETH: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'morpho' }] },
+    { tier: 'balanced',     network: 'Ethereum',
+      steps: [{ pct: 70, protocolId: 'eigenlayer' }, { pct: 30, protocolId: 'pendle' }] },
+    { tier: 'aggressive',   network: 'Ethereum',
+      steps: [{ pct: 50, protocolId: 'symbiotic' }, { pct: 50, protocolId: 'pendle' }] },
+  ],
+  BTC: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'babylon' }] },
+    { tier: 'balanced',     network: 'Ethereum', baseProtocolId: 'lombard',
+      steps: [{ pct: 70, protocolId: 'karak' }, { pct: 30, protocolId: 'morpho' }] },
+    { tier: 'aggressive',   network: 'Ethereum', baseProtocolId: 'lombard',
+      steps: [{ pct: 50, protocolId: 'karak' }, { pct: 50, protocolId: 'pendle' }] },
+  ],
+  LBTC: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'morpho' }] },
+    { tier: 'balanced',     network: 'Ethereum',
+      steps: [{ pct: 70, protocolId: 'karak' }, { pct: 30, protocolId: 'morpho' }] },
+    { tier: 'aggressive',   network: 'Ethereum',
+      steps: [{ pct: 50, protocolId: 'karak' }, { pct: 50, protocolId: 'pendle' }] },
+  ],
+  WBTC: [
+    { tier: 'conservative', network: 'Ethereum', steps: [{ pct: 100, protocolId: 'aave' }] },
+    { tier: 'balanced',     network: 'Ethereum',
+      steps: [{ pct: 70, protocolId: 'karak' }, { pct: 30, protocolId: 'morpho' }] },
+    { tier: 'aggressive',   network: 'Arbitrum',
+      steps: [{ pct: 50, protocolId: 'dolomite' }, { pct: 50, protocolId: 'beefy' }] },
+  ],
+  cbBTC: [
+    { tier: 'conservative', network: 'Base', steps: [{ pct: 100, protocolId: 'morpho' }] },
+    { tier: 'balanced',     network: 'Ethereum',
+      steps: [{ pct: 70, protocolId: 'aave' }, { pct: 30, protocolId: 'morpho' }] },
+  ],
+};
+
+const TIER_TITLES: Record<RouteRiskTier, { en: string; sk: string; emoji: string }> = {
+  conservative: { emoji: '🛡️', en: 'Conservative Base Route',     sk: 'Konzervatívna základná trasa' },
+  balanced:     { emoji: '⚖️', en: 'Balanced Multi-Layer Route',   sk: 'Vyvážená viacvrstvová trasa' },
+  aggressive:   { emoji: '⚡', en: 'Maximum Aggressive Yield',     sk: 'Maximálne agresívny výnos' },
+};
+
+export function getRecommendedRoutes(asset: YieldAsset, tick = 0, lang: 'en' | 'sk' = 'en'): RecommendedRoute[] {
+  const recipes = RECIPES[asset] ?? [];
+  return recipes.map((r, rIdx) => {
+    const baseProto = r.baseProtocolId ? PROTOCOLS.find(p => p.id === r.baseProtocolId) : undefined;
+    const stepProtos = r.steps.map(s => {
+      const p = PROTOCOLS.find(x => x.id === s.protocolId)!;
+      return { s, p };
+    });
+
+    const steps: RouteStep[] = stepProtos.map(({ s, p }, i) => ({
+      pct: s.pct,
+      protocolId: p.id,
+      protocolName: p.name,
+      officialUrl: p.officialUrl,
+      apy: jitter(p.baseApy, tick, rIdx * 10 + i),
+      layer: p.layer,
+    }));
+
+    // Blended APY: include baseProto's APY for capital that flows through it (full amount, single layer)
+    // then add weighted incremental from split steps.
+    const baseApy = baseProto ? jitter(baseProto.baseApy, tick, rIdx * 10 + 99) : 0;
+    const splitApy = steps.reduce((sum, st) => sum + (st.pct / 100) * st.apy, 0);
+    const blendedApy = baseApy + splitApy;
+
+    // Build hop chain: [asset] -> (baseProto) -> [outputToken] -> for each split: protocol chip
+    const hops: RouteHop[] = [{ kind: 'asset', label: asset }];
+    if (baseProto) {
+      hops.push({ kind: 'protocol', label: `⚡ ${baseProto.name}`, sublabel: baseProto.outputToken ?? baseProto.category, officialUrl: baseProto.officialUrl });
+      if (baseProto.outputToken) hops.push({ kind: 'asset', label: baseProto.outputToken });
+    }
+    stepProtos.forEach(({ s, p }) => {
+      const emoji = p.layer === 2 ? '🛡️' : p.layer === 3 ? '💰' : '⚡';
+      hops.push({
+        kind: 'protocol',
+        label: `${emoji} ${s.pct}% · ${p.name}`,
+        sublabel: p.category,
+        officialUrl: p.officialUrl,
+      });
+    });
+
+    const multiHop = (baseProto ? 1 : 0) + steps.length > 1;
+    const involvesLst = !!baseProto?.outputToken || LST_LIKE.has(asset);
+    // Tier-aligned risk
+    const tierRiskInput: RiskInput = (() => {
+      if (r.tier === 'conservative') {
+        const p = baseProto ?? stepProtos[0].p;
+        return {
+          tvlUsdM: p.tvlUsdM, auditedYears: p.auditedYears, layer: p.layer,
+          strategy: p.strategies[0], unbondingDays: p.unbondingDays,
+          isolatedMarkets: p.isolatedMarkets, hopsCount: hops.length,
+          involvesLst,
+        };
+      }
+      // Take worst step
+      const worst = stepProtos.reduce((acc, cur) =>
+        cur.p.tvlUsdM < acc.p.tvlUsdM || cur.p.auditedYears < acc.p.auditedYears ? cur : acc
+      , stepProtos[0]);
+      return {
+        tvlUsdM: worst.p.tvlUsdM, auditedYears: worst.p.auditedYears, layer: worst.p.layer,
+        strategy: worst.p.strategies[0], unbondingDays: Math.max(...stepProtos.map(x => x.p.unbondingDays), baseProto?.unbondingDays ?? 0),
+        isolatedMarkets: worst.p.isolatedMarkets, hopsCount: hops.length, involvesLst,
+      };
+    })();
+    const risk = assessRisk(tierRiskInput, lang);
+
+    const cfg = TIER_TITLES[r.tier];
+    return {
+      tier: r.tier,
+      emoji: cfg.emoji,
+      title: { en: cfg.en, sk: cfg.sk },
+      network: r.network,
+      baseHopProtocolId: r.baseProtocolId,
+      steps,
+      blendedApy,
+      hops,
+      risk,
+      multiHop,
+    } as RecommendedRoute;
+  });
+}
+
