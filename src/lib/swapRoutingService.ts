@@ -583,6 +583,8 @@ export interface Quote {
   priceVarianceFlag: boolean;
   // Explicit hop chain for the multi-hop route visualizer.
   hops: RouteHop[];
+  // Anti-phishing: verified official domain (e.g. "boltz.exchange").
+  officialUrl: string;
 }
 
 export interface RouteHop {
