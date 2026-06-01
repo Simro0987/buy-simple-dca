@@ -826,7 +826,7 @@ export function SwapPage({ lang }: Props) {
                   </>
                 );
                 return q.supported ? (
-                  <a key={q.platformId} href={q.url} target="_blank" rel="noopener noreferrer" className={baseCls}>{inner}</a>
+                  <a key={q.platformId} href={q.officialUrl ? `https://${q.officialUrl}` : q.url} target="_blank" rel="noopener noreferrer" className={baseCls}>{inner}</a>
                 ) : (
                   <div key={q.platformId} className={baseCls} aria-disabled="true">{inner}</div>
                 );
