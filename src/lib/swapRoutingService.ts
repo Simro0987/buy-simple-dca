@@ -136,6 +136,13 @@ export function involvesBitcoin(from: TokenMeta, to: TokenMeta): boolean {
   return from.chain === 'bitcoin' || to.chain === 'bitcoin';
 }
 
+// ============= Slippage & Price Impact constants =============
+// Hardcoded conservative max slippage (0.5%) applied uniformly to every route.
+export const MAX_SLIPPAGE_BPS = 50;                // 0.5%
+export const MAX_SLIPPAGE_PCT = MAX_SLIPPAGE_BPS / 100;
+export const PRICE_IMPACT_WARN_PCT = 1.5;          // yellow badge above this
+export const PRICE_IMPACT_UNSAFE_PCT = 3.0;        // red badge + push to bottom
+
 // ============= Platforms =============
 export interface Platform {
   id: string;
@@ -147,6 +154,9 @@ export interface Platform {
   extraGasUsd: number;
   bridgeFeeBps?: number;
   estTimeMin: number;
+  // Approximate effective liquidity (USD) used to simulate price impact.
+  // Higher = deeper pools = lower impact for the same trade size.
+  liquidityUsd: number;
   supports: (from: TokenMeta, to: TokenMeta, type: SwapType) => boolean;
 }
 
