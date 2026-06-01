@@ -917,3 +917,69 @@ export function formatMin(n: number): string {
   if (n < 10) return `~${n.toFixed(1)}m`;
   return `~${Math.round(n)}m`;
 }
+
+// ============= MEV / Slippage Protection Radar =============
+
+export type MevRiskLevel = 'low' | 'high';
+
+export interface MevRiskVerdict {
+  level: MevRiskLevel;
+  title: string;
+  text: string;
+}
+
+export function evaluateMevRisk(q: Quote, fromChain: ChainId, lang: 'sk' | 'en' = 'sk'): MevRiskVerdict {
+  const privateChannel = !!q.mevProtected;
+  const impactSafe = q.impactLevel === 'ok';
+  const varianceSafe = !q.priceVarianceFlag;
+  const fam = CHAINS[fromChain].family;
+  const noBotEcosystem = fam === 'btc' || fam === 'lightning' || fam === 'privacy';
+
+  const low = noBotEcosystem || (privateChannel && impactSafe && varianceSafe);
+
+  if (low) {
+    return {
+      level: 'low',
+      title: lang === 'sk' ? '🟢 OCHRANA AKTÍVNA' : '🟢 PROTECTION ACTIVE',
+      text: lang === 'sk'
+        ? 'Smerovanie prebieha cez privátne kanály. Obchodní boti tvoju transakciu nevidia a nemôžu ťa predbehnúť ani umelo posunúť cenu.'
+        : 'Routing goes through private channels. Trading bots cannot see your transaction or front-run / move the price against you.',
+    };
+  }
+  return {
+    level: 'high',
+    title: lang === 'sk' ? '🚨 RISK BOT ÚTOKU' : '🚨 BOT ATTACK RISK',
+    text: lang === 'sk'
+      ? 'Na tejto trase hrozí, že ťa predbehnú predátorskí boti (Sandwich Attack), kvôli čomu dostaneš menej mincí. Odporúčame znížiť povolený preklz (Slippage) alebo zvoliť inú sieť.'
+      : 'Predatory bots may front-run this route (Sandwich Attack), so you receive fewer coins. Lower slippage tolerance or pick another network.',
+  };
+}
+
+// ============= Dust & Gas Fee Eater Filter =============
+
+export interface GasEaterVerdict {
+  warn: boolean;
+  feePct: number;
+  message: string;
+}
+
+const GAS_EATER_THRESHOLD_PCT = 5.0;
+const CHEAP_CHAINS = new Set<ChainId>(['solana', 'arbitrum', 'base']);
+
+export function evaluateGasEater(q: Quote, fromChain: ChainId, lang: 'sk' | 'en' = 'sk'): GasEaterVerdict {
+  const grossUsd = q.netOutUsd + q.gasUsd + q.feeUsd + q.bridgeFeeUsd + q.priceImpactUsd + q.slippageBufferUsd;
+  const totalFeeUsd = q.gasUsd + q.feeUsd + q.bridgeFeeUsd;
+  const feePct = grossUsd > 0 ? (totalFeeUsd / grossUsd) * 100 : 0;
+
+  if (CHEAP_CHAINS.has(fromChain) || feePct < GAS_EATER_THRESHOLD_PCT) {
+    return { warn: false, feePct, message: '' };
+  }
+  return {
+    warn: true,
+    feePct,
+    message: lang === 'sk'
+      ? '⚠️ NEVÝHODNÝ SWAP (Vysoké poplatky): Sieťový poplatok (Gas) zhltne viac ako 5% z tvojej sumy. Tento swap je momentálne neefektívny. Ak je to možné, presuň transakciu na siete s lacnými poplatkami ako Solana, Arbitrum alebo Base.'
+      : '⚠️ INEFFICIENT SWAP (High Fees): Network gas eats more than 5% of your amount. Move to cheap-fee chains like Solana, Arbitrum or Base.',
+  };
+}
+

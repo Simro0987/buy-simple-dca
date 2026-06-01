@@ -13,6 +13,7 @@ import {
   isLimitOrderChain, getGasTokenSymbol, needsGasRefuel,
   MAX_SLIPPAGE_PCT, PRICE_IMPACT_WARN_PCT, PRICE_IMPACT_UNSAFE_PCT,
   type Quote, type OrderType, type QuoteFilters, type RouteHop,
+  evaluateMevRisk, evaluateGasEater,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
@@ -677,8 +678,8 @@ export function SwapPage({ lang }: Props) {
             <HopChain hops={best.hops} />
           </Card>
 
-          {/* Hero card */}
-          <Card className="p-3 border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent">
+          {/* Hero card — amber outline if gas eats >5% of swap value */}
+          <Card className={`p-3 border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent ${evaluateGasEater(best, from.chain, lang === 'sk' ? 'sk' : 'en').warn ? 'ring-2 ring-amber-500/70' : ''}`}>
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <Zap className="w-3 h-3 text-emerald-400" />
               <span className="text-[9px] font-bold tracking-widest text-emerald-400">{t.best}</span>
@@ -737,6 +738,39 @@ export function SwapPage({ lang }: Props) {
                 </>
               )}
             </div>
+
+            {/* MEV / Slippage Protection Radar */}
+            {(() => {
+              const mev = evaluateMevRisk(best, from.chain, lang === 'sk' ? 'sk' : 'en');
+              const isLow = mev.level === 'low';
+              return (
+                <div className={`mt-2 rounded-md border-2 p-2 ${isLow ? 'border-emerald-500/60 bg-emerald-500/10' : 'border-red-500/70 bg-red-500/15 animate-pulse'}`}>
+                  <div className={`text-[10px] font-extrabold tracking-wide ${isLow ? 'text-emerald-300' : 'text-red-300'}`}>
+                    {mev.title}
+                  </div>
+                  <div className={`text-[10px] leading-snug mt-0.5 ${isLow ? 'text-emerald-200/90' : 'text-red-200/95 font-semibold'}`}>
+                    {mev.text}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Dust & Gas Fee Eater Filter */}
+            {(() => {
+              const gas = evaluateGasEater(best, from.chain, lang === 'sk' ? 'sk' : 'en');
+              if (!gas.warn) return null;
+              return (
+                <div className="mt-2 rounded-md border-2 border-amber-500/70 bg-amber-500/10 p-2">
+                  <div className="text-[10px] font-extrabold tracking-wide text-amber-300">
+                    {gas.message.split(':')[0]} · {gas.feePct.toFixed(1)}%
+                  </div>
+                  <div className="text-[10px] leading-snug mt-0.5 text-amber-200/95">
+                    {gas.message}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div className="mt-3 grid grid-cols-[1fr_auto] gap-1.5">
               <a href={best.officialUrl ? `https://${best.officialUrl}` : best.url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-1.5 h-10 rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-bold transition-colors">
