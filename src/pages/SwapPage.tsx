@@ -738,7 +738,7 @@ export function SwapPage({ lang }: Props) {
               )}
             </div>
             <div className="mt-3 grid grid-cols-[1fr_auto] gap-1.5">
-              <a href={best.url} target="_blank" rel="noopener noreferrer"
+              <a href={best.officialUrl ? `https://${best.officialUrl}` : best.url} target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-1.5 h-10 rounded-md bg-emerald-500 hover:bg-emerald-400 text-emerald-950 text-xs font-bold transition-colors">
                 {t.cta} {best.platformName} <ExternalLink className="w-3.5 h-3.5" />
               </a>
