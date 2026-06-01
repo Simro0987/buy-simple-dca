@@ -324,8 +324,21 @@ export function SwapPage({ lang }: Props) {
         </div>
       </Card>
 
-      {/* Privacy / LN warning */}
-      {livePrivacy && !sameToken && (
+      {/* Submarine swap info (LN <-> Polygon stables) */}
+      {liveSubmarine && !sameToken && (
+        <Card className="p-3 border-emerald-500/40 bg-emerald-500/10">
+          <div className="flex items-start gap-2">
+            <Lock className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div className="space-y-0.5">
+              <div className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider">{t.submarineTitle}</div>
+              <p className="text-[11px] leading-snug text-foreground/80">{t.submarineNote}</p>
+            </div>
+          </div>
+        </Card>
+      )}
+
+      {/* Privacy / LN warning (suppressed for submarine routes — those have their own banner) */}
+      {livePrivacy && !liveSubmarine && !sameToken && (
         <Card className="p-3 border-amber-500/40 bg-amber-500/10">
           <div className="flex items-start gap-2">
             <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
