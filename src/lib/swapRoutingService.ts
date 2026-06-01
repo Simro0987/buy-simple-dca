@@ -186,7 +186,19 @@ export interface Platform {
   offchainGasless?: boolean;   // EIP-712 signature-based, gasless limit orders
   limitOrders?: boolean;       // Native limit-order protocol support
   gasRefuel?: boolean;         // Can deliver native gas on destination chain
+  // ===== Protocol health =====
+  health?: 'ok' | 'congested' | 'degraded' | 'security_risk' | 'paused';
+  healthNote?: string;         // Short alert reason for UI
 }
+
+// Health rank used for ranking penalty (higher = worse).
+const HEALTH_PENALTY: Record<NonNullable<Platform['health']>, number> = {
+  ok: 0,
+  congested: 0.15,
+  degraded: 0.35,
+  security_risk: 0.80,
+  paused: 1.00,
+};
 
 // Default liquidity tiers used when a platform doesn't override liquidityUsd.
 const DEFAULT_LIQUIDITY_USD: Record<Platform['type'], number> = {
