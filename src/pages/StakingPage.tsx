@@ -9,6 +9,8 @@ import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { MasterProtocolCard } from '@/components/staking/MasterProtocolCard';
 import { StakingCalculator } from '@/components/staking/StakingCalculator';
 import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
+import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
+import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
 
 interface Props { lang: Lang; }
 
@@ -125,6 +127,12 @@ export function StakingPage({ lang }: Props) {
       <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
 
       <StakingTimingCard lang={lang} amountUsd={500} />
+
+      {/* MODULE 1: Master Portfolio Yield Planner */}
+      <YieldPlannerCard lang={lang} />
+
+      {/* MODULE 2: Yield Route Finder & Scanner */}
+      <YieldRouteFinderCard lang={lang} />
 
       <StakingCalculator lang={lang} />
 
