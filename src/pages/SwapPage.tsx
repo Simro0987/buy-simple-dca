@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play,
   ShieldAlert, ShieldCheck, AlertTriangle, Lock, Copy, Check, Wallet, EyeOff,
