@@ -7,9 +7,11 @@ import {
   getRecommendedRoutes, evaluateGasGuard,
   buildOfficialLink, displayOfficialUrl,
   ASSET_USD_PRICE, RecommendedRoute,
-  isDerivative, getPegStatus, detectRouteDepegs, depegAlertMessage, PegStatus,
+  isDerivative, getPegStatus, detectRouteDepegs, depegAlertMessage,
+  getBestTargetRoute, evaluateSuitability, SuitabilityVerdict,
 } from '@/lib/stakeRoutingService';
-import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap, Sparkles, Fuel } from 'lucide-react';
+import { Radar, ArrowRight, ExternalLink, AlertTriangle, ShieldCheck, Zap, Sparkles, Fuel, Target } from 'lucide-react';
+
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -229,9 +231,21 @@ export function YieldRouteFinderCard({ lang }: Props) {
         </div>
       </div>
 
+      {/* Dynamic Target-Driven Best Route */}
+      <BestTargetSection
+        asset={asset}
+        network={network}
+        strategy={strategy}
+        tick={tick}
+        depositUsd={depositUsd}
+        isSk={isSk}
+        lang={lang}
+      />
+
       {/* Autonomous Recommended Routes */}
       {recommended.length > 0 && (
         <div className="space-y-2">
+
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
             <Sparkles className="w-3 h-3 text-primary" />
             {isSk
@@ -407,6 +421,139 @@ export function YieldRouteFinderCard({ lang }: Props) {
         })}
 
       </div>
+    </div>
+  );
+}
+
+function SuitabilityBadge({ v }: { v: SuitabilityVerdict }) {
+  if (v.level === 'opportune') {
+    return (
+      <div className="rounded-lg border-2 border-gain bg-gain/15 p-3 space-y-1">
+        <p className="text-xs font-bold text-gain">{v.title}</p>
+        <p className="text-[10px] text-gain/90 leading-snug">{v.text}</p>
+      </div>
+    );
+  }
+  if (v.level === 'caution') {
+    return (
+      <div className="rounded-lg border-2 border-amber-500 bg-amber-500/10 p-3 space-y-1">
+        <p className="text-xs font-bold text-amber-400">{v.title}</p>
+        <p className="text-[10px] text-amber-300/90 leading-snug">{v.text}</p>
+        {v.reasons.length > 0 && (
+          <p className="text-[9px] text-amber-300/70">→ {v.reasons.join(' · ')}</p>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-lg border-4 border-loss bg-loss/25 p-3 space-y-1 animate-pulse shadow-[0_0_20px_hsl(var(--loss)/0.6)]">
+      <p className="text-xs font-extrabold text-loss tracking-wide">{v.title}</p>
+      <p className="text-[10px] text-loss/95 leading-snug font-semibold">{v.text}</p>
+      {v.reasons.length > 0 && (
+        <p className="text-[9px] text-loss/80">→ {v.reasons.join(' · ')}</p>
+      )}
+    </div>
+  );
+}
+
+function BestTargetSection({
+  asset, network, strategy, tick, depositUsd, isSk, lang,
+}: {
+  asset: YieldAsset; network: YieldNetwork; strategy: Strategy;
+  tick: number; depositUsd: number; isSk: boolean; lang: Lang;
+}) {
+  const best = useMemo(
+    () => getBestTargetRoute(asset, strategy, tick, isSk ? 'sk' : 'en'),
+    [asset, strategy, tick, isSk],
+  );
+  if (!best) return null;
+  const { route, globalDeployPct, bufferPct, capitalRecommendation } = best;
+  const verdict = evaluateSuitability({
+    route, network, depositUsd, tick, lang: isSk ? 'sk' : 'en',
+  });
+  const depegs = detectRouteDepegs(route.hops, tick);
+  const primary = route.steps[0];
+
+  return (
+    <div className="rounded-lg border-2 border-primary/60 bg-primary/5 p-3 space-y-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <p className="text-[10px] uppercase tracking-wide text-primary flex items-center gap-1">
+            <Target className="w-3 h-3" />
+            {isSk ? 'Absolútne najlepšia trasa' : 'Absolute Best Yield Path'}
+          </p>
+          <p className="text-sm font-bold text-foreground truncate">
+            {route.emoji} {asset} → {route.steps.map(s => s.protocolName).join(' + ')}
+          </p>
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-base font-bold text-gain">{route.blendedApy.toFixed(2)}%</p>
+          <p className="text-[9px] text-muted-foreground">{isSk ? 'Zmiešaná APY' : 'Blended APY'}</p>
+        </div>
+      </div>
+
+      <div className="rounded border border-primary/40 bg-background/60 p-2 space-y-1.5">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {isSk ? 'Globálne odporúčanie kapitálu' : 'Global Capital Recommendation'}
+        </p>
+        <p className="text-[11px] font-semibold text-foreground leading-snug">{capitalRecommendation}</p>
+        <div className="flex h-2 rounded-full overflow-hidden bg-secondary">
+          <div className="bg-primary" style={{ width: `${globalDeployPct}%` }} />
+          <div className="bg-amber-500/60" style={{ width: `${bufferPct}%` }} />
+        </div>
+        <div className="flex justify-between text-[9px] text-muted-foreground">
+          <span>🚀 {isSk ? 'Nasadiť' : 'Deploy'} {globalDeployPct}%</span>
+          <span>🛡️ {isSk ? 'HODL buffer' : 'HODL buffer'} {bufferPct}%</span>
+        </div>
+      </div>
+
+      <div className="space-y-1">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
+          {isSk ? 'Sekčné rozdelenie kapitálu' : 'Sectional Capital Split'}
+        </p>
+        {route.steps.map((s, i) => (
+          <div key={i} className="flex items-center justify-between gap-2 text-[11px] bg-background/60 border border-border/40 rounded px-2 py-1.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary text-primary-foreground shrink-0">
+                [{s.pct}% Weight]
+              </span>
+              <div className="min-w-0">
+                <p className="font-semibold text-foreground truncate">→ {s.protocolName}</p>
+                <p className="text-[9px] text-emerald-400/90 truncate">
+                  {displayOfficialUrl(s.officialUrl)}
+                </p>
+              </div>
+            </div>
+            <span className="text-gain font-semibold shrink-0">{s.apy.toFixed(2)}%</span>
+          </div>
+        ))}
+      </div>
+
+      <HopChain hops={route.hops} risk={route.risk} tick={tick} />
+
+      <SuitabilityBadge v={verdict} />
+
+      {depegs.map(p => (
+        <div key={p.asset} className="flex items-start gap-2 p-2 rounded border border-loss/60 bg-loss/15 animate-pulse">
+          <AlertTriangle className="w-3.5 h-3.5 text-loss mt-0.5 shrink-0" />
+          <p className="text-[10px] text-loss leading-snug font-semibold">{depegAlertMessage(isSk ? 'sk' : 'en', p)}</p>
+        </div>
+      ))}
+
+      <a
+        href={buildOfficialLink(primary.officialUrl)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`flex items-center justify-center gap-1.5 h-9 rounded-md text-xs font-semibold active:opacity-80 ${
+          verdict.level === 'critical'
+            ? 'bg-loss/30 text-loss border border-loss cursor-not-allowed pointer-events-none'
+            : 'bg-primary text-primary-foreground'
+        }`}
+      >
+        {verdict.level === 'critical'
+          ? (isSk ? '🛑 Vstup blokovaný' : '🛑 Entry Blocked')
+          : `${isSk ? 'Spustiť trasu cez' : 'Execute via'} ${displayOfficialUrl(primary.officialUrl)}`} <ExternalLink className="w-3 h-3" />
+      </a>
     </div>
   );
 }
