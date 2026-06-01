@@ -864,6 +864,7 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       priceVariancePct,
       priceVarianceFlag,
       hops,
+      officialUrl: p.officialUrl ?? '',
     };
   });
 
