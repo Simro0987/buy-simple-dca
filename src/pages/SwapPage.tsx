@@ -294,6 +294,13 @@ export function SwapPage({ lang }: Props) {
             </div>
           </div>
         )}
+
+        {/* Locked slippage protection indicator */}
+        <div className="flex items-center gap-1.5 pt-1 border-t border-border/40">
+          <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
+          <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">{t.slippageLock}</span>
+          <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">· {t.slippageNote}</span>
+        </div>
       </Card>
 
       {/* Privacy / LN warning */}
