@@ -329,6 +329,8 @@ function chainNumericId(c: ChainId): string {
 }
 
 // ============= Quotes =============
+export type PriceImpactLevel = 'ok' | 'warn' | 'unsafe';
+
 export interface Quote {
   platformId: string;
   platformName: string;
@@ -341,6 +343,13 @@ export interface Quote {
   netOutUsd: number;
   estTimeMin: number;
   url: string;
+  // Safety metrics
+  priceImpactPct: number;     // simulated price impact (%)
+  priceImpactUsd: number;     // USD value lost to price impact at current trade size
+  slippageBufferUsd: number;  // worst-case USD lost to 0.5% slippage tolerance
+  slippagePct: number;        // = MAX_SLIPPAGE_PCT, exposed for UI consistency
+  impactLevel: PriceImpactLevel;
+  rankValue: number;          // final ranking score (see formula in getQuotes)
   isBest?: boolean;
   supported: boolean;
   prioritized?: boolean;
