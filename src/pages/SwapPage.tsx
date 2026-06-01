@@ -163,6 +163,11 @@ export function SwapPage({ lang }: Props) {
         impact: 'Cenový dopad',
         impactWarn: 'Vysoký dopad',
         impactUnsafe: 'Vysoký dopad / Nebezpečné',
+        scanSubmarine: 'Počítam Submarine Swap trasy…',
+        fixedRateBadge: 'Garantovaný fixný kurz',
+        submarineBadge: 'Submarine Route',
+        submarineTitle: 'Submarine Swap (LN ↔ Polygon stables)',
+        submarineNote: 'Tieto trasy používajú priame interné likvidné desky (žiadne AMM). Boltz, Exolix a FixedFloat ponúkajú zamknutý kurz s ~0% price impact a paušálnym poplatkom 0.5–1%.',
       }
     : {
         title: 'SWAP Scanner',
