@@ -417,6 +417,7 @@ export interface QuoteResult {
 export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: QuoteParams): QuoteResult {
   const swapType = detectSwapType(from, to);
   const privacyRoute = involvesPrivacy(from, to);
+  const submarineRoute = isSubmarineRoute(from, to);
   if (!amount || amount <= 0 || !prices) return { swapType, quotes: [], best: null, privacyRoute };
 
   const fromUsd = tokenUsdPrice(from, prices);
