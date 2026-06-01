@@ -426,6 +426,16 @@ export function SwapPage({ lang }: Props) {
                           <div className={`text-[10px] font-medium ${q.isBest ? 'text-emerald-400' : 'text-muted-foreground'}`}>
                             {q.isBest ? '✓ best' : `${deltaPct.toFixed(2)}%`}
                           </div>
+                          <div
+                            className={`text-[9px] font-mono tabular-nums ${
+                              q.impactLevel === 'unsafe' ? 'text-red-400'
+                              : q.impactLevel === 'warn' ? 'text-amber-400'
+                              : 'text-muted-foreground/70'
+                            }`}
+                            title={`${t.impact}: ${q.priceImpactPct.toFixed(2)}% (warn ≥${PRICE_IMPACT_WARN_PCT}%, unsafe ≥${PRICE_IMPACT_UNSAFE_PCT}%)`}
+                          >
+                            impact {q.priceImpactPct.toFixed(2)}%
+                          </div>
                         </>
                       ) : (
                         <span className="text-[10px] text-muted-foreground">n/a</span>
