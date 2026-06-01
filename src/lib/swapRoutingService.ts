@@ -590,6 +590,8 @@ export function getQuotes(params: QuoteParams): QuoteResult {
         supported = false; unsupportedReason = 'Requires Wallet Connection';
       } else if (filters.mevProtected && !p.mevProtected) {
         supported = false; unsupportedReason = 'No MEV protection (sandwich risk)';
+      } else if (filters.healthyOnly && p.health && p.health !== 'ok') {
+        supported = false; unsupportedReason = `Protocol Alert: ${p.healthNote ?? p.health}`;
       }
     }
 
