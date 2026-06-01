@@ -816,32 +816,33 @@ const SUITABILITY_COPY = {
   en: {
     opportune: {
       title: '🟢 SUITABILITY VERDICT: MARKET ENTRY OPTIMAL',
-      text: 'Baseline contract health is excellent and network parameters favor execution now.',
+      text: 'Baseline contract health is excellent and network parameters favor execution now.\n\n---\n\n🤔 PREČO ÁNO (Vhodné pre laika): Trh je momentálne pokojný, poplatky za zápis sú nízke a hodnota staknutých tokenov presne kopíruje skutočnú mincu (1:1). Systém funguje hladko, takže tvoj vklad hneď od prvého dňa zarába plný čistý výnos bez skrytých poplatkov.',
     },
     caution: {
       title: '⚠️ SUITABILITY VERDICT: PROCEED WITH CAUTION',
-      text: 'Conditions are sub-optimal. Minor temporal locks or gas overhead may dilute initial capital efficiency.',
+      text: 'Conditions are sub-optimal. Minor temporal locks or gas overhead may dilute initial capital efficiency.\n\n---\n\n🤔 PREČO SI DAŤ POZOR (Prečo radšej počkať): Podmienky nie sú ideálne. Buď sú na sieti príliš vysoké poplatky (vklad by ťa stál viac, než hneď zarobíš), alebo sú peniaze v protokole na nejaký čas zamknuté a nemohol by si ich v prípade núdze okamžite vybrať. Ak vkladáš malú sumu, poplatky ti môžu zožrať zisk.',
     },
     critical: {
       title: '🚨 CRITICAL WARNING: DO NOT ENTER STRATEGY NOW',
-      text: 'Extreme risk vectors detected (composability threats, asset peg instability, or cascading liquidation risks). It is highly recommended to KEEP CAPITAL IN SECURE HODL until market stabilizers trigger.',
+      text: 'Extreme risk vectors detected (composability threats, asset peg instability, or cascading liquidation risks). It is highly recommended to KEEP CAPITAL IN SECURE HODL until market stabilizers trigger.\n\n---\n\n🤔 PREČO SEM TERAZ NEDÁVAŤ PENIAZE (Kritické riziko): STOP! V systéme momentálne prebieha búrka. Staknutý token (napr. JitoSOL alebo weETH) stráca svoju stabilitu a jeho cena padá oproti skutočnej minci. Ak by si sem teraz vložil peniaze, hrozí, že o ne kvôli trhovému výkyvu alebo technickej chybe prídeš. Bezpečne vyčkajte v čistom HODL (držaní na peňaženke).',
     },
   },
   sk: {
     opportune: {
       title: '🟢 VERDIKT VHODNOSTI: VSTUP NA TRH OPTIMÁLNY',
-      text: 'Základné zdravie kontraktov je vynikajúce a sieťové parametre podporujú okamžitú exekúciu.',
+      text: 'Základné zdravie kontraktov je vynikajúce a sieťové parametre podporujú okamžitú exekúciu.\n\n---\n\n🤔 PREČO ÁNO (Vhodné pre laika): Trh je momentálne pokojný, poplatky za zápis sú nízke a hodnota staknutých tokenov presne kopíruje skutočnú mincu (1:1). Systém funguje hladko, takže tvoj vklad hneď od prvého dňa zarába plný čistý výnos bez skrytých poplatkov.',
     },
     caution: {
       title: '⚠️ VERDIKT VHODNOSTI: POSTUPUJ S OPATRNOSŤOU',
-      text: 'Podmienky sú sub-optimálne. Drobné časové zámky alebo gas náklady môžu znížiť počiatočnú kapitálovú efektivitu.',
+      text: 'Podmienky sú sub-optimálne. Drobné časové zámky alebo gas náklady môžu znížiť počiatočnú kapitálovú efektivitu.\n\n---\n\n🤔 PREČO SI DAŤ POZOR (Prečo radšej počkať): Podmienky nie sú ideálne. Buď sú na sieti príliš vysoké poplatky (vklad by ťa stál viac, než hneď zarobíš), alebo sú peniaze v protokole na nejaký čas zamknuté a nemohol by si ich v prípade núdze okamžite vybrať. Ak vkladáš malú sumu, poplatky ti môžu zožrať zisk.',
     },
     critical: {
       title: '🚨 KRITICKÉ VAROVANIE: NEVSTUPUJ DO STRATÉGIE TERAZ',
-      text: 'Detekované extrémne rizikové vektory (kompozičné hrozby, nestabilita pegov, kaskádové likvidácie). Dôrazne odporúčame PONECHAŤ KAPITÁL V BEZPEČNOM HODL kým sa trh stabilizuje.',
+      text: 'Detekované extrémne rizikové vektory (kompozičné hrozby, nestabilita pegov, kaskádové likvidácie). Dôrazne odporúčame PONECHAŤ KAPITÁL V BEZPEČNOM HODL kým sa trh stabilizuje.\n\n---\n\n🤔 PREČO SEM TERAZ NEDÁVAŤ PENIAZE (Kritické riziko): STOP! V systéme momentálne prebieha búrka. Staknutý token (napr. JitoSOL alebo weETH) stráca svoju stabilitu a jeho cena padá oproti skutočnej minci. Ak by si sem teraz vložil peniaze, hrozí, že o ne kvôli trhovému výkyvu alebo technickej chybe prídeš. Bezpečne vyčkajte v čistom HODL (držaní na peňaženke).',
     },
   },
 };
+
 
 export function evaluateSuitability(args: {
   route: RecommendedRoute;

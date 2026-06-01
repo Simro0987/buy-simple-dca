@@ -430,7 +430,7 @@ function SuitabilityBadge({ v }: { v: SuitabilityVerdict }) {
     return (
       <div className="rounded-lg border-2 border-gain bg-gain/15 p-3 space-y-1">
         <p className="text-xs font-bold text-gain">{v.title}</p>
-        <p className="text-[10px] text-gain/90 leading-snug">{v.text}</p>
+        <p className="text-[10px] text-gain/90 leading-relaxed whitespace-pre-line">{v.text}</p>
       </div>
     );
   }
@@ -438,7 +438,7 @@ function SuitabilityBadge({ v }: { v: SuitabilityVerdict }) {
     return (
       <div className="rounded-lg border-2 border-amber-500 bg-amber-500/10 p-3 space-y-1">
         <p className="text-xs font-bold text-amber-400">{v.title}</p>
-        <p className="text-[10px] text-amber-300/90 leading-snug">{v.text}</p>
+        <p className="text-[10px] text-amber-300/90 leading-relaxed whitespace-pre-line">{v.text}</p>
         {v.reasons.length > 0 && (
           <p className="text-[9px] text-amber-300/70">→ {v.reasons.join(' · ')}</p>
         )}
@@ -448,7 +448,7 @@ function SuitabilityBadge({ v }: { v: SuitabilityVerdict }) {
   return (
     <div className="rounded-lg border-4 border-loss bg-loss/25 p-3 space-y-1 animate-pulse shadow-[0_0_20px_hsl(var(--loss)/0.6)]">
       <p className="text-xs font-extrabold text-loss tracking-wide">{v.title}</p>
-      <p className="text-[10px] text-loss/95 leading-snug font-semibold">{v.text}</p>
+      <p className="text-[10px] text-loss/95 leading-relaxed font-semibold whitespace-pre-line">{v.text}</p>
       {v.reasons.length > 0 && (
         <p className="text-[9px] text-loss/80">→ {v.reasons.join(' · ')}</p>
       )}
