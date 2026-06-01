@@ -784,6 +784,11 @@ export function SwapPage({ lang }: Props) {
                           </span>
                         )}
                       </div>
+                      {q.officialUrl && (
+                        <div className="text-[9px] font-medium text-emerald-500/80 tracking-wide truncate">
+                          Verified: {q.officialUrl}
+                        </div>
+                      )}
                       <div className="text-[10px] text-muted-foreground">
                         {q.supported
                           ? (swapType === 'cross-chain'
