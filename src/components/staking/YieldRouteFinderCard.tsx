@@ -27,7 +27,7 @@ const STRATEGIES: { value: Strategy; label: string }[] = [
   { value: 'liquidity',      label: 'Liquidity Pools' },
 ];
 
-function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stakeRoutingService').RiskAssessment }) {
+function HopChain({ hops, risk, tick = 0 }: { hops: RouteHop[]; risk?: import('@/lib/stakeRoutingService').RiskAssessment; tick?: number }) {
   // attach the risk badge to the last protocol hop
   const lastProtocolIdx = (() => {
     for (let i = hops.length - 1; i >= 0; i--) if (hops[i].kind === 'protocol') return i;
@@ -43,17 +43,27 @@ function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stake
 
   return (
     <div className="flex flex-wrap items-center gap-1.5">
-      {hops.map((h, i) => (
+      {hops.map((h, i) => {
+        const peg = h.kind === 'asset' && isDerivative(h.label) ? getPegStatus(h.label, tick) : null;
+        const pegCritical = peg?.severity === 'critical';
+        return (
         <React.Fragment key={i}>
           <div
             className={`flex flex-col items-start px-2 py-1.5 rounded border text-xs max-w-full ${
               h.kind === 'asset'
-                ? 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
+                ? pegCritical
+                  ? 'border-loss/60 bg-loss/10 text-loss animate-pulse'
+                  : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-300'
                 : 'border-primary/40 bg-primary/15 text-foreground'
             }`}
           >
             <span className="font-medium truncate">{h.label}</span>
             {h.sublabel && <span className="text-[10px] text-muted-foreground truncate">{h.sublabel}</span>}
+            {peg && (
+              <span className={`mt-0.5 text-[9px] font-semibold ${pegCritical ? 'text-loss' : 'text-gain'}`}>
+                {pegCritical ? '🔴' : '🟢'} {pegCritical ? 'Depeg' : 'Parity'}: {peg.ratio.toFixed(4)}x
+              </span>
+            )}
             {risk && riskCfg && i === lastProtocolIdx && (
               <span className={`mt-0.5 inline-flex items-center gap-0.5 px-1 py-0.5 rounded border text-[9px] font-semibold ${riskCfg.wrap}`}>
                 {riskCfg.emoji} {risk.score}/10
@@ -62,7 +72,8 @@ function HopChain({ hops, risk }: { hops: RouteHop[]; risk?: import('@/lib/stake
           </div>
           {i < hops.length - 1 && <ArrowRight className="w-3 h-3 text-muted-foreground shrink-0" />}
         </React.Fragment>
-      ))}
+        );
+      })}
     </div>
   );
 }
