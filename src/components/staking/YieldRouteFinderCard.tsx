@@ -292,7 +292,14 @@ export function YieldRouteFinderCard({ lang }: Props) {
                   ))}
                 </div>
 
-                <HopChain hops={r.hops} risk={r.risk} />
+                <HopChain hops={r.hops} risk={r.risk} tick={tick} />
+
+                {depegs.map(p => (
+                  <div key={p.asset} className="flex items-start gap-2 p-2 rounded border border-loss/60 bg-loss/15 animate-pulse">
+                    <AlertTriangle className="w-3.5 h-3.5 text-loss mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-loss leading-snug font-semibold">{depegAlertMessage(isSk ? 'sk' : 'en', p)}</p>
+                  </div>
+                ))}
 
                 {gas && (
                   <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10">
