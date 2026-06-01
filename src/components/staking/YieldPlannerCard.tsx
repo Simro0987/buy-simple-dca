@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Lang } from '@/lib/i18n';
-import { PLANNER_ASSETS, getLiveApyMap, PlannerAsset } from '@/lib/stakeRoutingService';
+import { PLANNER_ASSETS, getLiveApyMap, PlannerAsset, assessPlannerRisk } from '@/lib/stakeRoutingService';
 import { Wallet, ShieldCheck, TrendingUp } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Slider } from '@/components/ui/slider';
+import { RiskShield } from './RiskShield';
+
 
 interface Props { lang: Lang; }
 
