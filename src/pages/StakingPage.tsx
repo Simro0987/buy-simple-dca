@@ -9,6 +9,8 @@ import { ContextCTAs } from '@/components/decision/ContextCTAs';
 import { MasterProtocolCard } from '@/components/staking/MasterProtocolCard';
 import { StakingCalculator } from '@/components/staking/StakingCalculator';
 import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
+import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
+import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
 
 interface Props { lang: Lang; }
 
