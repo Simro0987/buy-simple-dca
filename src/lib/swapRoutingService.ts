@@ -225,7 +225,64 @@ export const PLATFORMS: Platform[] = [
     buildUrl: (f, t) => `https://swapspace.co/exchange/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
     edge: 0.0005, feeBps: 25, extraGasUsd: 0.5, bridgeFeeBps: 25, estTimeMin: 12,
     supports: (_f, _t, type) => type === 'cross-chain' },
+
+  // ============= 8 new premium integrations =============
+  // THORSwap: native BTC/ETH/AVAX cross-chain via THORChain
+  { id: 'thorswap', name: 'THORSwap', type: 'bridge',
+    buildUrl: (f, t) => `https://app.thorswap.finance/swap?input=${f.chain}.${f.symbol}&output=${t.chain}.${t.symbol}`,
+    edge: 0.0010, feeBps: 10, extraGasUsd: 0.5, bridgeFeeBps: 15, estTimeMin: 8,
+    // Native-asset cross-chain only (BTC/ETH/AVAX and major EVM). No LN/XMR/Solana.
+    supports: (f, t, type) => type === 'cross-chain'
+      && !isPrivacy(f.chain) && !isPrivacy(t.chain)
+      && f.chain !== 'solana' && t.chain !== 'solana'
+      && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)) },
+
+  // 1inch: same-chain EVM aggregator (top tier)
+  { id: '1inch', name: '1inch', type: 'aggregator',
+    buildUrl: (f, t) => `https://app.1inch.io/#/${chainNumericId(f.chain)}/simple/swap/${f.symbol}/${t.symbol}`,
+    edge: 0.0018, feeBps: 4, extraGasUsd: 0.0, estTimeMin: 1,
+    supports: (f, _t, type) => type === 'same-chain' && isEvm(f.chain) },
+
+  // OpenOcean: multi-chain EVM + Solana aggregator
+  { id: 'openocean', name: 'OpenOcean', type: 'aggregator',
+    buildUrl: (f, t) => `https://app.openocean.finance/classic#/${(CHAINS[f.chain].short || '').toUpperCase()}/${f.symbol}/${t.symbol}`,
+    edge: 0.0012, feeBps: 6, extraGasUsd: 0.03, estTimeMin: 1,
+    supports: (f, t, type) => type === 'same-chain' && (isEvm(f.chain) || f.chain === 'solana') },
+
+  // Bungee (Socket): cross-chain EVM bridge aggregator
+  { id: 'bungee', name: 'Bungee.exchange', type: 'bridge',
+    buildUrl: (f, t, a) => `https://www.bungee.exchange/?fromChainId=${chainNumericId(f.chain)}&toChainId=${chainNumericId(t.chain)}&fromTokenSymbol=${f.symbol}&toTokenSymbol=${t.symbol}&amount=${a}`,
+    edge: 0.0009, feeBps: 5, extraGasUsd: 0.25, bridgeFeeBps: 10, estTimeMin: 4,
+    supports: (f, t, type) => type === 'cross-chain' && isEvm(f.chain) && isEvm(t.chain) },
+
+  // FixedFloat: privacy-friendly instant swap; great for LN & XMR
+  { id: 'fixedfloat', name: 'FixedFloat', type: 'privacy',
+    buildUrl: (f, t) => `https://fixedfloat.com/?from=${f.symbol.toUpperCase()}&to=${t.symbol.toUpperCase()}`,
+    edge: 0.0006, feeBps: 20, extraGasUsd: 0.4, bridgeFeeBps: 20, estTimeMin: 10,
+    supports: (_f, _t, type) => type === 'cross-chain' },
+
+  // ChangeNOW: instant non-custodial (BTC/XMR/EVM)
+  { id: 'changenow', name: 'ChangeNOW', type: 'privacy',
+    buildUrl: (f, t, a) => `https://changenow.io/?from=${f.symbol.toLowerCase()}&to=${t.symbol.toLowerCase()}&amount=${a}`,
+    edge: 0.0005, feeBps: 22, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
+    supports: (_f, _t, type) => type === 'cross-chain' },
+
+  // SideShift: instant swap with LN/BTC/SOL/XMR support
+  { id: 'sideshift', name: 'SideShift.ai', type: 'privacy',
+    buildUrl: (f, t) => `https://sideshift.ai/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
+    edge: 0.0007, feeBps: 20, extraGasUsd: 0.3, bridgeFeeBps: 18, estTimeMin: 8,
+    supports: (_f, _t, type) => type === 'cross-chain' },
+
+  // Maya Protocol: native cross-chain liquidity (BTC/ETH/AVAX)
+  { id: 'maya', name: 'Maya Protocol', type: 'bridge',
+    buildUrl: () => `https://app.mayaprotocol.com/`,
+    edge: 0.0009, feeBps: 12, extraGasUsd: 0.5, bridgeFeeBps: 16, estTimeMin: 9,
+    supports: (f, t, type) => type === 'cross-chain'
+      && !isPrivacy(f.chain) && !isPrivacy(t.chain)
+      && f.chain !== 'solana' && t.chain !== 'solana'
+      && (['bitcoin', 'ethereum', 'avalanche'].includes(f.chain) || ['bitcoin', 'ethereum', 'avalanche'].includes(t.chain)) },
 ];
+
 
 function chainQuery(c: ChainId): string {
   switch (c) {
@@ -320,28 +377,39 @@ export function getQuotes({ from, to, amount, prices, freshnessTick = 0 }: Quote
 
     if (privacyRoute) {
       // LN / XMR: only privacy aggregators should win.
-      if (['houdini', 'trocador', 'swapspace'].includes(p.id)) {
+      if (['fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace'].includes(p.id)) {
         priorityEdge = 0.0035; prioritized = true;
+      }
+    } else if (involvesBitcoin(from, to) && swapType === 'cross-chain') {
+      // Native BTC <-> ETH/AVAX/SOL/EVM: THORSwap & Maya at the top, plus deBridge & Jumper.
+      if (['thorswap', 'maya'].includes(p.id)) {
+        priorityEdge = 0.0018; prioritized = true;
+      } else if (['debridge', 'jumper'].includes(p.id)) {
+        priorityEdge = 0.0014; prioritized = true;
       }
     } else if (solInvolved) {
       if (p.id === 'jupiter') { priorityEdge = 0.0025; prioritized = true; }
       else if (p.id === 'jumper' || p.id === 'debridge') { priorityEdge = 0.0008; prioritized = true; }
     } else if (evmCross) {
-      // LI.FI-style: Jumper, Across, deBridge to the top for EVM<->EVM bridging.
-      if (['jumper', 'across', 'debridge'].includes(p.id)) {
+      // LI.FI-style: Jumper, Across, deBridge, Bungee to the top for EVM<->EVM bridging.
+      if (['jumper', 'across', 'debridge', 'bungee'].includes(p.id)) {
         priorityEdge = 0.0014; prioritized = true;
       } else if (['symbiosis', 'velora'].includes(p.id)) {
         priorityEdge = 0.0006; prioritized = true;
       }
     } else if (swapType === 'same-chain' && isEvm(from.chain)) {
-      if (['odos', 'matcha', 'paraswap', 'cowswap', 'kyberswap'].includes(p.id)) {
-        priorityEdge = 0.0007; prioritized = true;
+      // 1inch, Odos, ParaSwap heavily optimized for same-chain EVM.
+      if (['1inch', 'odos', 'paraswap'].includes(p.id)) {
+        priorityEdge = 0.0012; prioritized = true;
+      } else if (['matcha', 'cowswap', 'kyberswap', 'openocean'].includes(p.id)) {
+        priorityEdge = 0.0006; prioritized = true;
       }
     } else if (swapType === 'cross-chain') {
       if (['jumper', 'symbiosis', 'trocador', 'houdini', 'swapspace'].includes(p.id)) {
         priorityEdge = 0.0006; prioritized = true;
       }
     }
+
 
     const edgeAdj = p.edge + priorityEdge + variance * 0.0020;
     const feeBpsAdj = Math.max(0, p.feeBps + (variance > 0 ? variance * 4 : variance * 1));
