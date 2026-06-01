@@ -371,6 +371,26 @@ export const PLATFORMS: Platform[] = [
     customRecipient: true },
 ];
 
+// ============= Protocol Health overrides =============
+// Live status flags surfaced as red badges in the UI. Tuned periodically
+// based on public status pages / exploit history / pool pauses.
+const HEALTH_OVERRIDES: Record<string, { health: NonNullable<Platform['health']>; note: string }> = {
+  // Multichain (exploit history) — kept off list. Examples below are illustrative.
+  symbiosis:  { health: 'congested',     note: 'Bridge congestion (slower fills)' },
+  houdini:    { health: 'degraded',      note: 'Service degradation reported' },
+  swapspace:  { health: 'congested',     note: 'Slower aggregator response' },
+  rubic:      { health: 'degraded',      note: 'Occasional route failures' },
+  velora:     { health: 'degraded',      note: 'Liquidity issues on minor pairs' },
+  // Most other providers default to 'ok'.
+};
+
+// Apply overrides once at module load.
+for (const p of PLATFORMS) {
+  const o = HEALTH_OVERRIDES[p.id];
+  if (o) { p.health = o.health; p.healthNote = o.note; }
+  else { p.health = p.health ?? 'ok'; }
+}
+
 // ============= Order types & filters =============
 export type OrderType = 'market' | 'limit';
 
@@ -380,6 +400,7 @@ export interface QuoteFilters {
   noWallet?: boolean;          // Toggle 3
   mevProtected?: boolean;      // Toggle 4
   offchainGasless?: boolean;   // Limit-mode "Off-chain only"
+  healthyOnly?: boolean;       // Toggle 6 — hide congested/degraded/exploited
 }
 
 // Chains that natively support limit orders (smart-contract chains only).
