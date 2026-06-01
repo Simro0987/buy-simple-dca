@@ -194,6 +194,114 @@ export function YieldRouteFinderCard({ lang }: Props) {
         ))}
       </div>
 
+      {/* Deposit amount (for gas-fee guard) */}
+      <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
+        <div>
+          <Label className="text-[10px] text-muted-foreground">
+            {isSk ? `Vklad (${asset})` : `Deposit (${asset})`}
+          </Label>
+          <Input
+            type="text"
+            inputMode="decimal"
+            value={depositAmount}
+            onChange={e => setDepositAmount(e.target.value)}
+            className="h-9 text-xs mt-1"
+            placeholder="0.0"
+          />
+        </div>
+        <div className="text-right shrink-0">
+          <p className="text-[9px] text-muted-foreground">USD</p>
+          <p className="text-sm font-bold text-foreground">
+            ${depositUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          </p>
+        </div>
+      </div>
+
+      {/* Autonomous Recommended Routes */}
+      {recommended.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+            <Sparkles className="w-3 h-3 text-primary" />
+            {isSk
+              ? `Odporúčané trasy pre ${asset}`
+              : `Recommended routes for ${asset}`}
+          </p>
+          {recommended.map(r => {
+            const tierBorder =
+              r.risk.level === 'low' ? 'border-gain/40 bg-gain/5' :
+              r.risk.level === 'medium' ? 'border-amber-500/40 bg-amber-500/5' :
+              'border-loss/40 bg-loss/5';
+            const gas = evaluateGasGuard({
+              network: r.network,
+              depositUsd,
+              multiHop: r.multiHop,
+              lang: isSk ? 'sk' : 'en',
+            });
+            const primary = r.steps[0];
+            return (
+              <div key={r.tier} className={`rounded-lg border p-3 space-y-2 ${tierBorder}`}>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-bold text-foreground">
+                      {r.emoji} {isSk ? r.title.sk : r.title.en}
+                    </p>
+                    <p className="text-[10px] text-muted-foreground">
+                      {r.network} · {r.steps.length === 1
+                        ? (isSk ? '100% kapitálu' : '100% capital allocation')
+                        : (isSk ? 'Riadený split kapitálu' : 'Managed capital split')}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-base font-bold text-gain">{r.blendedApy.toFixed(2)}%</p>
+                    <p className="text-[9px] text-muted-foreground">{isSk ? 'Zmiešaná APY' : 'Blended APY'}</p>
+                  </div>
+                </div>
+
+                <RiskShield risk={r.risk} lang={lang} />
+
+                {/* Split breakdown */}
+                <div className="space-y-1">
+                  {r.steps.map((s, i) => (
+                    <div key={i} className="flex items-center justify-between gap-2 text-[11px] bg-background/60 border border-border/40 rounded px-2 py-1.5">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-primary/20 text-primary shrink-0">
+                          {s.pct}%
+                        </span>
+                        <div className="min-w-0">
+                          <p className="font-semibold text-foreground truncate">{s.protocolName}</p>
+                          <p className="text-[9px] text-emerald-400/90 truncate">
+                            Verified: {displayOfficialUrl(s.officialUrl)}
+                          </p>
+                        </div>
+                      </div>
+                      <span className="text-gain font-semibold shrink-0">{s.apy.toFixed(2)}%</span>
+                    </div>
+                  ))}
+                </div>
+
+                <HopChain hops={r.hops} risk={r.risk} />
+
+                {gas && (
+                  <div className="flex items-start gap-2 p-2 rounded border border-amber-500/40 bg-amber-500/10">
+                    <Fuel className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+                    <p className="text-[10px] text-amber-300 leading-snug">{gas.message}</p>
+                  </div>
+                )}
+
+                <a
+                  href={buildOfficialLink(primary.officialUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-center gap-1.5 h-9 rounded-md bg-primary text-primary-foreground text-xs font-semibold active:opacity-80"
+                >
+                  {isSk ? 'Spustiť trasu cez' : 'Go to Platform'} {displayOfficialUrl(primary.officialUrl)} <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* Results */}
       <div className="space-y-2">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
