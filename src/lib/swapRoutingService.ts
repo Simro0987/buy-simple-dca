@@ -157,8 +157,21 @@ export interface Platform {
   // Approximate effective liquidity (USD) used to simulate price impact.
   // Higher = deeper pools = lower impact for the same trade size.
   liquidityUsd: number;
+  // Approximate effective liquidity (USD) used to simulate price impact.
+  // Higher = deeper pools = lower impact for the same trade size. Optional;
+  // platforms that don't set it fall back to DEFAULT_LIQUIDITY_USD.
+  liquidityUsd?: number;
   supports: (from: TokenMeta, to: TokenMeta, type: SwapType) => boolean;
 }
+
+// Default liquidity tiers used when a platform doesn't override liquidityUsd.
+// Major aggregators -> deep; bridges -> medium; privacy/instant -> thin.
+const DEFAULT_LIQUIDITY_USD: Record<Platform['type'], number> = {
+  aggregator: 80_000_000,
+  dex:        45_000_000,
+  bridge:     25_000_000,
+  privacy:    1_200_000,
+};
 
 const EVM_CHAINS: ChainId[] = ['ethereum', 'base', 'arbitrum', 'polygon', 'avalanche'];
 const isEvm = (c: ChainId) => EVM_CHAINS.includes(c);
