@@ -136,6 +136,24 @@ export function involvesBitcoin(from: TokenMeta, to: TokenMeta): boolean {
   return from.chain === 'bitcoin' || to.chain === 'bitcoin';
 }
 
+// Submarine swap detection: Lightning <-> Polygon stables (USDC/USDT).
+// These routes are fixed-rate (locked before execution) so they bypass AMM math.
+const POLYGON_STABLES = ['USDC', 'USDT', 'USDC.e'];
+export function isSubmarineRoute(from: TokenMeta, to: TokenMeta): boolean {
+  const lnToPolyStable =
+    from.chain === 'lightning' && to.chain === 'polygon' && POLYGON_STABLES.includes(to.symbol);
+  const polyStableToLn =
+    to.chain === 'lightning' && from.chain === 'polygon' && POLYGON_STABLES.includes(from.symbol);
+  return lnToPolyStable || polyStableToLn;
+}
+
+// Providers that route LN <-> Polygon stables via submarine swaps / fixed-rate desks.
+export const SUBMARINE_PROVIDERS = [
+  'boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace',
+];
+// Subset that explicitly advertises a guaranteed fixed-rate quote.
+export const FIXED_RATE_PROVIDERS = ['boltz', 'exolix', 'fixedfloat'];
+
 // ============= Slippage & Price Impact constants =============
 // Hardcoded conservative max slippage (0.5%) applied uniformly to every route.
 export const MAX_SLIPPAGE_BPS = 50;                // 0.5%
