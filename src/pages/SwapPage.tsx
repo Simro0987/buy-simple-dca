@@ -678,9 +678,7 @@ export function SwapPage({ lang }: Props) {
             <HopChain hops={best.hops} />
           </Card>
 
-          {/* Hero card */}
-          {(() => null)()}
-          {/* Compute Bot/Gas verdicts once per render of hero */}
+          {/* Hero card — amber outline if gas eats >5% of swap value */}
           <Card className={`p-3 border-emerald-500/40 bg-gradient-to-br from-emerald-500/10 via-emerald-500/5 to-transparent ${evaluateGasEater(best, from.chain, lang === 'sk' ? 'sk' : 'en').warn ? 'ring-2 ring-amber-500/70' : ''}`}>
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <Zap className="w-3 h-3 text-emerald-400" />
