@@ -54,20 +54,7 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
     return () => window.removeEventListener('storage', handler);
   }, []);
 
-  const handleConfirmExecution = () => {
-    const ts = new Date().toISOString();
-    try { localStorage.setItem(REBALANCE_CONFIRM_KEY, ts); } catch { /* ignore */ }
-    setConfirmedAt(ts);
-    // Manual hand-off: store corrective legs and navigate to Swap.
-    // No transaction is executed — user signs every swap in their HW wallet.
-    if (actionsRef.current.length > 0) {
-      setPendingRebalance(actionsRef.current.map(a => ({ from: a.from, to: a.to, amountUsd: a.amount })));
-      navigateToTab('swap');
-      toast.success(sk ? 'Rebalansovanie potvrdené → Swap predvyplnený' : 'Rebalancing confirmed → Swap prefilled');
-    } else {
-      toast.success(sk ? 'Rebalansovanie potvrdené ✓' : 'Rebalancing confirmed ✓');
-    }
-  };
+  // handleConfirmExecution is defined inline below (needs `actions` in scope).
 
   if (!prices) return null;
 
@@ -308,7 +295,18 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
               : 'Portfolio drifted >5% from the 64/25/11 anchor. The system never executes rebalancing on its own — confirm manually below.'}
           </p>
           <button
-            onClick={handleConfirmExecution}
+            onClick={() => {
+              const ts = new Date().toISOString();
+              try { localStorage.setItem(REBALANCE_CONFIRM_KEY, ts); } catch { /* ignore */ }
+              setConfirmedAt(ts);
+              if (actions.length > 0) {
+                setPendingRebalance(actions.map(a => ({ from: a.from, to: a.to, amountUsd: a.amount })));
+                navigateToTab('swap');
+                toast.success(sk ? 'Rebalansovanie potvrdené → Swap predvyplnený' : 'Rebalancing confirmed → Swap prefilled');
+              } else {
+                toast.success(sk ? 'Rebalansovanie potvrdené ✓' : 'Rebalancing confirmed ✓');
+              }
+            }}
             className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500 text-background text-xs font-bold active:scale-95"
           >
             <CheckCircle2 className="w-4 h-4" />
