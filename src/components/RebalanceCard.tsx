@@ -4,6 +4,7 @@ import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
 import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { setPendingRebalance, navigateToTab } from '@/lib/pendingActions';
 
 const REBALANCE_CONFIRM_KEY = 'rebalance-last-confirmed-at';
 
@@ -57,7 +58,15 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
     const ts = new Date().toISOString();
     try { localStorage.setItem(REBALANCE_CONFIRM_KEY, ts); } catch { /* ignore */ }
     setConfirmedAt(ts);
-    toast.success(sk ? 'Rebalansovanie potvrdené ✓' : 'Rebalancing confirmed ✓');
+    // Manual hand-off: store corrective legs and navigate to Swap.
+    // No transaction is executed — user signs every swap in their HW wallet.
+    if (actionsRef.current.length > 0) {
+      setPendingRebalance(actionsRef.current.map(a => ({ from: a.from, to: a.to, amountUsd: a.amount })));
+      navigateToTab('swap');
+      toast.success(sk ? 'Rebalansovanie potvrdené → Swap predvyplnený' : 'Rebalancing confirmed → Swap prefilled');
+    } else {
+      toast.success(sk ? 'Rebalansovanie potvrdené ✓' : 'Rebalancing confirmed ✓');
+    }
   };
 
   if (!prices) return null;
