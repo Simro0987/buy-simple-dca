@@ -3,6 +3,8 @@ import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics, type PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { PROFIT_CONFIGS, getExecutedLevels } from '@/lib/profitTaking';
+import { useStakingLedger } from '@/hooks/useStakingLedger';
+import type { StakedEntry } from '@/lib/stakingLedger';
 import type { PriceData } from '@/lib/crypto';
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
@@ -12,6 +14,9 @@ interface AssetBreakdown {
   value: number;
   holdValue: number;
   stakedValue: number;
+  stakedQty: number;
+  liquidQty: number;
+  stakedEntries: StakedEntry[];
   projectedYieldUsd: number;   // annualised
 }
 
