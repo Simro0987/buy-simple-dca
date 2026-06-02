@@ -1,4 +1,4 @@
-import { TOKENS, formatUsd } from '@/lib/crypto';
+import { formatUsd } from '@/lib/crypto';
 import { TokenCardCarousel } from '@/components/TokenCardCarousel';
 import { MarketCycleGauge } from '@/components/MarketCycleGauge';
 import { PortfolioHeatMap } from '@/components/PortfolioHeatMap';
