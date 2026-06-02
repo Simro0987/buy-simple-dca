@@ -561,7 +561,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                       amount: Number(totalQty.toFixed(8)),
                       source: 'dca',
                     });
-                    navigateToTab('stake');
+                    navigateToTab('staking');
                     toast.success(`Pripravené na stake: ${qtyFmt(totalQty)} ${e.symbol}`);
                   }}
                   className="w-full px-2 py-1.5 rounded text-[10px] font-bold flex items-center justify-center gap-1.5 bg-primary/15 text-primary hover:bg-primary/25 ring-1 ring-primary/40 active:scale-95"
