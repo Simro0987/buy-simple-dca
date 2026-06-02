@@ -3,6 +3,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Lang } from '@/lib/i18n';
 import { PriceData, AthData } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
+import { Shield } from 'lucide-react';
 import { MissionControlActions } from '@/components/analysis/MissionControlActions';
 import { CounterpartyRiskCard } from '@/components/analysis/CounterpartyRiskCard';
 import { PortfolioProvider } from '@/contexts/PortfolioContext';
