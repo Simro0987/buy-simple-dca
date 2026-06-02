@@ -3,6 +3,8 @@ import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics, type PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { PROFIT_CONFIGS, getExecutedLevels } from '@/lib/profitTaking';
+import { useStakingLedger } from '@/hooks/useStakingLedger';
+import type { StakedEntry } from '@/lib/stakingLedger';
 import type { PriceData } from '@/lib/crypto';
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
@@ -12,6 +14,9 @@ interface AssetBreakdown {
   value: number;
   holdValue: number;
   stakedValue: number;
+  stakedQty: number;
+  liquidQty: number;
+  stakedEntries: StakedEntry[];
   projectedYieldUsd: number;   // annualised
 }
 
@@ -43,25 +48,36 @@ function loadMoved(): number {
 export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { data: prices } = usePrices();
   const metrics = usePortfolioMetrics(prices);
+  const ledger = useStakingLedger();
   const [selected, setSelected] = useState<AssetFilter>(null);
   const [movedProfit, setMovedProfit] = useState<number>(loadMoved());
 
   const value = useMemo<PortfolioCtx>(() => {
-    // Per-asset breakdown: hold vs staked, projected annual yield from staking positions
+    // Per-asset breakdown: liquid vs staked driven by the MANUAL LEDGER (source of truth).
+    // CRITICAL: staked qty is NEVER subtracted from total holdings/net worth — it stays part of the asset.
     const breakdown: AssetBreakdown[] = metrics.assets.map(a => {
       const cfg = STAKING_CONFIG.find(c => c.symbol === a.symbol);
-      let stakedPct = 0;
       let yieldPct = 0;
       if (cfg) {
         for (const p of cfg.positions) {
-          if (p.type !== 'hold') stakedPct += p.percentage;
           if (p.apy) yieldPct += (p.percentage / 100) * p.apy;
         }
       }
-      const stakedValue = a.value * (stakedPct / 100);
+      const stakedQty = Math.min(a.holdings, ledger.bySymbol[a.symbol] ?? 0);
+      const liquidQty = Math.max(0, a.holdings - stakedQty);
+      const stakedValue = stakedQty * a.currentPrice;
       const holdValue = a.value - stakedValue;
       const projectedYieldUsd = a.value * (yieldPct / 100);
-      return { symbol: a.symbol, value: a.value, holdValue, stakedValue, projectedYieldUsd };
+      return {
+        symbol: a.symbol,
+        value: a.value,
+        holdValue,
+        stakedValue,
+        stakedQty,
+        liquidQty,
+        stakedEntries: ledger.breakdown[a.symbol] ?? [],
+        projectedYieldUsd,
+      };
     });
 
     const totalStakedValue = breakdown.reduce((s, b) => s + b.stakedValue, 0);
@@ -123,7 +139,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setSelected,
       toggleSelected,
     };
-  }, [prices, metrics, selected, movedProfit]);
+  }, [prices, metrics, selected, movedProfit, ledger]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

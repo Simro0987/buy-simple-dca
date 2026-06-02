@@ -11,6 +11,7 @@ import { StakingCalculator } from '@/components/staking/StakingCalculator';
 import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
 import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
 import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
+import { StakingLedgerCard } from '@/components/staking/StakingLedgerCard';
 import { getPendingStake, clearPendingStake } from '@/lib/pendingActions';
 
 interface Props { lang: Lang; }
@@ -152,6 +153,9 @@ export function StakingPage({ lang }: Props) {
       </div>
 
       <ContextCTAs actions={['optimize_staking', 'move_to_yield']} />
+
+      {/* Bi-directional manual staking ledger — source of truth for Portfolio liquid/staked split */}
+      <StakingLedgerCard lang={lang} />
 
       <StakingTimingCard lang={lang} amountUsd={500} />
 

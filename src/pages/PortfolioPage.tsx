@@ -61,7 +61,7 @@ export function PortfolioPage({ lang }: Props) {
 }
 
 function PortfolioPageInner({ lang }: Props) {
-  const { selected, toggleSelected } = usePortfolio();
+  const { selected, toggleSelected, breakdown } = usePortfolio();
   const sk = lang === 'sk';
   const { data: prices, refetch, isFetching } = usePrices();
   const { data: athData } = useAthData();
@@ -225,6 +225,20 @@ function PortfolioPageInner({ lang }: Props) {
                       </span>
                     </div>
                   )}
+                  {(() => {
+                    const b = breakdown.find(x => x.symbol === t.symbol);
+                    if (!b || t.qty <= 0 || b.stakedQty <= 0) return null;
+                    const protos = b.stakedEntries.map(e => e.protocol).join(', ') || (sk ? 'protokol' : 'protocol');
+                    return (
+                      <p className="text-[10px] text-muted-foreground mt-1 tabular-nums leading-snug">
+                        <span className="text-foreground font-medium">{t.symbol} {sk ? 'Celkovo' : 'Total'}:</span>{' '}
+                        {t.qty.toFixed(8)} {t.symbol}{' '}
+                        <span className="text-blue-400">[{b.liquidQty.toFixed(8)} Liquid</span>
+                        {' / '}
+                        <span className="text-emerald-400">{b.stakedQty.toFixed(8)} Staked in {protos}]</span>
+                      </p>
+                    );
+                  })()}
                 </div>
                 {t.qty > 0 && (
                   isExpanded
