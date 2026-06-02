@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins } from 'lucide-react';
+import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -548,6 +549,28 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   );
                 })()}
               </div>
+
+              {/* 💰 Presunúť do STAKE — len pre ETH/SOL po úspešnej akumulácii */}
+              {!isBtc && (mAddedQty + lAddedQty) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const totalQty = mAddedQty + lAddedQty;
+                    setPendingStake({
+                      symbol: symU as 'ETH' | 'SOL',
+                      amount: Number(totalQty.toFixed(8)),
+                      source: 'dca',
+                    });
+                    navigateToTab('stake');
+                    toast.success(`Pripravené na stake: ${qtyFmt(totalQty)} ${e.symbol}`);
+                  }}
+                  className="w-full px-2 py-1.5 rounded text-[10px] font-bold flex items-center justify-center gap-1.5 bg-primary/15 text-primary hover:bg-primary/25 ring-1 ring-primary/40 active:scale-95"
+                >
+                  <Coins className="w-3 h-3" />
+                  💰 Presunúť do STAKE ({qtyFmt(mAddedQty + lAddedQty)} {e.symbol})
+                </button>
+              )}
+
 
               {/* Limit cena (kopírovateľná) + live market distance */}
               <div className="bg-background/40 rounded px-2 py-1.5 space-y-1">
