@@ -182,20 +182,60 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         base: { marketPct: 60, limitPct: 40, distance: -4 },
       };
     }
-    return calcUnifiedExecution(score, metrics, fillRates ?? { eth: 0.5, sol: 0.5 });
+    const raw = calcUnifiedExecution(score, metrics, fillRates ?? { eth: 0.5, sol: 0.5 });
+
+    // MONEY MODE REGIME OVERRIDE — re-shapes Market/Limit split for extremes
+    //  CAPITULATION (score ≤ 25): 30 % Market / 70 % Limit, limits 2–4 % below spot
+    //  PARABOLIC    (score ≥ 80): 20 % Market / 80 % Limit, defensive deep limits (-5 to -8 %)
+    //  NEUTRAL: unchanged engine output
+    if (score <= 25 || score >= 80) {
+      const capit = score <= 25;
+      const newMarket = capit ? 30 : 20;
+      const newLimit  = 100 - newMarket;
+      const minDist   = capit ? -4 : -8;
+      const maxDist   = capit ? -2 : -5;
+      const clampDist = (d: number) => Math.max(minDist, Math.min(maxDist, d));
+      const coins: CoinKey[] = ['btc', 'eth', 'sol'];
+      const overridden = { ...raw.executions } as typeof raw.executions;
+      for (const c of coins) {
+        const cur = overridden[c];
+        const dist = clampDist(cur.limitDistancePct);
+        overridden[c] = {
+          ...cur,
+          marketPct: newMarket,
+          limitPct: newLimit,
+          limitDistancePct: Math.round(dist * 10) / 10,
+        };
+      }
+      return {
+        ...raw,
+        executions: overridden,
+        sharedMarketPct: newMarket,
+        sharedLimitPct: newLimit,
+      };
+    }
+    return raw;
   }, [metrics, score, fillRates]);
 
   const { executions, sharedMarketPct, sharedLimitPct, sharedMomentumAvg, sharedMomentumAdj, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
 
+  // MONEY MODE regime tag for "why" text
+  const moneyMode: 'CAPITULATION' | 'NEUTRAL' | 'PARABOLIC' =
+    score <= 25 ? 'CAPITULATION' : score >= 80 ? 'PARABOLIC' : 'NEUTRAL';
+
   // "Prečo Market/Limit?" — vychádza zo skóre a momenta
   const splitReason = useMemo(() => {
+    if (moneyMode === 'CAPITULATION') {
+      return `⚡ MONEY MODE CAPITULATION (score ${score}) → presúvam váhu do staggered Limitov 2–4 % pod spotom (chytám likvidačné knôty). Override: 30/70.`;
+    }
+    if (moneyMode === 'PARABOLIC') {
+      return `⚡ MONEY MODE PARABOLIC (score ${score}) → škrtím Market expozíciu, defenzívne hlboké Limity 5–8 % pod spotom. Override: 20/80.`;
+    }
     const scorePart =
-      score <= 25 ? `Skóre ${score} → trh je lacný, base ${base.marketPct}/${base.limitPct} (viac market).`
-      : score <= 45 ? `Skóre ${score} → mierne lacný, base ${base.marketPct}/${base.limitPct}.`
+      score <= 45 ? `Skóre ${score} → mierne lacný, base ${base.marketPct}/${base.limitPct}.`
       : score <= 60 ? `Skóre ${score} → neutrálny, base ${base.marketPct}/${base.limitPct}.`
-      : score <= 75 ? `Skóre ${score} → drahší, base ${base.marketPct}/${base.limitPct} (viac limit).`
-      : `Skóre ${score} → veľmi drahý, base ${base.marketPct}/${base.limitPct} (najviac limit).`;
+      : `Skóre ${score} → drahší, base ${base.marketPct}/${base.limitPct} (viac limit).`;
     const momPart =
       sharedMomentumAdj === 0
         ? `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% — bez úpravy.`
@@ -203,7 +243,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         ? `Priemerné 14D momentum +${sharedMomentumAvg.toFixed(1)}% (uptrend) → +${sharedMomentumAdj}% k market% (chyť trend).`
         : `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% (downtrend) → +${sharedMomentumAdj}% k market% (defenzívne nakupuj pokles).`;
     return `${scorePart} ${momPart}`;
-  }, [score, base, sharedMomentumAvg, sharedMomentumAdj]);
+  }, [score, base, sharedMomentumAvg, sharedMomentumAdj, moneyMode]);
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
