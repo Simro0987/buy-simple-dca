@@ -6,6 +6,31 @@ export type PendingRebalanceLeg = { from: string; to: string; amountUsd: number 
 
 const REBALANCE_KEY = 'pending-rebalance-v1';
 const STAKE_KEY = 'pending-stake-v1';
+const SWAP_KEY = 'pending-swap-v1';
+
+export type PendingSwap = {
+  from: 'BTC' | 'ETH' | 'SOL';
+  to: 'BTC' | 'ETH' | 'SOL';
+  amountUsd: number;
+  source: 'analysis' | 'rebalance' | 'manual';
+  reason?: string;
+};
+
+export function setPendingSwap(p: PendingSwap): void {
+  try { sessionStorage.setItem(SWAP_KEY, JSON.stringify({ ...p, ts: Date.now() })); } catch { /* ignore */ }
+}
+
+export function getPendingSwap(): (PendingSwap & { ts: number }) | null {
+  try {
+    const raw = sessionStorage.getItem(SWAP_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+export function clearPendingSwap(): void {
+  try { sessionStorage.removeItem(SWAP_KEY); } catch { /* ignore */ }
+}
 
 export function setPendingRebalance(legs: PendingRebalanceLeg[]): void {
   try { sessionStorage.setItem(REBALANCE_KEY, JSON.stringify({ legs, ts: Date.now() })); } catch { /* ignore */ }
