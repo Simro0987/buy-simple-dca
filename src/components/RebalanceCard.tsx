@@ -287,6 +287,33 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
       })()}
 
       {/* Telegram alert button */}
+      {/* MANUAL CONFIRMATION ADVISORY — len pri >5% drifte, nikdy autonómne */}
+      {hasActionable && (
+        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+          <p className="text-xs font-bold text-amber-300 leading-snug">
+            💡 {sk ? 'NAVRHOVANÉ REBALANSOVANIE PORTFÓLIA' : 'PORTFOLIO REBALANCING SUGGESTED'}
+          </p>
+          <p className="text-[11px] text-amber-200/90 leading-relaxed">
+            {sk
+              ? 'Portfólio sa odchýlilo od kotvy 64/25/11 o viac ako 5 %. Systém nikdy nevykoná rebalansovanie sám — musíš ho potvrdiť ručne kliknutím nižšie.'
+              : 'Portfolio drifted >5% from the 64/25/11 anchor. The system never executes rebalancing on its own — confirm manually below.'}
+          </p>
+          <button
+            onClick={handleConfirmExecution}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500 text-background text-xs font-bold active:scale-95"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            {sk ? 'Potvrdiť vykonanie rebalansovania' : 'Confirm rebalancing executed'}
+          </button>
+          {confirmedAt && (
+            <p className="text-[10px] text-emerald-300/80 tabular-nums text-center">
+              {sk ? 'Naposledy potvrdené:' : 'Last confirmed:'} {new Date(confirmedAt).toLocaleString(sk ? 'sk-SK' : 'en-US')}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* Telegram alert button */}
       <button
         onClick={handleSendRebalanceAlert}
         disabled={sending}
