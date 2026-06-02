@@ -29,6 +29,7 @@ interface Props {
 export function AnalysisRiskPage({ lang, prices, athData, cycleResult }: Props) {
   const sk = lang === 'sk';
   return (
+    <PortfolioProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-1">
