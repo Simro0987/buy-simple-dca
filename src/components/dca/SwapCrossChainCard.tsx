@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { Repeat, Clock, Sun, Shield, Coins, Rocket, AlertTriangle, XCircle } from 'lucide-react';
 import { usePrices } from '@/hooks/usePrices';
 
+// Internal type stays mapped to Base L2 execution tokens (WETH, cbBTC),
+// but UI shows only native tickers ETH / BTC per Master Top anchor policy.
 type Token = 'WETH' | 'cbBTC';
+const UI_LABEL: Record<Token, string> = { WETH: 'ETH', cbBTC: 'BTC' };
 
 export function SwapCrossChainCard() {
   const { data: prices } = usePrices();
@@ -80,7 +83,7 @@ export function SwapCrossChainCard() {
 
         <div>
           <p className="text-xs font-bold text-sky-300 mb-1 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5" /> ETHEREUM (WETH / ETH)
+            <Shield className="w-3.5 h-3.5" /> ETHEREUM (ETH)
           </p>
           <ul className="ml-4 space-y-0.5 text-muted-foreground">
             <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span> alebo <span className="text-emerald-300 font-semibold">Odos</span></li>
@@ -92,7 +95,7 @@ export function SwapCrossChainCard() {
 
         <div>
           <p className="text-xs font-bold text-orange-300 mb-1 flex items-center gap-1.5">
-            <Coins className="w-3.5 h-3.5" /> BITCOIN (cbBTC / BTC)
+            <Coins className="w-3.5 h-3.5" /> BITCOIN (BTC)
           </p>
           <ul className="ml-4 space-y-0.5 text-muted-foreground">
             <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span> alebo <span className="text-emerald-300 font-semibold">Odos</span></li>
@@ -118,7 +121,7 @@ export function SwapCrossChainCard() {
                   className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-bold tabular-nums transition-colors ${
                     token === t ? 'bg-emerald-500/20 text-emerald-300' : 'text-muted-foreground'
                   }`}
-                >{t}</button>
+                >{UI_LABEL[t]}</button>
               ))}
             </div>
           </div>
