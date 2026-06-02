@@ -3,6 +3,7 @@ import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, Tr
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
+import { MoneyModeSignal } from '@/components/dca/MoneyModeSignal';
 
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
@@ -347,6 +348,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* CAPITAL INPUT — set weekly DCA capital from total + horizon */}
       <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
+
+      {/* MONEY MODE SIGNAL — BTC cycle-derived regime badge driving Market/Limit bias */}
+      <MoneyModeSignal score={effectiveScore} />
 
 
 
