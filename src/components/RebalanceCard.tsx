@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Lang } from '@/lib/i18n';
 import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
-import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send } from 'lucide-react';
+import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const REBALANCE_CONFIRM_KEY = 'rebalance-last-confirmed-at';
 
 interface Props {
   lang: Lang;
