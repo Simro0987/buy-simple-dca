@@ -83,36 +83,41 @@ interface ClassifiedItem {
   summary: string;
 }
 
-async function classifyWithAI(items: RawNewsItem[], lang: string): Promise<ClassifiedItem[]> {
+interface AIResult extends ClassifiedItem {
+  translatedTitle?: string;
+}
+
+async function classifyWithAI(items: RawNewsItem[], lang: string): Promise<AIResult[]> {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
   if (!LOVABLE_API_KEY || items.length === 0) {
     return items.map(item => ({ ...classifyByKeywords(item.title), summary: '' }));
   }
 
-  const numbered = items.map((item, i) => `${i + 1}. "${item.title}"`).join('\n');
-  const targetLang = lang === 'sk' ? 'Slovak' : 'English';
+  const numbered = items
+    .map((item, i) => `${i + 1}. TITLE: "${item.title}"${item.description ? `\n   CONTEXT: "${item.description.substring(0, 180)}"` : ''}`)
+    .join('\n');
+  const targetLang = lang === 'sk' ? 'Slovak (slovenčina)' : 'English';
+  const wantTranslation = lang === 'sk';
 
-  const prompt = `You are a crypto news analyst for a portfolio tracker (BTC, ETH, SOL).
+  const prompt = `You are a crypto news analyst & translator for a Slovak portfolio tracker (BTC, ETH, SOL).
 
-Classify each headline and write a one-sentence summary in ${targetLang}.
+For EACH item:
+1. Classify impact + sentiment.
+2. ${wantTranslation ? `Translate the TITLE to natural, fluent ${targetLang}. Keep token tickers (BTC, ETH, SOL) and proper nouns in original form. NO transliteration of names.` : `Keep the original English title.`}
+3. Write a one-sentence summary in ${targetLang} based on TITLE + CONTEXT.
 
-Impact levels:
-- "high": ETF approvals/rejections, major regulation, protocol hacks >$10M, exchange delistings, central bank crypto policy
-- "medium": partnerships, protocol upgrades, whale moves, exchange listings, stablecoin expansion
-- "low": general commentary, price speculation, minor updates
+Impact: "high" (ETF, regulation, hacks >$10M, delistings, central bank policy) | "medium" (partnerships, upgrades, whale moves, listings) | "low" (commentary, minor updates)
+Sentiment: "bullish" | "bearish" | "neutral"
 
-Sentiment: "bullish" (positive for price/adoption), "bearish" (negative), "neutral"
-
-Headlines:
+Items:
 ${numbered}
 
-Return ONLY a JSON array (no markdown, no backticks) with objects: {"impact":"high|medium|low","sentiment":"bullish|bearish|neutral","summary":"one sentence in ${targetLang}"}
-
-Array must have exactly ${items.length} items in the same order.`;
+Return ONLY a JSON array (no markdown). Each object: {"impact":"...","sentiment":"...","title":"${wantTranslation ? 'translated title' : 'original title'}","summary":"one sentence in ${targetLang}"}
+Array must have exactly ${items.length} items in order.`;
 
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeout = setTimeout(() => controller.abort(), 20000);
 
     const resp = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
@@ -121,7 +126,7 @@ Array must have exactly ${items.length} items in the same order.`;
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.5-flash-lite',
+        model: 'google/gemini-2.5-flash',
         messages: [{ role: 'user', content: prompt }],
         temperature: 0.1,
       }),
@@ -140,10 +145,11 @@ Array must have exactly ${items.length} items in the same order.`;
     const parsed = JSON.parse(content);
 
     if (Array.isArray(parsed) && parsed.length === items.length) {
-      return parsed.map((p: { impact?: string; sentiment?: string; summary?: string }) => ({
+      return parsed.map((p: { impact?: string; sentiment?: string; summary?: string; title?: string }) => ({
         impact: ['high', 'medium', 'low'].includes(p.impact) ? p.impact : 'low',
         sentiment: ['bullish', 'bearish', 'neutral'].includes(p.sentiment) ? p.sentiment : 'neutral',
         summary: typeof p.summary === 'string' ? p.summary : '',
+        translatedTitle: typeof p.title === 'string' ? p.title : undefined,
       }));
     }
     console.error('AI returned wrong array length:', parsed.length, 'expected:', items.length);
