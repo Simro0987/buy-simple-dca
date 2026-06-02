@@ -539,6 +539,7 @@ export function SwapPage({ lang }: Props) {
   return (
     <div className="space-y-3">
       <PendingRebalanceBanner lang={lang} />
+      <PendingSwapBanner lang={lang} />
       <header className="space-y-1">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
