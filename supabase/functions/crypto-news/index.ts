@@ -5,6 +5,30 @@ const corsHeaders = {
 
 // ── Helpers ──────────────────────────────────────────────
 
+function decodeEntities(input: string): string {
+  if (!input) return '';
+  let s = String(input);
+  // Numeric entities (decimal + hex)
+  s = s.replace(/&#(\d+);/g, (_, n) => {
+    try { return String.fromCodePoint(parseInt(n, 10)); } catch { return ''; }
+  });
+  s = s.replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+    try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ''; }
+  });
+  // Named entities (common set)
+  const named: Record<string, string> = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’',
+    mdash: '—', ndash: '–', hellip: '…', copy: '©', reg: '®', trade: '™',
+  };
+  s = s.replace(/&([a-zA-Z]+);/g, (m, name) => named[name] ?? m);
+  // Strip stray HTML tags
+  s = s.replace(/<[^>]*>/g, '');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+
+
 async function translateTexts(texts: string[], lang: string): Promise<string[]> {
   if (lang === 'en' || texts.length === 0) return texts;
   try {
@@ -296,6 +320,12 @@ Deno.serve(async (req) => {
     unique.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const top = unique.slice(0, 24);
 
+    // Sanitize HTML entities on titles & descriptions BEFORE translation
+    for (const it of top) {
+      it.title = decodeEntities(it.title);
+      it.description = decodeEntities(it.description);
+    }
+
     const classified = await classifyWithAI(top, targetLang);
 
     // Titles: use AI translation if available, otherwise Google Translate fallback
@@ -304,22 +334,27 @@ Deno.serve(async (req) => {
     const fallbackTranslated = await translateTexts(titlesToTranslate, targetLang);
     let fbIdx = 0;
     const finalTitles = top.map((item, i) => {
-      if (classified[i].translatedTitle) return classified[i].translatedTitle!;
-      return fallbackTranslated[fbIdx++] || item.title;
+      const t = classified[i].translatedTitle
+        ? classified[i].translatedTitle!
+        : (fallbackTranslated[fbIdx++] || item.title);
+      return decodeEntities(t);
     });
 
     // Summaries: if AI missed, translate the source description as fallback
     const summariesNeedingFallback = top.map((item, i) =>
       classified[i].summary || !item.description ? null : item.description
     );
+
     const summariesToTranslate = summariesNeedingFallback.filter((s): s is string => s !== null);
     const fallbackSummaries = await translateTexts(summariesToTranslate, targetLang);
     let sIdx = 0;
     const finalSummaries = top.map((item, i) => {
-      if (classified[i].summary) return classified[i].summary;
-      if (!item.description) return '';
-      return fallbackSummaries[sIdx++] || item.description;
+      const s = classified[i].summary
+        ? classified[i].summary
+        : (item.description ? (fallbackSummaries[sIdx++] || item.description) : '');
+      return decodeEntities(s);
     });
+
 
     const finalResults = top.map((item, i) => ({
       id: item.id,
