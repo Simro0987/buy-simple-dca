@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote } from 'lucide-react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins } from 'lucide-react';
+import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
