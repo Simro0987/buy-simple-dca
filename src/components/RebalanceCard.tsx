@@ -1,9 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Lang } from '@/lib/i18n';
 import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
-import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send } from 'lucide-react';
+import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send, CheckCircle2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+const REBALANCE_CONFIRM_KEY = 'rebalance-last-confirmed-at';
 
 interface Props {
   lang: Lang;
@@ -37,6 +39,26 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
   const holdings = getHoldings();
   const [sending, setSending] = useState(false);
+
+  const [confirmedAt, setConfirmedAt] = useState<string | null>(() => {
+    try { return localStorage.getItem(REBALANCE_CONFIRM_KEY); } catch { return null; }
+  });
+
+  // Listen for cross-tab confirmation changes
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === REBALANCE_CONFIRM_KEY) setConfirmedAt(e.newValue);
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  const handleConfirmExecution = () => {
+    const ts = new Date().toISOString();
+    try { localStorage.setItem(REBALANCE_CONFIRM_KEY, ts); } catch { /* ignore */ }
+    setConfirmedAt(ts);
+    toast.success(sk ? 'Rebalansovanie potvrdené ✓' : 'Rebalancing confirmed ✓');
+  };
 
   if (!prices) return null;
 
@@ -263,6 +285,33 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
           </div>
         );
       })()}
+
+      {/* Telegram alert button */}
+      {/* MANUAL CONFIRMATION ADVISORY — len pri >5% drifte, nikdy autonómne */}
+      {hasActionable && (
+        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+          <p className="text-xs font-bold text-amber-300 leading-snug">
+            💡 {sk ? 'NAVRHOVANÉ REBALANSOVANIE PORTFÓLIA' : 'PORTFOLIO REBALANCING SUGGESTED'}
+          </p>
+          <p className="text-[11px] text-amber-200/90 leading-relaxed">
+            {sk
+              ? 'Portfólio sa odchýlilo od kotvy 64/25/11 o viac ako 5 %. Systém nikdy nevykoná rebalansovanie sám — musíš ho potvrdiť ručne kliknutím nižšie.'
+              : 'Portfolio drifted >5% from the 64/25/11 anchor. The system never executes rebalancing on its own — confirm manually below.'}
+          </p>
+          <button
+            onClick={handleConfirmExecution}
+            className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg bg-emerald-500 text-background text-xs font-bold active:scale-95"
+          >
+            <CheckCircle2 className="w-4 h-4" />
+            {sk ? 'Potvrdiť vykonanie rebalansovania' : 'Confirm rebalancing executed'}
+          </button>
+          {confirmedAt && (
+            <p className="text-[10px] text-emerald-300/80 tabular-nums text-center">
+              {sk ? 'Naposledy potvrdené:' : 'Last confirmed:'} {new Date(confirmedAt).toLocaleString(sk ? 'sk-SK' : 'en-US')}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* Telegram alert button */}
       <button
