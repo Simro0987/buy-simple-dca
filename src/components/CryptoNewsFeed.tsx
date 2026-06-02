@@ -27,7 +27,10 @@ const PREMIUM_SOURCES = ['CoinDesk', 'CoinTelegraph', 'Decrypt', 'The Block', 'B
 const FLASH_KEYWORDS = /\b(exploit|hack|fork|sec|regulator|regulatory|halving|etf|breach|stolen|delist|ban|approval|approved|rejected|crash|collapse)\b/i;
 
 function isFlash(item: NewsItem): boolean {
-  return item.impact === 'high' && FLASH_KEYWORDS.test(`${item.title} ${item.summary ?? ''}`);
+  // CRITICAL: scan original English payload, never the translated Slovak text,
+  // so volatile keywords (SEC, ETF, hack, halving...) are never lost to translation.
+  const raw = `${item.rawTitle ?? item.title} ${item.rawDescription ?? ''} ${item.summary ?? ''}`;
+  return item.impact === 'high' && FLASH_KEYWORDS.test(raw);
 }
 
 function ImpactIcon({ impact }: { impact: NewsItem['impact'] }) {
