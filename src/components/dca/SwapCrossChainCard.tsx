@@ -83,7 +83,7 @@ export function SwapCrossChainCard() {
 
         <div>
           <p className="text-xs font-bold text-sky-300 mb-1 flex items-center gap-1.5">
-            <Shield className="w-3.5 h-3.5" /> ETHEREUM (WETH / ETH)
+            <Shield className="w-3.5 h-3.5" /> ETHEREUM (ETH)
           </p>
           <ul className="ml-4 space-y-0.5 text-muted-foreground">
             <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span> alebo <span className="text-emerald-300 font-semibold">Odos</span></li>
@@ -95,7 +95,7 @@ export function SwapCrossChainCard() {
 
         <div>
           <p className="text-xs font-bold text-orange-300 mb-1 flex items-center gap-1.5">
-            <Coins className="w-3.5 h-3.5" /> BITCOIN (cbBTC / BTC)
+            <Coins className="w-3.5 h-3.5" /> BITCOIN (BTC)
           </p>
           <ul className="ml-4 space-y-0.5 text-muted-foreground">
             <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span> alebo <span className="text-emerald-300 font-semibold">Odos</span></li>
