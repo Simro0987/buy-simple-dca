@@ -2,11 +2,13 @@ import { useMemo, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Copy, Check, Target, History as HistoryIcon, ChevronDown, ChevronUp, Wallet } from 'lucide-react';
+import { Copy, Check, Target, History as HistoryIcon, ChevronDown, ChevronUp, Wallet, Flame } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useProfitReservoir, addTakeProfit, resetReservoir } from '@/lib/profitReservoir';
+import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
+import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { toast } from 'sonner';
 
 const TOKEN_DECIMALS: Record<string, number> = { BTC: 6, ETH: 5, SOL: 3 };
@@ -39,6 +41,14 @@ export function DynamicTakeProfitCard({ lang }: Props) {
   const reservoir = useProfitReservoir();
   const [busy, setBusy] = useState<string | null>(null);
   const [showLog, setShowLog] = useState(false);
+
+  // Money Mode (Cycle Engine) — PARABOLIC = trh prepálený → take-profit prioritne
+  const { data: prices } = usePrices();
+  const { data: fearGreed } = useFearGreed();
+  const { data: athData } = useAthData();
+  const { data: altSeason } = useAltSeason();
+  const cycle = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
+  const parabolic = (cycle?.score ?? 0) >= 80 || cycle?.zone === 'euphoria';
 
   const rows = useMemo(() => {
     return metrics.assets.map(a => {
@@ -85,9 +95,24 @@ export function DynamicTakeProfitCard({ lang }: Props) {
 
 
   return (
-    <Card className="border-border bg-card overflow-hidden">
-      <div className="h-1 bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500" />
+    <Card className={`border-border bg-card overflow-hidden ${parabolic ? 'ring-2 ring-rose-500/60 shadow-[0_0_30px_-5px_rgba(244,63,94,0.45)]' : ''}`}>
+      <div className={`h-1 ${parabolic ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-rose-600' : 'bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500'}`} />
       <CardContent className="p-5 space-y-4">
+        {parabolic && (
+          <div className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5">
+            <Flame className="w-4 h-4 text-rose-300 mt-0.5 shrink-0" />
+            <div>
+              <p className="text-[11px] font-bold text-rose-200 leading-snug">
+                ⚠️ PARABOLIC — {sk ? 'trh je prepálený' : 'overheated market'} (score {cycle?.score ?? 0})
+              </p>
+              <p className="text-[10px] text-rose-200/80 leading-snug mt-0.5">
+                {sk
+                  ? 'Money Mode odporúča prioritne brať zisk. Žiadne auto-execution — každý predaj potvrď ručne v peňaženke.'
+                  : 'Money Mode recommends taking profit. No auto-execution — confirm each sell manually in your wallet.'}
+              </p>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-amber-400" />
