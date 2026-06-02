@@ -41,6 +41,17 @@ const Index = () => {
     return () => clearInterval(id);
   }, []);
 
+  // Cross-module navigation (RebalanceCard → Swap, DCA → Stake, …)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      const next = ce.detail as TabId | undefined;
+      if (next) setTab(next);
+    };
+    window.addEventListener('app-navigate-tab', handler);
+    return () => window.removeEventListener('app-navigate-tab', handler);
+  }, []);
+
   const totalValue = useMemo(() => {
     if (!prices) return 0;
     const holdings = loadHoldings();

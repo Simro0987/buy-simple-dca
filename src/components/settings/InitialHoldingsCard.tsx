@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Wallet } from 'lucide-react';
+import { Wallet, Lock, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppSettings, useUpdateAppSettings } from '@/hooks/useAppSettings';
+import { usePrices } from '@/hooks/usePrices';
+
+// Immutable baseline (Master Top — držby pred spustením appky).
+const BASELINE = { btc: 0.01746423, eth: 0.23278498, sol: 2.60983568 } as const;
+const TOKEN_PRICE_ID = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana' } as const;
 
 type CoinKey = 'btc' | 'eth' | 'sol';
 const COINS: { key: CoinKey; label: string }[] = [
@@ -10,12 +15,19 @@ const COINS: { key: CoinKey; label: string }[] = [
   { key: 'sol', label: 'SOL' },
 ];
 
+type Mode = 'asset' | 'usd';
+
 export function InitialHoldingsCard() {
   const { data: settings } = useAppSettings();
   const update = useUpdateAppSettings();
+  const { data: prices } = usePrices();
 
   const [holdings, setHoldings] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
   const [costBasis, setCostBasis] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
+
+  // Smart Manual Accumulator — prírastky
+  const [accMode, setAccMode] = useState<Record<CoinKey, Mode>>({ btc: 'asset', eth: 'asset', sol: 'asset' });
+  const [accInput, setAccInput] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
 
   useEffect(() => {
     if (!settings) return;
@@ -33,6 +45,11 @@ export function InitialHoldingsCard() {
     });
   }, [settings]);
 
+  const baselineOk =
+    Number(settings?.manual_holdings?.btc ?? 0) >= BASELINE.btc &&
+    Number(settings?.manual_holdings?.eth ?? 0) >= BASELINE.eth &&
+    Number(settings?.manual_holdings?.sol ?? 0) >= BASELINE.sol;
+
   const save = async () => {
     if (!settings?.id) return;
     try {
@@ -49,22 +66,67 @@ export function InitialHoldingsCard() {
           sol: Number(costBasis.sol) || 0,
         },
       });
-      toast.success('Počiatočné holdingy uložené');
-    } catch (e) {
+      toast.success('Holdingy uložené ✓');
+    } catch {
       toast.error('Uloženie zlyhalo');
+    }
+  };
+
+  // MANUAL ONLY — never call from effect. Spúšťa sa iba z tlačidla "Pridať".
+  const addAccumulation = async (key: CoinKey) => {
+    if (!settings?.id) return;
+    const raw = Number(accInput[key]);
+    if (!raw || raw <= 0) { toast.error('Zadaj kladnú hodnotu'); return; }
+    const price = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
+    if (price <= 0) { toast.error('Cena ešte neprišla — počkaj chvíľu'); return; }
+
+    const mode = accMode[key];
+    const newQty = mode === 'asset' ? raw : raw / price;
+    const newUsd = mode === 'asset' ? raw * price : raw;
+
+    const oldQty = Number(settings.manual_holdings?.[key] ?? 0);
+    const oldUsd = Number(settings.initial_cost_basis?.[key] ?? 0);
+    const totalQty = oldQty + newQty;
+    const totalUsd = oldUsd + newUsd; // weighted avg basis sa odvodí ako totalUsd / totalQty
+
+    const nextHoldings = { ...(settings.manual_holdings ?? {}), [key]: totalQty };
+    const nextBasis = { ...(settings.initial_cost_basis ?? {}), [key]: totalUsd };
+
+    try {
+      await update.mutateAsync({
+        id: settings.id,
+        manual_holdings: nextHoldings,
+        initial_cost_basis: nextBasis,
+      });
+      setAccInput(s => ({ ...s, [key]: '' }));
+      const avg = totalUsd / totalQty;
+      toast.success(
+        `+${newQty.toFixed(8)} ${key.toUpperCase()} pridané. Nový priemer: $${avg.toFixed(2)}`,
+      );
+    } catch {
+      toast.error('Pridanie zlyhalo');
     }
   };
 
   return (
     <div className="rounded-2xl border border-border bg-card p-4 space-y-4">
-      <div className="flex items-center gap-2">
-        <Wallet className="w-4 h-4 text-primary" />
-        <h3 className="font-semibold">Počiatočné holdingy & cost basis</h3>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-primary" />
+          <h3 className="font-semibold">Holdingy & cost basis</h3>
+        </div>
+        {baselineOk && (
+          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-1.5 py-0.5">
+            <Lock className="w-3 h-3" /> Baseline chránená
+          </span>
+        )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Coiny ktoré ste vlastnili pred spustením appky. Holdings = množstvo, Cost basis = USD ktoré ste minuli.
+        Holdings = množstvo, Cost basis = USD ktoré si minul. Smart Manual Accumulator nižšie pridáva
+        nové nákupy a počíta weighted average automaticky.
       </p>
 
+      {/* Editácia základov */}
       <div className="space-y-3">
         {COINS.map(({ key, label }) => (
           <div key={key} className="grid grid-cols-[3rem_1fr_1fr] gap-2 items-center">
@@ -102,6 +164,59 @@ export function InitialHoldingsCard() {
       >
         {update.isPending ? 'Ukladám…' : 'Uložiť'}
       </button>
+
+      {/* Smart Manual Accumulator */}
+      <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
+        <div className="flex items-center gap-2">
+          <Plus className="w-4 h-4 text-emerald-400" />
+          <h4 className="text-sm font-semibold text-emerald-300">Smart Manual Accumulator</h4>
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          Pridaj nový nákup — Holdings sa pripočítajú, priemerná nákupná cena sa prepočíta váženým priemerom.
+        </p>
+
+        {COINS.map(({ key, label }) => {
+          const price = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
+          const mode = accMode[key];
+          const v = Number(accInput[key]) || 0;
+          const preview = v > 0 && price > 0
+            ? (mode === 'asset' ? `≈ $${(v * price).toFixed(2)}` : `≈ ${(v / price).toFixed(8)} ${label}`)
+            : '';
+          return (
+            <div key={key} className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold">{label}</span>
+                <div className="flex rounded-md border border-border overflow-hidden text-[10px]">
+                  <button
+                    onClick={() => setAccMode(s => ({ ...s, [key]: 'asset' }))}
+                    className={`px-2 py-0.5 ${mode === 'asset' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}
+                  >Množstvo {label}</button>
+                  <button
+                    onClick={() => setAccMode(s => ({ ...s, [key]: 'usd' }))}
+                    className={`px-2 py-0.5 ${mode === 'usd' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-muted-foreground'}`}
+                  >USD suma</button>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="number"
+                  step={mode === 'asset' ? '0.00000001' : '0.01'}
+                  value={accInput[key]}
+                  onChange={e => setAccInput(s => ({ ...s, [key]: e.target.value }))}
+                  placeholder={mode === 'asset' ? `0 ${label}` : '$0.00'}
+                  className="flex-1 px-2 py-1.5 text-sm rounded-md border border-border bg-background"
+                />
+                <button
+                  onClick={() => addAccumulation(key)}
+                  disabled={update.isPending}
+                  className="px-3 py-1.5 rounded-md bg-emerald-500 text-background text-xs font-bold disabled:opacity-50"
+                >Pridať</button>
+              </div>
+              {preview && <p className="text-[10px] text-muted-foreground">{preview} @ ${price.toFixed(2)}</p>}
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
