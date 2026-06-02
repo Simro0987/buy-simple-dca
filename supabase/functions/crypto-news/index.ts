@@ -47,7 +47,7 @@ const HIGH_IMPACT_KEYWORDS = [
   'etf', 'sec ', 'regulation', 'ban', 'hack', 'exploit', 'breach', 'stolen',
   'lawsuit', 'arrest', 'fraud', 'crash', 'collapse', 'bankrupt', 'insolvent',
   'federal reserve', 'central bank', 'cbdc', 'delist', 'shutdown', 'halving',
-  'approval', 'approved', 'rejected', 'sanction', 'investigation', 'subpoena',
+  'approval', 'approved', 'rejected', 'sanction', 'investigation', 'subpoena', 'fork',
 ];
 const MEDIUM_IMPACT_KEYWORDS = [
   'partnership', 'upgrade', 'launch', 'listing', 'whale', 'stablecoin',
@@ -151,7 +151,6 @@ Array must have exactly ${items.length} items in the same order.`;
     console.error('AI classification error, using keyword fallback:', e);
   }
 
-  // Fallback: keyword-based classification
   return items.map(item => ({ ...classifyByKeywords(item.title), summary: '' }));
 }
 
@@ -204,20 +203,17 @@ async function fetchCryptoPanic(apiKey: string, coinFilter: string, kindFilter: 
         await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
         continue;
       }
-      console.error(`CryptoPanic failed [${response.status}]`);
       return [];
     }
     if (!response?.ok) return [];
 
     const data = await response.json();
-    return (data.results || []).slice(0, 12).map((item: Record<string, unknown> & { source?: { title?: string; domain?: string }; original_url?: string; url?: string; instruments?: Array<{ code: string }>; currencies?: Array<{ code: string }>; title?: string; id?: string | number; published_at?: string; description?: string; votes?: { positive?: number; negative?: number } }) => {
+    return (data.results || []).slice(0, 12).map((item: Record<string, unknown> & { source?: { title?: string; domain?: string }; original_url?: string; url?: string; instruments?: Array<{ code: string }>; currencies?: Array<{ code: string }>; title?: string; id?: string | number; published_at?: string }) => {
       const sourceName = item.source?.title || item.source?.domain || '';
       const itemUrl = item.original_url || item.url || '';
       let domainSource = sourceName;
       if (!domainSource && itemUrl) {
-        try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch {
-          // ignore URL parse error
-        }
+        try { domainSource = new URL(itemUrl).hostname.replace('www.', ''); } catch { /* ignore */ }
       }
       let tokens = (item.instruments || item.currencies || []).map((c: { code: string }) => c.code);
       if (tokens.length === 0) tokens = detectTokens(item.title || '');
@@ -249,6 +245,15 @@ async function fetchRssFeed(feedUrl: string, sourceName: string, maxItems = 8): 
   }
 }
 
+// Premium "Big Five" feeds
+const PREMIUM_FEEDS: Array<{ url: string; name: string }> = [
+  { url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', name: 'CoinDesk' },
+  { url: 'https://cointelegraph.com/rss', name: 'CoinTelegraph' },
+  { url: 'https://decrypt.co/feed', name: 'Decrypt' },
+  { url: 'https://www.theblock.co/rss.xml', name: 'The Block' },
+  { url: 'https://blockworks.co/feed', name: 'Blockworks' },
+];
+
 // ── Main Handler ────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -259,40 +264,37 @@ Deno.serve(async (req) => {
   try {
     const { currencies, kind, lang } = await req.json();
     const coinFilter = currencies || 'BTC,ETH,SOL';
+    const allowed = new Set(coinFilter.split(',').map((s: string) => s.trim().toUpperCase()));
     const kindFilter = kind || 'news';
     const targetLang = lang || 'sk';
     const apiKey = Deno.env.get('CRYPTOPANIC_API_KEY');
 
-    // Fetch from all sources in parallel
-    const [cpItems, ctItems, cdItems] = await Promise.all([
+    const results = await Promise.all([
       apiKey ? fetchCryptoPanic(apiKey, coinFilter, kindFilter) : Promise.resolve([]),
-      fetchRssFeed('https://cointelegraph.com/rss', 'CoinTelegraph', 8),
-      fetchRssFeed('https://www.coindesk.com/arc/outboundfeeds/rss/', 'CoinDesk', 8),
+      ...PREMIUM_FEEDS.map(f => fetchRssFeed(f.url, f.name, 8)),
     ]);
+    const allItems = results.flat();
 
-    // Merge and deduplicate
-    const allItems = [...cpItems, ...ctItems, ...cdItems];
+    // STRICT FILTER: only items that mention an allowed portfolio token
+    const portfolioOnly = allItems.filter(it => it.tokens.some(t => allowed.has(t.toUpperCase())));
+
+    // Deduplicate
     const seen = new Set<string>();
-    const unique = allItems.filter(item => {
+    const unique = portfolioOnly.filter(item => {
       const key = item.title.toLowerCase().substring(0, 40);
       if (seen.has(key)) return false;
       seen.add(key);
       return true;
     });
 
-    // Sort by date, take top items
     unique.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    const top = unique.slice(0, 20);
+    const top = unique.slice(0, 24);
 
-    // AI classification (impact, sentiment, summary) - already in target language
     const classified = await classifyWithAI(top, targetLang);
-
-    // Translate titles (summaries already in target lang from AI)
     const originalTitles = top.map(item => item.title);
     const translatedTitles = await translateTexts(originalTitles, targetLang);
 
-    // Build final results
-    const results = top.map((item, i) => ({
+    const finalResults = top.map((item, i) => ({
       id: item.id,
       title: translatedTitles[i] || item.title,
       summary: classified[i].summary,
@@ -301,19 +303,18 @@ Deno.serve(async (req) => {
       publishedAt: item.publishedAt,
       impact: classified[i].impact,
       sentiment: classified[i].sentiment,
-      tokens: item.tokens,
+      tokens: item.tokens.filter(t => allowed.has(t.toUpperCase())),
     }));
 
-    // Sort by impact priority then date
     const impactOrder = { high: 0, medium: 1, low: 2 };
-    results.sort((a, b) => {
+    finalResults.sort((a, b) => {
       const imp = impactOrder[a.impact] - impactOrder[b.impact];
       if (imp !== 0) return imp;
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
     });
 
     return new Response(
-      JSON.stringify({ success: true, data: results }),
+      JSON.stringify({ success: true, data: finalResults }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
