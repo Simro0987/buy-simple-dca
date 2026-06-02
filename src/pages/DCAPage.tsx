@@ -188,6 +188,14 @@ export function DCAPage({ lang: _lang }: Props) {
     ? { bg: 'bg-amber-500/15', text: 'text-amber-400', label: 'Medium' }
     : { bg: 'bg-rose-500/15', text: 'text-rose-400', label: 'Low' };
 
+  // MONEY MODE state derived from final cycle score
+  const moneyModeState: 'CAPITULATION' | 'NEUTRAL' | 'PARABOLIC' =
+    effectiveScore <= 25 ? 'CAPITULATION' : effectiveScore >= 80 ? 'PARABOLIC' : 'NEUTRAL';
+  const mmStyle =
+    moneyModeState === 'CAPITULATION' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 animate-pulse'
+    : moneyModeState === 'PARABOLIC'   ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse'
+    : 'bg-secondary text-foreground border-border';
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-2">
@@ -212,6 +220,15 @@ export function DCAPage({ lang: _lang }: Props) {
             Auto-fill
           </button>
         </div>
+      </div>
+
+      {/* HIGH-VISIBILITY MONEY MODE BADGE — driven by effectiveScore */}
+      <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${mmStyle}`}>
+        <span className="flex items-center gap-1.5 text-xs font-bold tracking-wide">
+          <Zap className="w-4 h-4" />
+          MONEY MODE: {moneyModeState}
+        </span>
+        <span className="text-[10px] tabular-nums opacity-80">Score {effectiveScore}/100</span>
       </div>
 
       {/* TOP — Regime · Score · Confidence · Allocation */}
