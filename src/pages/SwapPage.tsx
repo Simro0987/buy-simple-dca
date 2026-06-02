@@ -18,14 +18,13 @@ import {
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance } from '@/lib/pendingActions';
-import { useEffect as useEffectAlias, useState as useStateAlias } from 'react';
 
 interface Props { lang: Lang; }
 
 function PendingRebalanceBanner({ lang }: { lang: Lang }) {
   const sk = lang === 'sk';
-  const [pending, setPending] = useStateAlias(() => getPendingRebalance());
-  useEffectAlias(() => {
+  const [pending, setPending] = useState(() => getPendingRebalance());
+  useEffect(() => {
     const id = setInterval(() => setPending(getPendingRebalance()), 1000);
     return () => clearInterval(id);
   }, []);
