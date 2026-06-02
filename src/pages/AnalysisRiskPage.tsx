@@ -65,5 +65,6 @@ export function AnalysisRiskPage({ lang, prices, athData, cycleResult }: Props) 
         <AdvancedMarketPage lang={lang} />
       </Suspense>
     </div>
+    </PortfolioProvider>
   );
 }
