@@ -763,12 +763,118 @@ export function depegAlertMessage(lang: 'en' | 'sk', peg: PegStatus): string {
 }
 
 // ============= Dynamic Target-Driven Routing + Suitability Engine =============
+// Law of Maximum Efficiency: prefer the single best risk-adjusted protocol as a
+// 100% single-step path (no fragmentation). Dynamically omit any unsafe layer.
+// If every layer is unsafe → return a 100% Secure HODL fallback route.
 
 export interface BestTargetRoute {
   route: RecommendedRoute;
   globalDeployPct: number;
   bufferPct: number;
   capitalRecommendation: string;
+  /** True when no live protocol layer passes the safety guard — UI must lock entry. */
+  hodlFallback: boolean;
+  /** Human-readable reasons that explain why layers were omitted. */
+  omittedReasons: string[];
+}
+
+const HODL_WALLET_URL: Record<YieldAsset, string> = {
+  BTC: 'bitcoin.org', cbBTC: 'bitcoin.org', WBTC: 'bitcoin.org', LBTC: 'bitcoin.org',
+  ETH: 'ethereum.org', stETH: 'ethereum.org', wstETH: 'ethereum.org', weETH: 'ethereum.org',
+  SOL: 'solana.com', JitoSOL: 'solana.com', mSOL: 'solana.com', bSOL: 'solana.com',
+};
+
+const HODL_NATIVE_NETWORK: Record<YieldAsset, YieldNetwork> = {
+  BTC: 'Ethereum', cbBTC: 'Base', WBTC: 'Ethereum', LBTC: 'Ethereum',
+  ETH: 'Ethereum', stETH: 'Ethereum', wstETH: 'Ethereum', weETH: 'Ethereum',
+  SOL: 'Solana', JitoSOL: 'Solana', mSOL: 'Solana', bSOL: 'Solana',
+};
+
+interface ScoredProtocol {
+  proto: YieldProtocol;
+  apy: number;
+  risk: RiskAssessment;
+  score: number; // risk-adjusted yield
+}
+
+function isProtocolSafeNow(p: YieldProtocol, tick: number): { safe: boolean; reason?: string } {
+  if (p.health === 'security_risk') return { safe: false, reason: `${p.name}: exploit mitigation` };
+  if (p.health === 'paused')        return { safe: false, reason: `${p.name}: paused` };
+  if (p.health === 'degraded')      return { safe: false, reason: `${p.name}: operator turbulence` };
+  if (p.health === 'congested')     return { safe: false, reason: `${p.name}: network congestion` };
+  if (p.tvlUsdM < 100 || p.auditedYears < 1) return { safe: false, reason: `${p.name}: insufficient audit/TVL` };
+  if (p.outputToken && isDerivative(p.outputToken)) {
+    const peg = getPegStatus(p.outputToken as DerivativeAsset, tick);
+    if (peg.severity === 'critical') return { safe: false, reason: `${p.outputToken}: depeg ${peg.deviationPct.toFixed(2)}%` };
+  }
+  return { safe: true };
+}
+
+function buildSingleProtocolRoute(
+  asset: YieldAsset,
+  scored: ScoredProtocol,
+  network: YieldNetwork,
+): RecommendedRoute {
+  const { proto, apy, risk } = scored;
+  const step: RouteStep = {
+    pct: 100,
+    protocolId: proto.id,
+    protocolName: proto.name,
+    officialUrl: proto.officialUrl,
+    apy,
+    layer: proto.layer,
+  };
+  const emoji = proto.layer === 2 ? '🛡️' : proto.layer === 3 ? '💰' : '⚡';
+  const hops: RouteHop[] = [
+    { kind: 'asset', label: asset },
+    { kind: 'protocol', label: `${emoji} 100% · ${proto.name}`, sublabel: proto.category, officialUrl: proto.officialUrl },
+  ];
+  if (proto.outputToken) hops.push({ kind: 'asset', label: proto.outputToken });
+
+  return {
+    tier: risk.level === 'low' ? 'conservative' : risk.level === 'medium' ? 'balanced' : 'aggressive',
+    emoji,
+    title: { en: `Single-protocol · ${proto.name}`, sk: `Jediný protokol · ${proto.name}` },
+    network,
+    steps: [step],
+    blendedApy: apy,
+    hops,
+    risk,
+    multiHop: false,
+  };
+}
+
+function buildHodlFallbackRoute(asset: YieldAsset, network: YieldNetwork, lang: 'en' | 'sk'): RecommendedRoute {
+  const url = HODL_WALLET_URL[asset];
+  const step: RouteStep = {
+    pct: 100,
+    protocolId: 'hodl',
+    protocolName: 'Secure HODL (Cold Storage)',
+    officialUrl: url,
+    apy: 0,
+    layer: 1,
+  };
+  const hops: RouteHop[] = [
+    { kind: 'asset', label: asset },
+    { kind: 'protocol', label: '🛡️ 100% · HODL', sublabel: lang === 'sk' ? 'Studená peňaženka' : 'Cold storage', officialUrl: url },
+  ];
+  const risk: RiskAssessment = {
+    score: 1,
+    level: 'low',
+    vectors: { smartContract: 'N/A', depeg: 'N/A', lockup: 'Low' },
+    verdict: (lang === 'sk' ? VERDICTS_SK : VERDICTS_EN).low,
+  };
+  return {
+    tier: 'conservative',
+    emoji: '🛡️',
+    title: { en: '100% Secure HODL', sk: '100% Bezpečný HODL' },
+    network,
+    steps: [step],
+    blendedApy: 0,
+    hops,
+    risk,
+    multiHop: false,
+  };
 }
 
 export function getBestTargetRoute(
@@ -776,18 +882,64 @@ export function getBestTargetRoute(
   strategy: Strategy,
   tick = 0,
   lang: 'en' | 'sk' = 'en',
+  network?: YieldNetwork,
 ): BestTargetRoute | null {
-  const all = getRecommendedRoutes(asset, tick, lang);
-  if (all.length === 0) return null;
+  const targetNetwork = network ?? HODL_NATIVE_NETWORK[asset];
+  const omittedReasons: string[] = [];
 
-  const matches = all.filter(r =>
-    r.steps.some(s => {
-      const p = PROTOCOLS.find(x => x.id === s.protocolId);
-      return p?.strategies.includes(strategy);
-    })
+  // Match candidates by asset / network / strategy
+  const candidates = PROTOCOLS.filter(p =>
+    p.inputs.includes(asset) &&
+    p.networks.includes(targetNetwork) &&
+    p.strategies.includes(strategy)
   );
-  const pool = matches.length > 0 ? matches : all;
-  const route = pool.reduce((a, b) => (b.blendedApy > a.blendedApy ? b : a));
+
+  // Dynamic Layer Omission
+  const safeCandidates: YieldProtocol[] = [];
+  for (const p of candidates) {
+    const check = isProtocolSafeNow(p, tick);
+    if (check.safe) safeCandidates.push(p);
+    else if (check.reason) omittedReasons.push(check.reason);
+  }
+
+  // HODL Safety Guard fallback
+  if (safeCandidates.length === 0) {
+    const route = buildHodlFallbackRoute(asset, targetNetwork, lang);
+    return {
+      route,
+      globalDeployPct: 0,
+      bufferPct: 100,
+      capitalRecommendation: lang === 'sk'
+        ? '🛑 Všetky výnosové vrstvy sú momentálne rizikové. Odporúčame 100% kapitálu v bezpečnom HODL (studená peňaženka / natívne držanie).'
+        : '🛑 All active yield layers are currently sub-optimal or dangerous. Recommend 100% capital to Secure HODL (cold storage / native wallet).',
+      hodlFallback: true,
+      omittedReasons,
+    };
+  }
+
+  // Score by risk-adjusted yield: apy * (11 - riskScore) / 10
+  const scored: ScoredProtocol[] = safeCandidates.map((proto, idx) => {
+    const apy = jitter(proto.baseApy, tick, idx + 1000);
+    const involvesLst = !!proto.outputToken && LST_LIKE.has(proto.outputToken);
+    const risk = assessRisk({
+      tvlUsdM: proto.tvlUsdM,
+      auditedYears: proto.auditedYears,
+      layer: proto.layer,
+      strategy,
+      unbondingDays: proto.unbondingDays,
+      isolatedMarkets: proto.isolatedMarkets,
+      hopsCount: 2,
+      involvesLst,
+    }, lang);
+    const score = apy * (11 - risk.score) / 10;
+    return { proto, apy, risk, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score);
+  const winner = scored[0];
+
+  // Single-protocol full-capital route (no unnecessary fragmentation)
+  const route = buildSingleProtocolRoute(asset, winner, targetNetwork);
 
   const globalDeployPct =
     route.risk.level === 'low' ? 100 :
@@ -796,10 +948,10 @@ export function getBestTargetRoute(
   const bufferPct = 100 - globalDeployPct;
 
   const capitalRecommendation = lang === 'sk'
-    ? `Nasadiť ${globalDeployPct}% objemu | Ponechať ${bufferPct}% v bezpečnom HODL bufferi`
-    : `Deploy ${globalDeployPct}% of entered volume | Keep ${bufferPct}% in secure HODL buffer`;
+    ? `Nasadiť ${globalDeployPct}% objemu cez ${winner.proto.name} | Ponechať ${bufferPct}% v bezpečnom HODL bufferi`
+    : `Deploy ${globalDeployPct}% via ${winner.proto.name} | Keep ${bufferPct}% in secure HODL buffer`;
 
-  return { route, globalDeployPct, bufferPct, capitalRecommendation };
+  return { route, globalDeployPct, bufferPct, capitalRecommendation, hodlFallback: false, omittedReasons };
 }
 
 export type SuitabilityLevel = 'opportune' | 'caution' | 'critical';

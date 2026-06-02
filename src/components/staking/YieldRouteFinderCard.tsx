@@ -463,31 +463,48 @@ function BestTargetSection({
   tick: number; depositUsd: number; isSk: boolean; lang: Lang;
 }) {
   const best = useMemo(
-    () => getBestTargetRoute(asset, strategy, tick, isSk ? 'sk' : 'en'),
-    [asset, strategy, tick, isSk],
+    () => getBestTargetRoute(asset, strategy, tick, isSk ? 'sk' : 'en', network),
+    [asset, strategy, tick, isSk, network],
   );
   if (!best) return null;
-  const { route, globalDeployPct, bufferPct, capitalRecommendation } = best;
-  const verdict = evaluateSuitability({
+  const { route, globalDeployPct, bufferPct, capitalRecommendation, hodlFallback, omittedReasons } = best;
+  const baseVerdict = evaluateSuitability({
     route, network, depositUsd, tick, lang: isSk ? 'sk' : 'en',
   });
+  // HODL fallback forces critical lockout regardless of synthetic route risk
+  const verdict: SuitabilityVerdict = hodlFallback
+    ? {
+        level: 'critical',
+        emoji: '🛑',
+        title: isSk
+          ? '🚨 KRITICKÉ: VŠETKY VRSTVY UZAMKNUTÉ — 100% HODL'
+          : '🚨 CRITICAL: ALL LAYERS LOCKED — 100% HODL',
+        text: isSk
+          ? 'Všetky aktívne výnosové vrstvy pre tento asset / sieť / stratégiu sú momentálne pod-optimálne alebo nebezpečné. Systém ich vynechal a odporúča 100% kapitál ponechať v bezpečnom HODL (cold storage / natívna peňaženka), kým sa trh stabilizuje.\n\n---\n\n🤔 PREČO SEM NEVSTUPOVAŤ (Kritické riziko): Práve teraz každý kandidátsky protokol pre túto kombináciu má buď preťaženú sieť, audit alert, alebo derivátový depeg nad 1%. Vstup by znamenal vystavenie kapitálu riziku straty bez férového výnosu. Bezpečne počkaj v HODL.'
+          : 'Every active yield layer for this asset / network / strategy is currently sub-optimal or dangerous. The engine has omitted them and recommends holding 100% capital in Secure HODL (cold storage / native wallet) until market stabilizers trigger.\n\n---\n\n🤔 WHY NOT ENTER NOW (Critical Risk): Right now every candidate protocol for this combination has either network congestion, an audit alert, or a derivative depeg above 1%. Entering would expose capital to loss without fair yield. Safely wait in HODL.',
+        reasons: omittedReasons.length > 0 ? omittedReasons : (isSk ? ['Žiadny bezpečný kandidát'] : ['No safe candidate']),
+      }
+    : baseVerdict;
   const depegs = detectRouteDepegs(route.hops, tick);
   const primary = route.steps[0];
+  const blocked = verdict.level === 'critical' || hodlFallback;
 
   return (
-    <div className="rounded-lg border-2 border-primary/60 bg-primary/5 p-3 space-y-3">
+    <div className={`rounded-lg border-2 p-3 space-y-3 ${hodlFallback ? 'border-loss/70 bg-loss/5' : 'border-primary/60 bg-primary/5'}`}>
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <p className="text-[10px] uppercase tracking-wide text-primary flex items-center gap-1">
             <Target className="w-3 h-3" />
-            {isSk ? 'Absolútne najlepšia trasa' : 'Absolute Best Yield Path'}
+            {hodlFallback
+              ? (isSk ? 'Núdzový HODL Safety Guard' : 'Emergency HODL Safety Guard')
+              : (isSk ? 'Absolútne najlepšia trasa (single-protocol)' : 'Absolute Best Path (single-protocol)')}
           </p>
           <p className="text-sm font-bold text-foreground truncate">
             {route.emoji} {asset} → {route.steps.map(s => s.protocolName).join(' + ')}
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className="text-base font-bold text-gain">{route.blendedApy.toFixed(2)}%</p>
+          <p className={`text-base font-bold ${hodlFallback ? 'text-muted-foreground' : 'text-gain'}`}>{route.blendedApy.toFixed(2)}%</p>
           <p className="text-[9px] text-muted-foreground">{isSk ? 'Zmiešaná APY' : 'Blended APY'}</p>
         </div>
       </div>
@@ -498,7 +515,7 @@ function BestTargetSection({
         </p>
         <p className="text-[11px] font-semibold text-foreground leading-snug">{capitalRecommendation}</p>
         <div className="flex h-2 rounded-full overflow-hidden bg-secondary">
-          <div className="bg-primary" style={{ width: `${globalDeployPct}%` }} />
+          <div className={hodlFallback ? 'bg-loss' : 'bg-primary'} style={{ width: `${globalDeployPct}%` }} />
           <div className="bg-amber-500/60" style={{ width: `${bufferPct}%` }} />
         </div>
         <div className="flex justify-between text-[9px] text-muted-foreground">
@@ -509,7 +526,9 @@ function BestTargetSection({
 
       <div className="space-y-1">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-          {isSk ? 'Sekčné rozdelenie kapitálu' : 'Sectional Capital Split'}
+          {route.steps.length === 1
+            ? (isSk ? 'Jediný protokol (100% kapitál)' : 'Single protocol (100% capital)')
+            : (isSk ? 'Sekčné rozdelenie kapitálu' : 'Sectional Capital Split')}
         </p>
         {route.steps.map((s, i) => (
           <div key={i} className="flex items-center justify-between gap-2 text-[11px] bg-background/60 border border-border/40 rounded px-2 py-1.5">
@@ -524,10 +543,21 @@ function BestTargetSection({
                 </p>
               </div>
             </div>
-            <span className="text-gain font-semibold shrink-0">{s.apy.toFixed(2)}%</span>
+            <span className={`font-semibold shrink-0 ${hodlFallback ? 'text-muted-foreground' : 'text-gain'}`}>
+              {s.apy.toFixed(2)}%
+            </span>
           </div>
         ))}
       </div>
+
+      {omittedReasons.length > 0 && !hodlFallback && (
+        <div className="rounded border border-amber-500/40 bg-amber-500/5 p-2">
+          <p className="text-[10px] uppercase tracking-wide text-amber-400 mb-1">
+            {isSk ? 'Vynechané vrstvy' : 'Omitted layers'}
+          </p>
+          <p className="text-[10px] text-amber-300/90 leading-snug">{omittedReasons.join(' · ')}</p>
+        </div>
+      )}
 
       <HopChain hops={route.hops} risk={route.risk} tick={tick} />
 
@@ -545,13 +575,13 @@ function BestTargetSection({
         target="_blank"
         rel="noopener noreferrer"
         className={`flex items-center justify-center gap-1.5 h-9 rounded-md text-xs font-semibold active:opacity-80 ${
-          verdict.level === 'critical'
+          blocked
             ? 'bg-loss/30 text-loss border border-loss cursor-not-allowed pointer-events-none'
             : 'bg-primary text-primary-foreground'
         }`}
       >
-        {verdict.level === 'critical'
-          ? (isSk ? '🛑 Vstup blokovaný' : '🛑 Entry Blocked')
+        {blocked
+          ? (isSk ? '🛑 Vstup zablokovaný — HODL' : '🛑 Entry Blocked — HODL')
           : `${isSk ? 'Spustiť trasu cez' : 'Execute via'} ${displayOfficialUrl(primary.officialUrl)}`} <ExternalLink className="w-3 h-3" />
       </a>
     </div>
