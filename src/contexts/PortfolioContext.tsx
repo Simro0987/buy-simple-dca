@@ -139,7 +139,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setSelected,
       toggleSelected,
     };
-  }, [prices, metrics, selected, movedProfit]);
+  }, [prices, metrics, selected, movedProfit, ledger]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
