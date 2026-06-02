@@ -4,6 +4,8 @@ import { Lang } from '@/lib/i18n';
 import { PriceData, AthData } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { Shield } from 'lucide-react';
+import { MissionControlActions } from '@/components/analysis/MissionControlActions';
+import { CounterpartyRiskCard } from '@/components/analysis/CounterpartyRiskCard';
 
 const RiskDashboard = lazy(() => import('@/components/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
 const AnalysisPage = lazy(() => import('@/pages/AnalysisPage').then(m => ({ default: m.AnalysisPage })));
@@ -27,26 +29,36 @@ export function AnalysisRiskPage({ lang, prices, athData, cycleResult }: Props) 
   const sk = lang === 'sk';
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="space-y-1">
         <h1 className="text-2xl font-extrabold text-foreground flex items-center gap-2">
           <Shield className="w-6 h-6" />
-          {sk ? 'Analýza & Riziko' : 'Analysis & Risk'}
+          {sk ? 'Analýza & Riziko — Mission Control' : 'Analysis & Risk — Mission Control'}
         </h1>
         <p className="text-xs text-muted-foreground">
           {sk
-            ? 'Zjednotený pohľad: cyklus, riziká tokenov, technická a pokročilá trhová analýza.'
-            : 'Unified view: cycle, token risk, technical and advanced market analysis.'}
+            ? 'Centrálne velenie pre Portfólio, DCA, Swap a Stake. Všetky akcie sú manuálne.'
+            : 'Central command for Portfolio, DCA, Swap and Stake. All actions are manual.'}
         </p>
       </div>
 
-      <Suspense fallback={<Fallback />}>
-        <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
-      </Suspense>
-
+      {/* 1. ANALÝZA CORE — at the absolute top per spec */}
       <Suspense fallback={<Fallback />}>
         <AnalysisPage lang={lang} />
       </Suspense>
 
+      {/* 2. Cross-module CTA pipeline */}
+      <MissionControlActions lang={lang} cycleResult={cycleResult} />
+
+      {/* 3. Risk & Cycle dashboard */}
+      <Suspense fallback={<Fallback />}>
+        <RiskDashboard lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
+      </Suspense>
+
+      {/* 4. Staking counterparty risk */}
+      <CounterpartyRiskCard lang={lang} />
+
+      {/* 5. Advanced market analysis */}
       <Suspense fallback={<Fallback />}>
         <AdvancedMarketPage lang={lang} />
       </Suspense>
