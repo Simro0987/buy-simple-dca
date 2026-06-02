@@ -13,6 +13,10 @@ import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
 import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
 import { StakingLedgerCard } from '@/components/staking/StakingLedgerCard';
 import { getPendingStake, clearPendingStake } from '@/lib/pendingActions';
+import { useMarketCycleScore } from '@/hooks/useMarketCycle';
+import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
+import { overheatedWarning } from '@/lib/stakeAdvisor';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
@@ -57,6 +61,20 @@ export function StakingPage({ lang }: Props) {
     const id = setInterval(() => setPendingStakeState(getPendingStake()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // Market-aware gate: when score > 55 we block any auto-prefill flow.
+  const { data: prices } = usePrices();
+  const { data: fearGreed } = useFearGreed();
+  const { data: athData } = useAthData();
+  const { data: altSeason } = useAltSeason();
+  const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
+  const overheated = (cycleResult?.score ?? 0) > 55;
+  useEffect(() => {
+    if (overheated && pendingStake) {
+      clearPendingStake();
+      setPendingStakeState(null);
+    }
+  }, [overheated, pendingStake]);
 
   const handleSendMaturityAlert = async () => {
     const chatId = localStorage.getItem('telegram_chat_id')?.trim();
@@ -103,7 +121,15 @@ export function StakingPage({ lang }: Props) {
 
   return (
     <div className="space-y-4">
-      {pendingStake && (
+      {overheated && (
+        <div className="rounded-lg border-2 border-loss/60 bg-loss/10 p-3 flex items-start gap-2">
+          <AlertTriangle className="w-4 h-4 text-loss shrink-0 mt-0.5" />
+          <p className="text-[11px] text-loss font-semibold leading-snug">
+            {overheatedWarning(lang)}
+          </p>
+        </div>
+      )}
+      {pendingStake && !overheated && (
         <div className="rounded-lg border-2 border-emerald-500/50 bg-emerald-500/10 p-3 space-y-2">
           <div className="flex items-center justify-between">
             <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
