@@ -140,6 +140,14 @@ export function CryptoNewsFeed({ lang }: Props) {
             <span className="text-sm font-semibold text-foreground">
               {sk ? 'Novinky z portfólia' : 'Portfolio News'}
             </span>
+            {sk && (
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded-full bg-primary/15 text-primary border border-primary/30 font-medium"
+                title="Automaticky preložené do slovenčiny"
+              >
+                🇸🇰 Auto SK
+              </span>
+            )}
             {flashCount > 0 && (
               <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-red-500/30 text-red-300 font-bold inline-flex items-center gap-1 animate-pulse">
                 <Siren className="w-2.5 h-2.5" /> {flashCount} FLASH
