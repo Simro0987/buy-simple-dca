@@ -1,4 +1,3 @@
-import { useMemo } from 'react';
 import { Zap } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { nativeTicker } from '@/lib/tickerLabels';
@@ -12,30 +11,18 @@ interface Props { lang: Lang; }
 const MIN_IDLE_USD = 100;
 
 // Quick-action chips for ETH/SOL liquid balances that aren't staked yet.
-// Manual: only pre-fills Stake module — never signs anything.
+// MANUAL: only pre-fills Stake module — never signs anything.
 export function IdleStakeShortcuts({ lang }: Props) {
   const sk = lang === 'sk';
   const { breakdown } = usePortfolio();
 
-  const candidates = useMemo(() => {
-    return breakdown
-      .filter(b => (b.symbol === 'ETH' || b.symbol === 'SOL'))
-      .map(b => ({
-        symbol: nativeTicker(b.symbol),
-        liquidQty: b.liquidQty,
-        liquidUsd: b.liquidQty * (b.value / Math.max(b.value > 0 ? b.value / (b.liquidQty + b.stakedQty || 1) : 1, 1)),
-      }))
-      .filter(c => c.liquidQty > 0);
-  }, [breakdown]);
-
-  // Recompute USD properly using price-derived ratio (avoid NaN)
   const enriched = breakdown
     .filter(b => b.symbol === 'ETH' || b.symbol === 'SOL')
     .map(b => {
       const total = b.liquidQty + b.stakedQty;
       const pricePerUnit = total > 0 ? b.value / total : 0;
       const liquidUsd = b.liquidQty * pricePerUnit;
-      return { symbol: b.symbol, liquidQty: b.liquidQty, liquidUsd };
+      return { symbol: nativeTicker(b.symbol), liquidQty: b.liquidQty, liquidUsd };
     })
     .filter(c => c.liquidUsd >= MIN_IDLE_USD);
 
