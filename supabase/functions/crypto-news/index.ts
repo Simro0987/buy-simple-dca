@@ -320,6 +320,12 @@ Deno.serve(async (req) => {
     unique.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
     const top = unique.slice(0, 24);
 
+    // Sanitize HTML entities on titles & descriptions BEFORE translation
+    for (const it of top) {
+      it.title = decodeEntities(it.title);
+      it.description = decodeEntities(it.description);
+    }
+
     const classified = await classifyWithAI(top, targetLang);
 
     // Titles: use AI translation if available, otherwise Google Translate fallback
@@ -328,14 +334,17 @@ Deno.serve(async (req) => {
     const fallbackTranslated = await translateTexts(titlesToTranslate, targetLang);
     let fbIdx = 0;
     const finalTitles = top.map((item, i) => {
-      if (classified[i].translatedTitle) return classified[i].translatedTitle!;
-      return fallbackTranslated[fbIdx++] || item.title;
+      const t = classified[i].translatedTitle
+        ? classified[i].translatedTitle!
+        : (fallbackTranslated[fbIdx++] || item.title);
+      return decodeEntities(t);
     });
 
     // Summaries: if AI missed, translate the source description as fallback
     const summariesNeedingFallback = top.map((item, i) =>
       classified[i].summary || !item.description ? null : item.description
     );
+
     const summariesToTranslate = summariesNeedingFallback.filter((s): s is string => s !== null);
     const fallbackSummaries = await translateTexts(summariesToTranslate, targetLang);
     let sIdx = 0;
