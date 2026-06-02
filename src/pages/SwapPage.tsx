@@ -17,8 +17,45 @@ import {
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
+import { getPendingRebalance, clearPendingRebalance } from '@/lib/pendingActions';
+import { useEffect as useEffectAlias, useState as useStateAlias } from 'react';
 
 interface Props { lang: Lang; }
+
+function PendingRebalanceBanner({ lang }: { lang: Lang }) {
+  const sk = lang === 'sk';
+  const [pending, setPending] = useStateAlias(() => getPendingRebalance());
+  useEffectAlias(() => {
+    const id = setInterval(() => setPending(getPendingRebalance()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!pending || pending.legs.length === 0) return null;
+  return (
+    <div className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-amber-300">
+          💡 {sk ? 'PRIPRAVENÉ REBALANSOVANIE' : 'PENDING REBALANCING'}
+        </p>
+        <button
+          onClick={() => { clearPendingRebalance(); setPending(null); }}
+          className="text-[10px] text-amber-200/80 hover:text-amber-100"
+        >{sk ? 'Zrušiť' : 'Clear'}</button>
+      </div>
+      <ul className="space-y-1">
+        {pending.legs.map((l, i) => (
+          <li key={i} className="text-[11px] text-amber-200/90 font-mono tabular-nums">
+            • {l.from} → {l.to}: ${l.amountUsd.toFixed(2)}
+          </li>
+        ))}
+      </ul>
+      <p className="text-[10px] text-amber-200/70 leading-snug">
+        {sk
+          ? 'Prepni hore na "Z (zdroj)" a "Na (cieľ)" tokeny vyššie a zadaj sumu — každý leg podpíš samostatne v hardware peňaženke. Žiadne reťazenie automaticky.'
+          : 'Set source/destination tokens above and enter the amount — sign each leg separately in your hardware wallet. No automatic chaining.'}
+      </p>
+    </div>
+  );
+}
 
 const REFRESH_MS = 15_000;
 
@@ -468,6 +505,7 @@ export function SwapPage({ lang }: Props) {
   // =====================================================================
   return (
     <div className="space-y-3">
+      <PendingRebalanceBanner lang={lang} />
       <header className="space-y-1">
         <div className="flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
