@@ -5,6 +5,30 @@ const corsHeaders = {
 
 // ── Helpers ──────────────────────────────────────────────
 
+function decodeEntities(input: string): string {
+  if (!input) return '';
+  let s = String(input);
+  // Numeric entities (decimal + hex)
+  s = s.replace(/&#(\d+);/g, (_, n) => {
+    try { return String.fromCodePoint(parseInt(n, 10)); } catch { return ''; }
+  });
+  s = s.replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+    try { return String.fromCodePoint(parseInt(h, 16)); } catch { return ''; }
+  });
+  // Named entities (common set)
+  const named: Record<string, string> = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+    ldquo: '“', rdquo: '”', lsquo: '‘', rsquo: '’',
+    mdash: '—', ndash: '–', hellip: '…', copy: '©', reg: '®', trade: '™',
+  };
+  s = s.replace(/&([a-zA-Z]+);/g, (m, name) => named[name] ?? m);
+  // Strip stray HTML tags
+  s = s.replace(/<[^>]*>/g, '');
+  return s.replace(/\s+/g, ' ').trim();
+}
+
+
+
 async function translateTexts(texts: string[], lang: string): Promise<string[]> {
   if (lang === 'en' || texts.length === 0) return texts;
   try {
