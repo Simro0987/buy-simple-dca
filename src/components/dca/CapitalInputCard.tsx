@@ -42,11 +42,21 @@ export function CapitalInputCard({ capital, onCapitalChange }: Props) {
           type="number"
           inputMode="decimal"
           value={weekly}
-          onChange={e => setWeekly(Number(e.target.value) || 0)}
-          onBlur={() => onCapitalChange(weekly)}
+          onChange={e => {
+            const v = Number(e.target.value) || 0;
+            setWeekly(v);
+            onCapitalChange(v); // live update — breakdown 64/25/11 prepočíta okamžite
+          }}
           className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-lg font-semibold text-foreground tabular-nums focus:outline-none focus:border-primary"
         />
       </label>
+
+      <div className="flex items-center justify-between text-[10px] tabular-nums">
+        <span className="text-muted-foreground uppercase tracking-wide">Anchor split</span>
+        <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/30">
+          BTC 64% · ETH 25% · SOL 11%
+        </span>
+      </div>
 
       <div className="flex gap-1 flex-wrap">
         {QUICK.map(v => (

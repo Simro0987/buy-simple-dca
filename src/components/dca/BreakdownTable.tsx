@@ -13,7 +13,9 @@ export function BreakdownTable({ plan, onProceed }: Props) {
     <div className="glass-card p-4">
       <div className="flex items-center justify-between mb-3">
         <h2 className="text-sm font-bold text-foreground">Breakdown</h2>
-        <span className="text-[10px] text-muted-foreground">Alokácia podľa váh</span>
+        <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full border border-primary/30 bg-primary/10 text-primary">
+          Anchor 64/25/11
+        </span>
       </div>
 
       <div className="grid grid-cols-2 gap-2 mb-3">
