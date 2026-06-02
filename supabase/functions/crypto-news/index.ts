@@ -349,10 +349,12 @@ Deno.serve(async (req) => {
     const fallbackSummaries = await translateTexts(summariesToTranslate, targetLang);
     let sIdx = 0;
     const finalSummaries = top.map((item, i) => {
-      if (classified[i].summary) return classified[i].summary;
-      if (!item.description) return '';
-      return fallbackSummaries[sIdx++] || item.description;
+      const s = classified[i].summary
+        ? classified[i].summary
+        : (item.description ? (fallbackSummaries[sIdx++] || item.description) : '');
+      return decodeEntities(s);
     });
+
 
     const finalResults = top.map((item, i) => ({
       id: item.id,
