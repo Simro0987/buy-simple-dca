@@ -56,6 +56,40 @@ function PendingRebalanceBanner({ lang }: { lang: Lang }) {
   );
 }
 
+function PendingSwapBanner({ lang }: { lang: Lang }) {
+  const sk = lang === 'sk';
+  const [pending, setPending] = useState(() => getPendingSwap());
+  useEffect(() => {
+    const id = setInterval(() => setPending(getPendingSwap()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!pending) return null;
+  return (
+    <div className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3 space-y-1.5">
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-bold text-amber-300">
+          🔄 {sk ? 'PRIPRAVENÝ KOREKČNÝ SWAP' : 'PENDING CORRECTION SWAP'}
+        </p>
+        <button
+          onClick={() => { clearPendingSwap(); setPending(null); }}
+          className="text-[10px] text-amber-200/80 hover:text-amber-100"
+        >{sk ? 'Zrušiť' : 'Clear'}</button>
+      </div>
+      <p className="text-[11px] text-amber-200/90 font-mono tabular-nums">
+        {pending.from} → {pending.to} · ~${pending.amountUsd.toFixed(2)}
+      </p>
+      {pending.reason && (
+        <p className="text-[10px] text-amber-200/70">{pending.reason}</p>
+      )}
+      <p className="text-[10px] text-amber-200/70 leading-snug">
+        {sk
+          ? 'Nastav zdroj a cieľ vyššie, zadaj sumu a podpíš manuálne v hardware peňaženke.'
+          : 'Set source/destination above, enter the amount and sign manually in your hardware wallet.'}
+      </p>
+    </div>
+  );
+}
+
 const REFRESH_MS = 15_000;
 
 const tokensByChain = (chain: ChainId) => TOKENS.filter(t => t.chain === chain);
