@@ -121,7 +121,7 @@ export function SwapCrossChainCard() {
                   className={`flex-1 px-2 py-1.5 rounded-md text-[11px] font-bold tabular-nums transition-colors ${
                     token === t ? 'bg-emerald-500/20 text-emerald-300' : 'text-muted-foreground'
                   }`}
-                >{t}</button>
+                >{UI_LABEL[t]}</button>
               ))}
             </div>
           </div>
