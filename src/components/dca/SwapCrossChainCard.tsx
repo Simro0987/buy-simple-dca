@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { Repeat, Clock, Sun, Shield, Coins, Rocket, AlertTriangle, XCircle } from 'lucide-react';
 import { usePrices } from '@/hooks/usePrices';
 
+// Internal type stays mapped to Base L2 execution tokens (WETH, cbBTC),
+// but UI shows only native tickers ETH / BTC per Master Top anchor policy.
 type Token = 'WETH' | 'cbBTC';
+const UI_LABEL: Record<Token, string> = { WETH: 'ETH', cbBTC: 'BTC' };
 
 export function SwapCrossChainCard() {
   const { data: prices } = usePrices();
