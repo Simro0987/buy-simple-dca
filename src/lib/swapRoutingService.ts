@@ -110,14 +110,15 @@ export function tokenUsdPrice(t: TokenMeta, prices: PriceData | undefined): numb
     if (t.priceRef === 'usd') return 1 * m;
     return (FALLBACK_USD[t.priceRef] ?? 0) * m;
   }
+  const p = prices as unknown as Record<string, { usd?: number } | undefined>;
   switch (t.priceRef) {
     case 'usd':  return 1 * m;
-    case 'btc':  return (prices['bitcoin']?.usd ?? 0) * m;
-    case 'eth':  return (prices['ethereum']?.usd ?? 0) * m;
-    case 'sol':  return (prices['solana']?.usd ?? 0) * m;
-    case 'avax': return ((prices as any)['avalanche-2']?.usd ?? FALLBACK_USD.avax) * m;
-    case 'pol':  return ((prices as any)['matic-network']?.usd ?? (prices as any)['polygon-ecosystem-token']?.usd ?? FALLBACK_USD.pol) * m;
-    case 'xmr':  return ((prices as any)['monero']?.usd ?? FALLBACK_USD.xmr) * m;
+    case 'btc':  return (p['bitcoin']?.usd ?? 0) * m;
+    case 'eth':  return (p['ethereum']?.usd ?? 0) * m;
+    case 'sol':  return (p['solana']?.usd ?? 0) * m;
+    case 'avax': return (p['avalanche-2']?.usd ?? FALLBACK_USD.avax) * m;
+    case 'pol':  return (p['matic-network']?.usd ?? p['polygon-ecosystem-token']?.usd ?? FALLBACK_USD.pol) * m;
+    case 'xmr':  return (p['monero']?.usd ?? FALLBACK_USD.xmr) * m;
   }
 }
 
