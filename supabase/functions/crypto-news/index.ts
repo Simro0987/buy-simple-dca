@@ -324,6 +324,8 @@ Deno.serve(async (req) => {
     const finalResults = top.map((item, i) => ({
       id: item.id,
       title: finalTitles[i],
+      rawTitle: item.title,
+      rawDescription: item.description || '',
       summary: finalSummaries[i],
       url: item.url,
       source: item.source,
