@@ -6,6 +6,7 @@ import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { Shield } from 'lucide-react';
 import { MissionControlActions } from '@/components/analysis/MissionControlActions';
 import { CounterpartyRiskCard } from '@/components/analysis/CounterpartyRiskCard';
+import { PortfolioProvider } from '@/contexts/PortfolioContext';
 
 const RiskDashboard = lazy(() => import('@/components/RiskDashboard').then(m => ({ default: m.RiskDashboard })));
 const AnalysisPage = lazy(() => import('@/pages/AnalysisPage').then(m => ({ default: m.AnalysisPage })));
@@ -28,6 +29,7 @@ interface Props {
 export function AnalysisRiskPage({ lang, prices, athData, cycleResult }: Props) {
   const sk = lang === 'sk';
   return (
+    <PortfolioProvider>
     <div className="space-y-6">
       {/* Header */}
       <div className="space-y-1">
@@ -63,5 +65,6 @@ export function AnalysisRiskPage({ lang, prices, athData, cycleResult }: Props) 
         <AdvancedMarketPage lang={lang} />
       </Suspense>
     </div>
+    </PortfolioProvider>
   );
 }
