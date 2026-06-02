@@ -297,13 +297,34 @@ Deno.serve(async (req) => {
     const top = unique.slice(0, 24);
 
     const classified = await classifyWithAI(top, targetLang);
-    const originalTitles = top.map(item => item.title);
-    const translatedTitles = await translateTexts(originalTitles, targetLang);
+
+    // Titles: use AI translation if available, otherwise Google Translate fallback
+    const titlesNeedingFallback = top.map((item, i) => classified[i].translatedTitle ? null : item.title);
+    const titlesToTranslate = titlesNeedingFallback.filter((t): t is string => t !== null);
+    const fallbackTranslated = await translateTexts(titlesToTranslate, targetLang);
+    let fbIdx = 0;
+    const finalTitles = top.map((item, i) => {
+      if (classified[i].translatedTitle) return classified[i].translatedTitle!;
+      return fallbackTranslated[fbIdx++] || item.title;
+    });
+
+    // Summaries: if AI missed, translate the source description as fallback
+    const summariesNeedingFallback = top.map((item, i) =>
+      classified[i].summary || !item.description ? null : item.description
+    );
+    const summariesToTranslate = summariesNeedingFallback.filter((s): s is string => s !== null);
+    const fallbackSummaries = await translateTexts(summariesToTranslate, targetLang);
+    let sIdx = 0;
+    const finalSummaries = top.map((item, i) => {
+      if (classified[i].summary) return classified[i].summary;
+      if (!item.description) return '';
+      return fallbackSummaries[sIdx++] || item.description;
+    });
 
     const finalResults = top.map((item, i) => ({
       id: item.id,
-      title: translatedTitles[i] || item.title,
-      summary: classified[i].summary,
+      title: finalTitles[i],
+      summary: finalSummaries[i],
       url: item.url,
       source: item.source,
       publishedAt: item.publishedAt,
