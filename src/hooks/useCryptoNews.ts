@@ -5,6 +5,8 @@ import { supabase } from '@/integrations/supabase/client';
 export interface NewsItem {
   id: number | string;
   title: string;
+  rawTitle?: string;
+  rawDescription?: string;
   summary: string;
   url: string;
   source: string;
