@@ -66,7 +66,7 @@ const Index = () => {
     return <PinLock onUnlock={() => setUnlocked(true)} />;
   }
 
-  const renderTab = TAB_ROUTES[tab];
+  const renderTab = TAB_ROUTES[tab] ?? TAB_ROUTES.home;
 
   return (
     <div className="min-h-screen bg-background">
