@@ -40,6 +40,26 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
   const holdings = getHoldings();
   const [sending, setSending] = useState(false);
 
+  const [confirmedAt, setConfirmedAt] = useState<string | null>(() => {
+    try { return localStorage.getItem(REBALANCE_CONFIRM_KEY); } catch { return null; }
+  });
+
+  // Listen for cross-tab confirmation changes
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === REBALANCE_CONFIRM_KEY) setConfirmedAt(e.newValue);
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
+
+  const handleConfirmExecution = () => {
+    const ts = new Date().toISOString();
+    try { localStorage.setItem(REBALANCE_CONFIRM_KEY, ts); } catch { /* ignore */ }
+    setConfirmedAt(ts);
+    toast.success(sk ? 'Rebalansovanie potvrdené ✓' : 'Rebalancing confirmed ✓');
+  };
+
   if (!prices) return null;
 
   let totalValue = 0;
