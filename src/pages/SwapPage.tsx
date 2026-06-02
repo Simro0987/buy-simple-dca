@@ -17,7 +17,7 @@ import {
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
 import { Lang } from '@/lib/i18n';
-import { getPendingRebalance, clearPendingRebalance } from '@/lib/pendingActions';
+import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
 
 interface Props { lang: Lang; }
 
