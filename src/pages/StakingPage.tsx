@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Lang } from '@/lib/i18n';
 import { STAKING_CONFIG, StakingPosition } from '@/lib/wallets';
-import { Lock, TrendingUp, Landmark, Zap, Send } from 'lucide-react';
+import { Lock, TrendingUp, Landmark, Zap, Send, ArrowDown } from 'lucide-react';
 import { useDefiApys, DefiApyData } from '@/hooks/useDefiApys';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -11,6 +11,7 @@ import { StakingCalculator } from '@/components/staking/StakingCalculator';
 import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
 import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
 import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
+import { getPendingStake, clearPendingStake } from '@/lib/pendingActions';
 
 interface Props { lang: Lang; }
 
@@ -50,6 +51,11 @@ function yieldLabel(dir: StakingPosition['yieldDirection'], lang: Lang) {
 export function StakingPage({ lang }: Props) {
   const { data: apys, isFetching: apyLoading } = useDefiApys();
   const [sending, setSending] = useState(false);
+  const [pendingStake, setPendingStakeState] = useState(() => getPendingStake());
+  useEffect(() => {
+    const id = setInterval(() => setPendingStakeState(getPendingStake()), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const handleSendMaturityAlert = async () => {
     const chatId = localStorage.getItem('telegram_chat_id')?.trim();
@@ -96,6 +102,27 @@ export function StakingPage({ lang }: Props) {
 
   return (
     <div className="space-y-4">
+      {pendingStake && (
+        <div className="rounded-lg border-2 border-emerald-500/50 bg-emerald-500/10 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-emerald-300 flex items-center gap-1.5">
+              <ArrowDown className="w-3.5 h-3.5" /> 💰 {lang === 'sk' ? 'PRIPRAVENÉ NA STAKE' : 'READY TO STAKE'}
+            </p>
+            <button
+              onClick={() => { clearPendingStake(); setPendingStakeState(null); }}
+              className="text-[10px] text-emerald-200/80 hover:text-emerald-100"
+            >{lang === 'sk' ? 'Zrušiť' : 'Clear'}</button>
+          </div>
+          <p className="text-[11px] text-emerald-100 font-mono tabular-nums">
+            {pendingStake.amount} {pendingStake.symbol} {lang === 'sk' ? 'z' : 'from'} {pendingStake.source.toUpperCase()}
+          </p>
+          <p className="text-[10px] text-emerald-200/80 leading-snug">
+            {lang === 'sk'
+              ? 'Použi master protokol nižšie (Babylon/Lido/Kamino). Každý deposit podpíš samostatne v hardware peňaženke.'
+              : 'Use the master protocol below (Babylon/Lido/Kamino). Sign each deposit separately in your HW wallet.'}
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">
           {lang === 'sk' ? 'Staking & Výnosy' : 'Staking & Yields'}
