@@ -278,7 +278,7 @@ function UnstakeRow({ advice, lang }: { advice: UnstakeAdvice; lang: Lang }) {
       toast.success(sk ? 'Swap pripravený → USDC' : 'Swap prepared → USDC');
     } else {
       setPendingLending({
-        symbol: advice.symbol,
+        symbol: advice.symbol as 'ETH' | 'SOL',
         amount: advice.unstakeQty,
         source: 'unstake',
         reason: sk
