@@ -7,12 +7,15 @@ export type PendingRebalanceLeg = { from: string; to: string; amountUsd: number 
 const REBALANCE_KEY = 'pending-rebalance-v1';
 const STAKE_KEY = 'pending-stake-v1';
 const SWAP_KEY = 'pending-swap-v1';
+const LENDING_KEY = 'pending-lending-v1';
+
+export type SwapAsset = 'BTC' | 'ETH' | 'SOL' | 'USDC' | 'USDT';
 
 export type PendingSwap = {
-  from: 'BTC' | 'ETH' | 'SOL';
-  to: 'BTC' | 'ETH' | 'SOL';
+  from: SwapAsset;
+  to: SwapAsset;
   amountUsd: number;
-  source: 'analysis' | 'rebalance' | 'manual';
+  source: 'analysis' | 'rebalance' | 'manual' | 'unstake';
   reason?: string;
 };
 
@@ -64,6 +67,30 @@ export function getPendingStake(): (PendingStake & { ts: number }) | null {
 
 export function clearPendingStake(): void {
   try { sessionStorage.removeItem(STAKE_KEY); } catch { /* ignore */ }
+}
+
+// ===== Pending Lending hand-off (Unstake → flexible yield)
+export type PendingLending = {
+  symbol: 'ETH' | 'SOL';
+  amount: number;
+  source: 'unstake';
+  reason?: string;
+};
+
+export function setPendingLending(p: PendingLending): void {
+  try { sessionStorage.setItem(LENDING_KEY, JSON.stringify({ ...p, ts: Date.now() })); } catch { /* ignore */ }
+}
+
+export function getPendingLending(): (PendingLending & { ts: number }) | null {
+  try {
+    const raw = sessionStorage.getItem(LENDING_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+export function clearPendingLending(): void {
+  try { sessionStorage.removeItem(LENDING_KEY); } catch { /* ignore */ }
 }
 
 // Cross-module navigation event (Index listens, BottomNav-controlled tab switch).

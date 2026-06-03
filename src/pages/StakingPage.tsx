@@ -12,7 +12,7 @@ import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
 import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
 import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
 import { StakingLedgerCard } from '@/components/staking/StakingLedgerCard';
-import { getPendingStake, clearPendingStake } from '@/lib/pendingActions';
+import { getPendingStake, clearPendingStake, getPendingLending, clearPendingLending } from '@/lib/pendingActions';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { overheatedWarning } from '@/lib/stakeAdvisor';
@@ -57,8 +57,12 @@ export function StakingPage({ lang }: Props) {
   const { data: apys, isFetching: apyLoading } = useDefiApys();
   const [sending, setSending] = useState(false);
   const [pendingStake, setPendingStakeState] = useState(() => getPendingStake());
+  const [pendingLending, setPendingLendingState] = useState(() => getPendingLending());
   useEffect(() => {
-    const id = setInterval(() => setPendingStakeState(getPendingStake()), 1000);
+    const id = setInterval(() => {
+      setPendingStakeState(getPendingStake());
+      setPendingLendingState(getPendingLending());
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
@@ -147,6 +151,30 @@ export function StakingPage({ lang }: Props) {
             {lang === 'sk'
               ? 'Použi master protokol nižšie (Babylon/Lido/Kamino). Každý deposit podpíš samostatne v hardware peňaženke.'
               : 'Use the master protocol below (Babylon/Lido/Kamino). Sign each deposit separately in your HW wallet.'}
+          </p>
+        </div>
+      )}
+      {pendingLending && (
+        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              🔄 {lang === 'sk' ? 'PRESUN DO LENDING / LIQUIDITY' : 'MOVE TO LENDING / LIQUIDITY'}
+            </p>
+            <button
+              onClick={() => { clearPendingLending(); setPendingLendingState(null); }}
+              className="text-[10px] text-amber-200/80 hover:text-amber-100"
+            >{lang === 'sk' ? 'Zrušiť' : 'Clear'}</button>
+          </div>
+          <p className="text-[11px] text-amber-100 font-mono tabular-nums">
+            {pendingLending.amount} {pendingLending.symbol} → {pendingLending.symbol === 'ETH' ? 'Aave V3 / Morpho Blue' : 'Kamino / Drift'}
+          </p>
+          {pendingLending.reason && (
+            <p className="text-[10px] text-amber-200/80">{pendingLending.reason}</p>
+          )}
+          <p className="text-[10px] text-amber-200/80 leading-snug">
+            {lang === 'sk'
+              ? 'Otvor Yield Route Finder nižšie, vyber Lending stratégiu a podpíš v hardware peňaženke.'
+              : 'Open the Yield Route Finder below, pick a Lending strategy and sign in your HW wallet.'}
           </p>
         </div>
       )}
