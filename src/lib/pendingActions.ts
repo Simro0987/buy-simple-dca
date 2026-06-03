@@ -7,12 +7,15 @@ export type PendingRebalanceLeg = { from: string; to: string; amountUsd: number 
 const REBALANCE_KEY = 'pending-rebalance-v1';
 const STAKE_KEY = 'pending-stake-v1';
 const SWAP_KEY = 'pending-swap-v1';
+const LENDING_KEY = 'pending-lending-v1';
+
+export type SwapAsset = 'BTC' | 'ETH' | 'SOL' | 'USDC' | 'USDT';
 
 export type PendingSwap = {
-  from: 'BTC' | 'ETH' | 'SOL';
-  to: 'BTC' | 'ETH' | 'SOL';
+  from: SwapAsset;
+  to: SwapAsset;
   amountUsd: number;
-  source: 'analysis' | 'rebalance' | 'manual';
+  source: 'analysis' | 'rebalance' | 'manual' | 'unstake';
   reason?: string;
 };
 
