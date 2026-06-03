@@ -266,7 +266,7 @@ function UnstakeRow({ advice, lang }: { advice: UnstakeAdvice; lang: Lang }) {
   const onNextStep = () => {
     if (advice.nextStep === 'swap') {
       setPendingSwap({
-        from: advice.symbol,
+        from: advice.symbol as 'ETH' | 'SOL',
         to: 'USDC',
         amountUsd: 0,
         source: 'unstake',
