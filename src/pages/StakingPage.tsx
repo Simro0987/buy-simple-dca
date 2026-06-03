@@ -154,6 +154,30 @@ export function StakingPage({ lang }: Props) {
           </p>
         </div>
       )}
+      {pendingLending && (
+        <div className="rounded-lg border-2 border-amber-500/50 bg-amber-500/10 p-3 space-y-2">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              🔄 {lang === 'sk' ? 'PRESUN DO LENDING / LIQUIDITY' : 'MOVE TO LENDING / LIQUIDITY'}
+            </p>
+            <button
+              onClick={() => { clearPendingLending(); setPendingLendingState(null); }}
+              className="text-[10px] text-amber-200/80 hover:text-amber-100"
+            >{lang === 'sk' ? 'Zrušiť' : 'Clear'}</button>
+          </div>
+          <p className="text-[11px] text-amber-100 font-mono tabular-nums">
+            {pendingLending.amount} {pendingLending.symbol} → {pendingLending.symbol === 'ETH' ? 'Aave V3 / Morpho Blue' : 'Kamino / Drift'}
+          </p>
+          {pendingLending.reason && (
+            <p className="text-[10px] text-amber-200/80">{pendingLending.reason}</p>
+          )}
+          <p className="text-[10px] text-amber-200/80 leading-snug">
+            {lang === 'sk'
+              ? 'Otvor Yield Route Finder nižšie, vyber Lending stratégiu a podpíš v hardware peňaženke.'
+              : 'Open the Yield Route Finder below, pick a Lending strategy and sign in your HW wallet.'}
+          </p>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-foreground">
           {lang === 'sk' ? 'Staking & Výnosy' : 'Staking & Yields'}
