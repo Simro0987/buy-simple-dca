@@ -12,7 +12,7 @@ import { StakingTimingCard } from '@/components/staking/StakingTimingCard';
 import { YieldPlannerCard } from '@/components/staking/YieldPlannerCard';
 import { YieldRouteFinderCard } from '@/components/staking/YieldRouteFinderCard';
 import { StakingLedgerCard } from '@/components/staking/StakingLedgerCard';
-import { getPendingStake, clearPendingStake } from '@/lib/pendingActions';
+import { getPendingStake, clearPendingStake, getPendingLending, clearPendingLending } from '@/lib/pendingActions';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { overheatedWarning } from '@/lib/stakeAdvisor';
