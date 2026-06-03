@@ -57,8 +57,12 @@ export function StakingPage({ lang }: Props) {
   const { data: apys, isFetching: apyLoading } = useDefiApys();
   const [sending, setSending] = useState(false);
   const [pendingStake, setPendingStakeState] = useState(() => getPendingStake());
+  const [pendingLending, setPendingLendingState] = useState(() => getPendingLending());
   useEffect(() => {
-    const id = setInterval(() => setPendingStakeState(getPendingStake()), 1000);
+    const id = setInterval(() => {
+      setPendingStakeState(getPendingStake());
+      setPendingLendingState(getPendingLending());
+    }, 1000);
     return () => clearInterval(id);
   }, []);
 
