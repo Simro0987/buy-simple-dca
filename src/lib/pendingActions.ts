@@ -69,6 +69,30 @@ export function clearPendingStake(): void {
   try { sessionStorage.removeItem(STAKE_KEY); } catch { /* ignore */ }
 }
 
+// ===== Pending Lending hand-off (Unstake → flexible yield)
+export type PendingLending = {
+  symbol: 'ETH' | 'SOL';
+  amount: number;
+  source: 'unstake';
+  reason?: string;
+};
+
+export function setPendingLending(p: PendingLending): void {
+  try { sessionStorage.setItem(LENDING_KEY, JSON.stringify({ ...p, ts: Date.now() })); } catch { /* ignore */ }
+}
+
+export function getPendingLending(): (PendingLending & { ts: number }) | null {
+  try {
+    const raw = sessionStorage.getItem(LENDING_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch { return null; }
+}
+
+export function clearPendingLending(): void {
+  try { sessionStorage.removeItem(LENDING_KEY); } catch { /* ignore */ }
+}
+
 // Cross-module navigation event (Index listens, BottomNav-controlled tab switch).
 export function navigateToTab(tab: string): void {
   window.dispatchEvent(new CustomEvent('app-navigate-tab', { detail: tab }));
