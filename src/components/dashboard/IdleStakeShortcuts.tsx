@@ -127,6 +127,7 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
             marketScore={marketScore}
             locked={locked}
             phase={win.phase}
+            daysRemaining={days}
             onClick={() => handleClick(a)}
           />
         ))}
