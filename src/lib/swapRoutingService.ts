@@ -826,6 +826,9 @@ export function getQuotes(params: QuoteParams): QuoteResult {
     // Routes that deviate >2% from the verified baseline are flagged.
     const priceVariancePct = baseOut > 0 ? Math.abs(grossOut - baseOut) / baseOut * 100 : 0;
     const priceVarianceFlag = priceVariancePct > 2.0;
+    // Stronger guardrail: a deviation greater than 5% indicates a stale/glitched
+    // aggregator quote. We surface a separate, more aggressive badge for these.
+    const oracleDeviationFlag = priceVariancePct > 5.0;
 
     // ---- Health penalty (% of netOutUsd) ----
     const healthPenaltyUsd = netOutUsd * (HEALTH_PENALTY[p.health ?? 'ok'] * 0.01);
