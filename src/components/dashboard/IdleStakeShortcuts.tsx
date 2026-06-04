@@ -83,10 +83,11 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
   if (advised.length === 0) return null;
 
   const locked = win.locked;
+  const days = win.daysRemaining;
 
   const handleClick = (a: AdvisorResult) => {
     if (locked) {
-      toast.info(previewWindowNote(lang));
+      toast.info(previewWindowNote(lang, days));
       return;
     }
     const sym = nativeTicker(a.symbol) as 'BTC' | 'ETH' | 'SOL';
@@ -114,7 +115,7 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
       </div>
       {locked && (
         <p className="text-[10px] text-amber-300/90 leading-snug bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1">
-          {previewWindowNote(lang)}
+          {previewWindowNote(lang, days)}
         </p>
       )}
       <div className="flex flex-col gap-2">
