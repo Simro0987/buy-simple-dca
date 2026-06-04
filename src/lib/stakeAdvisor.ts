@@ -165,6 +165,14 @@ export interface TimingWindow {
   visible: boolean;         // controls card render
   reason: 'override-overheated' | 'override-value' | 'weekend-open' | 'weekend-preview' | 'out-of-window';
   firstWeekendISO?: string; // for UI hint
+  daysRemaining?: number;   // days until the NEXT quarterly first-Saturday window opens
+  inQuarterlyMonth?: boolean;
+}
+
+const QUARTERLY_MONTH_INDICES = [2, 5, 8, 11]; // Mar, Jun, Sep, Dec (0-based)
+
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
 function firstWeekend(year: number, monthIndex: number): Date {
@@ -176,12 +184,20 @@ function firstWeekend(year: number, monthIndex: number): Date {
   return new Date(year, monthIndex, 1);
 }
 
-function isOnOrAfterFirstWeekend(now: Date): boolean {
-  const sat = firstWeekend(now.getFullYear(), now.getMonth());
-  const sun = new Date(sat.getFullYear(), sat.getMonth(), sat.getDate() + 1);
-  // Window opens on first Saturday and remains open for the rest of that month.
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return today.getTime() >= sat.getTime() || today.getTime() === sun.getTime();
+// Returns the next first-Saturday of a quarterly month at or after `now`.
+function nextQuarterlyFirstSaturday(now: Date): Date {
+  const today = startOfDay(now);
+  for (let y = now.getFullYear(); y <= now.getFullYear() + 1; y++) {
+    for (const m of QUARTERLY_MONTH_INDICES) {
+      const sat = firstWeekend(y, m);
+      if (sat.getTime() >= today.getTime()) return sat;
+    }
+  }
+  return firstWeekend(now.getFullYear() + 1, QUARTERLY_MONTH_INDICES[0]);
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.max(0, Math.ceil((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86_400_000));
 }
 
 export function getTimingWindow(score: number, now: Date = new Date()): TimingWindow {
