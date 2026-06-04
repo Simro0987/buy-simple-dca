@@ -201,24 +201,43 @@ function daysBetween(a: Date, b: Date): number {
 }
 
 export function getTimingWindow(score: number, now: Date = new Date()): TimingWindow {
+  // Compute next quarterly-Saturday window + days remaining (used by all branches).
+  const nextSat = nextQuarterlyFirstSaturday(now);
+  const daysRemaining = daysBetween(now, nextSat);
+  const monthIdx = now.getMonth();
+  const isQuarterly = QUARTERLY_MONTH_INDICES.includes(monthIdx);
+  const thisMonthSat = isQuarterly ? firstWeekend(now.getFullYear(), monthIdx) : null;
+  const inQuarterlyMonth = isQuarterly;
+
   // Override: overheated forces Unstake UI regardless of calendar.
   if (score > 55) {
-    return { phase: 'overheated', locked: false, visible: true, reason: 'override-overheated' };
+    return {
+      phase: 'overheated', locked: false, visible: true, reason: 'override-overheated',
+      daysRemaining, inQuarterlyMonth,
+    };
   }
   // Override: deep-value bypasses calendar and weekend rules entirely.
   if (score <= 25) {
-    return { phase: 'value', locked: false, visible: true, reason: 'override-value' };
+    return {
+      phase: 'value', locked: false, visible: true, reason: 'override-value',
+      daysRemaining, inQuarterlyMonth,
+    };
   }
-  const month = now.getMonth() + 1; // 1..12
-  const isQuarterly = month === 3 || month === 6 || month === 9 || month === 12;
-  if (!isQuarterly) {
-    return { phase: 'closed', locked: true, visible: false, reason: 'out-of-window' };
+  // Window open: today is inside a quarterly month AND on/after the first Saturday.
+  if (isQuarterly && thisMonthSat && startOfDay(now).getTime() >= thisMonthSat.getTime()) {
+    return {
+      phase: 'open', locked: false, visible: true, reason: 'weekend-open',
+      firstWeekendISO: thisMonthSat.toISOString(),
+      daysRemaining: 0, inQuarterlyMonth,
+    };
   }
-  const sat = firstWeekend(now.getFullYear(), now.getMonth());
-  if (isOnOrAfterFirstWeekend(now)) {
-    return { phase: 'open', locked: false, visible: true, reason: 'weekend-open', firstWeekendISO: sat.toISOString() };
-  }
-  return { phase: 'preview', locked: true, visible: true, reason: 'weekend-preview', firstWeekendISO: sat.toISOString() };
+  // Otherwise PREVIEW — always visible, muted, with a live countdown until the next
+  // first-Saturday of the next quarterly month (even when we are outside Mar/Jun/Sep/Dec).
+  return {
+    phase: 'preview', locked: true, visible: true, reason: 'weekend-preview',
+    firstWeekendISO: nextSat.toISOString(),
+    daysRemaining, inQuarterlyMonth,
+  };
 }
 
 // ===== Unstake engine (score > 55) =====
