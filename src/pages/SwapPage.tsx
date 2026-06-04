@@ -16,6 +16,7 @@ import {
   evaluateMevRisk, evaluateGasEater,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
+import { RefreshCw } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
 
