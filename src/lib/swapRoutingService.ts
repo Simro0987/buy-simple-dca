@@ -48,7 +48,7 @@ export interface TokenMeta {
   symbol: string;
   name: string;
   chain: ChainId;
-  priceRef: 'usd' | 'btc' | 'eth' | 'sol' | 'avax' | 'pol' | 'xmr';
+  priceRef: 'usd' | 'btc' | 'eth' | 'sol' | 'avax' | 'pol' | 'xmr' | 'arb' | 'op' | 'bnb' | 'sui';
   multiplier?: number;
   decimals: number;
   native?: boolean;
