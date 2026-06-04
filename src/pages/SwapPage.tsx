@@ -194,7 +194,7 @@ function FilterToggle({
 // Page
 // =========================================================================
 export function SwapPage({ lang }: Props) {
-  const { data: prices } = usePrices();
+  const { data: prices, refetch: refetchPrices, isFetching: pricesFetching } = usePrices();
 
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [from, setFrom] = useState<TokenMeta>(TOKENS.find(t => t.chain === 'base' && t.symbol === 'USDC')!);
