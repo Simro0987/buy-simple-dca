@@ -28,8 +28,18 @@ export interface PriceData {
 import { cgFetch } from './coingecko';
 import { getEffectiveLimitDiscount } from './dynamicLimits';
 
+// Auxiliary CoinGecko ids fetched alongside the core BTC/ETH/SOL set so the Swap
+// Aggregator oracle has live spot prices for every supported network token.
+// POL = polygon-ecosystem-token (post-MATIC migration, Sept 2024). matic-network
+// is still queried as a defensive fallback because some CoinGecko endpoints lag.
+const AUX_PRICE_IDS = [
+  'polygon-ecosystem-token', 'matic-network',
+  'avalanche-2', 'monero',
+  'arbitrum', 'optimism', 'binancecoin', 'sui',
+];
+
 export async function fetchPrices(): Promise<PriceData> {
-  const ids = TOKENS.map(t => t.coingeckoId).join(',');
+  const ids = [...TOKENS.map(t => t.coingeckoId), ...AUX_PRICE_IDS].join(',');
   const res = await cgFetch('/simple/price', {
     ids, vs_currencies: 'usd', include_24hr_change: true, include_24hr_vol: true,
   });
