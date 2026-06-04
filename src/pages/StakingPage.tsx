@@ -17,6 +17,8 @@ import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { overheatedWarning } from '@/lib/stakeAdvisor';
 import { AlertTriangle } from 'lucide-react';
+import { IdleStakeShortcuts } from '@/components/dashboard/IdleStakeShortcuts';
+import { PortfolioProvider } from '@/contexts/PortfolioContext';
 
 interface Props { lang: Lang; }
 
