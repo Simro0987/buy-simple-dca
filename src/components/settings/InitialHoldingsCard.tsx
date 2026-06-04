@@ -91,21 +91,35 @@ export function InitialHoldingsCard() {
   };
 
   // MANUAL ONLY — never call from effect. Spúšťa sa iba z tlačidla "Pridať".
+  // Uses the user-supplied custom execution price (falls back to live spot if empty).
   const addAccumulation = async (key: CoinKey) => {
     if (!settings?.id) return;
     const raw = Number(accInput[key]);
     if (!raw || raw <= 0) { toast.error('Zadaj kladnú hodnotu'); return; }
-    const price = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
-    if (price <= 0) { toast.error('Cena ešte neprišla — počkaj chvíľu'); return; }
+    const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
+    const priceStr = accPrice[key];
+    const customPrice = Number(priceStr);
+    const execPrice = customPrice > 0 ? customPrice : spot;
+    if (execPrice <= 0) {
+      toast.error('Zadaj nákupnú cenu (USD) – cena ešte neprišla');
+      return;
+    }
 
     const mode = accMode[key];
-    const newQty = mode === 'asset' ? raw : raw / price;
-    const newUsd = mode === 'asset' ? raw * price : raw;
+    // Toggle logic:
+    //  - "Množstvo": user typed qty, USD volume = qty * execPrice
+    //  - "USD suma": user typed USD, qty = usd / execPrice
+    const newQty = mode === 'asset' ? raw : raw / execPrice;
+    const newUsd = mode === 'asset' ? raw * execPrice : raw;
 
     const oldQty = Number(settings.manual_holdings?.[key] ?? 0);
     const oldUsd = Number(settings.initial_cost_basis?.[key] ?? 0);
+    // Weighted-average cost basis:
+    //   New Total Qty = oldQty + newQty
+    //   New Cost Basis (USD) = oldUsd + newUsd
+    //   New Avg = New Cost Basis / New Total Qty
     const totalQty = oldQty + newQty;
-    const totalUsd = oldUsd + newUsd; // weighted avg basis sa odvodí ako totalUsd / totalQty
+    const totalUsd = oldUsd + newUsd;
 
     const nextHoldings = { ...(settings.manual_holdings ?? {}), [key]: totalQty };
     const nextBasis = { ...(settings.initial_cost_basis ?? {}), [key]: totalUsd };
@@ -117,9 +131,12 @@ export function InitialHoldingsCard() {
         initial_cost_basis: nextBasis,
       });
       setAccInput(s => ({ ...s, [key]: '' }));
+      // Reset price back to live spot for the next entry.
+      setPriceTouched(s => ({ ...s, [key]: false }));
+      setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
       const avg = totalUsd / totalQty;
       toast.success(
-        `+${newQty.toFixed(8)} ${key.toUpperCase()} pridané. Nový priemer: $${avg.toFixed(2)}`,
+        `+${newQty.toFixed(8)} ${key.toUpperCase()} @ $${execPrice.toFixed(2)} pridané. Nový priemer: $${avg.toFixed(2)}`,
       );
     } catch {
       toast.error('Pridanie zlyhalo');
