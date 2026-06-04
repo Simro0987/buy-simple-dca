@@ -8,7 +8,7 @@ import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
 import { HighImpactNewsBanner } from '@/components/HighImpactNewsBanner';
 import { RebalanceCard } from '@/components/RebalanceCard';
 import { PortfolioProvider } from '@/contexts/PortfolioContext';
-import { IdleStakeShortcuts } from '@/components/dashboard/IdleStakeShortcuts';
+// IdleStakeShortcuts moved to StakingPage (governs staking workflow natively).
 import { usePrices, useFearGreed, useAthData, useAltSeason, useSparklines } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
