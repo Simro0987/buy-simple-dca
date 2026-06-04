@@ -320,5 +320,6 @@ export function StakingPage({ lang }: Props) {
         </div>
       </div>
     </div>
+    </PortfolioProvider>
   );
 }
