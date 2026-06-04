@@ -28,6 +28,24 @@ export function InitialHoldingsCard() {
   // Smart Manual Accumulator — prírastky
   const [accMode, setAccMode] = useState<Record<CoinKey, Mode>>({ btc: 'asset', eth: 'asset', sol: 'asset' });
   const [accInput, setAccInput] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
+  // Custom execution / purchase price per coin (USD). Empty = use live spot.
+  const [accPrice, setAccPrice] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
+  // Track which prices the user has edited so live-spot autofill won't overwrite them.
+  const [priceTouched, setPriceTouched] = useState<Record<CoinKey, boolean>>({ btc: false, eth: false, sol: false });
+
+  // Auto-fill custom price from live spot once available (only if user hasn't typed yet).
+  useEffect(() => {
+    if (!prices) return;
+    setAccPrice(prev => {
+      const next = { ...prev };
+      (Object.keys(TOKEN_PRICE_ID) as CoinKey[]).forEach(k => {
+        if (priceTouched[k]) return;
+        const spot = prices?.[TOKEN_PRICE_ID[k]]?.usd;
+        if (spot && !prev[k]) next[k] = String(spot);
+      });
+      return next;
+    });
+  }, [prices, priceTouched]);
 
   useEffect(() => {
     if (!settings) return;
