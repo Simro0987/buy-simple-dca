@@ -487,16 +487,25 @@ export function SwapPage({ lang }: Props) {
     );
   };
 
-  // Price-variance badge (amber) — surfaces oracle deviation > 2%.
+  // Price-variance badge — amber at >2%, escalates to red "⚠️ Odchýlka kurzu" at >5%.
   const VarianceBadge = ({ q }: { q: Quote }) => {
     if (!q.priceVarianceFlag) return null;
+    const strong = q.oracleDeviationFlag;
     return (
       <span
-        title={t.priceVarianceT}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-amber-500/50 bg-amber-500/15 text-amber-400"
+        title={lang === 'sk'
+          ? `Odchýlka oracle: ${q.priceVariancePct.toFixed(2)}% (limit ${strong ? '5%' : '2%'})`
+          : t.priceVarianceT}
+        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border ${
+          strong
+            ? 'border-red-500/60 bg-red-500/15 text-red-400'
+            : 'border-amber-500/50 bg-amber-500/15 text-amber-400'
+        }`}
       >
         <AlertTriangle className="w-2.5 h-2.5" />
-        {t.priceVariance} · {q.priceVariancePct.toFixed(2)}%
+        {strong
+          ? (lang === 'sk' ? `⚠️ Odchýlka kurzu · ${q.priceVariancePct.toFixed(2)}%` : `⚠️ Rate deviation · ${q.priceVariancePct.toFixed(2)}%`)
+          : `${t.priceVariance} · ${q.priceVariancePct.toFixed(2)}%`}
       </span>
     );
   };
