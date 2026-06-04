@@ -603,6 +603,8 @@ export interface Quote {
   // oracle baseline (LI.FI / Jupiter style). Flag when |deviation| > 2%.
   priceVariancePct: number;
   priceVarianceFlag: boolean;
+  // Stronger oracle deviation flag (>5%) — used by the "⚠️ Odchýlka kurzu" badge.
+  oracleDeviationFlag: boolean;
   // Explicit hop chain for the multi-hop route visualizer.
   hops: RouteHop[];
   // Anti-phishing: verified official domain (e.g. "boltz.exchange").
