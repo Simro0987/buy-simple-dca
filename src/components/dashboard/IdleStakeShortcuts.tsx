@@ -83,10 +83,11 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
   if (advised.length === 0) return null;
 
   const locked = win.locked;
+  const days = win.daysRemaining;
 
   const handleClick = (a: AdvisorResult) => {
     if (locked) {
-      toast.info(previewWindowNote(lang));
+      toast.info(previewWindowNote(lang, days));
       return;
     }
     const sym = nativeTicker(a.symbol) as 'BTC' | 'ETH' | 'SOL';
@@ -114,7 +115,7 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
       </div>
       {locked && (
         <p className="text-[10px] text-amber-300/90 leading-snug bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1">
-          {previewWindowNote(lang)}
+          {previewWindowNote(lang, days)}
         </p>
       )}
       <div className="flex flex-col gap-2">
@@ -126,6 +127,7 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
             marketScore={marketScore}
             locked={locked}
             phase={win.phase}
+            daysRemaining={days}
             onClick={() => handleClick(a)}
           />
         ))}
@@ -140,10 +142,10 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
 }
 
 function ShortcutRow({
-  advice, lang, marketScore, locked, phase, onClick,
+  advice, lang, marketScore, locked, phase, daysRemaining, onClick,
 }: {
   advice: AdvisorResult; lang: Lang; marketScore: number; locked: boolean;
-  phase: ReturnType<typeof getTimingWindow>['phase']; onClick: () => void;
+  phase: ReturnType<typeof getTimingWindow>['phase']; daysRemaining?: number; onClick: () => void;
 }) {
   const sk = lang === 'sk';
   const sym = nativeTicker(advice.symbol);
@@ -245,7 +247,7 @@ function ShortcutRow({
                 </p>
               </div>
               {locked && (
-                <p className="text-[10px] text-amber-300/90">{previewWindowNote(lang)}</p>
+                <p className="text-[10px] text-amber-300/90">{previewWindowNote(lang, daysRemaining)}</p>
               )}
             </PopoverContent>
           </Popover>

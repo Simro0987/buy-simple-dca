@@ -48,7 +48,7 @@ export interface TokenMeta {
   symbol: string;
   name: string;
   chain: ChainId;
-  priceRef: 'usd' | 'btc' | 'eth' | 'sol' | 'avax' | 'pol' | 'xmr';
+  priceRef: 'usd' | 'btc' | 'eth' | 'sol' | 'avax' | 'pol' | 'xmr' | 'arb' | 'op' | 'bnb' | 'sui';
   multiplier?: number;
   decimals: number;
   native?: boolean;
@@ -75,6 +75,7 @@ export const TOKENS: TokenMeta[] = [
   { symbol: 'USDT',        name: 'Tether',                      chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
   { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
+  { symbol: 'ARB',         name: 'Arbitrum (Governance)',       chain: 'arbitrum',  priceRef: 'arb', decimals: 18 },
   // Polygon
   { symbol: 'USDC',        name: 'USD Coin (native)',           chain: 'polygon',   priceRef: 'usd', decimals: 6 },
   { symbol: 'USDC.e',      name: 'USD Coin (bridged)',          chain: 'polygon',   priceRef: 'usd', multiplier: 0.998, decimals: 6 },
@@ -98,10 +99,16 @@ export function tokenKey(t: TokenMeta) {
 }
 
 // Reference fallback prices used when CoinGecko hook doesn't include the asset.
+// Tuned to current realistic spot ranges so a missing oracle never displays a
+// stale or obviously wrong number (e.g. legacy MATIC ~$0.47).
 const FALLBACK_USD: Record<string, number> = {
-  pol: 0.45,
-  avax: 28,
-  xmr: 165,
+  pol:  0.20,
+  avax: 22,
+  xmr:  340,
+  arb:  0.30,
+  op:   0.45,
+  bnb:  600,
+  sui:  3.5,
 };
 
 export function tokenUsdPrice(t: TokenMeta, prices: PriceData | undefined): number {
@@ -117,8 +124,16 @@ export function tokenUsdPrice(t: TokenMeta, prices: PriceData | undefined): numb
     case 'eth':  return (p['ethereum']?.usd ?? 0) * m;
     case 'sol':  return (p['solana']?.usd ?? 0) * m;
     case 'avax': return (p['avalanche-2']?.usd ?? FALLBACK_USD.avax) * m;
-    case 'pol':  return (p['matic-network']?.usd ?? p['polygon-ecosystem-token']?.usd ?? FALLBACK_USD.pol) * m;
+    // POL: prefer the post-migration polygon-ecosystem-token id (the live POL
+    // contract). matic-network is kept ONLY as a defensive fallback because
+    // some CoinGecko mirrors still lag and would otherwise display the legacy
+    // ~$0.47 MATIC quote instead of the real POL price.
+    case 'pol':  return (p['polygon-ecosystem-token']?.usd ?? p['matic-network']?.usd ?? FALLBACK_USD.pol) * m;
     case 'xmr':  return (p['monero']?.usd ?? FALLBACK_USD.xmr) * m;
+    case 'arb':  return (p['arbitrum']?.usd ?? FALLBACK_USD.arb) * m;
+    case 'op':   return (p['optimism']?.usd ?? FALLBACK_USD.op) * m;
+    case 'bnb':  return (p['binancecoin']?.usd ?? FALLBACK_USD.bnb) * m;
+    case 'sui':  return (p['sui']?.usd ?? FALLBACK_USD.sui) * m;
   }
 }
 
@@ -153,7 +168,7 @@ export function isSubmarineRoute(from: TokenMeta, to: TokenMeta): boolean {
 
 // Providers that route LN <-> Polygon stables via submarine swaps / fixed-rate desks.
 export const SUBMARINE_PROVIDERS = [
-  'boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace',
+  'boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace', 'stealthex',
 ];
 // Subset that explicitly advertises a guaranteed fixed-rate quote.
 export const FIXED_RATE_PROVIDERS = ['boltz', 'exolix', 'fixedfloat'];
@@ -328,8 +343,8 @@ export const PLATFORMS: Platform[] = [
     edge: 0.0009, feeBps: 5, extraGasUsd: 0.25, bridgeFeeBps: 10, estTimeMin: 4,
     supports: (f, t, type) => type === 'cross-chain' && isEvm(f.chain) && isEvm(t.chain),
     customRecipient: true, mevProtected: true, gasRefuel: true },
-  { id: 'fixedfloat', name: 'FixedFloat', type: 'privacy',
-    buildUrl: (f, t) => `https://fixedfloat.com/?from=${f.symbol.toUpperCase()}&to=${t.symbol.toUpperCase()}`,
+  { id: 'fixedfloat', name: 'ff.io', type: 'privacy',
+    buildUrl: (f, t) => `https://ff.io/?type=fixed&from=${f.symbol.toUpperCase()}&to=${t.symbol.toUpperCase()}`,
     edge: 0.0006, feeBps: 20, extraGasUsd: 0.4, bridgeFeeBps: 20, estTimeMin: 10,
     supports: (_f, _t, type) => type === 'cross-chain',
     customRecipient: true, noKyc: true, noWallet: true },
@@ -341,6 +356,11 @@ export const PLATFORMS: Platform[] = [
   { id: 'sideshift', name: 'SideShift.ai', type: 'privacy',
     buildUrl: (f, t) => `https://sideshift.ai/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
     edge: 0.0007, feeBps: 20, extraGasUsd: 0.3, bridgeFeeBps: 18, estTimeMin: 8,
+    supports: (_f, _t, type) => type === 'cross-chain',
+    customRecipient: true, noKyc: true, noWallet: true },
+  { id: 'stealthex', name: 'StealthEX', type: 'privacy',
+    buildUrl: (f, t, a) => `https://stealthex.io/?from=${f.symbol.toLowerCase()}&to=${t.symbol.toLowerCase()}&amount=${a}`,
+    edge: 0.0005, feeBps: 25, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
     supports: (_f, _t, type) => type === 'cross-chain',
     customRecipient: true, noKyc: true, noWallet: true },
   { id: 'maya', name: 'Maya Protocol', type: 'bridge',
@@ -431,9 +451,10 @@ const OFFICIAL_URLS: Record<string, string> = {
   '1inch':    '1inch.io',
   openocean:  'openocean.finance',
   bungee:     'bungee.exchange',
-  fixedfloat: 'fixedfloat.com',
+  fixedfloat: 'ff.io',
   changenow:  'changenow.io',
   sideshift:  'sideshift.ai',
+  stealthex:  'stealthex.io',
   maya:       'mayaprotocol.com',
   orbiter:    'orbiter.finance',
   rubic:      'rubic.exchange',
@@ -582,6 +603,8 @@ export interface Quote {
   // oracle baseline (LI.FI / Jupiter style). Flag when |deviation| > 2%.
   priceVariancePct: number;
   priceVarianceFlag: boolean;
+  // Stronger oracle deviation flag (>5%) — used by the "⚠️ Odchýlka kurzu" badge.
+  oracleDeviationFlag: boolean;
   // Explicit hop chain for the multi-hop route visualizer.
   hops: RouteHop[];
   // Anti-phishing: verified official domain (e.g. "boltz.exchange").
@@ -803,6 +826,9 @@ export function getQuotes(params: QuoteParams): QuoteResult {
     // Routes that deviate >2% from the verified baseline are flagged.
     const priceVariancePct = baseOut > 0 ? Math.abs(grossOut - baseOut) / baseOut * 100 : 0;
     const priceVarianceFlag = priceVariancePct > 2.0;
+    // Stronger guardrail: a deviation greater than 5% indicates a stale/glitched
+    // aggregator quote. We surface a separate, more aggressive badge for these.
+    const oracleDeviationFlag = priceVariancePct > 5.0;
 
     // ---- Health penalty (% of netOutUsd) ----
     const healthPenaltyUsd = netOutUsd * (HEALTH_PENALTY[p.health ?? 'ok'] * 0.01);
@@ -864,6 +890,7 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       healthNote: p.healthNote,
       priceVariancePct,
       priceVarianceFlag,
+      oracleDeviationFlag,
       hops,
       officialUrl: p.officialUrl ?? '',
     };
@@ -984,3 +1011,49 @@ export function evaluateGasEater(q: Quote, fromChain: ChainId, lang: 'sk' | 'en'
   };
 }
 
+
+// ============= Oracle Deviation Validator (5% threshold) =============
+// Centralized helper that the Swap UI uses to tag any aggregator quote whose
+// estimatedReceive (`netOut` × destination spot price) deviates more than 5%
+// from the global oracle reference (LI.FI / Jupiter / CoinGecko). Routes
+// flagged here render the "⚠️ Odchýlka kurzu" badge.
+
+export interface AggregatorRateAudit {
+  platformId: string;
+  platformName: string;
+  expectedUsd: number;       // grossInUsd at oracle reference
+  receivedUsd: number;       // quote net-out USD value
+  deviationPct: number;      // signed deviation %
+  flagged: boolean;          // true when |deviation| > 5%
+}
+
+export const ORACLE_DEVIATION_THRESHOLD_PCT = 5.0;
+
+export function validateAggregatorRates(
+  quotes: Quote[],
+  expectedUsd: number,
+): AggregatorRateAudit[] {
+  if (!expectedUsd || expectedUsd <= 0) {
+    return quotes.map(q => ({
+      platformId: q.platformId,
+      platformName: q.platformName,
+      expectedUsd: 0,
+      receivedUsd: q.netOutUsd,
+      deviationPct: 0,
+      flagged: false,
+    }));
+  }
+  return quotes.map(q => {
+    const received = q.netOutUsd;
+    const deviationPct = ((received - expectedUsd) / expectedUsd) * 100;
+    const flagged = Math.abs(deviationPct) > ORACLE_DEVIATION_THRESHOLD_PCT;
+    return {
+      platformId: q.platformId,
+      platformName: q.platformName,
+      expectedUsd,
+      receivedUsd: received,
+      deviationPct,
+      flagged,
+    };
+  });
+}

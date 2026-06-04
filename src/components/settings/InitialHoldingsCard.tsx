@@ -28,6 +28,24 @@ export function InitialHoldingsCard() {
   // Smart Manual Accumulator — prírastky
   const [accMode, setAccMode] = useState<Record<CoinKey, Mode>>({ btc: 'asset', eth: 'asset', sol: 'asset' });
   const [accInput, setAccInput] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
+  // Custom execution / purchase price per coin (USD). Empty = use live spot.
+  const [accPrice, setAccPrice] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
+  // Track which prices the user has edited so live-spot autofill won't overwrite them.
+  const [priceTouched, setPriceTouched] = useState<Record<CoinKey, boolean>>({ btc: false, eth: false, sol: false });
+
+  // Auto-fill custom price from live spot once available (only if user hasn't typed yet).
+  useEffect(() => {
+    if (!prices) return;
+    setAccPrice(prev => {
+      const next = { ...prev };
+      (Object.keys(TOKEN_PRICE_ID) as CoinKey[]).forEach(k => {
+        if (priceTouched[k]) return;
+        const spot = prices?.[TOKEN_PRICE_ID[k]]?.usd;
+        if (spot && !prev[k]) next[k] = String(spot);
+      });
+      return next;
+    });
+  }, [prices, priceTouched]);
 
   useEffect(() => {
     if (!settings) return;
@@ -73,21 +91,35 @@ export function InitialHoldingsCard() {
   };
 
   // MANUAL ONLY — never call from effect. Spúšťa sa iba z tlačidla "Pridať".
+  // Uses the user-supplied custom execution price (falls back to live spot if empty).
   const addAccumulation = async (key: CoinKey) => {
     if (!settings?.id) return;
     const raw = Number(accInput[key]);
     if (!raw || raw <= 0) { toast.error('Zadaj kladnú hodnotu'); return; }
-    const price = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
-    if (price <= 0) { toast.error('Cena ešte neprišla — počkaj chvíľu'); return; }
+    const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
+    const priceStr = accPrice[key];
+    const customPrice = Number(priceStr);
+    const execPrice = customPrice > 0 ? customPrice : spot;
+    if (execPrice <= 0) {
+      toast.error('Zadaj nákupnú cenu (USD) – cena ešte neprišla');
+      return;
+    }
 
     const mode = accMode[key];
-    const newQty = mode === 'asset' ? raw : raw / price;
-    const newUsd = mode === 'asset' ? raw * price : raw;
+    // Toggle logic:
+    //  - "Množstvo": user typed qty, USD volume = qty * execPrice
+    //  - "USD suma": user typed USD, qty = usd / execPrice
+    const newQty = mode === 'asset' ? raw : raw / execPrice;
+    const newUsd = mode === 'asset' ? raw * execPrice : raw;
 
     const oldQty = Number(settings.manual_holdings?.[key] ?? 0);
     const oldUsd = Number(settings.initial_cost_basis?.[key] ?? 0);
+    // Weighted-average cost basis:
+    //   New Total Qty = oldQty + newQty
+    //   New Cost Basis (USD) = oldUsd + newUsd
+    //   New Avg = New Cost Basis / New Total Qty
     const totalQty = oldQty + newQty;
-    const totalUsd = oldUsd + newUsd; // weighted avg basis sa odvodí ako totalUsd / totalQty
+    const totalUsd = oldUsd + newUsd;
 
     const nextHoldings = { ...(settings.manual_holdings ?? {}), [key]: totalQty };
     const nextBasis = { ...(settings.initial_cost_basis ?? {}), [key]: totalUsd };
@@ -99,9 +131,12 @@ export function InitialHoldingsCard() {
         initial_cost_basis: nextBasis,
       });
       setAccInput(s => ({ ...s, [key]: '' }));
+      // Reset price back to live spot for the next entry.
+      setPriceTouched(s => ({ ...s, [key]: false }));
+      setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
       const avg = totalUsd / totalQty;
       toast.success(
-        `+${newQty.toFixed(8)} ${key.toUpperCase()} pridané. Nový priemer: $${avg.toFixed(2)}`,
+        `+${newQty.toFixed(8)} ${key.toUpperCase()} @ $${execPrice.toFixed(2)} pridané. Nový priemer: $${avg.toFixed(2)}`,
       );
     } catch {
       toast.error('Pridanie zlyhalo');
@@ -176,11 +211,16 @@ export function InitialHoldingsCard() {
         </p>
 
         {COINS.map(({ key, label }) => {
-          const price = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
+          const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
           const mode = accMode[key];
           const v = Number(accInput[key]) || 0;
-          const preview = v > 0 && price > 0
-            ? (mode === 'asset' ? `≈ $${(v * price).toFixed(2)}` : `≈ ${(v / price).toFixed(8)} ${label}`)
+          const customPriceNum = Number(accPrice[key]);
+          const execPrice = customPriceNum > 0 ? customPriceNum : spot;
+          const isCustom = priceTouched[key] && customPriceNum > 0 && Math.abs(customPriceNum - spot) > 0.005;
+          const preview = v > 0 && execPrice > 0
+            ? (mode === 'asset'
+                ? `≈ $${(v * execPrice).toFixed(2)}`
+                : `≈ ${(v / execPrice).toFixed(8)} ${label}`)
             : '';
           return (
             <div key={key} className="space-y-1.5">
@@ -197,6 +237,44 @@ export function InitialHoldingsCard() {
                   >USD suma</button>
                 </div>
               </div>
+
+              {/* Custom execution / purchase price */}
+              <div className="space-y-0.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] text-muted-foreground">
+                    Nákupná cena (USD) <span className="text-muted-foreground/70">· Execution Price</span>
+                  </label>
+                  {isCustom && spot > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPriceTouched(s => ({ ...s, [key]: false }));
+                        setAccPrice(s => ({ ...s, [key]: String(spot) }));
+                      }}
+                      className="text-[9px] text-emerald-400 hover:text-emerald-300 underline-offset-2 hover:underline"
+                    >Reset na spot</button>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={accPrice[key]}
+                  onChange={e => {
+                    setPriceTouched(s => ({ ...s, [key]: true }));
+                    setAccPrice(s => ({ ...s, [key]: e.target.value }));
+                  }}
+                  placeholder={spot > 0 ? spot.toFixed(2) : '0.00'}
+                  className={`w-full px-2 py-1.5 text-sm rounded-md border bg-background tabular-nums ${
+                    isCustom ? 'border-amber-500/50 text-amber-300' : 'border-border'
+                  }`}
+                />
+                <p className="text-[9px] text-muted-foreground">
+                  {isCustom
+                    ? `Vlastná historická cena · spot $${spot.toFixed(2)}`
+                    : `Auto-vyplnené zo spotu (oracle) · $${spot.toFixed(2)}`}
+                </p>
+              </div>
+
               <div className="flex gap-2">
                 <input
                   type="number"
@@ -212,7 +290,11 @@ export function InitialHoldingsCard() {
                   className="px-3 py-1.5 rounded-md bg-emerald-500 text-background text-xs font-bold disabled:opacity-50"
                 >Pridať</button>
               </div>
-              {preview && <p className="text-[10px] text-muted-foreground">{preview} @ ${price.toFixed(2)}</p>}
+              {preview && (
+                <p className="text-[10px] text-muted-foreground">
+                  {preview} @ ${execPrice.toFixed(2)}{isCustom ? ' (vlastná)' : ''}
+                </p>
+              )}
             </div>
           );
         })}

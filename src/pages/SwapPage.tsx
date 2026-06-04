@@ -16,6 +16,7 @@ import {
   evaluateMevRisk, evaluateGasEater,
 } from '@/lib/swapRoutingService';
 import { usePrices } from '@/hooks/usePrices';
+import { RefreshCw } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
 
@@ -193,7 +194,7 @@ function FilterToggle({
 // Page
 // =========================================================================
 export function SwapPage({ lang }: Props) {
-  const { data: prices } = usePrices();
+  const { data: prices, refetch: refetchPrices, isFetching: pricesFetching } = usePrices();
 
   const [orderType, setOrderType] = useState<OrderType>('market');
   const [from, setFrom] = useState<TokenMeta>(TOKENS.find(t => t.chain === 'base' && t.symbol === 'USDC')!);
@@ -486,16 +487,25 @@ export function SwapPage({ lang }: Props) {
     );
   };
 
-  // Price-variance badge (amber) — surfaces oracle deviation > 2%.
+  // Price-variance badge — amber at >2%, escalates to red "⚠️ Odchýlka kurzu" at >5%.
   const VarianceBadge = ({ q }: { q: Quote }) => {
     if (!q.priceVarianceFlag) return null;
+    const strong = q.oracleDeviationFlag;
     return (
       <span
-        title={t.priceVarianceT}
-        className="inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border border-amber-500/50 bg-amber-500/15 text-amber-400"
+        title={lang === 'sk'
+          ? `Odchýlka oracle: ${q.priceVariancePct.toFixed(2)}% (limit ${strong ? '5%' : '2%'})`
+          : t.priceVarianceT}
+        className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase border ${
+          strong
+            ? 'border-red-500/60 bg-red-500/15 text-red-400'
+            : 'border-amber-500/50 bg-amber-500/15 text-amber-400'
+        }`}
       >
         <AlertTriangle className="w-2.5 h-2.5" />
-        {t.priceVariance} · {q.priceVariancePct.toFixed(2)}%
+        {strong
+          ? (lang === 'sk' ? `⚠️ Odchýlka kurzu · ${q.priceVariancePct.toFixed(2)}%` : `⚠️ Rate deviation · ${q.priceVariancePct.toFixed(2)}%`)
+          : `${t.priceVariance} · ${q.priceVariancePct.toFixed(2)}%`}
       </span>
     );
   };
@@ -639,6 +649,15 @@ export function SwapPage({ lang }: Props) {
                 className="h-6 w-6 rounded-md border border-border bg-background/60 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors"
                 aria-label={paused ? 'play' : 'pause'}>
                 {paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
+              </button>
+              <button
+                onClick={() => { setElapsed(0); setTick(t => t + 1); refetchPrices(); }}
+                disabled={pricesFetching}
+                className="h-6 w-6 rounded-md border border-border bg-background/60 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50"
+                aria-label={lang === 'sk' ? 'Obnoviť kurzy' : 'Refresh rates'}
+                title={lang === 'sk' ? 'Manuálne obnoviť oracle a quotes' : 'Manual oracle + quotes refresh'}
+              >
+                <RefreshCw className={`w-3 h-3 ${pricesFetching ? 'animate-spin' : ''}`} />
               </button>
               <span className={`text-[9px] font-bold tracking-wider ${paused ? 'text-muted-foreground' : 'text-emerald-400'}`}>
                 {paused ? '' : t.live}

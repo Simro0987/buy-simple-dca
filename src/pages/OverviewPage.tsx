@@ -8,7 +8,7 @@ import { PortfolioHistoryChart } from '@/components/PortfolioHistoryChart';
 import { HighImpactNewsBanner } from '@/components/HighImpactNewsBanner';
 import { RebalanceCard } from '@/components/RebalanceCard';
 import { PortfolioProvider } from '@/contexts/PortfolioContext';
-import { IdleStakeShortcuts } from '@/components/dashboard/IdleStakeShortcuts';
+// IdleStakeShortcuts moved to StakingPage (governs staking workflow natively).
 import { usePrices, useFearGreed, useAthData, useAltSeason, useSparklines } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { Lang, t } from '@/lib/i18n';
@@ -120,8 +120,7 @@ export function OverviewPage({ lang }: Props) {
           <TokenCardCarousel prices={prices} athData={athData} sparklines={sparklines} lang={lang} />
         )}
 
-        {/* Idle BTC/ETH/SOL → network-aware Stake advisor (auto-hidden when score > 55) */}
-        <IdleStakeShortcuts lang={lang} marketScore={cycleResult?.score ?? 50} />
+        {/* Idle staking shortcuts moved to Staking tab top section. */}
 
         {/* Portfolio History Chart */}
         <PortfolioHistoryChart lang={lang} prices={prices} />
