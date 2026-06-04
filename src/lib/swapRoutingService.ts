@@ -1011,3 +1011,49 @@ export function evaluateGasEater(q: Quote, fromChain: ChainId, lang: 'sk' | 'en'
   };
 }
 
+
+// ============= Oracle Deviation Validator (5% threshold) =============
+// Centralized helper that the Swap UI uses to tag any aggregator quote whose
+// estimatedReceive (`netOut` × destination spot price) deviates more than 5%
+// from the global oracle reference (LI.FI / Jupiter / CoinGecko). Routes
+// flagged here render the "⚠️ Odchýlka kurzu" badge.
+
+export interface AggregatorRateAudit {
+  platformId: string;
+  platformName: string;
+  expectedUsd: number;       // grossInUsd at oracle reference
+  receivedUsd: number;       // quote net-out USD value
+  deviationPct: number;      // signed deviation %
+  flagged: boolean;          // true when |deviation| > 5%
+}
+
+export const ORACLE_DEVIATION_THRESHOLD_PCT = 5.0;
+
+export function validateAggregatorRates(
+  quotes: Quote[],
+  expectedUsd: number,
+): AggregatorRateAudit[] {
+  if (!expectedUsd || expectedUsd <= 0) {
+    return quotes.map(q => ({
+      platformId: q.platformId,
+      platformName: q.platformName,
+      expectedUsd: 0,
+      receivedUsd: q.netOutUsd,
+      deviationPct: 0,
+      flagged: false,
+    }));
+  }
+  return quotes.map(q => {
+    const received = q.netOutUsd;
+    const deviationPct = ((received - expectedUsd) / expectedUsd) * 100;
+    const flagged = Math.abs(deviationPct) > ORACLE_DEVIATION_THRESHOLD_PCT;
+    return {
+      platformId: q.platformId,
+      platformName: q.platformName,
+      expectedUsd,
+      receivedUsd: received,
+      deviationPct,
+      flagged,
+    };
+  });
+}
