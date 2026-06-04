@@ -98,10 +98,16 @@ export function tokenKey(t: TokenMeta) {
 }
 
 // Reference fallback prices used when CoinGecko hook doesn't include the asset.
+// Tuned to current realistic spot ranges so a missing oracle never displays a
+// stale or obviously wrong number (e.g. legacy MATIC ~$0.47).
 const FALLBACK_USD: Record<string, number> = {
-  pol: 0.45,
-  avax: 28,
-  xmr: 165,
+  pol:  0.20,
+  avax: 22,
+  xmr:  340,
+  arb:  0.30,
+  op:   0.45,
+  bnb:  600,
+  sui:  3.5,
 };
 
 export function tokenUsdPrice(t: TokenMeta, prices: PriceData | undefined): number {
@@ -117,8 +123,16 @@ export function tokenUsdPrice(t: TokenMeta, prices: PriceData | undefined): numb
     case 'eth':  return (p['ethereum']?.usd ?? 0) * m;
     case 'sol':  return (p['solana']?.usd ?? 0) * m;
     case 'avax': return (p['avalanche-2']?.usd ?? FALLBACK_USD.avax) * m;
-    case 'pol':  return (p['matic-network']?.usd ?? p['polygon-ecosystem-token']?.usd ?? FALLBACK_USD.pol) * m;
+    // POL: prefer the post-migration polygon-ecosystem-token id (the live POL
+    // contract). matic-network is kept ONLY as a defensive fallback because
+    // some CoinGecko mirrors still lag and would otherwise display the legacy
+    // ~$0.47 MATIC quote instead of the real POL price.
+    case 'pol':  return (p['polygon-ecosystem-token']?.usd ?? p['matic-network']?.usd ?? FALLBACK_USD.pol) * m;
     case 'xmr':  return (p['monero']?.usd ?? FALLBACK_USD.xmr) * m;
+    case 'arb':  return (p['arbitrum']?.usd ?? FALLBACK_USD.arb) * m;
+    case 'op':   return (p['optimism']?.usd ?? FALLBACK_USD.op) * m;
+    case 'bnb':  return (p['binancecoin']?.usd ?? FALLBACK_USD.bnb) * m;
+    case 'sui':  return (p['sui']?.usd ?? FALLBACK_USD.sui) * m;
   }
 }
 
