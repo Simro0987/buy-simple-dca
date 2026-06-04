@@ -126,7 +126,11 @@ export function StakingPage({ lang }: Props) {
   };
 
   return (
+    <PortfolioProvider>
     <div className="space-y-4">
+      {/* Idle balances ready to stake — moved from Dashboard. Governs staking natively. */}
+      <IdleStakeShortcuts lang={lang} marketScore={cycleResult?.score ?? 50} />
+
       {overheated && (
         <div className="rounded-lg border-2 border-loss/60 bg-loss/10 p-3 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-loss shrink-0 mt-0.5" />
