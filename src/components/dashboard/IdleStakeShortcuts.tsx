@@ -142,10 +142,10 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
 }
 
 function ShortcutRow({
-  advice, lang, marketScore, locked, phase, onClick,
+  advice, lang, marketScore, locked, phase, daysRemaining, onClick,
 }: {
   advice: AdvisorResult; lang: Lang; marketScore: number; locked: boolean;
-  phase: ReturnType<typeof getTimingWindow>['phase']; onClick: () => void;
+  phase: ReturnType<typeof getTimingWindow>['phase']; daysRemaining?: number; onClick: () => void;
 }) {
   const sk = lang === 'sk';
   const sym = nativeTicker(advice.symbol);
