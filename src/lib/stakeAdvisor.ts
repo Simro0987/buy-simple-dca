@@ -362,8 +362,31 @@ export function overheatedWarning(lang: Lang): string {
     : '⚠️ Market is overheated. New staking is discouraged — keep 100% native liquidity for immediate take-profit selling.';
 }
 
-export function previewWindowNote(lang: Lang): string {
-  return lang === 'sk'
-    ? '🔒 Kvartálne okno sa plne aktivuje cez víkend.'
-    : '🔒 Quarterly window fully unlocks on the upcoming weekend.';
+function dniLabel(n: number): string {
+  if (n === 1) return 'deň';
+  if (n >= 2 && n <= 4) return 'dni';
+  return 'dní';
+}
+
+function daysLabel(n: number): string {
+  return n === 1 ? 'day' : 'days';
+}
+
+export function previewWindowNote(lang: Lang, daysRemaining?: number): string {
+  if (lang === 'sk') {
+    if (typeof daysRemaining === 'number' && daysRemaining > 0) {
+      return `🔒 Kvartálne okno sa plne aktivuje cez víkend (o ${daysRemaining} ${dniLabel(daysRemaining)}).`;
+    }
+    if (daysRemaining === 0) {
+      return '🔒 Kvartálne okno sa otvára dnes.';
+    }
+    return '🔒 Kvartálne okno sa plne aktivuje cez víkend.';
+  }
+  if (typeof daysRemaining === 'number' && daysRemaining > 0) {
+    return `🔒 Quarterly window fully unlocks on the upcoming weekend (in ${daysRemaining} ${daysLabel(daysRemaining)}).`;
+  }
+  if (daysRemaining === 0) {
+    return '🔒 Quarterly window opens today.';
+  }
+  return '🔒 Quarterly window fully unlocks on the upcoming weekend.';
 }
