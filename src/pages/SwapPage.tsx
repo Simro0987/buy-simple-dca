@@ -641,6 +641,15 @@ export function SwapPage({ lang }: Props) {
                 aria-label={paused ? 'play' : 'pause'}>
                 {paused ? <Play className="w-3 h-3" /> : <Pause className="w-3 h-3" />}
               </button>
+              <button
+                onClick={() => { setElapsed(0); setTick(t => t + 1); refetchPrices(); }}
+                disabled={pricesFetching}
+                className="h-6 w-6 rounded-md border border-border bg-background/60 flex items-center justify-center text-muted-foreground hover:text-primary hover:border-primary transition-colors disabled:opacity-50"
+                aria-label={lang === 'sk' ? 'Obnoviť kurzy' : 'Refresh rates'}
+                title={lang === 'sk' ? 'Manuálne obnoviť oracle a quotes' : 'Manual oracle + quotes refresh'}
+              >
+                <RefreshCw className={`w-3 h-3 ${pricesFetching ? 'animate-spin' : ''}`} />
+              </button>
               <span className={`text-[9px] font-bold tracking-wider ${paused ? 'text-muted-foreground' : 'text-emerald-400'}`}>
                 {paused ? '' : t.live}
               </span>
