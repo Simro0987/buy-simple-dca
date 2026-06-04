@@ -890,6 +890,7 @@ export function getQuotes(params: QuoteParams): QuoteResult {
       healthNote: p.healthNote,
       priceVariancePct,
       priceVarianceFlag,
+      oracleDeviationFlag,
       hops,
       officialUrl: p.officialUrl ?? '',
     };
