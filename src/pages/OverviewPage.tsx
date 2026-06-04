@@ -120,8 +120,7 @@ export function OverviewPage({ lang }: Props) {
           <TokenCardCarousel prices={prices} athData={athData} sparklines={sparklines} lang={lang} />
         )}
 
-        {/* Idle BTC/ETH/SOL → network-aware Stake advisor (auto-hidden when score > 55) */}
-        <IdleStakeShortcuts lang={lang} marketScore={cycleResult?.score ?? 50} />
+        {/* Idle staking shortcuts moved to Staking tab top section. */}
 
         {/* Portfolio History Chart */}
         <PortfolioHistoryChart lang={lang} prices={prices} />
