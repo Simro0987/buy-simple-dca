@@ -247,7 +247,7 @@ function ShortcutRow({
                 </p>
               </div>
               {locked && (
-                <p className="text-[10px] text-amber-300/90">{previewWindowNote(lang, advice.symbol === 'BTC' ? undefined : undefined)}</p>
+                <p className="text-[10px] text-amber-300/90">{previewWindowNote(lang, daysRemaining)}</p>
               )}
             </PopoverContent>
           </Popover>
