@@ -168,7 +168,7 @@ export function isSubmarineRoute(from: TokenMeta, to: TokenMeta): boolean {
 
 // Providers that route LN <-> Polygon stables via submarine swaps / fixed-rate desks.
 export const SUBMARINE_PROVIDERS = [
-  'boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace',
+  'boltz', 'exolix', 'fixedfloat', 'sideshift', 'changenow', 'houdini', 'trocador', 'swapspace', 'stealthex',
 ];
 // Subset that explicitly advertises a guaranteed fixed-rate quote.
 export const FIXED_RATE_PROVIDERS = ['boltz', 'exolix', 'fixedfloat'];
