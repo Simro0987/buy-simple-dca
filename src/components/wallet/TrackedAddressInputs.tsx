@@ -30,7 +30,10 @@ function loadTracked(): TrackedAddresses {
 }
 
 function saveTracked(value: TrackedAddresses): void {
-  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(value)); } catch { /* ignore */ }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
+    window.dispatchEvent(new CustomEvent('tracked-addresses-changed'));
+  } catch { /* ignore */ }
 }
 
 interface Props {
