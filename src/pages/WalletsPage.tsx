@@ -6,18 +6,37 @@ import { useWalletBalances, OnChainWalletResult } from '@/hooks/useWalletBalance
 import { Input } from '@/components/ui/input';
 import { usePrices } from '@/hooks/usePrices';
 import { formatUsd } from '@/lib/crypto';
+import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
 
 interface Props { lang: Lang; }
 
 const CHAINS: ChainId[] = ['btc', 'eth', 'sol', 'arb'];
+
+function formatRelative(ts: number | undefined, lang: Lang, now: number): string {
+  if (!ts) return lang === 'sk' ? 'zatiaľ nikdy' : 'never';
+  const diff = Math.max(0, Math.floor((now - ts) / 1000));
+  if (diff < 10) return lang === 'sk' ? 'Práve teraz' : 'Just now';
+  if (diff < 60) return lang === 'sk' ? `pred ${diff} s` : `${diff}s ago`;
+  const m = Math.floor(diff / 60);
+  if (m < 60) return lang === 'sk' ? `pred ${m} min` : `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return lang === 'sk' ? `pred ${h} h` : `${h}h ago`;
+  return new Date(ts).toLocaleTimeString();
+}
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);
   const [adding, setAdding] = useState(false);
   const [newChain, setNewChain] = useState<ChainId>('btc');
   const [newAddress, setNewAddress] = useState('');
-  const { data: balances, isFetching, refetch, error } = useWalletBalances(wallets);
+  const { data: balances, isFetching, refetch, error, dataUpdatedAt } = useWalletBalances(wallets);
   const { data: prices } = usePrices();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const updatedLabel = formatRelative(dataUpdatedAt, lang, now);
 
   const findResult = (chain: ChainId, address: string): OnChainWalletResult | undefined => {
     if (!balances) return undefined;
