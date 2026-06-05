@@ -274,3 +274,34 @@ export function WalletsPage({ lang }: Props) {
     </div>
   );
 }
+
+function RpcStatusDot({ lang }: { lang: Lang }) {
+  const { data, isFetching } = useRpcHealth();
+  const status: RpcHealthStatus = data?.status ?? 'unknown';
+
+  const color =
+    status === 'ok' ? 'bg-emerald-500 shadow-[0_0_6px_2px_hsl(142_71%_45%/0.55)]'
+    : status === 'degraded' ? 'bg-amber-400 shadow-[0_0_6px_2px_hsl(38_92%_50%/0.55)]'
+    : status === 'down' ? 'bg-red-500 shadow-[0_0_6px_2px_hsl(0_84%_60%/0.55)]'
+    : 'bg-muted-foreground/50';
+
+  const label =
+    status === 'ok' ? (lang === 'sk' ? 'RPC online' : 'RPC online')
+    : status === 'degraded' ? (lang === 'sk' ? 'RPC čiastočne dostupné' : 'RPC partial')
+    : status === 'down' ? (lang === 'sk' ? 'RPC nedostupné (timeout)' : 'RPC down (timeout)')
+    : (lang === 'sk' ? 'RPC stav neznámy' : 'RPC unknown');
+
+  const latency = data?.latencyMs != null ? `${data.latencyMs} ms` : '—';
+  const title = `${label} · ${latency}${data?.endpoints?.length
+    ? ' · ' + data.endpoints.map(e => `${e.name}:${e.ok ? 'OK' : 'X'}`).join(' ')
+    : ''}`;
+
+  return (
+    <span
+      title={title}
+      aria-label={title}
+      className={`inline-block w-2 h-2 rounded-full ${color} ${isFetching ? 'animate-pulse' : ''}`}
+    />
+  );
+}
+
