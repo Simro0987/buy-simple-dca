@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DollarSign } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
+import { useExternalCapital } from '@/hooks/useExternalCapital';
 
 interface Props {
   capital: number;
@@ -15,6 +16,7 @@ const QUICK = [50, 100, 200, 500, 1000];
  */
 export function CapitalInputCard({ capital, onCapitalChange }: Props) {
   const [weekly, setWeekly] = useState<number>(capital || 100);
+  const { total: walletCapital } = useExternalCapital();
 
   // Keep local state in sync if outer changes (e.g., reset)
   useEffect(() => {
