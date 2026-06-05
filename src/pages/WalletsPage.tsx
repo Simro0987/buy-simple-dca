@@ -6,18 +6,37 @@ import { useWalletBalances, OnChainWalletResult } from '@/hooks/useWalletBalance
 import { Input } from '@/components/ui/input';
 import { usePrices } from '@/hooks/usePrices';
 import { formatUsd } from '@/lib/crypto';
+import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
 
 interface Props { lang: Lang; }
 
 const CHAINS: ChainId[] = ['btc', 'eth', 'sol', 'arb'];
+
+function formatRelative(ts: number | undefined, lang: Lang, now: number): string {
+  if (!ts) return lang === 'sk' ? 'zatiaľ nikdy' : 'never';
+  const diff = Math.max(0, Math.floor((now - ts) / 1000));
+  if (diff < 10) return lang === 'sk' ? 'Práve teraz' : 'Just now';
+  if (diff < 60) return lang === 'sk' ? `pred ${diff} s` : `${diff}s ago`;
+  const m = Math.floor(diff / 60);
+  if (m < 60) return lang === 'sk' ? `pred ${m} min` : `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return lang === 'sk' ? `pred ${h} h` : `${h}h ago`;
+  return new Date(ts).toLocaleTimeString();
+}
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);
   const [adding, setAdding] = useState(false);
   const [newChain, setNewChain] = useState<ChainId>('btc');
   const [newAddress, setNewAddress] = useState('');
-  const { data: balances, isFetching, refetch, error } = useWalletBalances(wallets);
+  const { data: balances, isFetching, refetch, error, dataUpdatedAt } = useWalletBalances(wallets);
   const { data: prices } = usePrices();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 15_000);
+    return () => clearInterval(id);
+  }, []);
+  const updatedLabel = formatRelative(dataUpdatedAt, lang, now);
 
   const findResult = (chain: ChainId, address: string): OnChainWalletResult | undefined => {
     if (!balances) return undefined;
@@ -71,21 +90,26 @@ export function WalletsPage({ lang }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-foreground">
           {lang === 'sk' ? 'Peňaženky (On-chain)' : 'Wallets (On-chain)'}
         </h1>
         <div className="flex items-center gap-2">
-          {wallets.length > 0 && (
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              aria-label="Refresh"
-              className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-            </button>
-          )}
+          <div className="text-[10px] text-muted-foreground text-right leading-tight hidden xs:block">
+            <div className="uppercase tracking-wide">
+              {lang === 'sk' ? 'Zostatky aktualizované' : 'Balances updated'}
+            </div>
+            <div className="text-foreground/80 tabular-nums">{updatedLabel}</div>
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching || wallets.length === 0}
+            aria-label={lang === 'sk' ? 'Obnoviť zostatky' : 'Refresh balances'}
+            title={lang === 'sk' ? 'Obnoviť zostatky' : 'Refresh balances'}
+            className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
           <button
             onClick={() => setAdding(!adding)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
@@ -95,6 +119,13 @@ export function WalletsPage({ lang }: Props) {
           </button>
         </div>
       </div>
+
+      <div className="text-[11px] text-muted-foreground sm:hidden -mt-1">
+        {lang === 'sk' ? 'Zostatky aktualizované: ' : 'Balances updated: '}
+        <span className="text-foreground/80 tabular-nums">{updatedLabel}</span>
+      </div>
+
+      <TrackedAddressInputs lang={lang} />
 
       <div className="glass-card p-3 text-[11px] text-muted-foreground leading-relaxed">
         {lang === 'sk'
