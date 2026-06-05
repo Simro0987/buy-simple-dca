@@ -90,21 +90,26 @@ export function WalletsPage({ lang }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-foreground">
           {lang === 'sk' ? 'Peňaženky (On-chain)' : 'Wallets (On-chain)'}
         </h1>
         <div className="flex items-center gap-2">
-          {wallets.length > 0 && (
-            <button
-              onClick={() => refetch()}
-              disabled={isFetching}
-              aria-label="Refresh"
-              className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
-            >
-              <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
-            </button>
-          )}
+          <div className="text-[10px] text-muted-foreground text-right leading-tight hidden xs:block">
+            <div className="uppercase tracking-wide">
+              {lang === 'sk' ? 'Zostatky aktualizované' : 'Balances updated'}
+            </div>
+            <div className="text-foreground/80 tabular-nums">{updatedLabel}</div>
+          </div>
+          <button
+            onClick={() => refetch()}
+            disabled={isFetching || wallets.length === 0}
+            aria-label={lang === 'sk' ? 'Obnoviť zostatky' : 'Refresh balances'}
+            title={lang === 'sk' ? 'Obnoviť zostatky' : 'Refresh balances'}
+            className="p-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors disabled:opacity-50"
+          >
+            <RefreshCw className={`w-4 h-4 ${isFetching ? 'animate-spin' : ''}`} />
+          </button>
           <button
             onClick={() => setAdding(!adding)}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium"
@@ -114,6 +119,13 @@ export function WalletsPage({ lang }: Props) {
           </button>
         </div>
       </div>
+
+      <div className="text-[11px] text-muted-foreground sm:hidden -mt-1">
+        {lang === 'sk' ? 'Zostatky aktualizované: ' : 'Balances updated: '}
+        <span className="text-foreground/80 tabular-nums">{updatedLabel}</span>
+      </div>
+
+      <TrackedAddressInputs lang={lang} />
 
       <div className="glass-card p-3 text-[11px] text-muted-foreground leading-relaxed">
         {lang === 'sk'
