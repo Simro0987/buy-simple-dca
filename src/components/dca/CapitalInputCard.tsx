@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { DollarSign } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
+import { useExternalCapital } from '@/hooks/useExternalCapital';
 
 interface Props {
   capital: number;
@@ -15,6 +16,7 @@ const QUICK = [50, 100, 200, 500, 1000];
  */
 export function CapitalInputCard({ capital, onCapitalChange }: Props) {
   const [weekly, setWeekly] = useState<number>(capital || 100);
+  const { total: walletCapital } = useExternalCapital();
 
   // Keep local state in sync if outer changes (e.g., reset)
   useEffect(() => {
@@ -50,6 +52,33 @@ export function CapitalInputCard({ capital, onCapitalChange }: Props) {
           className="mt-1 w-full bg-secondary border border-border rounded-lg px-3 py-2 text-lg font-semibold text-foreground tabular-nums focus:outline-none focus:border-primary"
         />
       </label>
+
+      {walletCapital > 0 && (
+        <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
+          {(() => {
+            const weeks = weekly > 0 ? Math.floor(walletCapital / weekly) : 0;
+            const weeksWord = weeks === 1 ? 'týždeň' : weeks >= 2 && weeks <= 4 ? 'týždne' : 'týždňov';
+            return (
+              <>
+                Disponibilný kapitál na peňaženkách:{' '}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatUsd(walletCapital)}
+                </span>
+                {weekly > 0 && (
+                  <>
+                    {' '}
+                    <span className="text-muted-foreground">
+                      (Zostane vám cash na{' '}
+                      <span className="text-foreground font-semibold tabular-nums">{weeks}</span>{' '}
+                      {weeksWord} nákupov)
+                    </span>
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </p>
+      )}
 
       <div className="flex items-center justify-between text-[10px] tabular-nums">
         <span className="text-muted-foreground uppercase tracking-wide">Anchor split</span>

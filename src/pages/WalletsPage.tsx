@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { usePrices } from '@/hooks/usePrices';
 import { formatUsd } from '@/lib/crypto';
 import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
+import { ExternalCapitalCard } from '@/components/wallet/ExternalCapitalCard';
 import { useRpcHealth, RpcHealthStatus } from '@/hooks/useRpcHealth';
 
 interface Props { lang: Lang; }
@@ -133,6 +134,7 @@ export function WalletsPage({ lang }: Props) {
       </div>
 
       <TrackedAddressInputs lang={lang} />
+      <ExternalCapitalCard lang={lang} />
 
       <div className="glass-card p-3 text-[11px] text-muted-foreground leading-relaxed">
         {lang === 'sk'
