@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { usePrices } from '@/hooks/usePrices';
 import { formatUsd } from '@/lib/crypto';
 import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
+import { useRpcHealth, RpcHealthStatus } from '@/hooks/useRpcHealth';
 
 interface Props { lang: Lang; }
 
@@ -99,7 +100,10 @@ export function WalletsPage({ lang }: Props) {
             <div className="uppercase tracking-wide">
               {lang === 'sk' ? 'Zostatky aktualizované' : 'Balances updated'}
             </div>
-            <div className="text-foreground/80 tabular-nums">{updatedLabel}</div>
+            <div className="flex items-center justify-end gap-1.5">
+              <RpcStatusDot lang={lang} />
+              <span className="text-foreground/80 tabular-nums">{updatedLabel}</span>
+            </div>
           </div>
           <button
             onClick={() => refetch()}
@@ -120,9 +124,12 @@ export function WalletsPage({ lang }: Props) {
         </div>
       </div>
 
-      <div className="text-[11px] text-muted-foreground sm:hidden -mt-1">
-        {lang === 'sk' ? 'Zostatky aktualizované: ' : 'Balances updated: '}
-        <span className="text-foreground/80 tabular-nums">{updatedLabel}</span>
+      <div className="text-[11px] text-muted-foreground sm:hidden -mt-1 flex items-center gap-1.5">
+        <RpcStatusDot lang={lang} />
+        <span>
+          {lang === 'sk' ? 'Zostatky aktualizované: ' : 'Balances updated: '}
+          <span className="text-foreground/80 tabular-nums">{updatedLabel}</span>
+        </span>
       </div>
 
       <TrackedAddressInputs lang={lang} />
