@@ -53,6 +53,33 @@ export function CapitalInputCard({ capital, onCapitalChange }: Props) {
         />
       </label>
 
+      {walletCapital > 0 && (
+        <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
+          {(() => {
+            const weeks = weekly > 0 ? Math.floor(walletCapital / weekly) : 0;
+            const weeksWord = weeks === 1 ? 'týždeň' : weeks >= 2 && weeks <= 4 ? 'týždne' : 'týždňov';
+            return (
+              <>
+                Disponibilný kapitál na peňaženkách:{' '}
+                <span className="font-semibold text-foreground tabular-nums">
+                  {formatUsd(walletCapital)}
+                </span>
+                {weekly > 0 && (
+                  <>
+                    {' '}
+                    <span className="text-muted-foreground">
+                      (Zostane vám cash na{' '}
+                      <span className="text-foreground font-semibold tabular-nums">{weeks}</span>{' '}
+                      {weeksWord} nákupov)
+                    </span>
+                  </>
+                )}
+              </>
+            );
+          })()}
+        </p>
+      )}
+
       <div className="flex items-center justify-between text-[10px] tabular-nums">
         <span className="text-muted-foreground uppercase tracking-wide">Anchor split</span>
         <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/30">
