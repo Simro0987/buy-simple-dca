@@ -134,6 +134,7 @@ export function WalletsPage({ lang }: Props) {
       </div>
 
       <TrackedAddressInputs lang={lang} />
+      <ExternalCapitalCard lang={lang} />
 
       <div className="glass-card p-3 text-[11px] text-muted-foreground leading-relaxed">
         {lang === 'sk'
