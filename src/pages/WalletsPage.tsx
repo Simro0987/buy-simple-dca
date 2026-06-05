@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { usePrices } from '@/hooks/usePrices';
 import { formatUsd } from '@/lib/crypto';
 import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
+import { ExternalCapitalCard } from '@/components/wallet/ExternalCapitalCard';
 import { useRpcHealth, RpcHealthStatus } from '@/hooks/useRpcHealth';
 
 interface Props { lang: Lang; }
