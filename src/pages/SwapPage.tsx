@@ -566,6 +566,52 @@ export function SwapPage({ lang }: Props) {
         {showInfo && (
           <div className="rounded-md border border-primary/30 bg-primary/5 p-2 text-[11px] text-foreground/80 leading-snug">{t.info}</div>
         )}
+
+        {/* Kokpit Režim — gating prepínač pre prísne reštrikcie */}
+        <button
+          type="button"
+          onClick={() => setCockpit(!cockpit)}
+          aria-pressed={cockpit}
+          className={`mt-1.5 w-full flex items-center gap-2 rounded-lg border px-2.5 py-2 transition-colors text-left ${
+            cockpit
+              ? 'border-primary/60 bg-primary/10 hover:bg-primary/15'
+              : 'border-border/60 bg-card/40 hover:bg-muted/40'
+          }`}
+        >
+          <Plane className={`w-3.5 h-3.5 shrink-0 ${cockpit ? 'text-primary' : 'text-muted-foreground'}`} />
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-1.5">
+              <span className={`text-[11px] font-bold uppercase tracking-wider ${cockpit ? 'text-primary' : 'text-foreground'}`}>
+                {lang === 'sk' ? 'Kokpit Režim' : 'Cockpit Mode'}
+              </span>
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded-sm ${
+                cockpit ? 'bg-primary/20 text-primary' : 'bg-muted/40 text-muted-foreground'
+              }`}>
+                {cockpit ? (lang === 'sk' ? 'AKTÍVNY' : 'ACTIVE') : (lang === 'sk' ? 'VYPNUTÝ' : 'OFF')}
+              </span>
+            </div>
+            <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+              {cockpit
+                ? (lang === 'sk'
+                  ? 'Vynucuje $5 gas strop, cross-chain deficit buffer a backend reštrikcie pre disciplinované execution.'
+                  : 'Enforces $5 gas cap, cross-chain deficit buffer and backend restrictions for disciplined execution.')
+                : (lang === 'sk'
+                  ? 'Verejný režim — bez gas stropu a bez backend reštrikcií. Zapni pre profesionálne disciplinované execution.'
+                  : 'Public mode — no gas cap or backend restrictions. Enable for disciplined pro execution.')}
+            </p>
+          </div>
+          <div
+            className={`shrink-0 h-5 w-9 rounded-full transition-colors relative ${
+              cockpit ? 'bg-primary' : 'bg-muted'
+            }`}
+          >
+            <span
+              className={`absolute top-0.5 h-4 w-4 rounded-full bg-background shadow transition-transform ${
+                cockpit ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </div>
+        </button>
       </header>
 
       {/* Market / Limit segmented tabs */}
