@@ -20,7 +20,9 @@ import { RefreshCw } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
 import { useCockpitMode } from '@/lib/cockpitMode';
-import { Plane } from 'lucide-react';
+import { useStablesByNetwork, type StableChain } from '@/hooks/useStablesByNetwork';
+import { loadTrackedAddresses } from '@/components/wallet/TrackedAddressInputs';
+import { Plane, AlertTriangle as AlertTriangleIcon, ClipboardCopy } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
