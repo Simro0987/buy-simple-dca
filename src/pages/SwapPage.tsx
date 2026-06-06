@@ -856,6 +856,17 @@ export function SwapPage({ lang }: Props) {
         </div>
       </Card>
 
+      {/* Cockpit deficit warning (len ak Kokpit Režim AKTÍVNY) */}
+      {cockpit && !sameToken && (
+        <CockpitDeficitCard
+          lang={lang}
+          targetChain={to.chain}
+          plannedUsd={fromUsd}
+          stables={stables}
+        />
+      )}
+
+
       {/* Pro-filter toggle grid */}
       <Card className="p-3 space-y-2 bg-card/60 border-border/60">
         <div className="flex items-center gap-1.5">
