@@ -19,6 +19,8 @@ import { usePrices } from '@/hooks/usePrices';
 import { RefreshCw } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
+import { useCockpitMode } from '@/lib/cockpitMode';
+import { Plane } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
