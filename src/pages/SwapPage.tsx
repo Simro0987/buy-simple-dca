@@ -22,7 +22,7 @@ import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendin
 import { useCockpitMode } from '@/lib/cockpitMode';
 import { useStablesByNetwork, type StableChain } from '@/hooks/useStablesByNetwork';
 import { loadTrackedAddresses } from '@/components/wallet/TrackedAddressInputs';
-import { Plane, AlertTriangle as AlertTriangleIcon, ClipboardCopy } from 'lucide-react';
+import { Plane } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
