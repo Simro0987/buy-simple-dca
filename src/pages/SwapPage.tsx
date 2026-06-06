@@ -20,6 +20,8 @@ import { RefreshCw } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
 import { useCockpitMode } from '@/lib/cockpitMode';
+import { useStablesByNetwork, type StableChain } from '@/hooks/useStablesByNetwork';
+import { loadTrackedAddresses } from '@/components/wallet/TrackedAddressInputs';
 import { Plane } from 'lucide-react';
 
 interface Props { lang: Lang; }
@@ -193,6 +195,136 @@ function FilterToggle({
 }
 
 // =========================================================================
+// Cockpit Liquidity Deficit Warning — len keď je Kokpit Režim AKTÍVNY
+// =========================================================================
+const COCKPIT_CHAINS: Record<ChainId, StableChain | null> = {
+  ethereum: 'ethereum', arbitrum: 'arbitrum', base: 'base', solana: 'solana',
+  bitcoin: null, lightning: null, polygon: null, avalanche: null, monero: null,
+};
+
+function CockpitDeficitCard({
+  lang, targetChain, plannedUsd, stables,
+}: {
+  lang: Lang;
+  targetChain: ChainId;
+  plannedUsd: number;
+  stables: ReturnType<typeof useStablesByNetwork>;
+}) {
+  const sk = lang === 'sk';
+  const [copied, setCopied] = useState<'sol' | 'evm' | null>(null);
+
+  const mapped = COCKPIT_CHAINS[targetChain];
+  if (!mapped || plannedUsd <= 0) return null;
+  const available = stables[mapped];
+  const rawDeficit = plannedUsd - available;
+  if (rawDeficit <= 0) return null;
+
+  // Hybridná cenotvorba: $2 relay gas + 0.3% protokol + 0.5% slippage rezerva
+  const bufferDeficit = rawDeficit + 2 + rawDeficit * 0.003 + rawDeficit * 0.005;
+
+  // Zdrojová sieť = sieť s najväčším stable zostatkom (mimo target)
+  const candidates: Array<[StableChain, number]> = (
+    ['ethereum', 'arbitrum', 'base', 'solana'] as StableChain[]
+  )
+    .filter(c => c !== mapped)
+    .map(c => [c, stables[c]]);
+  candidates.sort((a, b) => b[1] - a[1]);
+  const sourceChain: StableChain | null = candidates[0] && candidates[0][1] > 0 ? candidates[0][0] : null;
+
+  const labelOf = (c: StableChain): string =>
+    c === 'solana' ? 'Solana' : c === 'base' ? 'Base' : c === 'arbitrum' ? 'Arbitrum' : 'Ethereum';
+
+  const targetIsSol = mapped === 'solana';
+  const addrType: 'sol' | 'evm' = targetIsSol ? 'sol' : 'evm';
+  const tracked = loadTrackedAddresses();
+  const address = targetIsSol ? tracked.solana : tracked.evm;
+
+  const copy = async () => {
+    if (!address) return;
+    try {
+      await navigator.clipboard.writeText(address);
+      setCopied(addrType);
+      setTimeout(() => setCopied(null), 1800);
+    } catch { /* noop */ }
+  };
+
+  const fmt = (n: number) => n.toFixed(2);
+
+  return (
+    <Card className="p-3 space-y-2 border-2 border-orange-500/60 bg-orange-500/10">
+      <div className="flex items-start gap-2">
+        <AlertTriangle className="w-4 h-4 text-orange-400 shrink-0 mt-0.5" />
+        <div className="space-y-1 min-w-0 flex-1">
+          <div className="text-[11px] font-bold uppercase tracking-wider text-orange-300">
+            {sk ? 'Nedostatok likvidity na cieľovej sieti' : 'Insufficient liquidity on target network'}
+          </div>
+          <p className="text-[11px] leading-snug text-foreground/90">
+            {sk ? (
+              <>⚠️ Nedostatok stablecoinov na sieti <b>{labelOf(mapped)}</b>! Chýba vám{' '}
+              <b className="font-mono tabular-nums">${fmt(rawDeficit)}</b> USD.{' '}
+              {sourceChain ? (
+                <>Odporúčaný presun (vrátane poplatkov mosta a 0.5% tolerancie sklzu): Presuňte aspoň{' '}
+                <b className="font-mono tabular-nums">${fmt(bufferDeficit)} USDC</b> zo siete{' '}
+                <b>{labelOf(sourceChain)}</b> na sieť <b>{labelOf(mapped)}</b>.</>
+              ) : (
+                <>Doplňte aspoň <b className="font-mono tabular-nums">${fmt(bufferDeficit)} USDC</b>{' '}
+                (vrátane $2 mosta a 0.5% sklzu) na sieť <b>{labelOf(mapped)}</b>.</>
+              )}</>
+            ) : (
+              <>⚠️ Not enough stablecoins on <b>{labelOf(mapped)}</b>! You're short{' '}
+              <b className="font-mono tabular-nums">${fmt(rawDeficit)}</b> USD.{' '}
+              {sourceChain ? (
+                <>Recommended transfer (incl. bridge fees and 0.5% slippage): Move at least{' '}
+                <b className="font-mono tabular-nums">${fmt(bufferDeficit)} USDC</b> from{' '}
+                <b>{labelOf(sourceChain)}</b> to <b>{labelOf(mapped)}</b>.</>
+              ) : (
+                <>Top up at least <b className="font-mono tabular-nums">${fmt(bufferDeficit)} USDC</b>{' '}
+                (incl. $2 bridge + 0.5% slippage) on <b>{labelOf(mapped)}</b>.</>
+              )}</>
+            )}
+          </p>
+
+          <div className="grid grid-cols-3 gap-1 pt-1">
+            <div className="rounded border border-orange-500/30 bg-background/30 px-1.5 py-1">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{sk ? 'Plán' : 'Plan'}</div>
+              <div className="text-[11px] font-mono tabular-nums font-bold">${fmt(plannedUsd)}</div>
+            </div>
+            <div className="rounded border border-orange-500/30 bg-background/30 px-1.5 py-1">
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">{sk ? 'Dostupné' : 'Avail.'}</div>
+              <div className="text-[11px] font-mono tabular-nums font-bold">${fmt(available)}</div>
+            </div>
+            <div className="rounded border border-orange-500/40 bg-orange-500/10 px-1.5 py-1">
+              <div className="text-[9px] uppercase tracking-wider text-orange-300">{sk ? 'Buffer' : 'Buffer'}</div>
+              <div className="text-[11px] font-mono tabular-nums font-bold text-orange-300">${fmt(bufferDeficit)}</div>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={copy}
+            disabled={!address}
+            className="w-full mt-1 h-8 rounded-md border border-orange-500/40 bg-orange-500/10 hover:bg-orange-500/20 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-[11px] font-bold text-orange-200 transition-colors"
+          >
+            {copied === addrType ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
+            {copied === addrType
+              ? (sk ? 'Skopírované!' : 'Copied!')
+              : address
+                ? (sk
+                    ? `Kopírovať moju ${targetIsSol ? 'Solana' : 'EVM'} adresu`
+                    : `Copy my ${targetIsSol ? 'Solana' : 'EVM'} address`)
+                : (sk
+                    ? `Najprv pridajte ${targetIsSol ? 'Solana' : 'EVM'} adresu v Peňaženke`
+                    : `Add ${targetIsSol ? 'Solana' : 'EVM'} address in Wallets first`)}
+          </button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+
+
+// =========================================================================
 // Page
 // =========================================================================
 export function SwapPage({ lang }: Props) {
@@ -209,6 +341,7 @@ export function SwapPage({ lang }: Props) {
   const [showInfo, setShowInfo] = useState(false);
   const [copied, setCopied] = useState(false);
   const [cockpit, setCockpit] = useCockpitMode();
+  const stables = useStablesByNetwork();
 
   // Filters
   const [filters, setFilters] = useState<QuoteFilters>({});
@@ -722,6 +855,17 @@ export function SwapPage({ lang }: Props) {
           <span className="text-[10px] text-muted-foreground truncate hidden sm:inline">· {t.slippageNote}</span>
         </div>
       </Card>
+
+      {/* Cockpit deficit warning (len ak Kokpit Režim AKTÍVNY) */}
+      {cockpit && !sameToken && (
+        <CockpitDeficitCard
+          lang={lang}
+          targetChain={to.chain}
+          plannedUsd={fromUsd}
+          stables={stables}
+        />
+      )}
+
 
       {/* Pro-filter toggle grid */}
       <Card className="p-3 space-y-2 bg-card/60 border-border/60">
