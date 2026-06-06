@@ -208,6 +208,7 @@ export function SwapPage({ lang }: Props) {
   const [paused, setPaused] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [cockpit, setCockpit] = useCockpitMode();
 
   // Filters
   const [filters, setFilters] = useState<QuoteFilters>({});
