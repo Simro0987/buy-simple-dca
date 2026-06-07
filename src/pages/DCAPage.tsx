@@ -7,6 +7,7 @@ import { MoneyModeSignal } from '@/components/dca/MoneyModeSignal';
 
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
+import { ManualTargetExecutionCard } from '@/components/dca/ManualTargetExecutionCard';
 import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
 
 import { SwapCrossChainCard } from '@/components/dca/SwapCrossChainCard';
@@ -374,6 +375,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
+
+      {/* MANUAL TARGETS — Limit -1 % / Dynamic Limit aktivácia, edit ceny, Day 7 New Market */}
+      <ManualTargetExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
 
       {/* SELF-LEARNING ENGINE — adaptívne parametre + história výkonu */}
       <LearningEngineCard />
