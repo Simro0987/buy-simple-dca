@@ -94,12 +94,12 @@ export function ManualTargetExecutionCard({ score, prices, investableUsd }: Prop
   // Lokálny stav pre každú asset/mode dvojicu
   const [rows, setRows] = useState<Record<CoinKey, Record<Mode, RowState>>>(() => {
     const saved = loadSaved();
-    const init = (c: CoinKey): Record<Mode, RowState> => ({
+    const init = (): Record<Mode, RowState> => ({
       limit1: { price: 0, oracle: 0, status: 'idle' },
       dynamic: { price: 0, oracle: 0, status: 'idle' },
     });
     const out: Record<CoinKey, Record<Mode, RowState>> = {
-      btc: init('btc'), eth: init('eth'), sol: init('sol'),
+      btc: init(), eth: init(), sol: init(),
     };
     for (const c of coins) {
       const s = saved[c];
