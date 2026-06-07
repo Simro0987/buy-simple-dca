@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { AppHeader } from '@/components/AppHeader';
+import { GasWatchdogBanner } from '@/components/GasWatchdogBanner';
 import { PinLock } from '@/components/PinLock';
 import { isUnlocked } from '@/lib/pin';
 import { useLanguage } from '@/hooks/useLanguage';
@@ -71,6 +72,9 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-background">
       <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
+      <div className="max-w-lg mx-auto px-4 pt-2">
+        <GasWatchdogBanner />
+      </div>
       <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
         {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
       </main>
