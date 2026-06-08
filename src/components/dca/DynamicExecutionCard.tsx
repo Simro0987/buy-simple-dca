@@ -298,25 +298,35 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         <p className="text-[11px] text-muted-foreground">Načítavam 14D volatilitu a momentum…</p>
       )}
 
-      {/* JEDNOTNÝ Market / Limit split (rovnaký pre všetky tokeny) */}
+      {/* GLOBÁLNY SPLIT — Limit -1 % vs Limit Dynamic (užívateľsky riadený, všetky tokeny) */}
       <div className="bg-secondary/40 rounded-lg p-3 space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            Market / Limit split (všetky tokeny)
+            Limit -1 % / Limit Dynamic split (všetky tokeny)
           </p>
           <span className="text-[10px] tabular-nums font-bold text-foreground">
-            M{Math.round(sharedMarketPct)} / L{Math.round(sharedLimitPct)}
+            L-1 {Math.round(limit1Pct)} / DYN {Math.round(limitDynPct)}
           </span>
         </div>
         <div className="h-2.5 rounded-full bg-background/50 overflow-hidden flex">
-          <div className="h-full bg-primary" style={{ width: `${sharedMarketPct}%` }} />
-          <div className="h-full bg-emerald-500/70" style={{ width: `${sharedLimitPct}%` }} />
+          <div className="h-full bg-emerald-500" style={{ width: `${limit1Pct}%` }} />
+          <div className="h-full bg-primary" style={{ width: `${limitDynPct}%` }} />
         </div>
+        <Slider
+          value={[limit1Pct]}
+          min={0}
+          max={100}
+          step={5}
+          onValueChange={(v) => setLimit1Pct(v[0] ?? 50)}
+          aria-label="Limit -1 % / Limit Dynamic split"
+        />
         <div className="flex items-start gap-1.5 pt-1 border-t border-border">
           <Info className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
           <p className="text-[10px] text-foreground/80 leading-snug">
-            <span className="font-semibold">Prečo {Math.round(sharedMarketPct)}/{Math.round(sharedLimitPct)}? </span>
-            {splitReason}
+            <span className="font-semibold">Rozdelenie týždenného DCA rozpočtu: </span>
+            Ľavá strana ide do <span className="text-emerald-300 font-semibold">Limit -1 %</span> (oracle cena − 1.0 %),
+            pravá do <span className="text-primary font-semibold">Limit Dynamic</span> (per-coin volatilita).
+            {' '}{splitReason}
           </p>
         </div>
       </div>
