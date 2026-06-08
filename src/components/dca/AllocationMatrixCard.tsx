@@ -1,0 +1,223 @@
+import { useEffect, useMemo, useState } from 'react';
+import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
+import { formatUsd } from '@/lib/crypto';
+import { toast } from 'sonner';
+
+export interface TargetAllocationRow {
+  id: string;
+  symbol: string;
+  pct: number; // 0-100
+  color: string;
+}
+
+const STORAGE_KEY = 'dca-target-weights-v1';
+export const ALLOC_CHANGED_EVENT = 'dca-target-weights-changed';
+
+const DEFAULT_ROWS: TargetAllocationRow[] = [
+  { id: 'btc', symbol: 'BTC', pct: 64, color: '#F7931A' },
+  { id: 'eth', symbol: 'ETH', pct: 25, color: '#627EEA' },
+  { id: 'sol', symbol: 'SOL', pct: 11, color: '#9945FF' },
+];
+
+const PALETTE = ['#22D3EE', '#A78BFA', '#F472B6', '#34D399', '#FBBF24', '#F87171', '#60A5FA'];
+
+export function loadTargetWeights(): TargetAllocationRow[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return DEFAULT_ROWS;
+    const parsed = JSON.parse(raw) as TargetAllocationRow[];
+    if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_ROWS;
+    return parsed;
+  } catch {
+    return DEFAULT_ROWS;
+  }
+}
+
+function saveTargetWeights(rows: TargetAllocationRow[]) {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(rows));
+    window.dispatchEvent(new Event(ALLOC_CHANGED_EVENT));
+  } catch { /* ignore */ }
+}
+
+interface Props {
+  weeklyBudgetUsd: number;
+}
+
+export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
+  const [rows, setRows] = useState<TargetAllocationRow[]>(loadTargetWeights);
+  const [newSymbol, setNewSymbol] = useState('');
+
+  useEffect(() => { saveTargetWeights(rows); }, [rows]);
+
+  const total = useMemo(() => rows.reduce((s, r) => s + r.pct, 0), [rows]);
+  const valid = Math.abs(total - 100) < 0.01;
+
+  const updatePct = (id: string, pct: number) => {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, pct: Math.max(0, Math.min(100, pct)) } : r));
+  };
+
+  const removeRow = (id: string) => {
+    if (rows.length <= 1) {
+      toast.error('Musí zostať aspoň jeden token');
+      return;
+    }
+    setRows(prev => prev.filter(r => r.id !== id));
+  };
+
+  const addRow = () => {
+    const symbol = newSymbol.trim().toUpperCase();
+    if (!symbol) {
+      toast.error('Zadaj symbol tokenu');
+      return;
+    }
+    if (rows.some(r => r.symbol === symbol)) {
+      toast.error('Tento token už existuje');
+      return;
+    }
+    if (rows.length >= 8) {
+      toast.error('Maximálne 8 tokenov');
+      return;
+    }
+    const color = PALETTE[rows.length % PALETTE.length];
+    setRows(prev => [...prev, { id: symbol.toLowerCase(), symbol, pct: 0, color }]);
+    setNewSymbol('');
+  };
+
+  const normalize = () => {
+    if (total <= 0) return;
+    const factor = 100 / total;
+    setRows(prev => prev.map(r => ({ ...r, pct: Math.round(r.pct * factor * 10) / 10 })));
+    toast.success('Váhy normalizované na 100 %');
+  };
+
+  const resetDefaults = () => {
+    setRows(DEFAULT_ROWS);
+    toast.success('Obnovené východiskové váhy (64/25/11)');
+  };
+
+  return (
+    <div className="glass-card p-4 space-y-3">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Sliders className="w-4 h-4 text-primary flex-shrink-0" />
+          <h2 className="text-xs font-bold uppercase tracking-wide text-foreground truncate">
+            Cieľová alokácia portfólia
+          </h2>
+        </div>
+        <button
+          onClick={resetDefaults}
+          className="flex items-center gap-1 px-2 py-1 rounded-md bg-secondary text-secondary-foreground text-[10px] font-medium active:scale-95"
+          title="Obnoviť 64 / 25 / 11"
+        >
+          <RotateCcw className="w-3 h-3" /> Reset
+        </button>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground leading-relaxed">
+        Nastav cieľové váhy. DCA engine automaticky prepočíta týždenné rozdelenie kapitálu podľa týchto percent.
+      </p>
+
+      {/* Total sum bar */}
+      <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${
+        valid ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'
+      }`}>
+        <span className="flex items-center gap-1.5 text-xs font-semibold">
+          {valid
+            ? <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
+            : <AlertTriangle className="w-3.5 h-3.5 text-rose-400" />}
+          <span className={valid ? 'text-emerald-400' : 'text-rose-400'}>
+            Súčet = {total.toFixed(1)} %
+          </span>
+        </span>
+        {!valid && (
+          <button
+            onClick={normalize}
+            className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 text-[10px] font-bold active:scale-95"
+          >
+            Normalizovať na 100 %
+          </button>
+        )}
+      </div>
+
+      {/* Allocation rows */}
+      <div className="space-y-2.5">
+        {rows.map(r => {
+          const budgetForRow = valid && weeklyBudgetUsd > 0 ? (weeklyBudgetUsd * r.pct) / 100 : 0;
+          return (
+            <div key={r.id} className="p-2.5 rounded-lg bg-secondary/50 space-y-2">
+              <div className="flex items-center gap-2">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0"
+                  style={{ backgroundColor: r.color + '20', color: r.color }}
+                >
+                  {r.symbol.slice(0, 3)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-foreground">{r.symbol}</p>
+                  <p className="text-[10px] text-muted-foreground tabular-nums">
+                    {valid && weeklyBudgetUsd > 0
+                      ? `${formatUsd(budgetForRow)} / týždeň`
+                      : 'čaká na 100 %'}
+                  </p>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <input
+                    type="number"
+                    inputMode="decimal"
+                    value={r.pct}
+                    min={0}
+                    max={100}
+                    step={0.1}
+                    onChange={e => updatePct(r.id, Number(e.target.value) || 0)}
+                    className="w-16 bg-background border border-border rounded px-2 py-1 text-xs text-right text-foreground tabular-nums focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <span className="text-xs text-muted-foreground">%</span>
+                  <button
+                    onClick={() => removeRow(r.id)}
+                    className="p-1.5 rounded-md bg-rose-500/10 text-rose-400 active:scale-95"
+                    aria-label={`Odstrániť ${r.symbol}`}
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              </div>
+              <Slider
+                value={[r.pct]}
+                onValueChange={v => updatePct(r.id, v[0])}
+                min={0}
+                max={100}
+                step={0.5}
+              />
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Add token row */}
+      <div className="flex items-center gap-2 pt-1">
+        <input
+          type="text"
+          value={newSymbol}
+          onChange={e => setNewSymbol(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') addRow(); }}
+          placeholder="Symbol (napr. LINK)"
+          className="flex-1 bg-secondary/60 border border-border rounded-lg px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary uppercase"
+          maxLength={8}
+        />
+        <button
+          onClick={addRow}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-xs font-semibold active:scale-95"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Pridať token
+        </button>
+      </div>
+
+      <p className="text-[10px] text-muted-foreground leading-relaxed">
+        ⚠️ Súčet všetkých percent musí byť presne 100 %. DCA engine použije tieto váhy len pri platnej konfigurácii.
+      </p>
+    </div>
+  );
+}
