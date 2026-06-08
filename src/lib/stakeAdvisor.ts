@@ -223,13 +223,19 @@ export function getTimingWindow(score: number, now: Date = new Date()): TimingWi
       daysRemaining, inQuarterlyMonth,
     };
   }
-  // Window open: today is inside a quarterly month AND on/after the first Saturday.
-  if (isQuarterly && thisMonthSat && startOfDay(now).getTime() >= thisMonthSat.getTime()) {
-    return {
-      phase: 'open', locked: false, visible: true, reason: 'weekend-open',
-      firstWeekendISO: thisMonthSat.toISOString(),
-      daysRemaining: 0, inQuarterlyMonth,
-    };
+  // Window open: ONLY during the first-Saturday + first-Sunday of the quarterly month.
+  // After Sunday (i.e. from Monday onwards) the window closes and we fall back to muted preview/countdown.
+  if (isQuarterly && thisMonthSat) {
+    const satStart = startOfDay(thisMonthSat).getTime();
+    const monStart = satStart + 2 * 86_400_000; // exclusive — covers Sat (0d) and Sun (1d) only
+    const t = startOfDay(now).getTime();
+    if (t >= satStart && t < monStart) {
+      return {
+        phase: 'open', locked: false, visible: true, reason: 'weekend-open',
+        firstWeekendISO: thisMonthSat.toISOString(),
+        daysRemaining: 0, inQuarterlyMonth,
+      };
+    }
   }
   // Otherwise PREVIEW — always visible, muted, with a live countdown until the next
   // first-Saturday of the next quarterly month (even when we are outside Mar/Jun/Sep/Dec).
