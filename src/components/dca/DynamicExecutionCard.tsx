@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react';
-import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins, Pencil, AlertTriangle, Ban, ShoppingCart } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -75,6 +76,36 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+
+  // === Unified slider: LIMIT -1 % (left) vs LIMIT DYNAMIC (right), per všetky tokeny.
+  const [limit1Pct, setLimit1Pct] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('limit-split-v1');
+      const v = raw ? Number(JSON.parse(raw)) : 50;
+      return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 50;
+    } catch { return 50; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('limit-split-v1', JSON.stringify(limit1Pct)); } catch { /* noop */ }
+  }, [limit1Pct]);
+  const limitDynPct = 100 - limit1Pct;
+
+  // === Per-coin/per-mode manually edited prices (override oracle baseline)
+  type Mode = 'limit1' | 'dynamic';
+  const [editedPrices, setEditedPrices] = useState<Record<CoinKey, Partial<Record<Mode, number>>>>(() => {
+    try {
+      const raw = localStorage.getItem('dca-target-prices-v1');
+      if (!raw) return { btc: {}, eth: {}, sol: {} };
+      const p = JSON.parse(raw);
+      return { btc: p.btc ?? {}, eth: p.eth ?? {}, sol: p.sol ?? {} };
+    } catch { return { btc: {}, eth: {}, sol: {} }; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dca-target-prices-v1', JSON.stringify(editedPrices)); } catch { /* noop */ }
+  }, [editedPrices]);
+
+  // Day 7 burgundy modal — "Nepadlo · Presunúť kapitál"
+  const [day7Coin, setDay7Coin] = useState<CoinKey | null>(null);
 
 
   const { data: executionsRows } = useQuery({
@@ -267,25 +298,35 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         <p className="text-[11px] text-muted-foreground">Načítavam 14D volatilitu a momentum…</p>
       )}
 
-      {/* JEDNOTNÝ Market / Limit split (rovnaký pre všetky tokeny) */}
+      {/* GLOBÁLNY SPLIT — Limit -1 % vs Limit Dynamic (užívateľsky riadený, všetky tokeny) */}
       <div className="bg-secondary/40 rounded-lg p-3 space-y-2">
         <div className="flex items-center justify-between">
           <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            Market / Limit split (všetky tokeny)
+            Limit -1 % / Limit Dynamic split (všetky tokeny)
           </p>
           <span className="text-[10px] tabular-nums font-bold text-foreground">
-            M{Math.round(sharedMarketPct)} / L{Math.round(sharedLimitPct)}
+            L-1 {Math.round(limit1Pct)} / DYN {Math.round(limitDynPct)}
           </span>
         </div>
         <div className="h-2.5 rounded-full bg-background/50 overflow-hidden flex">
-          <div className="h-full bg-primary" style={{ width: `${sharedMarketPct}%` }} />
-          <div className="h-full bg-emerald-500/70" style={{ width: `${sharedLimitPct}%` }} />
+          <div className="h-full bg-emerald-500" style={{ width: `${limit1Pct}%` }} />
+          <div className="h-full bg-primary" style={{ width: `${limitDynPct}%` }} />
         </div>
+        <Slider
+          value={[limit1Pct]}
+          min={0}
+          max={100}
+          step={5}
+          onValueChange={(v) => setLimit1Pct(v[0] ?? 50)}
+          aria-label="Limit -1 % / Limit Dynamic split"
+        />
         <div className="flex items-start gap-1.5 pt-1 border-t border-border">
           <Info className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
           <p className="text-[10px] text-foreground/80 leading-snug">
-            <span className="font-semibold">Prečo {Math.round(sharedMarketPct)}/{Math.round(sharedLimitPct)}? </span>
-            {splitReason}
+            <span className="font-semibold">Rozdelenie týždenného DCA rozpočtu: </span>
+            Ľavá strana ide do <span className="text-emerald-300 font-semibold">Limit -1 %</span> (oracle cena − 1.0 %),
+            pravá do <span className="text-primary font-semibold">Limit Dynamic</span> (per-coin volatilita).
+            {' '}{splitReason}
           </p>
         </div>
       </div>
@@ -315,10 +356,28 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
-          // Suma pre tento token podľa cieľovej váhy v portfóliu
+          // === USD alokácia tokenu + nový Limit -1 % / Limit Dynamic split (užívateľom riadený) ===
           const coinUsd = investableUsd * TARGET_WEIGHTS[c];
-          const marketUsd = coinUsd * (e.marketPct / 100);
-          const limitUsd = lockedLimitUsd > 0 ? lockedLimitUsd : coinUsd * (e.limitPct / 100);
+          const limit1UsdRaw = coinUsd * (limit1Pct / 100);
+          const dynUsdRaw = coinUsd * (limitDynPct / 100);
+
+          // Oracle baseline ceny pre obe stratégie
+          const l1Oracle = price > 0 ? price * 0.99 : 0;
+          const dynOracle = price > 0 ? price * (1 + e.limitDistancePct / 100) : 0;
+          const l1PriceEffective = editedPrices[c]?.limit1 ?? l1Oracle;
+          const dynPriceEffective = editedPrices[c]?.dynamic ?? dynOracle;
+          const l1Drift = l1Oracle > 0 ? Math.abs(l1PriceEffective - l1Oracle) / l1Oracle * 100 : 0;
+          const dynDrift = dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
+          const l1DriftAlert = l1Drift > 2;
+          const dynDriftAlert = dynDrift > 2;
+
+          // Server pending limit — určuje, ktorá karta je zamknutá
+          const anyLimitLocked = lockedLimitPrice > 0;
+          const pendingIsL1 = anyLimitLocked
+            && Math.abs(lockedLimitPrice - l1Oracle) <= Math.abs(lockedLimitPrice - dynOracle);
+          const pendingIsDyn = anyLimitLocked && !pendingIsL1;
+          const limit1Usd = anyLimitLocked && pendingIsL1 ? lockedLimitUsd : limit1UsdRaw;
+          const dynUsd = anyLimitLocked && pendingIsDyn ? lockedLimitUsd : dynUsdRaw;
 
           // BTC-only funding split: Profit Reservoir vs Regular Capital (dynamic by Final Score)
           const isBtc = c === 'btc';
@@ -329,36 +388,31 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const btcReservoirShare = isBtc && coinUsd > 0 ? btcFromReservoir / coinUsd : 0;
           const btcReservoirCapped = isBtc && btcDesiredFromReservoir > btcFromReservoir + 0.005;
 
-
-          const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
-          const lBg = lFilled
-            ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
-            : lPending
-            ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
-            : 'bg-emerald-500/10';
-          const mBusy = busy === `${c}-market`;
           const lBusy = busy === `${c}-limit`;
 
           // Aktuálne držané tokeny
           const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
-          // Množstvo tokenov pre market/limit objednávku
-          const marketQty = price > 0 ? marketUsd / price : 0;
-          const limitQty = limitPrice > 0 ? limitUsd / limitPrice : 0;
-          // Skutočne pridané z executions (ak vykonané/naplnené)
+          // Množstvo tokenov pre limit objednávky
+          const l1Qty = l1PriceEffective > 0 ? limit1Usd / l1PriceEffective : 0;
+          const dynQty = dynPriceEffective > 0 ? dynUsd / dynPriceEffective : 0;
           const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;
           const lAddedQty = lFilled ? Number(st?.limit?.quantity ?? 0) : 0;
           const qtyFmt = (n: number) => c === 'btc' ? n.toFixed(6) : n.toFixed(4);
-          // Zamknuté % distancie pri pendingu (na zobrazenie)
-          const displayLimitDistPct = lockedLimitPrice > 0 && price > 0
-            ? ((lockedLimitPrice / price) - 1) * 100
-            : e.limitDistancePct;
 
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-baseline gap-2">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-foreground">{e.symbol}</span>
                   <span className="text-[9px] text-muted-foreground">váha {COIN_LABEL_WEIGHT[c]}</span>
+                  <button
+                    type="button"
+                    onClick={() => setDay7Coin(c)}
+                    className="text-[9px] font-bold px-2 py-0.5 rounded bg-rose-900/40 text-rose-200 border border-rose-700/60 hover:bg-rose-900/60 active:scale-95"
+                    title="Deň 7 — Nepadlo · Presunúť kapitál"
+                  >
+                    Nepadlo · Presunúť kapitál
+                  </button>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
                   <span className="text-muted-foreground flex items-center gap-1">
@@ -425,99 +479,123 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               )}
 
-              {/* Market / Limit rozdelenie sumy */}
+              {/* LIMIT -1 % (ľavá karta) / LIMIT DYNAMIC (pravá karta) */}
               <div className="grid grid-cols-2 gap-1.5">
-                <div className={`rounded p-2 ${mBg}`}>
-                  <div className="flex items-center justify-between">
-                    <p className="text-[10px] text-primary font-semibold">MARKET {e.marketPct}%</p>
-
-                    <button
-                      onClick={() => copy(marketUsd.toFixed(2))}
-                      className="p-0.5 rounded text-primary hover:bg-primary/20 active:scale-95"
-                      aria-label={`Kopíruj market USD ${e.symbol}`}
-                    >
-                      <Copy className="w-3 h-3" />
-                    </button>
-                  </div>
-                  <p className="text-sm font-bold text-foreground tabular-nums">
-                    ${marketUsd.toFixed(2)}
-                  </p>
-                  <p className="text-[9px] text-foreground/70 tabular-nums">
-                    ≈ {qtyFmt(marketQty)} {e.symbol}
-                  </p>
-                  {mDone && mAddedQty > 0 && (
-                    <p className="text-[9px] text-emerald-400 tabular-nums">
-                      +{qtyFmt(mAddedQty)} {e.symbol} pridané
-                    </p>
-                  )}
-                  <p className="text-[9px] text-muted-foreground">teraz, za trhovú cenu</p>
-                  <button
-                    onClick={() => !mDone && handleExecute(c, 'market', marketUsd, price, isBtc ? marketUsd * btcReservoirShare : 0)}
-                    disabled={mDone || mBusy || marketUsd <= 0 || price <= 0}
-                    className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
-                      mDone ? 'bg-emerald-500 text-background' : 'bg-primary text-primary-foreground'
-                    }`}
-                  >
-                    {mDone ? <><Check className="w-3 h-3" /> Vykonané</> : (mBusy ? '…' : 'Vykonať')}
-                  </button>
-                </div>
-                {(() => {
-                  // Live progress: how close current price is to triggering the limit
-                  const liveDistPct = price > 0 && limitPrice > 0 ? ((price - limitPrice) / price) * 100 : 0;
-                  const triggered = price > 0 && price <= limitPrice;
-                  const initialBand = Math.max(0.1, Math.abs(displayLimitDistPct));
-                  const progress = triggered
-                    ? 100
-                    : Math.max(0, Math.min(100, (1 - liveDistPct / initialBand) * 100));
-                  const barColor = triggered
-                    ? 'bg-emerald-500'
-                    : progress >= 60
-                    ? 'bg-amber-400'
-                    : 'bg-emerald-500/40';
-                  const cardBg = triggered
+                {([
+                  {
+                    mode: 'limit1' as Mode,
+                    title: `LIMIT -1 % · ${limit1Pct}%`,
+                    usd: limit1Usd,
+                    oracle: l1Oracle,
+                    effPrice: l1PriceEffective,
+                    qty: l1Qty,
+                    drift: l1Drift,
+                    driftAlert: l1DriftAlert,
+                    accentText: 'text-emerald-300',
+                    isPending: anyLimitLocked && pendingIsL1,
+                    isFilled: lFilled && pendingIsL1,
+                    addedQty: lFilled && pendingIsL1 ? lAddedQty : 0,
+                  },
+                  {
+                    mode: 'dynamic' as Mode,
+                    title: `LIMIT DYNAMIC · ${limitDynPct}% (${e.limitDistancePct.toFixed(1)}%)`,
+                    usd: dynUsd,
+                    oracle: dynOracle,
+                    effPrice: dynPriceEffective,
+                    qty: dynQty,
+                    drift: dynDrift,
+                    driftAlert: dynDriftAlert,
+                    accentText: 'text-primary',
+                    isPending: anyLimitLocked && pendingIsDyn,
+                    isFilled: lFilled && pendingIsDyn,
+                    addedQty: lFilled && pendingIsDyn ? lAddedQty : 0,
+                  },
+                ]).map(card => {
+                  const triggered = price > 0 && card.effPrice > 0 && price <= card.effPrice;
+                  const cardBg = card.isFilled
+                    ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
+                    : card.isPending
+                    ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
+                    : card.driftAlert
+                    ? 'bg-orange-500/10 ring-1 ring-orange-500/40'
+                    : triggered
                     ? 'bg-emerald-500/20 ring-1 ring-emerald-500/50'
-                    : lBg;
+                    : 'bg-emerald-500/10';
+                  const baseDistPct = price > 0 && card.effPrice > 0 ? ((card.effPrice - price) / price) * 100 : 0;
+
                   return (
-                    <div className={`rounded p-2 relative overflow-hidden ${cardBg}`}>
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] text-emerald-400 font-semibold">LIMIT {e.limitPct}%</p>
+                    <div key={card.mode} className={`rounded p-2 relative overflow-hidden ${cardBg}`}>
+                      <div className="flex items-center justify-between gap-1">
+                        <p className={`text-[10px] font-semibold ${card.accentText}`}>{card.title}</p>
                         <button
-                          onClick={() => copy(limitUsd.toFixed(2))}
-                          className="p-0.5 rounded text-emerald-400 hover:bg-emerald-500/20 active:scale-95"
-                          aria-label={`Kopíruj limit USD ${e.symbol}`}
+                          onClick={() => copy(card.usd.toFixed(2))}
+                          className="p-0.5 rounded text-foreground/70 hover:bg-foreground/10 active:scale-95"
+                          aria-label={`Kopíruj USD ${e.symbol} ${card.mode}`}
                         >
                           <Copy className="w-3 h-3" />
                         </button>
                       </div>
-                      <p className="text-sm font-bold text-foreground tabular-nums">
-                        ${limitUsd.toFixed(2)}
-                      </p>
+                      <p className="text-sm font-bold text-foreground tabular-nums">${card.usd.toFixed(2)}</p>
                       <p className="text-[9px] text-foreground/70 tabular-nums">
-                        ≈ {qtyFmt(limitQty)} {e.symbol}
+                        ≈ {qtyFmt(card.qty)} {e.symbol}
                       </p>
-                      {lFilled && lAddedQty > 0 && (
+                      {card.isFilled && card.addedQty > 0 && (
                         <p className="text-[9px] text-emerald-400 tabular-nums">
-                          +{qtyFmt(lAddedQty)} {e.symbol} pridané
+                          +{qtyFmt(card.addedQty)} {e.symbol} pridané
                         </p>
                       )}
-                      <p className="text-[9px] text-muted-foreground">
-                        limit @ {displayLimitDistPct.toFixed(1)}%
-                        {lockedLimitPrice > 0 && <span className="ml-1 text-amber-400">🔒 ${formatLimitPrice(lockedLimitPrice)}</span>}
-                      </p>
+                      <div className="flex items-center justify-between gap-1 mt-1">
+                        <p className="text-[10px] font-semibold text-foreground tabular-nums">
+                          {card.effPrice > 0 ? formatLimitPrice(card.effPrice) : '—'}
+                          <span className="text-[9px] text-muted-foreground ml-1">
+                            ({baseDistPct >= 0 ? '+' : ''}{baseDistPct.toFixed(2)}%)
+                          </span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const current = card.effPrice;
+                            const input = window.prompt(
+                              `Upraviť cieľovú cenu pre ${symU} (${card.mode === 'limit1' ? 'Limit -1 %' : 'Limit Dynamic'})`,
+                              current.toFixed(c === 'btc' ? 0 : 2),
+                            );
+                            if (input === null) return;
+                            const v = Number(input);
+                            if (!Number.isFinite(v) || v <= 0) { toast.error('Neplatná cena'); return; }
+                            setEditedPrices(prev => ({
+                              ...prev,
+                              [c]: { ...prev[c], [card.mode]: v },
+                            }));
+                          }}
+                          className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95"
+                          aria-label="Upraviť cenu"
+                          title="Upraviť cenu"
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </button>
+                      </div>
+                      {card.driftAlert && (
+                        <p className="text-[9px] text-orange-300 flex items-center gap-1 leading-tight mt-0.5">
+                          <AlertTriangle className="w-2.5 h-2.5" />
+                          Odchýlka {card.drift.toFixed(1)} % od oracle
+                        </p>
+                      )}
                       <button
-                        onClick={() => !lFilled && !lPending && handleExecute(c, 'limit', limitUsd, limitPrice, isBtc ? limitUsd * btcReservoirShare : 0)}
-                        disabled={lFilled || lPending || lBusy || limitUsd <= 0 || price <= 0}
+                        onClick={() => !card.isFilled && !card.isPending && handleExecute(c, 'limit', card.usd, card.effPrice, isBtc ? card.usd * btcReservoirShare : 0)}
+                        disabled={card.isFilled || anyLimitLocked || lBusy || card.usd <= 0 || card.effPrice <= 0}
                         className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
-                          lFilled ? 'bg-emerald-500 text-background'
-                          : lPending ? (triggered ? 'bg-emerald-500 text-background' : 'bg-amber-500 text-background')
+                          card.isFilled ? 'bg-emerald-500 text-background'
+                          : card.isPending ? (triggered ? 'bg-emerald-500 text-background' : 'bg-amber-500 text-background')
                           : (triggered ? 'bg-emerald-500 text-background' : 'bg-emerald-500/80 text-background')
                         }`}
                       >
-                        {lFilled ? <><Check className="w-3 h-3" /> Naplnené</>
-                          : lPending ? <><Clock className="w-3 h-3" /> {triggered ? 'Pripravené' : 'Sleduje'}</>
-                          : (lBusy ? '…' : (triggered ? 'Pripravené — zadať' : 'Zadať limit'))}
+                        {card.isFilled ? <><Check className="w-3 h-3" /> Naplnené</>
+                          : card.isPending ? <><Clock className="w-3 h-3" /> {triggered ? 'Pripravené' : 'Sleduje'}</>
+                          : (lBusy ? '…' : (
+                            card.mode === 'limit1' ? 'Aktivovať Limit -1 %' : 'Aktivovať Limit Dynamic'
+                          ))}
                       </button>
-                      {lPending && st?.limit?.id && (
+                      {card.isPending && st?.limit?.id && (
                         <div className="mt-1 grid grid-cols-2 gap-1">
                           <button
                             onClick={() => handleMarkExpired(st.limit.id, symU)}
@@ -536,18 +614,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                           </button>
                         </div>
                       )}
-                      {/* Progress bar: fills as market price approaches limit */}
-                      {price > 0 && !lFilled && (
-                        <div className="mt-1.5 h-1 rounded-full bg-background/60 overflow-hidden">
-                          <div
-                            className={`h-full ${barColor} transition-all duration-500`}
-                            style={{ width: `${progress}%` }}
-                          />
-                        </div>
-                      )}
                     </div>
                   );
-                })()}
+                })}
               </div>
 
               {/* 💰 Presunúť do STAKE — len pre ETH/SOL po úspešnej akumulácii */}
@@ -658,6 +727,114 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           );
         })}
       </div>
+
+      {/* Day 7 modal — Nepadlo · Presunúť kapitál */}
+      {day7Coin && (() => {
+        const c = day7Coin;
+        const symU = c.toUpperCase();
+        const coinUsd = investableUsd * TARGET_WEIGHTS[c];
+        const l1Usd = coinUsd * (limit1Pct / 100);
+        const spot = prices?.[COIN_PRICE_KEY[c]]?.usd ?? 0;
+        const sObj = execStatus.get(symU);
+        const pendingLimitId: string | undefined = sObj?.limit?.status === 'PENDING' ? sObj.limit.id : undefined;
+        const isBtc = c === 'btc';
+        const btcResShareNow = isBtc && coinUsd > 0
+          ? Math.min((coinUsd * btcReservoirPct(score)) / 100, Math.max(0, reservoir.stable)) / coinUsd
+          : 0;
+
+        const runMigrateToMarket = async () => {
+          try {
+            if (pendingLimitId) {
+              await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', pendingLimitId);
+            }
+            // Wipe Limit Dynamic local override + reset Limit -1 % local override
+            setEditedPrices(prev => ({ ...prev, [c]: {} }));
+            await handleExecute(c, 'market', l1Usd, spot, isBtc ? l1Usd * btcResShareNow : 0);
+            toast.success(`${symU} — Limit Dynamic zrušený, Limit -1 % presunutý do Market (${formatUsd(l1Usd)})`);
+          } catch (err) {
+            toast.error('Chyba: ' + (err as Error).message);
+          } finally {
+            setDay7Coin(null);
+          }
+        };
+        const runCancelOnly = async () => {
+          try {
+            if (pendingLimitId) {
+              await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', pendingLimitId);
+            }
+            setEditedPrices(prev => ({ ...prev, [c]: {} }));
+            qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+            toast.success(`${symU} — Limit Dynamic zrušený a vymazaný`);
+          } finally {
+            setDay7Coin(null);
+          }
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
+            onClick={() => setDay7Coin(null)}
+          >
+            <div
+              className="w-full max-w-md glass-card p-5 space-y-4"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Deň 7 · New Market</p>
+                  <h2 className="text-base font-bold text-foreground">Nepadlo — Presunúť kapitál ({symU})</h2>
+                </div>
+                <button
+                  onClick={() => setDay7Coin(null)}
+                  className="p-1 rounded-md hover:bg-secondary"
+                  aria-label="Zatvoriť"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+
+              <div className="bg-secondary/40 rounded-lg p-3 space-y-1.5 text-[11px] text-foreground/90 leading-relaxed">
+                <p>
+                  <span className="font-semibold text-rose-300">Limit Dynamic</span> bude úplne zrušený a vymazaný
+                  (žiadny presun rozpočtu).
+                </p>
+                <p>
+                  <span className="font-semibold text-orange-300">Limit -1 %</span> alokácia
+                  ({formatUsd(l1Usd)}) sa zruší a celá pretečie do okamžitej Market Buy položky nižšie.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-orange-200 font-semibold">Market Buy</p>
+                <p className="text-base font-bold text-foreground tabular-nums">
+                  {formatUsd(l1Usd)} {symU} @ spot {spot > 0 ? formatLimitPrice(spot) : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">
+                  ≈ {spot > 0 ? (l1Usd / spot).toFixed(c === 'btc' ? 6 : 4) : '—'} {symU}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={runCancelOnly}
+                  className="w-full px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 bg-rose-500/15 text-rose-300 border border-rose-500/40 hover:bg-rose-500/25 active:scale-[0.98]"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Zrušiť starý čakajúci limit
+                </button>
+                <button
+                  type="button"
+                  onClick={runMigrateToMarket}
+                  disabled={l1Usd <= 0 || spot <= 0}
+                  className="w-full px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 bg-orange-500/20 text-orange-200 border border-orange-500/50 hover:bg-orange-500/30 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" /> Odoslať New Market nákup ({formatUsd(l1Usd)})
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
