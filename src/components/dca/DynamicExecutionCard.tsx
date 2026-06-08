@@ -699,6 +699,114 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           );
         })}
       </div>
+
+      {/* Day 7 modal — Nepadlo · Presunúť kapitál */}
+      {day7Coin && (() => {
+        const c = day7Coin;
+        const symU = c.toUpperCase();
+        const coinUsd = investableUsd * TARGET_WEIGHTS[c];
+        const l1Usd = coinUsd * (limit1Pct / 100);
+        const spot = prices?.[COIN_PRICE_KEY[c]]?.usd ?? 0;
+        const sObj = execStatus.get(symU);
+        const pendingLimitId: string | undefined = sObj?.limit?.status === 'PENDING' ? sObj.limit.id : undefined;
+        const isBtc = c === 'btc';
+        const btcResShareNow = isBtc && coinUsd > 0
+          ? Math.min((coinUsd * btcReservoirPct(score)) / 100, Math.max(0, reservoir.stable)) / coinUsd
+          : 0;
+
+        const runMigrateToMarket = async () => {
+          try {
+            if (pendingLimitId) {
+              await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', pendingLimitId);
+            }
+            // Wipe Limit Dynamic local override + reset Limit -1 % local override
+            setEditedPrices(prev => ({ ...prev, [c]: {} }));
+            await handleExecute(c, 'market', l1Usd, spot, isBtc ? l1Usd * btcResShareNow : 0);
+            toast.success(`${symU} — Limit Dynamic zrušený, Limit -1 % presunutý do Market (${formatUsd(l1Usd)})`);
+          } catch (err) {
+            toast.error('Chyba: ' + (err as Error).message);
+          } finally {
+            setDay7Coin(null);
+          }
+        };
+        const runCancelOnly = async () => {
+          try {
+            if (pendingLimitId) {
+              await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', pendingLimitId);
+            }
+            setEditedPrices(prev => ({ ...prev, [c]: {} }));
+            qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+            toast.success(`${symU} — Limit Dynamic zrušený a vymazaný`);
+          } finally {
+            setDay7Coin(null);
+          }
+        };
+
+        return (
+          <div
+            className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3"
+            onClick={() => setDay7Coin(null)}
+          >
+            <div
+              className="w-full max-w-md glass-card p-5 space-y-4"
+              onClick={(ev) => ev.stopPropagation()}
+            >
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Deň 7 · New Market</p>
+                  <h2 className="text-base font-bold text-foreground">Nepadlo — Presunúť kapitál ({symU})</h2>
+                </div>
+                <button
+                  onClick={() => setDay7Coin(null)}
+                  className="p-1 rounded-md hover:bg-secondary"
+                  aria-label="Zatvoriť"
+                >
+                  <X className="w-4 h-4 text-muted-foreground" />
+                </button>
+              </div>
+
+              <div className="bg-secondary/40 rounded-lg p-3 space-y-1.5 text-[11px] text-foreground/90 leading-relaxed">
+                <p>
+                  <span className="font-semibold text-rose-300">Limit Dynamic</span> bude úplne zrušený a vymazaný
+                  (žiadny presun rozpočtu).
+                </p>
+                <p>
+                  <span className="font-semibold text-orange-300">Limit -1 %</span> alokácia
+                  ({formatUsd(l1Usd)}) sa zruší a celá pretečie do okamžitej Market Buy položky nižšie.
+                </p>
+              </div>
+
+              <div className="rounded-lg border border-orange-500/40 bg-orange-500/10 p-3 space-y-1">
+                <p className="text-[10px] uppercase tracking-wider text-orange-200 font-semibold">Market Buy</p>
+                <p className="text-base font-bold text-foreground tabular-nums">
+                  {formatUsd(l1Usd)} {symU} @ spot {spot > 0 ? formatLimitPrice(spot) : '—'}
+                </p>
+                <p className="text-[10px] text-muted-foreground tabular-nums">
+                  ≈ {spot > 0 ? (l1Usd / spot).toFixed(c === 'btc' ? 6 : 4) : '—'} {symU}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 gap-2">
+                <button
+                  type="button"
+                  onClick={runCancelOnly}
+                  className="w-full px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 bg-rose-500/15 text-rose-300 border border-rose-500/40 hover:bg-rose-500/25 active:scale-[0.98]"
+                >
+                  <Ban className="w-3.5 h-3.5" /> Zrušiť starý čakajúci limit
+                </button>
+                <button
+                  type="button"
+                  onClick={runMigrateToMarket}
+                  disabled={l1Usd <= 0 || spot <= 0}
+                  className="w-full px-3 py-2.5 rounded-lg text-xs font-bold flex items-center justify-center gap-2 bg-orange-500/20 text-orange-200 border border-orange-500/50 hover:bg-orange-500/30 active:scale-[0.98] disabled:opacity-50"
+                >
+                  <ShoppingCart className="w-3.5 h-3.5" /> Odoslať New Market nákup ({formatUsd(l1Usd)})
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 }
