@@ -77,6 +77,36 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
 
+  // === Unified slider: LIMIT -1 % (left) vs LIMIT DYNAMIC (right), per všetky tokeny.
+  const [limit1Pct, setLimit1Pct] = useState<number>(() => {
+    try {
+      const raw = localStorage.getItem('limit-split-v1');
+      const v = raw ? Number(JSON.parse(raw)) : 50;
+      return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 50;
+    } catch { return 50; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('limit-split-v1', JSON.stringify(limit1Pct)); } catch { /* noop */ }
+  }, [limit1Pct]);
+  const limitDynPct = 100 - limit1Pct;
+
+  // === Per-coin/per-mode manually edited prices (override oracle baseline)
+  type Mode = 'limit1' | 'dynamic';
+  const [editedPrices, setEditedPrices] = useState<Record<CoinKey, Partial<Record<Mode, number>>>>(() => {
+    try {
+      const raw = localStorage.getItem('dca-target-prices-v1');
+      if (!raw) return { btc: {}, eth: {}, sol: {} };
+      const p = JSON.parse(raw);
+      return { btc: p.btc ?? {}, eth: p.eth ?? {}, sol: p.sol ?? {} };
+    } catch { return { btc: {}, eth: {}, sol: {} }; }
+  });
+  useEffect(() => {
+    try { localStorage.setItem('dca-target-prices-v1', JSON.stringify(editedPrices)); } catch { /* noop */ }
+  }, [editedPrices]);
+
+  // Day 7 burgundy modal — "Nepadlo · Presunúť kapitál"
+  const [day7Coin, setDay7Coin] = useState<CoinKey | null>(null);
+
 
   const { data: executionsRows } = useQuery({
     queryKey: ['dca_executions', week],
