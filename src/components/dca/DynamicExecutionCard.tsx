@@ -356,10 +356,28 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
-          // Suma pre tento token podľa cieľovej váhy v portfóliu
+          // === USD alokácia tokenu + nový Limit -1 % / Limit Dynamic split (užívateľom riadený) ===
           const coinUsd = investableUsd * TARGET_WEIGHTS[c];
-          const marketUsd = coinUsd * (e.marketPct / 100);
-          const limitUsd = lockedLimitUsd > 0 ? lockedLimitUsd : coinUsd * (e.limitPct / 100);
+          const limit1UsdRaw = coinUsd * (limit1Pct / 100);
+          const dynUsdRaw = coinUsd * (limitDynPct / 100);
+
+          // Oracle baseline ceny pre obe stratégie
+          const l1Oracle = price > 0 ? price * 0.99 : 0;
+          const dynOracle = price > 0 ? price * (1 + e.limitDistancePct / 100) : 0;
+          const l1PriceEffective = editedPrices[c]?.limit1 ?? l1Oracle;
+          const dynPriceEffective = editedPrices[c]?.dynamic ?? dynOracle;
+          const l1Drift = l1Oracle > 0 ? Math.abs(l1PriceEffective - l1Oracle) / l1Oracle * 100 : 0;
+          const dynDrift = dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
+          const l1DriftAlert = l1Drift > 2;
+          const dynDriftAlert = dynDrift > 2;
+
+          // Server pending limit — určuje, ktorá karta je zamknutá
+          const anyLimitLocked = lockedLimitPrice > 0;
+          const pendingIsL1 = anyLimitLocked
+            && Math.abs(lockedLimitPrice - l1Oracle) <= Math.abs(lockedLimitPrice - dynOracle);
+          const pendingIsDyn = anyLimitLocked && !pendingIsL1;
+          const limit1Usd = anyLimitLocked && pendingIsL1 ? lockedLimitUsd : limit1UsdRaw;
+          const dynUsd = anyLimitLocked && pendingIsDyn ? lockedLimitUsd : dynUsdRaw;
 
           // BTC-only funding split: Profit Reservoir vs Regular Capital (dynamic by Final Score)
           const isBtc = c === 'btc';
@@ -370,29 +388,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const btcReservoirShare = isBtc && coinUsd > 0 ? btcFromReservoir / coinUsd : 0;
           const btcReservoirCapped = isBtc && btcDesiredFromReservoir > btcFromReservoir + 0.005;
 
-
-          const mBg = mDone ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40' : 'bg-primary/10';
-          const lBg = lFilled
-            ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
-            : lPending
-            ? 'bg-amber-500/15 ring-1 ring-amber-500/40'
-            : 'bg-emerald-500/10';
-          const mBusy = busy === `${c}-market`;
           const lBusy = busy === `${c}-limit`;
 
           // Aktuálne držané tokeny
           const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
-          // Množstvo tokenov pre market/limit objednávku
-          const marketQty = price > 0 ? marketUsd / price : 0;
-          const limitQty = limitPrice > 0 ? limitUsd / limitPrice : 0;
-          // Skutočne pridané z executions (ak vykonané/naplnené)
+          // Množstvo tokenov pre limit objednávky
+          const l1Qty = l1PriceEffective > 0 ? limit1Usd / l1PriceEffective : 0;
+          const dynQty = dynPriceEffective > 0 ? dynUsd / dynPriceEffective : 0;
           const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;
           const lAddedQty = lFilled ? Number(st?.limit?.quantity ?? 0) : 0;
           const qtyFmt = (n: number) => c === 'btc' ? n.toFixed(6) : n.toFixed(4);
-          // Zamknuté % distancie pri pendingu (na zobrazenie)
-          const displayLimitDistPct = lockedLimitPrice > 0 && price > 0
-            ? ((lockedLimitPrice / price) - 1) * 100
-            : e.limitDistancePct;
 
           return (
             <div key={c} className="bg-secondary/40 rounded-lg p-2.5 space-y-2">
