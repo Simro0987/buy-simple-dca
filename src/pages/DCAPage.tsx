@@ -8,7 +8,7 @@ import { AllocationMatrixCard } from '@/components/dca/AllocationMatrixCard';
 
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
-import { ManualTargetExecutionCard } from '@/components/dca/ManualTargetExecutionCard';
+
 import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
 
 import { SwapCrossChainCard } from '@/components/dca/SwapCrossChainCard';
