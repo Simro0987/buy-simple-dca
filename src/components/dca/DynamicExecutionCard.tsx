@@ -358,10 +358,28 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
-          // === USD alokácia tokenu + nový Limit -1 % / Limit Dynamic split (užívateľom riadený) ===
+          // === USD alokácia tokenu + automatický Limit -1 % / Limit Dynamic split ===
           const coinUsd = investableUsd * TARGET_WEIGHTS[c];
-          const limit1UsdRaw = coinUsd * (limit1Pct / 100);
-          const dynUsdRaw = coinUsd * (limitDynPct / 100);
+          let limit1UsdRaw = coinUsd * (limit1Pct / 100);
+          let dynUsdRaw = coinUsd * (limitDynPct / 100);
+
+          // === $10 MIN VOLUME FILTER + MERGE RULE ===
+          const MIN_USD = 10;
+          const totalInsufficient = coinUsd < MIN_USD;
+          let dynMergedIntoL1 = false;
+          if (!totalInsufficient && dynUsdRaw < MIN_USD) {
+            // zlúč Dynamic do Limit -1 %
+            limit1UsdRaw = limit1UsdRaw + dynUsdRaw;
+            dynUsdRaw = 0;
+            dynMergedIntoL1 = true;
+          }
+          // edge: ak L-1 % vyšlo pod $10 (extrémny up-shift do Dynamic), zlúčime opačne do Dynamic
+          let l1MergedIntoDyn = false;
+          if (!totalInsufficient && !dynMergedIntoL1 && limit1UsdRaw < MIN_USD) {
+            dynUsdRaw = dynUsdRaw + limit1UsdRaw;
+            limit1UsdRaw = 0;
+            l1MergedIntoDyn = true;
+          }
 
           // Oracle baseline ceny pre obe stratégie
           const l1Oracle = price > 0 ? price * 0.99 : 0;
@@ -390,7 +408,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const btcReservoirShare = isBtc && coinUsd > 0 ? btcFromReservoir / coinUsd : 0;
           const btcReservoirCapped = isBtc && btcDesiredFromReservoir > btcFromReservoir + 0.005;
 
-          const lBusy = busy === `${c}-limit`;
+          // Per-card busy keys (independent activation states)
+          const l1BusyKey = `${c}-limit-l1`;
+          const dynBusyKey = `${c}-limit-dyn`;
+          const lBusy = busy === `${c}-limit` || busy === l1BusyKey || busy === dynBusyKey;
+
+          // === Day 7 conditional visibility — len ak je pending L-1 starší ako 7 dní ===
+          const l1CreatedAtRaw = anyLimitLocked && pendingIsL1 ? st?.limit?.created_at : null;
+          const day7Reached = l1CreatedAtRaw
+            ? (Date.now() - new Date(l1CreatedAtRaw).getTime()) >= 7 * 24 * 3600 * 1000
+            : false;
+          const showDay7Btn = day7Reached && !lFilled;
 
           // Aktuálne držané tokeny
           const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
