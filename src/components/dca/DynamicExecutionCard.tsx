@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins, Pencil, AlertTriangle, Ban, ShoppingCart } from 'lucide-react';
-import { Slider } from '@/components/ui/slider';
 import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
