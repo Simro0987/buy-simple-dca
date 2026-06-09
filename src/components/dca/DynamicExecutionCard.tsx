@@ -128,8 +128,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     amount: number,
     price: number,
     fromReservoir = 0,
+    busyKey?: string,
   ) => {
-    const key = `${coin}-${kind}`;
+    const key = busyKey ?? `${coin}-${kind}`;
     setBusy(key);
     try {
       const { error } = await supabase.functions.invoke('dca-execute', {
