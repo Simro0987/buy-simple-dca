@@ -246,6 +246,25 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const moneyMode: 'CAPITULATION' | 'NEUTRAL' | 'PARABOLIC' =
     score <= 25 ? 'CAPITULATION' : score >= 80 ? 'PARABOLIC' : 'NEUTRAL';
 
+  // ===== Automatický split: LIMIT -1 % vs LIMIT DYNAMIC (smooth, continuous) =====
+  // Hodnoty riadi Self-Learning Engine: skóre + agregované 14D momentum.
+  //   downtrend → posúva váhu do Limit -1 % (defenzívne nakupuj pokles)
+  //   uptrend   → posúva váhu do Limit Dynamic (čakaj hlbší pokles cez per-coin volatilitu)
+  //   nízke skóre (lacný trh) → mierna preferencia Limit -1 %
+  const { limit1Pct, limitDynPct, limit1Adj } = useMemo(() => {
+    const momAdj = sharedMomentumAvg < 0
+      ? Math.min(30, Math.abs(sharedMomentumAvg) * 0.6)   // shift do L-1 %
+      : -Math.min(20, sharedMomentumAvg * 0.4);           // shift do Dynamic
+    const scoreAdj = (50 - score) * 0.2;                  // -10 .. +10
+    const raw = 50 + momAdj + scoreAdj;
+    const l1 = Math.max(20, Math.min(80, raw));
+    return {
+      limit1Pct: l1,
+      limitDynPct: 100 - l1,
+      limit1Adj: l1 - 50,
+    };
+  }, [sharedMomentumAvg, score]);
+
   // "Prečo Market/Limit?" — vychádza zo skóre a momenta
   const splitReason = useMemo(() => {
     if (moneyMode === 'CAPITULATION') {
@@ -258,14 +277,15 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       score <= 45 ? `Skóre ${score} → mierne lacný, base ${base.marketPct}/${base.limitPct}.`
       : score <= 60 ? `Skóre ${score} → neutrálny, base ${base.marketPct}/${base.limitPct}.`
       : `Skóre ${score} → drahší, base ${base.marketPct}/${base.limitPct} (viac limit).`;
+    const adjSign = limit1Adj >= 0 ? '+' : '';
     const momPart =
-      sharedMomentumAdj === 0
+      Math.abs(sharedMomentumAvg) < 0.1
         ? `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% — bez úpravy.`
         : sharedMomentumAvg > 0
-        ? `Priemerné 14D momentum +${sharedMomentumAvg.toFixed(1)}% (uptrend) → +${sharedMomentumAdj}% k market% (chyť trend).`
-        : `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% (downtrend) → +${sharedMomentumAdj}% k market% (defenzívne nakupuj pokles).`;
+        ? `Priemerné 14D momentum +${sharedMomentumAvg.toFixed(1)}% (uptrend) → ${adjSign}${limit1Adj.toFixed(1)}% k Limit -1 % (čakaj hlbší pokles cez Limit Dynamic).`
+        : `Priemerné 14D momentum ${sharedMomentumAvg.toFixed(1)}% (downtrend) → ${adjSign}${limit1Adj.toFixed(1)}% k Limit -1 % (defenzívne nakupuj pokles).`;
     return `${scorePart} ${momPart}`;
-  }, [score, base, sharedMomentumAvg, sharedMomentumAdj, moneyMode]);
+  }, [score, base, sharedMomentumAvg, limit1Adj, moneyMode]);
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
