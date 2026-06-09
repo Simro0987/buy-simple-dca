@@ -77,18 +77,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
 
-  // === Unified slider: LIMIT -1 % (left) vs LIMIT DYNAMIC (right), per všetky tokeny.
-  const [limit1Pct, setLimit1Pct] = useState<number>(() => {
-    try {
-      const raw = localStorage.getItem('limit-split-v1');
-      const v = raw ? Number(JSON.parse(raw)) : 50;
-      return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) : 50;
-    } catch { return 50; }
-  });
-  useEffect(() => {
-    try { localStorage.setItem('limit-split-v1', JSON.stringify(limit1Pct)); } catch { /* noop */ }
-  }, [limit1Pct]);
-  const limitDynPct = 100 - limit1Pct;
+  // === Automatický split LIMIT -1 % vs LIMIT DYNAMIC — riadi Self-Learning Engine
+  // (kontinuálne, bez krokov). Vypočíta sa nižšie z momenta + skóre. Placeholder, prepíše sa.
 
   // === Per-coin/per-mode manually edited prices (override oracle baseline)
   type Mode = 'limit1' | 'dynamic';
