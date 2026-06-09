@@ -435,14 +435,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-foreground">{e.symbol}</span>
                   <span className="text-[9px] text-muted-foreground">váha {COIN_LABEL_WEIGHT[c]}</span>
-                  <button
-                    type="button"
-                    onClick={() => setDay7Coin(c)}
-                    className="text-[9px] font-bold px-2 py-0.5 rounded bg-rose-900/40 text-rose-200 border border-rose-700/60 hover:bg-rose-900/60 active:scale-95"
-                    title="Deň 7 — Nepadlo · Presunúť kapitál"
-                  >
-                    Nepadlo · Presunúť kapitál
-                  </button>
+                  {showDay7Btn && (
+                    <button
+                      type="button"
+                      onClick={() => setDay7Coin(c)}
+                      className="text-[9px] font-bold px-2 py-0.5 rounded bg-rose-900/40 text-rose-200 border border-rose-700/60 hover:bg-rose-900/60 active:scale-95"
+                      title="Deň 7 — Nepadlo · Presunúť kapitál"
+                    >
+                      Nepadlo · Presunúť kapitál
+                    </button>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
                   <span className="text-muted-foreground flex items-center gap-1">
