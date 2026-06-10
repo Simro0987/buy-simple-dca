@@ -19,6 +19,7 @@ const WalletsPage = lazy(() => import('@/pages/WalletsPage').then(m => ({ defaul
 const AllocationCalculatorPage = lazy(() => import('@/pages/AllocationCalculatorPage').then(m => ({ default: m.AllocationCalculatorPage })));
 const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })));
 const SwapPage = lazy(() => import('@/pages/SwapPage').then(m => ({ default: m.SwapPage })));
+const AgentPage = lazy(() => import('@/pages/AgentPage').then(m => ({ default: m.AgentPage })));
 const ExecutionTracker = lazy(() => import('@/components/ExecutionTracker').then(m => ({ default: m.ExecutionTracker })));
 const WeeklyChecklist = lazy(() => import('@/components/WeeklyChecklist').then(m => ({ default: m.WeeklyChecklist })));
 
@@ -70,6 +71,7 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   staking: ({ lang }) => wrap(<StakingPage lang={lang} />),
   wallets: ({ lang }) => wrap(<WalletsPage lang={lang} />),
   allocator: ({ lang }) => wrap(<AllocationCalculatorPage lang={lang} />),
+  agent: ({ lang }) => wrap(<AgentPage lang={lang} />),
   settings: ({ lang, toggleLang, theme, setTheme }) => wrap(
     <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />
   ),

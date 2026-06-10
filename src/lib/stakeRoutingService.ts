@@ -267,7 +267,12 @@ export interface PlannerSubAllocation {
   protocol: string;
   officialUrl: string;
   defaultPct: number;
-  apyKey: 'hodl' | 'btcStake' | 'btcLst' | 'ethStake' | 'ethL2' | 'solStake' | 'solLp';
+  apyKey:
+    | 'hodl' | 'btcStake' | 'btcLst'
+    | 'ethStake' | 'ethL2'
+    | 'solStake' | 'solLp'
+    | 'solMarinadeNative' | 'solSanctumInf'
+    | 'ethRocketPool' | 'ethEtherfi';
 }
 
 export interface PlannerAsset {
@@ -289,18 +294,18 @@ export const PLANNER_ASSETS: PlannerAsset[] = [
   },
   {
     symbol: 'ETH', name: 'Ethereum', color: '#627EEA', defaultPct: 25,
+    // 60% Rocket Pool (rETH) / 40% ether.fi (weETH) — Arbitrum native rails
     sub: [
-      { key: 'eth_hodl',   label: 'HODL (Native ETH)',      protocol: 'Hardware wallet',       officialUrl: 'ethereum.org', defaultPct: 41, apyKey: 'hodl' },
-      { key: 'eth_stake',  label: 'Mainnet Staking',        protocol: 'Lido stETH',            officialUrl: 'lido.fi',      defaultPct: 32, apyKey: 'ethStake' },
-      { key: 'eth_l2',     label: 'Layer-2 DeFi Yield',     protocol: 'wstETH · Arbitrum',     officialUrl: 'arbitrum.io',  defaultPct: 27, apyKey: 'ethL2' },
+      { key: 'eth_rocket',  label: 'Rocket Pool (rETH) · Arbitrum',  protocol: 'Rocket Pool',  officialUrl: 'rocketpool.net', defaultPct: 60, apyKey: 'ethRocketPool' },
+      { key: 'eth_etherfi', label: 'ether.fi (weETH) · Arbitrum',     protocol: 'ether.fi',     officialUrl: 'ether.fi',       defaultPct: 40, apyKey: 'ethEtherfi' },
     ],
   },
   {
     symbol: 'SOL', name: 'Solana', color: '#9945FF', defaultPct: 11,
+    // 50% Marinade Native / 50% Sanctum INF
     sub: [
-      { key: 'sol_hodl',  label: 'HODL (Native SOL)',          protocol: 'Wallet',           officialUrl: 'solana.com',      defaultPct: 36, apyKey: 'hodl' },
-      { key: 'sol_stake', label: 'Liquid Staking',             protocol: 'Jito JitoSOL',     officialUrl: 'jito.network',    defaultPct: 32, apyKey: 'solStake' },
-      { key: 'sol_lp',    label: 'Lending & Liquidity',        protocol: 'Kamino JitoSOL/SOL LP', officialUrl: 'kamino.finance', defaultPct: 32, apyKey: 'solLp' },
+      { key: 'sol_marinade_native', label: 'Marinade Native',  protocol: 'Marinade Finance', officialUrl: 'marinade.finance', defaultPct: 50, apyKey: 'solMarinadeNative' },
+      { key: 'sol_sanctum_inf',     label: 'Sanctum INF',      protocol: 'Sanctum',          officialUrl: 'sanctum.so',       defaultPct: 50, apyKey: 'solSanctumInf' },
     ],
   },
 ];
@@ -314,6 +319,10 @@ export function getLiveApyMap(tick: number): Record<PlannerSubAllocation['apyKey
     ethL2:    jitter(7.6, tick, 4),
     solStake: jitter(7.6, tick, 5),
     solLp:    jitter(8.1, tick, 6),
+    solMarinadeNative: jitter(7.4, tick, 7),
+    solSanctumInf:     jitter(8.2, tick, 8),
+    ethRocketPool:     jitter(3.1, tick, 9),
+    ethEtherfi:        jitter(4.2, tick, 10),
   };
 }
 
@@ -428,6 +437,10 @@ export function assessPlannerRisk(apyKey: PlannerSubAllocation['apyKey'], lang: 
     ethL2:    { tvlUsdM: 3200, auditedYears: 2, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4, strategy: 'lending', isolatedMarkets: true },
     solStake: { tvlUsdM: 2800, auditedYears: 3, layer: 1, unbondingDays: 0 },
     solLp:    { tvlUsdM: 2100, auditedYears: 2, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4, strategy: 'liquidity' },
+    solMarinadeNative: { tvlUsdM: 1500, auditedYears: 4, layer: 1, unbondingDays: 0 },
+    solSanctumInf:     { tvlUsdM: 450,  auditedYears: 2, layer: 1, unbondingDays: 0, involvesLst: true },
+    ethRocketPool:     { tvlUsdM: 3400, auditedYears: 4, layer: 1, unbondingDays: 0 },
+    ethEtherfi:        { tvlUsdM: 6200, auditedYears: 2, layer: 1, unbondingDays: 0, involvesLst: true },
   };
   return assessRisk(map[apyKey] ?? map.ethStake, lang);
 }
@@ -753,6 +766,11 @@ export const PLANNER_APYKEY_TO_DERIVATIVE: Partial<Record<PlannerSubAllocation['
   ethL2:    'wstETH',
   solStake: 'JitoSOL',
   solLp:    'JitoSOL',
+  solMarinadeNative: 'mSOL',
+  // INF is a Sanctum LST basket — track parity vs SOL via mSOL proxy
+  solSanctumInf:     'mSOL',
+  ethRocketPool:     'stETH',
+  ethEtherfi:        'weETH',
 };
 
 export function depegAlertMessage(lang: 'en' | 'sk', peg: PegStatus): string {

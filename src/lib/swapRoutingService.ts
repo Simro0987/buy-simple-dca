@@ -69,10 +69,13 @@ export const TOKENS: TokenMeta[] = [
   { symbol: 'USDT',        name: 'Tether',                      chain: 'base',      priceRef: 'usd', decimals: 6 },
   { symbol: 'cbBTC',       name: 'Coinbase Wrapped BTC',        chain: 'base',      priceRef: 'btc', decimals: 8 },
   { symbol: 'WETH',        name: 'Wrapped Ether',               chain: 'base',      priceRef: 'eth', decimals: 18 },
+  { symbol: 'ETH',         name: 'Ether (Base Native Bridged)', chain: 'base',      priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'SOL',         name: 'Wormhole SOL',                chain: 'base',      priceRef: 'sol', decimals: 9 },
   // Arbitrum
+  { symbol: 'ETH',         name: 'Ether (Arbitrum Native)',     chain: 'arbitrum',  priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
+  { symbol: 'wBTC',        name: 'Wrapped BTC',                 chain: 'arbitrum',  priceRef: 'btc', decimals: 8 },
   { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
   { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
   { symbol: 'ARB',         name: 'Arbitrum (Governance)',       chain: 'arbitrum',  priceRef: 'arb', decimals: 18 },
@@ -84,6 +87,8 @@ export const TOKENS: TokenMeta[] = [
   // Solana
   { symbol: 'SOL',         name: 'Solana (Native)',             chain: 'solana',    priceRef: 'sol', decimals: 9, native: true },
   { symbol: 'JitoSOL',     name: 'Jito Staked SOL',             chain: 'solana',    priceRef: 'sol', multiplier: 1.072, decimals: 9 },
+  { symbol: 'mSOL',        name: 'Marinade Staked SOL',         chain: 'solana',    priceRef: 'sol', multiplier: 1.087, decimals: 9 },
+  { symbol: 'INF',         name: 'Sanctum Infinity (INF)',      chain: 'solana',    priceRef: 'sol', multiplier: 1.052, decimals: 9 },
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'solana',    priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'solana',    priceRef: 'usd', decimals: 6 },
   // Avalanche
@@ -246,11 +251,8 @@ export const PLATFORMS: Platform[] = [
     customRecipient: true, mevProtected: true, gasRefuel: true },
 
   // ===== Same-chain EVM aggregators =====
-  { id: 'odos', name: 'Odos.xyz', type: 'aggregator',
-    buildUrl: (f, t) => `https://app.odos.xyz/?inputCurrency=${f.symbol}&outputCurrency=${t.symbol}&chainId=${chainNumericId(f.chain)}`,
-    edge: 0.0017, feeBps: 5, extraGasUsd: 0.0, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain),
-    mevProtected: true, limitOrders: true },
+  // odos.xyz removed per cockpit policy
+
   { id: 'paraswap', name: 'ParaSwap', type: 'aggregator',
     buildUrl: (f, t) => `https://app.paraswap.io/#/${f.symbol}-${t.symbol}/SELL?network=${chainQuery(f.chain)}`,
     edge: 0.0011, feeBps: 6, extraGasUsd: 0.02, estTimeMin: 1,
@@ -353,11 +355,8 @@ export const PLATFORMS: Platform[] = [
     edge: 0.0005, feeBps: 22, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
     supports: (_f, _t, type) => type === 'cross-chain',
     customRecipient: true, noKyc: true, noWallet: true },
-  { id: 'sideshift', name: 'SideShift.ai', type: 'privacy',
-    buildUrl: (f, t) => `https://sideshift.ai/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
-    edge: 0.0007, feeBps: 20, extraGasUsd: 0.3, bridgeFeeBps: 18, estTimeMin: 8,
-    supports: (_f, _t, type) => type === 'cross-chain',
-    customRecipient: true, noKyc: true, noWallet: true },
+  // sideshift.ai removed per cockpit policy
+
   { id: 'stealthex', name: 'StealthEX', type: 'privacy',
     buildUrl: (f, t, a) => `https://stealthex.io/?from=${f.symbol.toLowerCase()}&to=${t.symbol.toLowerCase()}&amount=${a}`,
     edge: 0.0005, feeBps: 25, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
@@ -438,7 +437,7 @@ const OFFICIAL_URLS: Record<string, string> = {
   paraswap:   'paraswap.io',
   across:     'across.to',
   jupiter:    'jup.ag',
-  odos:       'odos.xyz',
+  
   kyberswap:  'kyberswap.com',
   symbiosis:  'symbiosis.finance',
   cowswap:    'cow.fi',
@@ -453,7 +452,7 @@ const OFFICIAL_URLS: Record<string, string> = {
   bungee:     'bungee.exchange',
   fixedfloat: 'ff.io',
   changenow:  'changenow.io',
-  sideshift:  'sideshift.ai',
+  
   stealthex:  'stealthex.io',
   maya:       'mayaprotocol.com',
   orbiter:    'orbiter.finance',

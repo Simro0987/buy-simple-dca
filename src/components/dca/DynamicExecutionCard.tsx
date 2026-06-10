@@ -15,6 +15,23 @@ import {
 } from '@/lib/dynamicExecution';
 import { formatPrice, formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
 
+// ============= Rollover Capital Store (Limit -1% Day 7 → New Market) =============
+type RolloverMap = Partial<Record<CoinKey, number>>;
+const ROLLOVER_KEY = 'dca-rollover-capital-v1';
+function loadRollover(): RolloverMap {
+  try {
+    const raw = localStorage.getItem(ROLLOVER_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed as RolloverMap : {};
+  } catch { return {}; }
+}
+function saveRollover(m: RolloverMap) {
+  try { localStorage.setItem(ROLLOVER_KEY, JSON.stringify(m)); } catch { /* noop */ }
+  window.dispatchEvent(new CustomEvent('rollover-capital-changed'));
+}
+
+
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
   if (score <= 30) return 70;   // Deep Value
@@ -75,6 +92,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+  const [rollover, setRollover] = useState<RolloverMap>(loadRollover);
+  useEffect(() => {
+    const h = () => setRollover(loadRollover());
+    window.addEventListener('rollover-capital-changed', h);
+    window.addEventListener('storage', h);
+    return () => { window.removeEventListener('rollover-capital-changed', h); window.removeEventListener('storage', h); };
+  }, []);
+
 
   // === Automatický split LIMIT -1 % vs LIMIT DYNAMIC — riadi Self-Learning Engine
   // (kontinuálne, bez krokov). Vypočíta sa nižšie z momenta + skóre. Placeholder, prepíše sa.
@@ -598,6 +623,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                           <span className="font-normal text-rose-200/80">
                             (Zlúčené do {card.mode === 'dynamic' ? 'Limit -1 %' : 'Limit Dynamic'})
                           </span>
+                          <br/>
+                          <span className="font-normal text-rose-200/70 text-[9px]">
+                            {card.mode === 'dynamic'
+                              ? 'Dôvod: Silné medvedie momentum — kapitál chránený v bezpečnej zľave.'
+                              : 'Dôvod: Rastúci trend — alokácia uprednostňuje prispôsobivú dynamickú cenu.'}
+                          </span>
                         </p>
                       ) : (
                         <>
@@ -703,6 +734,77 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   );
                 })}
               </div>
+
+              {/* 3. MARKET (PRETEČENÝ KAPITÁL) — locked by default, unlocked by rolled-over funds */}
+              {(() => {
+                const rolledUsd = Math.max(0, Number(rollover[c] ?? 0));
+                const unlocked = rolledUsd > 0;
+                const spot = price;
+                const estQty = unlocked && spot > 0 ? rolledUsd / spot : 0;
+                const busyKey = `${c}-rollover-market`;
+                const isBusy = busy === busyKey;
+                return (
+                  <div className={`rounded-lg p-2 mt-1 ${unlocked
+                    ? 'bg-orange-500/10 ring-1 ring-orange-500/40'
+                    : 'bg-secondary/30 ring-1 ring-border opacity-70'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-[10px] font-semibold ${unlocked ? 'text-orange-200' : 'text-muted-foreground'}`}>
+                        MARKET · Pretečený kapitál {unlocked ? '🔓' : '🔒'}
+                      </p>
+                      {unlocked && (
+                        <button
+                          type="button"
+                          onClick={() => copy(rolledUsd.toFixed(2))}
+                          className="p-0.5 rounded text-foreground/70 hover:bg-foreground/10 active:scale-95"
+                          aria-label="Kopíruj USD"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    {unlocked ? (
+                      <>
+                        <p className="text-sm font-bold text-foreground tabular-nums">${rolledUsd.toFixed(2)}</p>
+                        <p className="text-[9px] text-foreground/70 tabular-nums">
+                          ≈ {qtyFmt(estQty)} {e.symbol} @ spot {spot > 0 ? formatLimitPrice(spot) : '—'}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={isBusy || spot <= 0}
+                          onClick={async () => {
+                            setBusy(busyKey);
+                            try {
+                              const { error } = await supabase.functions.invoke('dca-execute', {
+                                body: { coin: c, kind: 'market', amount_usd: rolledUsd, target_price: spot },
+                              });
+                              if (error) throw error;
+                              // clear rollover for this coin
+                              const next = { ...rollover };
+                              delete next[c];
+                              saveRollover(next);
+                              setRollover(next);
+                              toast.success(`${symU} New Market vykonaný ✓ (${formatUsd(rolledUsd)})`);
+                              qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+                              qc.invalidateQueries({ queryKey: ['app_settings'] });
+                            } catch (err) {
+                              toast.error('Chyba: ' + (err as Error).message);
+                            } finally { setBusy(null); }
+                          }}
+                          className="mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-orange-500 text-background active:scale-95 disabled:opacity-50"
+                        >
+                          {isBusy ? 'Spracúvam…' : <><ShoppingCart className="w-3 h-3" /> Zúčtovať Market nákup</>}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                        Karta sa odomkne, keď z "Limit -1 %" pretečie nezaplnený kapitál cez tlačidlo "Nepadlo · Presunúť kapitál".
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+
 
               {/* 💰 Presunúť do STAKE — len pre ETH/SOL po úspešnej akumulácii */}
               {!isBtc && (mAddedQty + lAddedQty) > 0 && (
@@ -832,16 +934,22 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
             if (pendingLimitId) {
               await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', pendingLimitId);
             }
-            // Wipe Limit Dynamic local override + reset Limit -1 % local override
+            // Reset overrides + push the unfulfilled "Limit -1 %" sum into the
+            // 3rd "Market (Pretečený kapitál)" card for next-week settlement.
             setEditedPrices(prev => ({ ...prev, [c]: {} }));
-            await handleExecute(c, 'market', l1Usd, spot, isBtc ? l1Usd * btcResShareNow : 0);
-            toast.success(`${symU} — Limit Dynamic zrušený, Limit -1 % presunutý do Market (${formatUsd(l1Usd)})`);
+            const current = loadRollover();
+            const next = { ...current, [c]: Number(((current[c] ?? 0) + l1Usd).toFixed(2)) };
+            saveRollover(next);
+            setRollover(next);
+            qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+            toast.success(`${symU} — kapitál ${formatUsd(l1Usd)} pretiekol do 3. karty "Market (Pretečený kapitál)".`);
           } catch (err) {
             toast.error('Chyba: ' + (err as Error).message);
           } finally {
             setDay7Coin(null);
           }
         };
+
         const runCancelOnly = async () => {
           try {
             if (pendingLimitId) {

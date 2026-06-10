@@ -7,6 +7,8 @@ import { Lang } from '@/lib/i18n';
 interface Props {
   result: MarketCycleResult;
   lang: Lang;
+  /** Optional live Fear & Greed value (alternative.me) — overrides gauge score. */
+  fearGreedValue?: number;
 }
 
 function zoneColor(zone: MarketCycleResult['zone']): string {
@@ -19,16 +21,50 @@ function zoneColor(zone: MarketCycleResult['zone']): string {
   }
 }
 
+function zoneFromFG(v: number): MarketCycleResult['zone'] {
+  if (v <= 24) return 'extreme_fear';
+  if (v <= 44) return 'bearish';
+  if (v <= 55) return 'neutral';
+  if (v <= 74) return 'bullish';
+  return 'euphoria';
+}
+
+function zoneLabelSk(zone: MarketCycleResult['zone']): string {
+  switch (zone) {
+    case 'extreme_fear': return 'Extrémny strach';
+    case 'bearish': return 'Medvedí trh';
+    case 'neutral': return 'Neutrálny trh';
+    case 'bullish': return 'Býčí trh';
+    case 'euphoria': return 'Eufória';
+  }
+}
+function zoneLabelEn(zone: MarketCycleResult['zone']): string {
+  switch (zone) {
+    case 'extreme_fear': return 'Extreme Fear';
+    case 'bearish': return 'Bearish';
+    case 'neutral': return 'Neutral';
+    case 'bullish': return 'Bullish';
+    case 'euphoria': return 'Euphoria';
+  }
+}
+
 function needleRotation(score: number): number {
   // Map 0-100 to -90° (left) to +90° (right)
   return -90 + (score / 100) * 180;
 }
 
-export function MarketCycleGauge({ result, lang }: Props) {
+export function MarketCycleGauge({ result, lang, fearGreedValue }: Props) {
   const sk = lang === 'sk';
   const [expanded, setExpanded] = useState(false);
-  const color = zoneColor(result.zone);
-  const rotation = needleRotation(result.score);
+  const useFg = typeof fearGreedValue === 'number' && Number.isFinite(fearGreedValue);
+  const displayScore = useFg ? Math.max(0, Math.min(100, Math.round(fearGreedValue!))) : result.score;
+  const displayZone = useFg ? zoneFromFG(displayScore) : result.zone;
+  const displayLabel = useFg
+    ? `${displayScore}/100 - ${sk ? zoneLabelSk(displayZone) : zoneLabelEn(displayZone)}`
+    : result.label;
+  const color = zoneColor(displayZone);
+  const rotation = needleRotation(displayScore);
+
 
   return (
     <div className="glass-card p-4 space-y-3">
@@ -63,8 +99,8 @@ export function MarketCycleGauge({ result, lang }: Props) {
               stroke="#ef4444"
               strokeWidth="12"
               strokeLinecap="round"
-              opacity={result.score >= 0 ? '0.9' : '0.2'}
-              strokeDasharray={result.score <= 20 ? `${(result.score / 20) * 55} 200` : '55 200'}
+              opacity={displayScore >= 0 ? '0.9' : '0.2'}
+              strokeDasharray={displayScore <= 20 ? `${(displayScore / 20) * 55} 200` : '55 200'}
             />
 
             {/* Needle */}
@@ -83,10 +119,10 @@ export function MarketCycleGauge({ result, lang }: Props) {
 
         {/* Score display */}
         <div className="text-center -mt-2">
-          <span className="text-3xl font-bold" style={{ color }}>{result.score}</span>
+          <span className="text-3xl font-bold" style={{ color }}>{displayScore}</span>
           <span className="text-sm text-muted-foreground ml-1">/ 100</span>
         </div>
-        <span className="text-sm font-semibold mt-1" style={{ color }}>{result.label}</span>
+        <span className="text-sm font-semibold mt-1" style={{ color }}>{displayLabel}</span>
       </div>
 
       {/* Interpretation */}

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
-import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing } from 'lucide-react';
+import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing, Bot, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
 import { CronJobsCard } from '@/components/CronJobsCard';
@@ -48,6 +48,13 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     highImpactNews: true,
   });
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(getNotificationPrefs);
+  const [openRouterKey, setOpenRouterKey] = useState<string>(() => localStorage.getItem('openrouter-api-key-v1') ?? '');
+  const [showKey, setShowKey] = useState(false);
+
+  const saveOpenRouterKey = (v: string) => {
+    setOpenRouterKey(v);
+    try { localStorage.setItem('openrouter-api-key-v1', v); } catch { /* noop */ }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('telegram_chat_id');
@@ -153,6 +160,47 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">{t('settings', lang)}</h1>
+
+      {/* OpenRouter API key for AI Agent */}
+      <div className="glass-card p-4 space-y-3">
+        <div className="flex items-center gap-3">
+          <Bot className="w-5 h-5 text-muted-foreground" />
+          <span className="font-medium text-foreground">
+            {lang === 'sk' ? 'AI Agent (OpenRouter)' : 'AI Agent (OpenRouter)'}
+          </span>
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm text-muted-foreground">
+            {lang === 'sk' ? 'Zadajte OpenRouter API Kľúč' : 'Enter OpenRouter API Key'}
+          </label>
+          <div className="relative">
+            <input
+              type={showKey ? 'text' : 'password'}
+              value={openRouterKey}
+              onChange={(e) => saveOpenRouterKey(e.target.value)}
+              placeholder="sk-or-v1-…"
+              autoComplete="off"
+              spellCheck={false}
+              className="w-full pr-10 px-3 py-2 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(s => !s)}
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
+              aria-label={showKey ? 'Hide' : 'Show'}
+            >
+              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            {lang === 'sk'
+              ? 'Kľúč sa ukladá lokálne v prehliadači. Model: openrouter/auto (NotDiamond cost/quality = 0) s web search.'
+              : 'Stored locally in your browser. Model: openrouter/auto (NotDiamond cost/quality = 0) with web search.'}
+          </p>
+        </div>
+      </div>
+
+
 
       {/* Language */}
       <div className="glass-card p-4">

@@ -86,7 +86,7 @@ export function SwapCrossChainCard() {
             <Shield className="w-3.5 h-3.5" /> ETHEREUM (ETH)
           </p>
           <ul className="ml-4 space-y-0.5 text-muted-foreground">
-            <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span> alebo <span className="text-emerald-300 font-semibold">Odos</span></li>
+            <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span></li>
             <li>• <span className="text-foreground font-semibold">Týždenný nákup (Limit):</span> <span className="text-emerald-300 font-semibold">CoW Swap</span></li>
             <li>• <span className="text-foreground font-semibold">Mesačný presun na Ledger:</span> <span className="text-emerald-300 font-semibold">Across Protocol</span> (alebo Across trasa v Jumperi)</li>
             <li className="text-[10px] ml-3 italic flex items-center gap-1"><Clock className="w-3 h-3" /> Najlepší čas: cez víkend (sobota alebo nedeľa) ráno kvôli najlacnejšiemu plynu.</li>
@@ -98,7 +98,7 @@ export function SwapCrossChainCard() {
             <Coins className="w-3.5 h-3.5" /> BITCOIN (BTC)
           </p>
           <ul className="ml-4 space-y-0.5 text-muted-foreground">
-            <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span> alebo <span className="text-emerald-300 font-semibold">Odos</span></li>
+            <li>• <span className="text-foreground font-semibold">Týždenný nákup (Market):</span> <span className="text-emerald-300 font-semibold">Velora</span></li>
             <li>• <span className="text-foreground font-semibold">Týždenný nákup (Limit):</span> <span className="text-emerald-300 font-semibold">CoW Swap</span></li>
             <li>• <span className="text-foreground font-semibold">Mesačný presun na Trezor/Ledger:</span> <span className="text-emerald-300 font-semibold">Jumper Exchange</span> (trasa THORchain) alebo <span className="text-emerald-300 font-semibold">Symbiosis Finance</span></li>
             <li className="text-[10px] ml-3 italic flex items-center gap-1"><Clock className="w-3 h-3" /> Najlepší čas: cez víkend (sobota alebo nedeľa) ráno kvôli najnižším L1 poplatkom.</li>
