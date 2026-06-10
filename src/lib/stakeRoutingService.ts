@@ -437,6 +437,10 @@ export function assessPlannerRisk(apyKey: PlannerSubAllocation['apyKey'], lang: 
     ethL2:    { tvlUsdM: 3200, auditedYears: 2, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4, strategy: 'lending', isolatedMarkets: true },
     solStake: { tvlUsdM: 2800, auditedYears: 3, layer: 1, unbondingDays: 0 },
     solLp:    { tvlUsdM: 2100, auditedYears: 2, layer: 3, unbondingDays: 0, involvesLst: true, hopsCount: 4, strategy: 'liquidity' },
+    solMarinadeNative: { tvlUsdM: 1500, auditedYears: 4, layer: 1, unbondingDays: 0 },
+    solSanctumInf:     { tvlUsdM: 450,  auditedYears: 2, layer: 1, unbondingDays: 0, involvesLst: true },
+    ethRocketPool:     { tvlUsdM: 3400, auditedYears: 4, layer: 1, unbondingDays: 0 },
+    ethEtherfi:        { tvlUsdM: 6200, auditedYears: 2, layer: 1, unbondingDays: 0, involvesLst: true },
   };
   return assessRisk(map[apyKey] ?? map.ethStake, lang);
 }
