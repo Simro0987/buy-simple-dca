@@ -200,6 +200,26 @@ function daysBetween(a: Date, b: Date): number {
   return Math.max(0, Math.ceil((startOfDay(b).getTime() - startOfDay(a).getTime()) / 86_400_000));
 }
 
+// ===== Emergency bypass — overrides time-lock, instantly opens the window =====
+const BYPASS_KEY = 'stake-emergency-bypass-v1';
+export function isEmergencyBypassActive(): boolean {
+  try {
+    const raw = localStorage.getItem(BYPASS_KEY);
+    if (!raw) return false;
+    const ts = Number(raw);
+    if (!Number.isFinite(ts)) return false;
+    // bypass auto-expires after 24h to prevent permanently leaving the lock open
+    return Date.now() - ts < 24 * 3600 * 1000;
+  } catch { return false; }
+}
+export function setEmergencyBypass(active: boolean): void {
+  try {
+    if (active) localStorage.setItem(BYPASS_KEY, String(Date.now()));
+    else localStorage.removeItem(BYPASS_KEY);
+    window.dispatchEvent(new CustomEvent('stake-bypass-changed', { detail: active }));
+  } catch { /* noop */ }
+}
+
 export function getTimingWindow(score: number, now: Date = new Date()): TimingWindow {
   // Compute next quarterly-Saturday window + days remaining (used by all branches).
   const nextSat = nextQuarterlyFirstSaturday(now);
@@ -208,6 +228,15 @@ export function getTimingWindow(score: number, now: Date = new Date()): TimingWi
   const isQuarterly = QUARTERLY_MONTH_INDICES.includes(monthIdx);
   const thisMonthSat = isQuarterly ? firstWeekend(now.getFullYear(), monthIdx) : null;
   const inQuarterlyMonth = isQuarterly;
+
+  // Emergency bypass — manual override forces the window open
+  if (isEmergencyBypassActive()) {
+    return {
+      phase: 'open', locked: false, visible: true, reason: 'weekend-open',
+      firstWeekendISO: thisMonthSat?.toISOString() ?? nextSat.toISOString(),
+      daysRemaining: 0, inQuarterlyMonth,
+    };
+  }
 
   // Override: overheated forces Unstake UI regardless of calendar.
   if (score > 55) {
