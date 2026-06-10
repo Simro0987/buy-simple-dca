@@ -69,10 +69,13 @@ export const TOKENS: TokenMeta[] = [
   { symbol: 'USDT',        name: 'Tether',                      chain: 'base',      priceRef: 'usd', decimals: 6 },
   { symbol: 'cbBTC',       name: 'Coinbase Wrapped BTC',        chain: 'base',      priceRef: 'btc', decimals: 8 },
   { symbol: 'WETH',        name: 'Wrapped Ether',               chain: 'base',      priceRef: 'eth', decimals: 18 },
+  { symbol: 'ETH',         name: 'Ether (Base Native Bridged)', chain: 'base',      priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'SOL',         name: 'Wormhole SOL',                chain: 'base',      priceRef: 'sol', decimals: 9 },
   // Arbitrum
+  { symbol: 'ETH',         name: 'Ether (Arbitrum Native)',     chain: 'arbitrum',  priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'arbitrum',  priceRef: 'usd', decimals: 6 },
+  { symbol: 'wBTC',        name: 'Wrapped BTC',                 chain: 'arbitrum',  priceRef: 'btc', decimals: 8 },
   { symbol: 'wstETH',      name: 'Wrapped stETH',               chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.18, decimals: 18 },
   { symbol: 'weETH',       name: 'Ether.fi Wrapped eETH',       chain: 'arbitrum',  priceRef: 'eth', multiplier: 1.045, decimals: 18 },
   { symbol: 'ARB',         name: 'Arbitrum (Governance)',       chain: 'arbitrum',  priceRef: 'arb', decimals: 18 },
