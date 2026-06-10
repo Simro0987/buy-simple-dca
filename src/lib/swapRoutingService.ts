@@ -437,7 +437,7 @@ const OFFICIAL_URLS: Record<string, string> = {
   paraswap:   'paraswap.io',
   across:     'across.to',
   jupiter:    'jup.ag',
-  odos:       'odos.xyz',
+  
   kyberswap:  'kyberswap.com',
   symbiosis:  'symbiosis.finance',
   cowswap:    'cow.fi',
