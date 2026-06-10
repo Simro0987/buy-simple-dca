@@ -48,6 +48,13 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     highImpactNews: true,
   });
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(getNotificationPrefs);
+  const [openRouterKey, setOpenRouterKey] = useState<string>(() => localStorage.getItem('openrouter-api-key-v1') ?? '');
+  const [showKey, setShowKey] = useState(false);
+
+  const saveOpenRouterKey = (v: string) => {
+    setOpenRouterKey(v);
+    try { localStorage.setItem('openrouter-api-key-v1', v); } catch { /* noop */ }
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('telegram_chat_id');
