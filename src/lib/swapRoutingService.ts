@@ -251,11 +251,8 @@ export const PLATFORMS: Platform[] = [
     customRecipient: true, mevProtected: true, gasRefuel: true },
 
   // ===== Same-chain EVM aggregators =====
-  { id: 'odos', name: 'Odos.xyz', type: 'aggregator',
-    buildUrl: (f, t) => `https://app.odos.xyz/?inputCurrency=${f.symbol}&outputCurrency=${t.symbol}&chainId=${chainNumericId(f.chain)}`,
-    edge: 0.0017, feeBps: 5, extraGasUsd: 0.0, estTimeMin: 1,
-    supports: (f, t, type) => type === 'same-chain' && isEvm(f.chain),
-    mevProtected: true, limitOrders: true },
+  // odos.xyz removed per cockpit policy
+
   { id: 'paraswap', name: 'ParaSwap', type: 'aggregator',
     buildUrl: (f, t) => `https://app.paraswap.io/#/${f.symbol}-${t.symbol}/SELL?network=${chainQuery(f.chain)}`,
     edge: 0.0011, feeBps: 6, extraGasUsd: 0.02, estTimeMin: 1,
