@@ -355,11 +355,8 @@ export const PLATFORMS: Platform[] = [
     edge: 0.0005, feeBps: 22, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
     supports: (_f, _t, type) => type === 'cross-chain',
     customRecipient: true, noKyc: true, noWallet: true },
-  { id: 'sideshift', name: 'SideShift.ai', type: 'privacy',
-    buildUrl: (f, t) => `https://sideshift.ai/${f.symbol.toLowerCase()}/${t.symbol.toLowerCase()}`,
-    edge: 0.0007, feeBps: 20, extraGasUsd: 0.3, bridgeFeeBps: 18, estTimeMin: 8,
-    supports: (_f, _t, type) => type === 'cross-chain',
-    customRecipient: true, noKyc: true, noWallet: true },
+  // sideshift.ai removed per cockpit policy
+
   { id: 'stealthex', name: 'StealthEX', type: 'privacy',
     buildUrl: (f, t, a) => `https://stealthex.io/?from=${f.symbol.toLowerCase()}&to=${t.symbol.toLowerCase()}&amount=${a}`,
     edge: 0.0005, feeBps: 25, extraGasUsd: 0.4, bridgeFeeBps: 22, estTimeMin: 12,
