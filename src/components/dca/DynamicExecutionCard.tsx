@@ -928,16 +928,22 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
             if (pendingLimitId) {
               await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', pendingLimitId);
             }
-            // Wipe Limit Dynamic local override + reset Limit -1 % local override
+            // Reset overrides + push the unfulfilled "Limit -1 %" sum into the
+            // 3rd "Market (Pretečený kapitál)" card for next-week settlement.
             setEditedPrices(prev => ({ ...prev, [c]: {} }));
-            await handleExecute(c, 'market', l1Usd, spot, isBtc ? l1Usd * btcResShareNow : 0);
-            toast.success(`${symU} — Limit Dynamic zrušený, Limit -1 % presunutý do Market (${formatUsd(l1Usd)})`);
+            const current = loadRollover();
+            const next = { ...current, [c]: Number(((current[c] ?? 0) + l1Usd).toFixed(2)) };
+            saveRollover(next);
+            setRollover(next);
+            qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+            toast.success(`${symU} — kapitál ${formatUsd(l1Usd)} pretiekol do 3. karty "Market (Pretečený kapitál)".`);
           } catch (err) {
             toast.error('Chyba: ' + (err as Error).message);
           } finally {
             setDay7Coin(null);
           }
         };
+
         const runCancelOnly = async () => {
           try {
             if (pendingLimitId) {
