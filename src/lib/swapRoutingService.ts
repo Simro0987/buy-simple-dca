@@ -452,7 +452,7 @@ const OFFICIAL_URLS: Record<string, string> = {
   bungee:     'bungee.exchange',
   fixedfloat: 'ff.io',
   changenow:  'changenow.io',
-  sideshift:  'sideshift.ai',
+  
   stealthex:  'stealthex.io',
   maya:       'mayaprotocol.com',
   orbiter:    'orbiter.finance',
