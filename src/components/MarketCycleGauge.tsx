@@ -119,10 +119,10 @@ export function MarketCycleGauge({ result, lang, fearGreedValue }: Props) {
 
         {/* Score display */}
         <div className="text-center -mt-2">
-          <span className="text-3xl font-bold" style={{ color }}>{result.score}</span>
+          <span className="text-3xl font-bold" style={{ color }}>{displayScore}</span>
           <span className="text-sm text-muted-foreground ml-1">/ 100</span>
         </div>
-        <span className="text-sm font-semibold mt-1" style={{ color }}>{result.label}</span>
+        <span className="text-sm font-semibold mt-1" style={{ color }}>{displayLabel}</span>
       </div>
 
       {/* Interpretation */}
