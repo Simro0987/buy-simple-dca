@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { Zap, Info, Lock, Unlock, ArrowRightLeft, Landmark } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useStakingLedger } from '@/hooks/useStakingLedger';
@@ -16,6 +17,8 @@ import {
   strategyCommentary,
   overheatedWarning,
   previewWindowNote,
+  isEmergencyBypassActive,
+  setEmergencyBypass,
   type AdvisorSymbol,
   type AdvisorResult,
   type UnstakeAdvice,
@@ -30,9 +33,19 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
   const { breakdown } = usePortfolio();
   const { entries } = useStakingLedger();
+  const [bypass, setBypass] = useState<boolean>(() => isEmergencyBypassActive());
+  useEffect(() => {
+    const h = () => setBypass(isEmergencyBypassActive());
+    window.addEventListener('stake-bypass-changed', h);
+    const id = setInterval(h, 5000);
+    return () => { window.removeEventListener('stake-bypass-changed', h); clearInterval(id); };
+  }, []);
+  // Recompute window when bypass changes
   const win = getTimingWindow(marketScore);
+  void bypass; // ensures re-render when bypass toggles
 
   if (!win.visible) return null;
+
 
   // ===== OVERHEATED → Unstake engine =====
   if (win.phase === 'overheated') {
