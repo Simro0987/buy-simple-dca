@@ -623,6 +623,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                           <span className="font-normal text-rose-200/80">
                             (Zlúčené do {card.mode === 'dynamic' ? 'Limit -1 %' : 'Limit Dynamic'})
                           </span>
+                          <br/>
+                          <span className="font-normal text-rose-200/70 text-[9px]">
+                            {card.mode === 'dynamic'
+                              ? 'Dôvod: Silné medvedie momentum — kapitál chránený v bezpečnej zľave.'
+                              : 'Dôvod: Rastúci trend — alokácia uprednostňuje prispôsobivú dynamickú cenu.'}
+                          </span>
                         </p>
                       ) : (
                         <>
