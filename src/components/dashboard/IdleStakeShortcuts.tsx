@@ -127,10 +127,40 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
         </span>
       </div>
       {locked && (
-        <p className="text-[10px] text-amber-300/90 leading-snug bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1">
-          {previewWindowNote(lang, days)}
-        </p>
+        <div className="flex flex-col gap-1.5 bg-amber-500/10 border border-amber-500/30 rounded-md px-2 py-1.5">
+          <p className="text-[10px] text-amber-300/90 leading-snug">
+            {previewWindowNote(lang, days)}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setEmergencyBypass(true);
+              toast.success(sk ? 'Núdzové odomknutie aktívne (24 h)' : 'Emergency bypass active (24 h)');
+            }}
+            className="self-start text-[10px] font-bold px-2 py-1 rounded bg-rose-500/20 text-rose-200 border border-rose-500/40 hover:bg-rose-500/30 active:scale-95"
+          >
+            🔓 {sk ? 'Núdzovo odomknúť okno' : 'Emergency unlock'}
+          </button>
+        </div>
       )}
+      {!locked && isEmergencyBypassActive() && (
+        <div className="flex items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-2 py-1.5">
+          <p className="text-[10px] text-emerald-200 leading-snug">
+            {sk ? '🔓 Okno otvorené núdzovým odomknutím' : '🔓 Window opened via emergency bypass'}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setEmergencyBypass(false);
+              toast.info(sk ? 'Núdzové okno zrušené' : 'Emergency bypass cleared');
+            }}
+            className="text-[10px] text-emerald-200/80 hover:text-emerald-100"
+          >
+            {sk ? 'Zatvoriť' : 'Close'}
+          </button>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         {advised.map(a => (
           <ShortcutRow
