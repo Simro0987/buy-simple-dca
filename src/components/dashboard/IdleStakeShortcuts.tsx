@@ -93,7 +93,10 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
     })
     .filter(a => a.eligible);
 
-  if (advised.length === 0) return null;
+  // Even without eligible advice we still render the locked preview card so the
+  // emergency-bypass control stays reachable for the user.
+  if (advised.length === 0 && !win.locked && !isEmergencyBypassActive()) return null;
+
 
   const locked = win.locked;
   const days = win.daysRemaining;
