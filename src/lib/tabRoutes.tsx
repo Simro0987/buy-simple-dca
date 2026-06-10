@@ -71,6 +71,7 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   staking: ({ lang }) => wrap(<StakingPage lang={lang} />),
   wallets: ({ lang }) => wrap(<WalletsPage lang={lang} />),
   allocator: ({ lang }) => wrap(<AllocationCalculatorPage lang={lang} />),
+  agent: ({ lang }) => wrap(<AgentPage lang={lang} />),
   settings: ({ lang, toggleLang, theme, setTheme }) => wrap(
     <SettingsPage lang={lang} toggleLang={toggleLang} theme={theme} setTheme={setTheme} />
   ),
