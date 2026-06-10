@@ -20,6 +20,7 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'staking', labelSk: 'Stake', labelEn: 'Stake', icon: Coins },
   { id: 'wallets', labelSk: 'Wallet', labelEn: 'Wallet', icon: Wallet },
   { id: 'allocator', labelSk: 'Alokátor', labelEn: 'Allocator', icon: CalcIcon },
+  { id: 'agent', labelSk: 'AI Agent', labelEn: 'AI Agent', icon: Bot },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
 
