@@ -70,7 +70,7 @@ export function OverviewPage({ lang }: Props) {
             aria-label={sk ? 'Otvoriť Mission Control' : 'Open Mission Control'}
           >
             <div className="relative">
-              <MarketCycleGauge result={cycleResult} lang={lang} />
+              <MarketCycleGauge result={cycleResult} lang={lang} fearGreedValue={fearGreed?.value} />
               <div className="absolute top-3 right-3 inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/10 border border-primary/30 px-2 py-0.5 rounded-full">
                 {sk ? 'Mission Control' : 'Mission Control'}
                 <ChevronRight className="w-3 h-3" />
