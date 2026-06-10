@@ -99,8 +99,8 @@ export function MarketCycleGauge({ result, lang, fearGreedValue }: Props) {
               stroke="#ef4444"
               strokeWidth="12"
               strokeLinecap="round"
-              opacity={result.score >= 0 ? '0.9' : '0.2'}
-              strokeDasharray={result.score <= 20 ? `${(result.score / 20) * 55} 200` : '55 200'}
+              opacity={displayScore >= 0 ? '0.9' : '0.2'}
+              strokeDasharray={displayScore <= 20 ? `${(displayScore / 20) * 55} 200` : '55 200'}
             />
 
             {/* Needle */}
