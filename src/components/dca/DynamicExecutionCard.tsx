@@ -729,6 +729,77 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 })}
               </div>
 
+              {/* 3. MARKET (PRETEČENÝ KAPITÁL) — locked by default, unlocked by rolled-over funds */}
+              {(() => {
+                const rolledUsd = Math.max(0, Number(rollover[c] ?? 0));
+                const unlocked = rolledUsd > 0;
+                const spot = price;
+                const estQty = unlocked && spot > 0 ? rolledUsd / spot : 0;
+                const busyKey = `${c}-rollover-market`;
+                const isBusy = busy === busyKey;
+                return (
+                  <div className={`rounded-lg p-2 mt-1 ${unlocked
+                    ? 'bg-orange-500/10 ring-1 ring-orange-500/40'
+                    : 'bg-secondary/30 ring-1 ring-border opacity-70'}`}>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className={`text-[10px] font-semibold ${unlocked ? 'text-orange-200' : 'text-muted-foreground'}`}>
+                        MARKET · Pretečený kapitál {unlocked ? '🔓' : '🔒'}
+                      </p>
+                      {unlocked && (
+                        <button
+                          type="button"
+                          onClick={() => copy(rolledUsd.toFixed(2))}
+                          className="p-0.5 rounded text-foreground/70 hover:bg-foreground/10 active:scale-95"
+                          aria-label="Kopíruj USD"
+                        >
+                          <Copy className="w-3 h-3" />
+                        </button>
+                      )}
+                    </div>
+                    {unlocked ? (
+                      <>
+                        <p className="text-sm font-bold text-foreground tabular-nums">${rolledUsd.toFixed(2)}</p>
+                        <p className="text-[9px] text-foreground/70 tabular-nums">
+                          ≈ {qtyFmt(estQty)} {e.symbol} @ spot {spot > 0 ? formatLimitPrice(spot) : '—'}
+                        </p>
+                        <button
+                          type="button"
+                          disabled={isBusy || spot <= 0}
+                          onClick={async () => {
+                            setBusy(busyKey);
+                            try {
+                              const { error } = await supabase.functions.invoke('dca-execute', {
+                                body: { coin: c, kind: 'market', amount_usd: rolledUsd, target_price: spot },
+                              });
+                              if (error) throw error;
+                              // clear rollover for this coin
+                              const next = { ...rollover };
+                              delete next[c];
+                              saveRollover(next);
+                              setRollover(next);
+                              toast.success(`${symU} New Market vykonaný ✓ (${formatUsd(rolledUsd)})`);
+                              qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+                              qc.invalidateQueries({ queryKey: ['app_settings'] });
+                            } catch (err) {
+                              toast.error('Chyba: ' + (err as Error).message);
+                            } finally { setBusy(null); }
+                          }}
+                          className="mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 bg-orange-500 text-background active:scale-95 disabled:opacity-50"
+                        >
+                          {isBusy ? 'Spracúvam…' : <><ShoppingCart className="w-3 h-3" /> Zúčtovať Market nákup</>}
+                        </button>
+                      </>
+                    ) : (
+                      <p className="text-[10px] text-muted-foreground leading-snug mt-0.5">
+                        Karta sa odomkne, keď z "Limit -1 %" pretečie nezaplnený kapitál cez tlačidlo "Nepadlo · Presunúť kapitál".
+                      </p>
+                    )}
+                  </div>
+                );
+              })()}
+
+
+
               {/* 💰 Presunúť do STAKE — len pre ETH/SOL po úspešnej akumulácii */}
               {!isBtc && (mAddedQty + lAddedQty) > 0 && (
                 <button
