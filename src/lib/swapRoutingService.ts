@@ -87,6 +87,8 @@ export const TOKENS: TokenMeta[] = [
   // Solana
   { symbol: 'SOL',         name: 'Solana (Native)',             chain: 'solana',    priceRef: 'sol', decimals: 9, native: true },
   { symbol: 'JitoSOL',     name: 'Jito Staked SOL',             chain: 'solana',    priceRef: 'sol', multiplier: 1.072, decimals: 9 },
+  { symbol: 'mSOL',        name: 'Marinade Staked SOL',         chain: 'solana',    priceRef: 'sol', multiplier: 1.087, decimals: 9 },
+  { symbol: 'INF',         name: 'Sanctum Infinity (INF)',      chain: 'solana',    priceRef: 'sol', multiplier: 1.052, decimals: 9 },
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'solana',    priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'solana',    priceRef: 'usd', decimals: 6 },
   // Avalanche
