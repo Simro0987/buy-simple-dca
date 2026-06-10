@@ -766,6 +766,11 @@ export const PLANNER_APYKEY_TO_DERIVATIVE: Partial<Record<PlannerSubAllocation['
   ethL2:    'wstETH',
   solStake: 'JitoSOL',
   solLp:    'JitoSOL',
+  solMarinadeNative: 'mSOL',
+  // INF is a Sanctum LST basket — track parity vs SOL via mSOL proxy
+  solSanctumInf:     'mSOL',
+  ethRocketPool:     'stETH',
+  ethEtherfi:        'weETH',
 };
 
 export function depegAlertMessage(lang: 'en' | 'sk', peg: PegStatus): string {
