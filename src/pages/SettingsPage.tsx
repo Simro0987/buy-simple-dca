@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
-import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing } from 'lucide-react';
+import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing, Bot, Eye, EyeOff } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { CsvExport } from '@/components/CsvExport';
 import { CronJobsCard } from '@/components/CronJobsCard';
