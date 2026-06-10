@@ -15,6 +15,23 @@ import {
 } from '@/lib/dynamicExecution';
 import { formatPrice, formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
 
+// ============= Rollover Capital Store (Limit -1% Day 7 → New Market) =============
+type RolloverMap = Partial<Record<CoinKey, number>>;
+const ROLLOVER_KEY = 'dca-rollover-capital-v1';
+function loadRollover(): RolloverMap {
+  try {
+    const raw = localStorage.getItem(ROLLOVER_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return (parsed && typeof parsed === 'object') ? parsed as RolloverMap : {};
+  } catch { return {}; }
+}
+function saveRollover(m: RolloverMap) {
+  try { localStorage.setItem(ROLLOVER_KEY, JSON.stringify(m)); } catch { /* noop */ }
+  window.dispatchEvent(new CustomEvent('rollover-capital-changed'));
+}
+
+
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
   if (score <= 30) return 70;   // Deep Value
