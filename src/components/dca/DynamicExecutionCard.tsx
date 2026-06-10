@@ -92,6 +92,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+  const [rollover, setRollover] = useState<RolloverMap>(loadRollover);
+  useEffect(() => {
+    const h = () => setRollover(loadRollover());
+    window.addEventListener('rollover-capital-changed', h);
+    window.addEventListener('storage', h);
+    return () => { window.removeEventListener('rollover-capital-changed', h); window.removeEventListener('storage', h); };
+  }, []);
+
 
   // === Automatický split LIMIT -1 % vs LIMIT DYNAMIC — riadi Self-Learning Engine
   // (kontinuálne, bez krokov). Vypočíta sa nižšie z momenta + skóre. Placeholder, prepíše sa.
