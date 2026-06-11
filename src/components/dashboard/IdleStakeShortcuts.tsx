@@ -19,9 +19,11 @@ import {
   previewWindowNote,
   isEmergencyBypassActive,
   setEmergencyBypass,
+  computeDynamicStakeSplit,
   type AdvisorSymbol,
   type AdvisorResult,
   type UnstakeAdvice,
+  type DynamicStakeTarget,
 } from '@/lib/stakeAdvisor';
 
 interface Props {
