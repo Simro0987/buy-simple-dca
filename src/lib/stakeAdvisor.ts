@@ -12,6 +12,7 @@
 
 import { Lang } from '@/lib/i18n';
 import type { StakedEntry, LedgerSymbol } from '@/lib/stakingLedger';
+import { getLiveApyMap } from '@/lib/stakeRoutingService';
 
 export type AdvisorSymbol = 'BTC' | 'ETH' | 'SOL';
 
