@@ -244,6 +244,18 @@ function ShortcutRow({
           <p className={`mt-0.5 text-[10px] ${locked ? 'text-muted-foreground/70' : 'text-violet-300/80'}`}>
             {protoLabel}
           </p>
+
+          {!advice.manualOnly && (advice.symbol === 'ETH' || advice.symbol === 'SOL') && (
+            <DynamicSplitPanel
+              symbol={advice.symbol}
+              totalQty={breakdown.recommendedQty}
+              totalUsd={breakdown.recommendedUsd}
+              marketScore={marketScore}
+              locked={locked}
+              lang={lang}
+            />
+          )}
+
           <Popover>
             <PopoverTrigger asChild>
               <button
