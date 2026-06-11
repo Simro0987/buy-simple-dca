@@ -12,6 +12,7 @@
 
 import { Lang } from '@/lib/i18n';
 import type { StakedEntry, LedgerSymbol } from '@/lib/stakingLedger';
+import { getLiveApyMap } from '@/lib/stakeRoutingService';
 
 export type AdvisorSymbol = 'BTC' | 'ETH' | 'SOL';
 
@@ -424,4 +425,64 @@ export function previewWindowNote(lang: Lang, daysRemaining?: number): string {
     return '🔒 Quarterly window opens today.';
   }
   return '🔒 Quarterly window fully unlocks on the upcoming weekend.';
+}
+
+// ===== Dynamic Stake Split — Self-Learning Engine =====
+// Replaces hardcoded 50/50 (SOL) and 60/40 (ETH) splits with a dynamic
+// allocator driven by live APY differential + market-risk appetite.
+// Targets are FIXED (per product requirements), only the percentages flex.
+export type DynamicStakeSymbol = 'ETH' | 'SOL';
+
+export interface DynamicStakeTarget {
+  key: string;
+  protocol: string;       // human label, e.g. "Marinade Native"
+  outputToken: string;    // resulting LST, e.g. "mSOL"
+  officialUrl: string;    // anti-phishing pinned domain
+  apy: number;            // live (jittered) APY %
+  pct: number;            // dynamic allocation % (0..100)
+}
+
+interface RawTarget { key: string; protocol: string; outputToken: string; officialUrl: string; apy: number; }
+
+function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)); }
+
+/**
+ * Self-Learning split engine.
+ *  - Anchor 50/50.
+ *  - Yield tilt: skew toward whichever target shows higher live APY.
+ *  - Risk-appetite tilt: low market score (accumulation) → chase yield (B);
+ *    high market score (heating up) → prefer the more audited/conservative (A).
+ * Output is clamped to 25..75 to preserve diversification at all times.
+ */
+function dynamicSplit(a: RawTarget, b: RawTarget, marketScore: number): DynamicStakeTarget[] {
+  const yieldTilt = clamp((a.apy - b.apy) * 6, -22, 22);   // APY diff (%) → ±22
+  const riskAppetite = clamp((40 - marketScore) * 0.4, -16, 16); // <40 → chase B
+  let aPct = 50 + yieldTilt * 0.4 - riskAppetite * 0.6;
+  aPct = clamp(aPct, 25, 75);
+  const bPct = 100 - aPct;
+  return [
+    { ...a, pct: Math.round(aPct * 10) / 10 },
+    { ...b, pct: Math.round(bPct * 10) / 10 },
+  ];
+}
+
+export function computeDynamicStakeSplit(
+  symbol: DynamicStakeSymbol,
+  marketScore: number,
+  tick: number,
+): DynamicStakeTarget[] {
+  const apys = getLiveApyMap(tick);
+  if (symbol === 'SOL') {
+    return dynamicSplit(
+      { key: 'marinade_native', protocol: 'Marinade Native', outputToken: 'mSOL', officialUrl: 'marinade.finance', apy: apys.solMarinadeNative },
+      { key: 'sanctum_inf',     protocol: 'Sanctum INF',     outputToken: 'INF',  officialUrl: 'sanctum.so',       apy: apys.solSanctumInf },
+      marketScore,
+    );
+  }
+  // ETH — Arbitrum rails
+  return dynamicSplit(
+    { key: 'rocket_pool', protocol: 'Rocket Pool (rETH)', outputToken: 'rETH',  officialUrl: 'rocketpool.net', apy: apys.ethRocketPool },
+    { key: 'etherfi',     protocol: 'ether.fi (weETH)',   outputToken: 'weETH', officialUrl: 'ether.fi',       apy: apys.ethEtherfi },
+    marketScore,
+  );
 }

@@ -19,9 +19,11 @@ import {
   previewWindowNote,
   isEmergencyBypassActive,
   setEmergencyBypass,
+  computeDynamicStakeSplit,
   type AdvisorSymbol,
   type AdvisorResult,
   type UnstakeAdvice,
+  type DynamicStakeTarget,
 } from '@/lib/stakeAdvisor';
 
 interface Props {
@@ -242,6 +244,18 @@ function ShortcutRow({
           <p className={`mt-0.5 text-[10px] ${locked ? 'text-muted-foreground/70' : 'text-violet-300/80'}`}>
             {protoLabel}
           </p>
+
+          {!advice.manualOnly && (advice.symbol === 'ETH' || advice.symbol === 'SOL') && (
+            <DynamicSplitPanel
+              symbol={advice.symbol}
+              totalQty={breakdown.recommendedQty}
+              totalUsd={breakdown.recommendedUsd}
+              marketScore={marketScore}
+              locked={locked}
+              lang={lang}
+            />
+          )}
+
           <Popover>
             <PopoverTrigger asChild>
               <button
@@ -365,6 +379,72 @@ function UnstakeRow({ advice, lang }: { advice: UnstakeAdvice; lang: Lang }) {
         {advice.nextStep === 'swap' ? <ArrowRightLeft className="w-3.5 h-3.5" /> : <Landmark className="w-3.5 h-3.5" />}
         {nextStepLabel}
       </button>
+    </div>
+  );
+}
+
+function DynamicSplitPanel({
+  symbol, totalQty, totalUsd, marketScore, locked, lang,
+}: {
+  symbol: 'ETH' | 'SOL';
+  totalQty: number;
+  totalUsd: number;
+  marketScore: number;
+  locked: boolean;
+  lang: Lang;
+}) {
+  const sk = lang === 'sk';
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick(t => t + 1), 18000);
+    return () => clearInterval(id);
+  }, []);
+  const targets: DynamicStakeTarget[] = computeDynamicStakeSplit(symbol, marketScore, tick);
+  const decimals = symbol === 'SOL' ? 2 : 3;
+  const nativeSym = symbol;
+
+  return (
+    <div
+      onClick={e => e.stopPropagation()}
+      className={`mt-1.5 rounded-md border px-2 py-1.5 space-y-1.5 ${
+        locked ? 'bg-muted/20 border-border/40' : 'bg-background/40 border-violet-500/25'
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300/90">
+          {sk ? 'Dynamický split (Self-Learning)' : 'Dynamic split (Self-Learning)'}
+        </p>
+        <p className="text-[9px] text-muted-foreground tabular-nums">
+          {sk ? 'trh' : 'score'} {Math.round(marketScore)}
+        </p>
+      </div>
+      <div className="space-y-1">
+        {targets.map(t => {
+          const subQty = totalQty * (t.pct / 100);
+          const subUsd = totalUsd * (t.pct / 100);
+          return (
+            <div key={t.key} className="flex items-center justify-between gap-2 text-[10.5px]">
+              <div className="min-w-0 flex-1">
+                <p className="font-semibold text-foreground truncate">{t.protocol}</p>
+                <p className="text-[9.5px] text-muted-foreground truncate">
+                  {sk ? 'výstup' : 'output'}: {t.outputToken} · {t.apy.toFixed(2)}% APY · {t.officialUrl}
+                </p>
+              </div>
+              <div className="text-right shrink-0 tabular-nums">
+                <p className={`font-bold ${locked ? 'text-muted-foreground' : 'text-violet-200'}`}>
+                  {t.pct.toFixed(1)}%
+                </p>
+                <p className="text-[9.5px] text-foreground/90">
+                  {subQty.toFixed(decimals)} {nativeSym}
+                </p>
+                <p className="text-[9px] text-muted-foreground">
+                  ${subUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
