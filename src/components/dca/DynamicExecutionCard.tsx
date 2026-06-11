@@ -755,7 +755,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             type="button"
                             onClick={() => {
                               if (card.isFilled || card.isPending || cardBusy || cardDisabled) return;
-                              handleExecute(c, 'limit', card.usd, card.effPrice, isBtc ? card.usd * btcReservoirShare : 0, card.busyKey);
+                              const reservoirShare = isBtc ? card.usd * btcReservoirShare : 0;
+                              if (card.mode === 'limit1') {
+                                activateLimitMinusOne(c, card.usd, card.effPrice, reservoirShare);
+                              } else {
+                                activateLimitDynamic(c, card.usd, card.effPrice, reservoirShare);
+                              }
                             }}
                             disabled={card.isFilled || card.isPending || cardBusy || cardDisabled || card.effPrice <= 0}
                             className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
