@@ -92,6 +92,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+  // Decoupled per-mode activation state (Limit -1 % vs Limit Dynamic) — must NOT share setters.
+  const [isMinusOneActive, setIsMinusOneActive] = useState<string | null>(null); // busy coin key e.g. 'btc'
+  const [isDynamicActive, setIsDynamicActive] = useState<string | null>(null);
   const [rollover, setRollover] = useState<RolloverMap>(loadRollover);
   useEffect(() => {
     const h = () => setRollover(loadRollover());
@@ -174,6 +177,61 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       toast.error('Chyba: ' + (e as Error).message);
     } finally {
       setBusy(null);
+    }
+  };
+
+  // ============= DECOUPLED LIMIT ACTIVATIONS =============
+  // Two strictly independent functions. They MUST NOT share state setters or
+  // call each other, so each card toggles only its own activation state.
+  const activateLimitMinusOne = async (
+    coin: CoinKey,
+    amount: number,
+    price: number,
+    fromReservoir = 0,
+  ) => {
+    if (isMinusOneActive === coin) return;
+    setIsMinusOneActive(coin);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin, kind: 'limit', amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      if (coin === 'btc' && fromReservoir > 0) {
+        deductReservoir(fromReservoir, `BTC LIMIT -1 % · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
+      }
+      toast.success(`${coin.toUpperCase()} Limit -1 % zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setIsMinusOneActive(null);
+    }
+  };
+
+  const activateLimitDynamic = async (
+    coin: CoinKey,
+    amount: number,
+    price: number,
+    fromReservoir = 0,
+  ) => {
+    if (isDynamicActive === coin) return;
+    setIsDynamicActive(coin);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin, kind: 'limit', amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      if (coin === 'btc' && fromReservoir > 0) {
+        deductReservoir(fromReservoir, `BTC LIMIT DYNAMIC · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
+      }
+      toast.success(`${coin.toUpperCase()} Limit Dynamic zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setIsDynamicActive(null);
     }
   };
 
@@ -591,7 +649,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   const triggered = price > 0 && card.effPrice > 0 && price <= card.effPrice;
                   const isMerged = card.mergedAway; // táto karta bola zlúčená do druhej
                   const cardDisabled = isMerged || card.usd < MIN_USD;
-                  const cardBusy = busy === card.busyKey;
+                  // Per-card busy reads from its OWN independent state hook.
+                  const cardBusy = card.mode === 'limit1'
+                    ? isMinusOneActive === c
+                    : isDynamicActive === c;
                   const cardBg = isMerged
                     ? 'bg-rose-500/5 ring-1 ring-rose-500/30 opacity-70'
                     : card.isFilled
@@ -694,7 +755,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             type="button"
                             onClick={() => {
                               if (card.isFilled || card.isPending || cardBusy || cardDisabled) return;
-                              handleExecute(c, 'limit', card.usd, card.effPrice, isBtc ? card.usd * btcReservoirShare : 0, card.busyKey);
+                              const reservoirShare = isBtc ? card.usd * btcReservoirShare : 0;
+                              if (card.mode === 'limit1') {
+                                activateLimitMinusOne(c, card.usd, card.effPrice, reservoirShare);
+                              } else {
+                                activateLimitDynamic(c, card.usd, card.effPrice, reservoirShare);
+                              }
                             }}
                             disabled={card.isFilled || card.isPending || cardBusy || cardDisabled || card.effPrice <= 0}
                             className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
