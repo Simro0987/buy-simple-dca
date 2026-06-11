@@ -92,6 +92,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
   const [busy, setBusy] = useState<string | null>(null);
+  // Decoupled per-mode activation state (Limit -1 % vs Limit Dynamic) — must NOT share setters.
+  const [isMinusOneActive, setIsMinusOneActive] = useState<string | null>(null); // busy coin key e.g. 'btc'
+  const [isDynamicActive, setIsDynamicActive] = useState<string | null>(null);
   const [rollover, setRollover] = useState<RolloverMap>(loadRollover);
   useEffect(() => {
     const h = () => setRollover(loadRollover());
