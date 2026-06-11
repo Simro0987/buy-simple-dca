@@ -180,6 +180,61 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     }
   };
 
+  // ============= DECOUPLED LIMIT ACTIVATIONS =============
+  // Two strictly independent functions. They MUST NOT share state setters or
+  // call each other, so each card toggles only its own activation state.
+  const activateLimitMinusOne = async (
+    coin: CoinKey,
+    amount: number,
+    price: number,
+    fromReservoir = 0,
+  ) => {
+    if (isMinusOneActive === coin) return;
+    setIsMinusOneActive(coin);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin, kind: 'limit', amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      if (coin === 'btc' && fromReservoir > 0) {
+        deductReservoir(fromReservoir, `BTC LIMIT -1 % · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
+      }
+      toast.success(`${coin.toUpperCase()} Limit -1 % zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setIsMinusOneActive(null);
+    }
+  };
+
+  const activateLimitDynamic = async (
+    coin: CoinKey,
+    amount: number,
+    price: number,
+    fromReservoir = 0,
+  ) => {
+    if (isDynamicActive === coin) return;
+    setIsDynamicActive(coin);
+    try {
+      const { error } = await supabase.functions.invoke('dca-execute', {
+        body: { coin, kind: 'limit', amount_usd: amount, target_price: price },
+      });
+      if (error) throw error;
+      if (coin === 'btc' && fromReservoir > 0) {
+        deductReservoir(fromReservoir, `BTC LIMIT DYNAMIC · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
+      }
+      toast.success(`${coin.toUpperCase()} Limit Dynamic zadaný ⏳`);
+      qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+      qc.invalidateQueries({ queryKey: ['app_settings'] });
+    } catch (e) {
+      toast.error('Chyba: ' + (e as Error).message);
+    } finally {
+      setIsDynamicActive(null);
+    }
+  };
+
 
   const handleCancelLimit = async (id: string, coin: string) => {
     if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
