@@ -649,7 +649,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   const triggered = price > 0 && card.effPrice > 0 && price <= card.effPrice;
                   const isMerged = card.mergedAway; // táto karta bola zlúčená do druhej
                   const cardDisabled = isMerged || card.usd < MIN_USD;
-                  const cardBusy = busy === card.busyKey;
+                  // Per-card busy reads from its OWN independent state hook.
+                  const cardBusy = card.mode === 'limit1'
+                    ? isMinusOneActive === c
+                    : isDynamicActive === c;
                   const cardBg = isMerged
                     ? 'bg-rose-500/5 ring-1 ring-rose-500/30 opacity-70'
                     : card.isFilled
