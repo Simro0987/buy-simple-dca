@@ -193,6 +193,61 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
         Nastav cieľové váhy. DCA engine automaticky prepočíta týždenné rozdelenie kapitálu podľa týchto percent.
       </p>
 
+      {/* ANCHORS vs ALTCOINS — colorful stacked split + Prečo? popover */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+            Anchors vs Altcoins
+          </p>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/70 text-[10px] font-semibold text-foreground hover:bg-secondary active:scale-95 transition"
+                aria-label="Prečo táto alokácia?"
+              >
+                <HelpCircle className="w-3 h-3 text-primary" /> Prečo?
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 text-[11px] space-y-1.5">
+              <p className="font-bold text-foreground">Logika živej alokácie</p>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Fear &amp; Greed</span>
+                <span className="tabular-nums font-semibold text-foreground">{fgValue}/100 · {fgLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">BTC Mayer · zóna</span>
+                <span className="tabular-nums font-semibold text-foreground">{mayer.toFixed(2)} · {mayerZone}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Solana TVL</span>
+                <span className={`tabular-nums font-semibold ${tvlHealthy ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  ${(solTvl / 1e9).toFixed(2)} B {tvlHealthy ? '🟢' : '🟡'}
+                </span>
+              </div>
+              <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
+                <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
+                <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
+                {fgValue < 30 && ' Extrémny strach → zvýši priestor pre Anchors.'}
+                {fgValue > 75 && ' Extrémna chamtivosť → škrť Altcoin expozíciu.'}
+              </p>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="h-3 rounded-full bg-background/60 overflow-hidden flex ring-1 ring-border">
+          <div className="h-full bg-sky-500 transition-all duration-500" style={{ width: `${anchorsPct}%` }} />
+          <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${altsPct}%` }} />
+        </div>
+        <div className="flex items-center justify-between text-[10px] tabular-nums">
+          <span className="flex items-center gap-1 text-sky-400 font-semibold">
+            <span className="w-2 h-2 rounded-sm bg-sky-500" /> Anchors {anchorsPct.toFixed(1)}%
+          </span>
+          <span className="flex items-center gap-1 text-violet-400 font-semibold">
+            Altcoins {altsPct.toFixed(1)}% <span className="w-2 h-2 rounded-sm bg-violet-500" />
+          </span>
+        </div>
+      </div>
+
       {/* Total sum bar */}
       <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${
         valid ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'
