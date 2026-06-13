@@ -1,8 +1,65 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw, HelpCircle, Cpu, Droplets, HeartPulse, Repeat } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatUsd } from '@/lib/crypto';
 import { toast } from 'sonner';
+import { useFearGreed } from '@/hooks/usePrices';
+import { useMarketData } from '@/hooks/useMarketData';
+
+// ===== CBBC Quality Scores — Tech / DCA / Liquidity / Health (0-100) =====
+const CBBC_BASE: Record<string, { tech: number; dca: number; liq: number; health: number }> = {
+  BTC: { tech: 95, dca: 98, liq: 99, health: 96 },
+  ETH: { tech: 92, dca: 90, liq: 95, health: 88 },
+  SOL: { tech: 84, dca: 78, liq: 82, health: 80 },
+};
+const ANCHORS = new Set(['BTC', 'ETH']);
+
+function hashSymbol(sym: string): number {
+  let h = 0;
+  for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) >>> 0;
+  return h;
+}
+function cbbcScores(symbol: string) {
+  const base = CBBC_BASE[symbol];
+  if (base) return base;
+  const h = hashSymbol(symbol);
+  const j = (n: number) => 55 + ((h >> n) & 0x1f); // 55..86
+  return { tech: j(0), dca: j(5), liq: j(10), health: j(15) };
+}
+function qualityColor(score: number): string {
+  if (score >= 85) return '#22C55E';
+  if (score >= 70) return '#84CC16';
+  if (score >= 55) return '#F59E0B';
+  return '#EF4444';
+}
+
+interface QualityRingProps { score: number; label: string; size?: number; }
+function QualityRing({ score, label, size = 40 }: QualityRingProps) {
+  const r = (size - 6) / 2;
+  const c = 2 * Math.PI * r;
+  const off = c - (Math.max(0, Math.min(100, score)) / 100) * c;
+  const color = qualityColor(score);
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} stroke="hsl(var(--border))" strokeWidth={3} fill="none" />
+          <circle
+            cx={size / 2} cy={size / 2} r={r}
+            stroke={color} strokeWidth={3} fill="none" strokeLinecap="round"
+            strokeDasharray={c} strokeDashoffset={off}
+            style={{ transition: 'stroke-dashoffset 600ms ease, stroke 300ms ease' }}
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold tabular-nums text-foreground">
+          {Math.round(score)}
+        </span>
+      </div>
+      <span className="text-[8px] uppercase tracking-tight text-muted-foreground font-semibold">{label}</span>
+    </div>
+  );
+}
 
 export interface TargetAllocationRow {
   id: string;
