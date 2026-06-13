@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw, HelpCircle, Cpu, Droplets, HeartPulse, Repeat } from 'lucide-react';
+import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw, HelpCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatUsd } from '@/lib/crypto';
