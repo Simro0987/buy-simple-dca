@@ -105,8 +105,27 @@ interface Props {
 export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const [rows, setRows] = useState<TargetAllocationRow[]>(loadTargetWeights);
   const [newSymbol, setNewSymbol] = useState('');
+  const { data: fg } = useFearGreed();
+  const { data: market } = useMarketData();
 
   useEffect(() => { saveTargetWeights(rows); }, [rows]);
+
+  const total = useMemo(() => rows.reduce((s, r) => s + r.pct, 0), [rows]);
+  const valid = Math.abs(total - 100) < 0.01;
+
+  // ===== Anchors (BTC/ETH) vs Altcoins (rest) — stacked split =====
+  const { anchorsPct, altsPct } = useMemo(() => {
+    const a = rows.filter(r => ANCHORS.has(r.symbol)).reduce((s, r) => s + r.pct, 0);
+    const t = total > 0 ? total : 100;
+    return { anchorsPct: (a / t) * 100, altsPct: ((t - a) / t) * 100 };
+  }, [rows, total]);
+
+  const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
+  const fgLabel = fg?.classification ?? 'Neutral';
+  const solTvl = market?.sol?.tvl ?? 0;
+  const tvlHealthy = solTvl >= 8_000_000_000;
+  const mayer = market?.btc?.mayerMultiple ?? 1;
+  const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
 
   const total = useMemo(() => rows.reduce((s, r) => s + r.pct, 0), [rows]);
   const valid = Math.abs(total - 100) < 0.01;
