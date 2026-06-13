@@ -319,6 +319,31 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
                 max={100}
                 step={0.5}
               />
+              {/* CBBC Quality Score — Tech / DCA / Liquidity / Health */}
+              {(() => {
+                const q = cbbcScores(r.symbol);
+                const overall = Math.round((q.tech + q.dca + q.liq + q.health) / 4);
+                const isAnchor = ANCHORS.has(r.symbol);
+                return (
+                  <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-border">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isAnchor ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300'}`}>
+                        {isAnchor ? 'ANCHOR' : 'ALTCOIN'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">CBBC skóre</span>
+                      <span className="text-[11px] font-bold tabular-nums" style={{ color: qualityColor(overall) }}>
+                        {overall}/100
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <QualityRing score={q.tech} label="TECH" />
+                      <QualityRing score={q.dca} label="DCA" />
+                      <QualityRing score={q.liq} label="LIQ" />
+                      <QualityRing score={q.health} label="HEALTH" />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
