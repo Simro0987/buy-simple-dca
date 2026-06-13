@@ -127,8 +127,6 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const mayer = market?.btc?.mayerMultiple ?? 1;
   const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
 
-  const total = useMemo(() => rows.reduce((s, r) => s + r.pct, 0), [rows]);
-  const valid = Math.abs(total - 100) < 0.01;
 
   const updatePct = (id: string, pct: number) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, pct: Math.max(0, Math.min(100, pct)) } : r));
