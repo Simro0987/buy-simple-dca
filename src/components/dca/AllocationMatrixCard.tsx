@@ -1,8 +1,65 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Sliders, AlertTriangle, CheckCircle2, RotateCcw, HelpCircle } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatUsd } from '@/lib/crypto';
 import { toast } from 'sonner';
+import { useFearGreed } from '@/hooks/usePrices';
+import { useMarketData } from '@/hooks/useMarketData';
+
+// ===== CBBC Quality Scores — Tech / DCA / Liquidity / Health (0-100) =====
+const CBBC_BASE: Record<string, { tech: number; dca: number; liq: number; health: number }> = {
+  BTC: { tech: 95, dca: 98, liq: 99, health: 96 },
+  ETH: { tech: 92, dca: 90, liq: 95, health: 88 },
+  SOL: { tech: 84, dca: 78, liq: 82, health: 80 },
+};
+const ANCHORS = new Set(['BTC', 'ETH']);
+
+function hashSymbol(sym: string): number {
+  let h = 0;
+  for (let i = 0; i < sym.length; i++) h = (h * 31 + sym.charCodeAt(i)) >>> 0;
+  return h;
+}
+function cbbcScores(symbol: string) {
+  const base = CBBC_BASE[symbol];
+  if (base) return base;
+  const h = hashSymbol(symbol);
+  const j = (n: number) => 55 + ((h >> n) & 0x1f); // 55..86
+  return { tech: j(0), dca: j(5), liq: j(10), health: j(15) };
+}
+function qualityColor(score: number): string {
+  if (score >= 85) return '#22C55E';
+  if (score >= 70) return '#84CC16';
+  if (score >= 55) return '#F59E0B';
+  return '#EF4444';
+}
+
+interface QualityRingProps { score: number; label: string; size?: number; }
+function QualityRing({ score, label, size = 40 }: QualityRingProps) {
+  const r = (size - 6) / 2;
+  const c = 2 * Math.PI * r;
+  const off = c - (Math.max(0, Math.min(100, score)) / 100) * c;
+  const color = qualityColor(score);
+  return (
+    <div className="flex flex-col items-center gap-0.5">
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} className="-rotate-90">
+          <circle cx={size / 2} cy={size / 2} r={r} stroke="hsl(var(--border))" strokeWidth={3} fill="none" />
+          <circle
+            cx={size / 2} cy={size / 2} r={r}
+            stroke={color} strokeWidth={3} fill="none" strokeLinecap="round"
+            strokeDasharray={c} strokeDashoffset={off}
+            style={{ transition: 'stroke-dashoffset 600ms ease, stroke 300ms ease' }}
+          />
+        </svg>
+        <span className="absolute inset-0 flex items-center justify-center text-[9px] font-bold tabular-nums text-foreground">
+          {Math.round(score)}
+        </span>
+      </div>
+      <span className="text-[8px] uppercase tracking-tight text-muted-foreground font-semibold">{label}</span>
+    </div>
+  );
+}
 
 export interface TargetAllocationRow {
   id: string;
@@ -48,11 +105,28 @@ interface Props {
 export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const [rows, setRows] = useState<TargetAllocationRow[]>(loadTargetWeights);
   const [newSymbol, setNewSymbol] = useState('');
+  const { data: fg } = useFearGreed();
+  const { data: market } = useMarketData();
 
   useEffect(() => { saveTargetWeights(rows); }, [rows]);
 
   const total = useMemo(() => rows.reduce((s, r) => s + r.pct, 0), [rows]);
   const valid = Math.abs(total - 100) < 0.01;
+
+  // ===== Anchors (BTC/ETH) vs Altcoins (rest) — stacked split =====
+  const { anchorsPct, altsPct } = useMemo(() => {
+    const a = rows.filter(r => ANCHORS.has(r.symbol)).reduce((s, r) => s + r.pct, 0);
+    const t = total > 0 ? total : 100;
+    return { anchorsPct: (a / t) * 100, altsPct: ((t - a) / t) * 100 };
+  }, [rows, total]);
+
+  const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
+  const fgLabel = fg?.classification ?? 'Neutral';
+  const solTvl = market?.sol?.tvl ?? 0;
+  const tvlHealthy = solTvl >= 8_000_000_000;
+  const mayer = market?.btc?.mayerMultiple ?? 1;
+  const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
+
 
   const updatePct = (id: string, pct: number) => {
     setRows(prev => prev.map(r => r.id === id ? { ...r, pct: Math.max(0, Math.min(100, pct)) } : r));
@@ -118,6 +192,61 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
       <p className="text-[10px] text-muted-foreground leading-relaxed">
         Nastav cieľové váhy. DCA engine automaticky prepočíta týždenné rozdelenie kapitálu podľa týchto percent.
       </p>
+
+      {/* ANCHORS vs ALTCOINS — colorful stacked split + Prečo? popover */}
+      <div className="space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+            Anchors vs Altcoins
+          </p>
+          <Popover>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-secondary/70 text-[10px] font-semibold text-foreground hover:bg-secondary active:scale-95 transition"
+                aria-label="Prečo táto alokácia?"
+              >
+                <HelpCircle className="w-3 h-3 text-primary" /> Prečo?
+              </button>
+            </PopoverTrigger>
+            <PopoverContent align="end" className="w-72 text-[11px] space-y-1.5">
+              <p className="font-bold text-foreground">Logika živej alokácie</p>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Fear &amp; Greed</span>
+                <span className="tabular-nums font-semibold text-foreground">{fgValue}/100 · {fgLabel}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">BTC Mayer · zóna</span>
+                <span className="tabular-nums font-semibold text-foreground">{mayer.toFixed(2)} · {mayerZone}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Solana TVL</span>
+                <span className={`tabular-nums font-semibold ${tvlHealthy ? 'text-emerald-400' : 'text-amber-400'}`}>
+                  ${(solTvl / 1e9).toFixed(2)} B {tvlHealthy ? '🟢' : '🟡'}
+                </span>
+              </div>
+              <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
+                <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
+                <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
+                {fgValue < 30 && ' Extrémny strach → zvýši priestor pre Anchors.'}
+                {fgValue > 75 && ' Extrémna chamtivosť → škrť Altcoin expozíciu.'}
+              </p>
+            </PopoverContent>
+          </Popover>
+        </div>
+        <div className="h-3 rounded-full bg-background/60 overflow-hidden flex ring-1 ring-border">
+          <div className="h-full bg-sky-500 transition-all duration-500" style={{ width: `${anchorsPct}%` }} />
+          <div className="h-full bg-violet-500 transition-all duration-500" style={{ width: `${altsPct}%` }} />
+        </div>
+        <div className="flex items-center justify-between text-[10px] tabular-nums">
+          <span className="flex items-center gap-1 text-sky-400 font-semibold">
+            <span className="w-2 h-2 rounded-sm bg-sky-500" /> Anchors {anchorsPct.toFixed(1)}%
+          </span>
+          <span className="flex items-center gap-1 text-violet-400 font-semibold">
+            Altcoins {altsPct.toFixed(1)}% <span className="w-2 h-2 rounded-sm bg-violet-500" />
+          </span>
+        </div>
+      </div>
 
       {/* Total sum bar */}
       <div className={`flex items-center justify-between px-3 py-2 rounded-lg border ${
@@ -190,6 +319,31 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
                 max={100}
                 step={0.5}
               />
+              {/* CBBC Quality Score — Tech / DCA / Liquidity / Health */}
+              {(() => {
+                const q = cbbcScores(r.symbol);
+                const overall = Math.round((q.tech + q.dca + q.liq + q.health) / 4);
+                const isAnchor = ANCHORS.has(r.symbol);
+                return (
+                  <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-border">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isAnchor ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300'}`}>
+                        {isAnchor ? 'ANCHOR' : 'ALTCOIN'}
+                      </span>
+                      <span className="text-[10px] text-muted-foreground">CBBC skóre</span>
+                      <span className="text-[11px] font-bold tabular-nums" style={{ color: qualityColor(overall) }}>
+                        {overall}/100
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <QualityRing score={q.tech} label="TECH" />
+                      <QualityRing score={q.dca} label="DCA" />
+                      <QualityRing score={q.liq} label="LIQ" />
+                      <QualityRing score={q.health} label="HEALTH" />
+                    </div>
+                  </div>
+                );
+              })()}
             </div>
           );
         })}
