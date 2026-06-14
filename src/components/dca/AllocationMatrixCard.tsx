@@ -157,10 +157,22 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
       else list.push({ icon: '🟡', text: `Solana TVL $${(solTvl/1e9).toFixed(2)} B pod prahom $8 B → opatrnejšia Altcoin expozícia`, tone: 'neg' });
     }
 
+    if (btcWmaDistPct !== null) {
+      const abs = Math.abs(btcWmaDistPct).toFixed(1);
+      if (btcWmaDistPct < 0) list.push({ icon: '🟢', text: `BTC je pod 200WMA o ${abs} %, zóna hlbokej akumulácie – navýšená alokácia.`, tone: 'pos' });
+      else if (btcWmaDistPct > 20) list.push({ icon: '🔴', text: `BTC je nad 200WMA o ${abs} %, trh je lokálne drahý – automaticky znížená alokácia pre Market nákup.`, tone: 'neg' });
+      else list.push({ icon: '⚪️', text: `BTC je nad 200WMA o ${abs} % – neutrálne pásmo, plánovaná alokácia bez úprav.`, tone: 'neu' });
+    }
+    if (ethWmaDistPct !== null) {
+      const abs = Math.abs(ethWmaDistPct).toFixed(1);
+      if (ethWmaDistPct < 0) list.push({ icon: '🟢', text: `ETH je pod 200WMA o ${abs} % – akumulačná zóna pre Anchor pár.`, tone: 'pos' });
+      else if (ethWmaDistPct > 20) list.push({ icon: '🔴', text: `ETH je nad 200WMA o ${abs} % – prehriata zóna, opatrnejší Market vstup.`, tone: 'neg' });
+    }
+
     if (anchorsPct >= 80) list.push({ icon: '🛡️', text: `Anchors tvoria ${anchorsPct.toFixed(1)}% → defenzívny profil, nižšia volatilita`, tone: 'neu' });
     else if (altsPct >= 30) list.push({ icon: '⚡️', text: `Altcoins tvoria ${altsPct.toFixed(1)}% → vyššia citlivosť na sentiment`, tone: 'neu' });
     return list;
-  }, [fgValue, mayer, solTvl, tvlHealthy, anchorsPct, altsPct]);
+  }, [fgValue, mayer, solTvl, tvlHealthy, anchorsPct, altsPct, btcWmaDistPct, ethWmaDistPct]);
 
 
   const updatePct = (id: string, pct: number) => {
