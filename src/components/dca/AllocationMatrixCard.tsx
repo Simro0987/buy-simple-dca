@@ -272,6 +272,38 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
                   ${(solTvl / 1e9).toFixed(2)} B {tvlHealthy ? '🟢' : '🟡'}
                 </span>
               </div>
+              <div className="pt-1.5 mt-1 border-t border-border space-y-1">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">200WMA analýza</p>
+                {btcWmaDistPct === null ? (
+                  <p className="text-muted-foreground italic">200WMA: Dáta nedostupné</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">BTC vs 200WMA</span>
+                      <span className={`tabular-nums font-semibold ${btcBelowWma ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {btcWmaDistPct >= 0 ? '+' : ''}{btcWmaDistPct.toFixed(1)} %
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Status 200WMA</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        btcBelowWma ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+                      }`}>
+                        {btcBelowWma ? 'POD · Akumulácia' : 'NAD · Opatrnosť'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {ethWmaDistPct !== null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">ETH vs 200WMA</span>
+                    <span className={`tabular-nums font-semibold ${ethWmaDistPct < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {ethWmaDistPct >= 0 ? '+' : ''}{ethWmaDistPct.toFixed(1)} %
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
                 <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
                 <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
