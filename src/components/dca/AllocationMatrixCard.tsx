@@ -120,12 +120,35 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
     return { anchorsPct: (a / t) * 100, altsPct: ((t - a) / t) * 100 };
   }, [rows, total]);
 
+  const [expandedCbbc, setExpandedCbbc] = useState<string | null>(null);
+
   const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
   const fgLabel = fg?.classification ?? 'Neutral';
   const solTvl = market?.sol?.tvl ?? 0;
   const tvlHealthy = solTvl >= 8_000_000_000;
   const mayer = market?.btc?.mayerMultiple ?? 1;
   const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
+
+  // ===== Dynamic reasons — human-readable bullets driving the current split =====
+  const reasons = useMemo(() => {
+    const list: Array<{ icon: string; text: string; tone: 'pos' | 'neg' | 'neu' }> = [];
+    if (fgValue < 30) list.push({ icon: '🟢', text: `Fear & Greed nízky (${fgValue}) → posilnenie Market nákupov na Anchors`, tone: 'pos' });
+    else if (fgValue > 75) list.push({ icon: '🟠', text: `Fear & Greed extrémne vysoký (${fgValue}) → škrtenie Altcoin expozície, viac Limit Dynamic`, tone: 'neg' });
+    else list.push({ icon: '⚪️', text: `Fear & Greed neutrálny (${fgValue}) → vyvážený split medzi Market a Limit`, tone: 'neu' });
+
+    if (mayer < 0.9) list.push({ icon: '🟢', text: `BTC Mayer ${mayer.toFixed(2)} pod 0.9 → makro akumulačná zóna, navýšiť BTC váhu`, tone: 'pos' });
+    else if (mayer > 1.4) list.push({ icon: '🔴', text: `BTC Mayer ${mayer.toFixed(2)} nad 1.4 → prehriata zóna, brzdiť market nákupy`, tone: 'neg' });
+    else list.push({ icon: '⚪️', text: `BTC Mayer ${mayer.toFixed(2)} v pásme Macro Support → držať plánovanú alokáciu`, tone: 'neu' });
+
+    if (solTvl > 0) {
+      if (tvlHealthy) list.push({ icon: '🟢', text: `Solana TVL $${(solTvl/1e9).toFixed(2)} B nad prahom → priestor pre vyššiu SOL váhu`, tone: 'pos' });
+      else list.push({ icon: '🟡', text: `Solana TVL $${(solTvl/1e9).toFixed(2)} B pod prahom $8 B → opatrnejšia Altcoin expozícia`, tone: 'neg' });
+    }
+
+    if (anchorsPct >= 80) list.push({ icon: '🛡️', text: `Anchors tvoria ${anchorsPct.toFixed(1)}% → defenzívny profil, nižšia volatilita`, tone: 'neu' });
+    else if (altsPct >= 30) list.push({ icon: '⚡️', text: `Altcoins tvoria ${altsPct.toFixed(1)}% → vyššia citlivosť na sentiment`, tone: 'neu' });
+    return list;
+  }, [fgValue, mayer, solTvl, tvlHealthy, anchorsPct, altsPct]);
 
 
   const updatePct = (id: string, pct: number) => {
