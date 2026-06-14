@@ -251,9 +251,23 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
               <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
                 <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
                 <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
-                {fgValue < 30 && ' Extrémny strach → zvýši priestor pre Anchors.'}
-                {fgValue > 75 && ' Extrémna chamtivosť → škrť Altcoin expozíciu.'}
               </p>
+              <div className="pt-1.5 border-t border-border space-y-1">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Dôvody aktuálneho splitu</p>
+                <ul className="space-y-1">
+                  {reasons.map((r, i) => (
+                    <li
+                      key={i}
+                      className={`flex items-start gap-1.5 leading-snug ${
+                        r.tone === 'pos' ? 'text-emerald-300' : r.tone === 'neg' ? 'text-amber-300' : 'text-foreground/90'
+                      }`}
+                    >
+                      <span className="flex-shrink-0">{r.icon}</span>
+                      <span>{r.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </PopoverContent>
           </Popover>
         </div>
