@@ -4,7 +4,7 @@ import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatUsd } from '@/lib/crypto';
 import { toast } from 'sonner';
-import { useFearGreed } from '@/hooks/usePrices';
+import { useFearGreed, usePrices } from '@/hooks/usePrices';
 import { useMarketData } from '@/hooks/useMarketData';
 
 // ===== CBBC Quality Scores — Tech / DCA / Liquidity / Health (0-100) =====
@@ -107,6 +107,8 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const [newSymbol, setNewSymbol] = useState('');
   const { data: fg } = useFearGreed();
   const { data: market } = useMarketData();
+  const { data: prices } = usePrices();
+
 
   useEffect(() => { saveTargetWeights(rows); }, [rows]);
 
@@ -129,6 +131,16 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const mayer = market?.btc?.mayerMultiple ?? 1;
   const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
 
+  // ===== 200WMA distance (BTC + ETH) =====
+  const btcPrice = market?.btc?.price && market.btc.price > 0 ? market.btc.price : (prices?.bitcoin?.usd ?? 0);
+  const ethPrice = prices?.ethereum?.usd ?? 0;
+  const btcWma = market?.btc?.ma200w ?? 0;
+  const ethWma = market?.eth?.ma200w ?? 0;
+  const btcWmaDistPct = btcPrice > 0 && btcWma > 0 ? ((btcPrice - btcWma) / btcWma) * 100 : null;
+  const ethWmaDistPct = ethPrice > 0 && ethWma > 0 ? ((ethPrice - ethWma) / ethWma) * 100 : null;
+  const btcBelowWma = btcWmaDistPct !== null && btcWmaDistPct < 0;
+
+
   // ===== Dynamic reasons — human-readable bullets driving the current split =====
   const reasons = useMemo(() => {
     const list: Array<{ icon: string; text: string; tone: 'pos' | 'neg' | 'neu' }> = [];
@@ -145,10 +157,22 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
       else list.push({ icon: '🟡', text: `Solana TVL $${(solTvl/1e9).toFixed(2)} B pod prahom $8 B → opatrnejšia Altcoin expozícia`, tone: 'neg' });
     }
 
+    if (btcWmaDistPct !== null) {
+      const abs = Math.abs(btcWmaDistPct).toFixed(1);
+      if (btcWmaDistPct < 0) list.push({ icon: '🟢', text: `BTC je pod 200WMA o ${abs} %, zóna hlbokej akumulácie – navýšená alokácia.`, tone: 'pos' });
+      else if (btcWmaDistPct > 20) list.push({ icon: '🔴', text: `BTC je nad 200WMA o ${abs} %, trh je lokálne drahý – automaticky znížená alokácia pre Market nákup.`, tone: 'neg' });
+      else list.push({ icon: '⚪️', text: `BTC je nad 200WMA o ${abs} % – neutrálne pásmo, plánovaná alokácia bez úprav.`, tone: 'neu' });
+    }
+    if (ethWmaDistPct !== null) {
+      const abs = Math.abs(ethWmaDistPct).toFixed(1);
+      if (ethWmaDistPct < 0) list.push({ icon: '🟢', text: `ETH je pod 200WMA o ${abs} % – akumulačná zóna pre Anchor pár.`, tone: 'pos' });
+      else if (ethWmaDistPct > 20) list.push({ icon: '🔴', text: `ETH je nad 200WMA o ${abs} % – prehriata zóna, opatrnejší Market vstup.`, tone: 'neg' });
+    }
+
     if (anchorsPct >= 80) list.push({ icon: '🛡️', text: `Anchors tvoria ${anchorsPct.toFixed(1)}% → defenzívny profil, nižšia volatilita`, tone: 'neu' });
     else if (altsPct >= 30) list.push({ icon: '⚡️', text: `Altcoins tvoria ${altsPct.toFixed(1)}% → vyššia citlivosť na sentiment`, tone: 'neu' });
     return list;
-  }, [fgValue, mayer, solTvl, tvlHealthy, anchorsPct, altsPct]);
+  }, [fgValue, mayer, solTvl, tvlHealthy, anchorsPct, altsPct, btcWmaDistPct, ethWmaDistPct]);
 
 
   const updatePct = (id: string, pct: number) => {
@@ -248,6 +272,38 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
                   ${(solTvl / 1e9).toFixed(2)} B {tvlHealthy ? '🟢' : '🟡'}
                 </span>
               </div>
+              <div className="pt-1.5 mt-1 border-t border-border space-y-1">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">200WMA analýza</p>
+                {btcWmaDistPct === null ? (
+                  <p className="text-muted-foreground italic">200WMA: Dáta nedostupné</p>
+                ) : (
+                  <>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">BTC vs 200WMA</span>
+                      <span className={`tabular-nums font-semibold ${btcBelowWma ? 'text-emerald-400' : 'text-rose-400'}`}>
+                        {btcWmaDistPct >= 0 ? '+' : ''}{btcWmaDistPct.toFixed(1)} %
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Status 200WMA</span>
+                      <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                        btcBelowWma ? 'bg-emerald-500/15 text-emerald-300' : 'bg-rose-500/15 text-rose-300'
+                      }`}>
+                        {btcBelowWma ? 'POD · Akumulácia' : 'NAD · Opatrnosť'}
+                      </span>
+                    </div>
+                  </>
+                )}
+                {ethWmaDistPct !== null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">ETH vs 200WMA</span>
+                    <span className={`tabular-nums font-semibold ${ethWmaDistPct < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
+                      {ethWmaDistPct >= 0 ? '+' : ''}{ethWmaDistPct.toFixed(1)} %
+                    </span>
+                  </div>
+                )}
+              </div>
+
               <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
                 <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
                 <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
