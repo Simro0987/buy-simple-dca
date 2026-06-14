@@ -120,12 +120,35 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
     return { anchorsPct: (a / t) * 100, altsPct: ((t - a) / t) * 100 };
   }, [rows, total]);
 
+  const [expandedCbbc, setExpandedCbbc] = useState<string | null>(null);
+
   const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
   const fgLabel = fg?.classification ?? 'Neutral';
   const solTvl = market?.sol?.tvl ?? 0;
   const tvlHealthy = solTvl >= 8_000_000_000;
   const mayer = market?.btc?.mayerMultiple ?? 1;
   const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
+
+  // ===== Dynamic reasons — human-readable bullets driving the current split =====
+  const reasons = useMemo(() => {
+    const list: Array<{ icon: string; text: string; tone: 'pos' | 'neg' | 'neu' }> = [];
+    if (fgValue < 30) list.push({ icon: '🟢', text: `Fear & Greed nízky (${fgValue}) → posilnenie Market nákupov na Anchors`, tone: 'pos' });
+    else if (fgValue > 75) list.push({ icon: '🟠', text: `Fear & Greed extrémne vysoký (${fgValue}) → škrtenie Altcoin expozície, viac Limit Dynamic`, tone: 'neg' });
+    else list.push({ icon: '⚪️', text: `Fear & Greed neutrálny (${fgValue}) → vyvážený split medzi Market a Limit`, tone: 'neu' });
+
+    if (mayer < 0.9) list.push({ icon: '🟢', text: `BTC Mayer ${mayer.toFixed(2)} pod 0.9 → makro akumulačná zóna, navýšiť BTC váhu`, tone: 'pos' });
+    else if (mayer > 1.4) list.push({ icon: '🔴', text: `BTC Mayer ${mayer.toFixed(2)} nad 1.4 → prehriata zóna, brzdiť market nákupy`, tone: 'neg' });
+    else list.push({ icon: '⚪️', text: `BTC Mayer ${mayer.toFixed(2)} v pásme Macro Support → držať plánovanú alokáciu`, tone: 'neu' });
+
+    if (solTvl > 0) {
+      if (tvlHealthy) list.push({ icon: '🟢', text: `Solana TVL $${(solTvl/1e9).toFixed(2)} B nad prahom → priestor pre vyššiu SOL váhu`, tone: 'pos' });
+      else list.push({ icon: '🟡', text: `Solana TVL $${(solTvl/1e9).toFixed(2)} B pod prahom $8 B → opatrnejšia Altcoin expozícia`, tone: 'neg' });
+    }
+
+    if (anchorsPct >= 80) list.push({ icon: '🛡️', text: `Anchors tvoria ${anchorsPct.toFixed(1)}% → defenzívny profil, nižšia volatilita`, tone: 'neu' });
+    else if (altsPct >= 30) list.push({ icon: '⚡️', text: `Altcoins tvoria ${altsPct.toFixed(1)}% → vyššia citlivosť na sentiment`, tone: 'neu' });
+    return list;
+  }, [fgValue, mayer, solTvl, tvlHealthy, anchorsPct, altsPct]);
 
 
   const updatePct = (id: string, pct: number) => {
@@ -228,9 +251,23 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
               <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
                 <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
                 <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
-                {fgValue < 30 && ' Extrémny strach → zvýši priestor pre Anchors.'}
-                {fgValue > 75 && ' Extrémna chamtivosť → škrť Altcoin expozíciu.'}
               </p>
+              <div className="pt-1.5 border-t border-border space-y-1">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Dôvody aktuálneho splitu</p>
+                <ul className="space-y-1">
+                  {reasons.map((r, i) => (
+                    <li
+                      key={i}
+                      className={`flex items-start gap-1.5 leading-snug ${
+                        r.tone === 'pos' ? 'text-emerald-300' : r.tone === 'neg' ? 'text-amber-300' : 'text-foreground/90'
+                      }`}
+                    >
+                      <span className="flex-shrink-0">{r.icon}</span>
+                      <span>{r.text}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </PopoverContent>
           </Popover>
         </div>
@@ -324,23 +361,64 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
                 const q = cbbcScores(r.symbol);
                 const overall = Math.round((q.tech + q.dca + q.liq + q.health) / 4);
                 const isAnchor = ANCHORS.has(r.symbol);
+                const expanded = expandedCbbc === r.id;
+                const breakdown: Array<{ key: string; label: string; score: number; desc: string }> = [
+                  { key: 'tech', label: '1. Tech Strength', score: q.tech, desc: 'Sila protokolu, vývojárska aktivita, roadmapa' },
+                  { key: 'dca',  label: '2. DCA Alignment', score: q.dca,  desc: 'Vhodnosť pre pravidelné nákupy a dlhodobé držanie' },
+                  { key: 'liq',  label: '3. Liquidity',     score: q.liq,  desc: 'Hĺbka trhu, spread, dostupnosť na burzách' },
+                  { key: 'health', label: '4. On-chain Health', score: q.health, desc: 'Aktivita siete, držitelia, tokenomika' },
+                ];
                 return (
-                  <div className="flex items-center justify-between gap-2 pt-1.5 mt-1 border-t border-border">
-                    <div className="flex items-center gap-1.5 min-w-0">
-                      <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isAnchor ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300'}`}>
-                        {isAnchor ? 'ANCHOR' : 'ALTCOIN'}
-                      </span>
-                      <span className="text-[10px] text-muted-foreground">CBBC skóre</span>
-                      <span className="text-[11px] font-bold tabular-nums" style={{ color: qualityColor(overall) }}>
-                        {overall}/100
-                      </span>
+                  <div className="pt-1.5 mt-1 border-t border-border space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${isAnchor ? 'bg-sky-500/15 text-sky-300' : 'bg-violet-500/15 text-violet-300'}`}>
+                          {isAnchor ? 'ANCHOR' : 'ALTCOIN'}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setExpandedCbbc(expanded ? null : r.id)}
+                          className="flex items-center gap-1.5 px-1.5 py-0.5 rounded hover:bg-secondary/70 active:scale-95 transition"
+                          aria-expanded={expanded}
+                          aria-label={`Zobraziť CBBC rozpis pre ${r.symbol}`}
+                        >
+                          <QualityRing score={overall} label="CBBC" size={28} />
+                          <span className="text-[11px] font-bold tabular-nums" style={{ color: qualityColor(overall) }}>
+                            {overall}/100
+                          </span>
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <QualityRing score={q.tech} label="TECH" />
+                        <QualityRing score={q.dca} label="DCA" />
+                        <QualityRing score={q.liq} label="LIQ" />
+                        <QualityRing score={q.health} label="HEALTH" />
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <QualityRing score={q.tech} label="TECH" />
-                      <QualityRing score={q.dca} label="DCA" />
-                      <QualityRing score={q.liq} label="LIQ" />
-                      <QualityRing score={q.health} label="HEALTH" />
-                    </div>
+                    {expanded && (
+                      <div className="rounded-md bg-background/60 ring-1 ring-border p-2 space-y-1.5 animate-fade-in">
+                        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                          CBBC rozpis · {r.symbol}
+                        </p>
+                        {breakdown.map(b => (
+                          <div key={b.key} className="space-y-0.5">
+                            <div className="flex items-center justify-between text-[10px]">
+                              <span className="font-semibold text-foreground">{b.label}</span>
+                              <span className="tabular-nums font-bold" style={{ color: qualityColor(b.score) }}>
+                                {b.score}/100
+                              </span>
+                            </div>
+                            <div className="h-1 rounded-full bg-secondary/70 overflow-hidden">
+                              <div
+                                className="h-full transition-all duration-500"
+                                style={{ width: `${b.score}%`, backgroundColor: qualityColor(b.score) }}
+                              />
+                            </div>
+                            <p className="text-[9px] text-muted-foreground leading-snug">{b.desc}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })()}
