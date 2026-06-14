@@ -4,7 +4,7 @@ import { Slider } from '@/components/ui/slider';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { formatUsd } from '@/lib/crypto';
 import { toast } from 'sonner';
-import { useFearGreed } from '@/hooks/usePrices';
+import { useFearGreed, usePrices } from '@/hooks/usePrices';
 import { useMarketData } from '@/hooks/useMarketData';
 
 // ===== CBBC Quality Scores — Tech / DCA / Liquidity / Health (0-100) =====
