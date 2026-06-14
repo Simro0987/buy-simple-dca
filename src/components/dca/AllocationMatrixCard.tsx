@@ -107,6 +107,8 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const [newSymbol, setNewSymbol] = useState('');
   const { data: fg } = useFearGreed();
   const { data: market } = useMarketData();
+  const { data: prices } = usePrices();
+
 
   useEffect(() => { saveTargetWeights(rows); }, [rows]);
 
