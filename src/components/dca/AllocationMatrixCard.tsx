@@ -131,6 +131,16 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
   const mayer = market?.btc?.mayerMultiple ?? 1;
   const mayerZone = mayer < 0.9 ? 'Hard Accumulation' : mayer > 1.4 ? 'Overheated' : 'Macro Support';
 
+  // ===== 200WMA distance (BTC + ETH) =====
+  const btcPrice = market?.btc?.price && market.btc.price > 0 ? market.btc.price : (prices?.bitcoin?.usd ?? 0);
+  const ethPrice = prices?.ethereum?.usd ?? 0;
+  const btcWma = market?.btc?.ma200w ?? 0;
+  const ethWma = market?.eth?.ma200w ?? 0;
+  const btcWmaDistPct = btcPrice > 0 && btcWma > 0 ? ((btcPrice - btcWma) / btcWma) * 100 : null;
+  const ethWmaDistPct = ethPrice > 0 && ethWma > 0 ? ((ethPrice - ethWma) / ethWma) * 100 : null;
+  const btcBelowWma = btcWmaDistPct !== null && btcWmaDistPct < 0;
+
+
   // ===== Dynamic reasons — human-readable bullets driving the current split =====
   const reasons = useMemo(() => {
     const list: Array<{ icon: string; text: string; tone: 'pos' | 'neg' | 'neu' }> = [];
