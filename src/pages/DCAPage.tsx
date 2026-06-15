@@ -5,6 +5,7 @@ import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 import { MoneyModeSignal } from '@/components/dca/MoneyModeSignal';
 import { AllocationMatrixCard } from '@/components/dca/AllocationMatrixCard';
+import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCard';
 
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
@@ -367,6 +368,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* CAPITAL INPUT — set weekly DCA capital from total + horizon */}
       <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
+
+      {/* AUTONOMOUS CORE-SATELLITE ENGINE — 5 factors drive Core/Satellite weights live */}
+      <CoreSatelliteEngineCard weeklyBudgetUsd={plan.investableUsd} />
 
       {/* TARGET ALLOCATION MATRIX — dynamic per-token target weights with reactive weekly distribution */}
       <AllocationMatrixCard weeklyBudgetUsd={plan.investableUsd} />
