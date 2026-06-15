@@ -1,0 +1,181 @@
+// Autonomous Core-Satellite Engine
+// Derives Core (BTC) vs Satellite (ETH+SOL) split from 5 Market Mode factors.
+// Pure / deterministic — UI components consume the result through MarketContext.
+
+export type MarketMode = 'ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
+
+export type FactorKey = 'wma200' | 'fearGreed' | 'cbbc' | 'liquidity' | 'volatility';
+export type FactorStatus = 'pos' | 'neu' | 'neg' | 'critical';
+
+export interface FactorReading {
+  key: FactorKey;
+  label: string;
+  status: FactorStatus;
+  /** -1 (defensive bias) … 0 (neutral) … +1 (accumulate bias). NaN-safe. */
+  bias: number;
+  /** Human-readable short value for the UI chip. */
+  value: string;
+  detail: string;
+}
+
+export interface EngineInputs {
+  btcWmaDistPct: number | null;   // % above/below 200WMA
+  ethWmaDistPct: number | null;
+  fearGreed: number | null;       // 0..100
+  cbbcAvg: number;                // 0..100 quality of held basket
+  solTvlUsd: number | null;       // liquidity proxy
+  btcVol14d: number;              // % daily stdev
+  ethVol14d: number;
+  solVol14d: number;
+}
+
+export interface EngineResult {
+  factors: FactorReading[];
+  mode: MarketMode;
+  /** Core (BTC) weight in %, clamped to [50, 75]. */
+  coreWeight: number;
+  /** Satellite (ETH+SOL) weight in %, clamped to [25, 50]. */
+  satelliteWeight: number;
+  /** Per-token recommended split inside the budget. */
+  perToken: { btc: number; eth: number; sol: number };
+  /** Slovak narrative bullets explaining the shift. */
+  narrative: string[];
+  /** True when DEFENSIVE mode is forced — buys frozen, alert raised. */
+  defensiveLock: boolean;
+}
+
+const BTC_VOL_DANGER = 4.5;   // % daily stdev → systemic stress
+const SAT_VOL_DANGER = 7.0;   // ETH/SOL combined avg above this → DEFENSIVE
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+function read200wma(btc: number | null, eth: number | null): FactorReading {
+  if (btc === null) {
+    return {
+      key: 'wma200', label: '200WMA',
+      status: 'neu', bias: 0, value: 'N/A', detail: 'Yahoo Finance dáta nedostupné',
+    };
+  }
+  const eAbs = eth !== null ? eth : btc;
+  const avg = (btc + eAbs) / 2;
+  if (avg < -5) return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +1, value: `${btc.toFixed(1)}%`, detail: 'BTC/ETH hlboko pod 200WMA — akumulačná zóna' };
+  if (avg < 0)  return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +0.6, value: `${btc.toFixed(1)}%`, detail: 'Pod 200WMA — mierne akumulačné pásmo' };
+  if (avg > 25) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.8, value: `+${btc.toFixed(1)}%`, detail: 'Prehriaty trh — distribučná zóna' };
+  if (avg > 10) return { key: 'wma200', label: '200WMA NAD', status: 'neu', bias: -0.3, value: `+${btc.toFixed(1)}%`, detail: 'Nad 200WMA — opatrná expanzia' };
+  return { key: 'wma200', label: '200WMA Neutrál', status: 'neu', bias: 0, value: `${btc >= 0 ? '+' : ''}${btc.toFixed(1)}%`, detail: 'V neutrálnom pásme 200WMA' };
+}
+
+function readFearGreed(v: number | null): FactorReading {
+  if (v === null) return { key: 'fearGreed', label: 'Fear & Greed', status: 'neu', bias: 0, value: 'N/A', detail: 'Alternative.me nedostupné' };
+  if (v <= 20) return { key: 'fearGreed', label: 'Extreme Fear', status: 'pos', bias: +1, value: `${v}`, detail: 'Kapitulácia — akumulačná príležitosť' };
+  if (v <= 40) return { key: 'fearGreed', label: 'Fear', status: 'pos', bias: +0.5, value: `${v}`, detail: 'Sentiment pod priemerom' };
+  if (v >= 80) return { key: 'fearGreed', label: 'Extreme Greed', status: 'neg', bias: -0.8, value: `${v}`, detail: 'Eufória — riziko distribúcie' };
+  if (v >= 60) return { key: 'fearGreed', label: 'Greed', status: 'neu', bias: -0.3, value: `${v}`, detail: 'Sentiment nad priemerom' };
+  return { key: 'fearGreed', label: 'Neutral', status: 'neu', bias: 0, value: `${v}`, detail: 'Vyvážený sentiment' };
+}
+
+function readCbbc(avg: number): FactorReading {
+  if (avg >= 88) return { key: 'cbbc', label: 'CBBC Quality', status: 'pos', bias: +0.4, value: `${avg.toFixed(0)}`, detail: 'Vysoká kvalita košíka — priestor pre satelity' };
+  if (avg >= 75) return { key: 'cbbc', label: 'CBBC Quality', status: 'neu', bias: +0.1, value: `${avg.toFixed(0)}`, detail: 'Štandardná kvalita košíka' };
+  if (avg >= 60) return { key: 'cbbc', label: 'CBBC Quality', status: 'neu', bias: -0.2, value: `${avg.toFixed(0)}`, detail: 'Nižšia kvalita — preferuj Core' };
+  return { key: 'cbbc', label: 'CBBC Quality', status: 'neg', bias: -0.5, value: `${avg.toFixed(0)}`, detail: 'Slabá kvalita — Core dominantné' };
+}
+
+function readLiquidity(solTvl: number | null): FactorReading {
+  if (solTvl === null || solTvl <= 0) return { key: 'liquidity', label: 'Likvidita', status: 'neu', bias: 0, value: 'N/A', detail: 'DefiLlama TVL nedostupné' };
+  const b = solTvl / 1e9;
+  if (b >= 12) return { key: 'liquidity', label: 'Likvidita Up', status: 'pos', bias: +0.5, value: `$${b.toFixed(1)} B`, detail: 'Solana TVL rastie — alts môžu reagovať' };
+  if (b >= 8)  return { key: 'liquidity', label: 'Likvidita OK', status: 'neu', bias: 0, value: `$${b.toFixed(1)} B`, detail: 'TVL v zdravom pásme' };
+  return { key: 'liquidity', label: 'Likvidita Down', status: 'neg', bias: -0.5, value: `$${b.toFixed(1)} B`, detail: 'TVL pod prahom $8 B — utiahnuť satelity' };
+}
+
+function readVolatility(btcVol: number, ethVol: number, solVol: number): FactorReading {
+  const satAvg = (ethVol + solVol) / 2;
+  if (btcVol >= BTC_VOL_DANGER || satAvg >= SAT_VOL_DANGER) {
+    return {
+      key: 'volatility', label: 'Volatility ALERT', status: 'critical', bias: -1,
+      value: `BTC ${btcVol.toFixed(1)}% / Sat ${satAvg.toFixed(1)}%`,
+      detail: 'Extrémna volatilita — DEFENSIVE mód, freeze nových buyov',
+    };
+  }
+  if (btcVol >= 3 || satAvg >= 5) return { key: 'volatility', label: 'Volatility High', status: 'neg', bias: -0.5, value: `${btcVol.toFixed(1)}%`, detail: 'Zvýšená vol — preferuj Core, šírka limitov' };
+  if (btcVol <= 1.5 && satAvg <= 2.5) return { key: 'volatility', label: 'Volatility Low', status: 'pos', bias: +0.3, value: `${btcVol.toFixed(1)}%`, detail: 'Pokojný trh — priestor pre satelity' };
+  return { key: 'volatility', label: 'Volatility OK', status: 'neu', bias: 0, value: `${btcVol.toFixed(1)}%`, detail: 'Štandardná volatilita' };
+}
+
+function inferMode(score: number, defensive: boolean): MarketMode {
+  if (defensive) return 'DEFENSIVE';
+  if (score >= 0.45) return 'ACCUMULATION';
+  if (score <= -0.45) return 'DISTRIBUTION';
+  return 'BALANCED';
+}
+
+export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
+  const f200 = read200wma(inputs.btcWmaDistPct, inputs.ethWmaDistPct);
+  const fFg = readFearGreed(inputs.fearGreed);
+  const fCb = readCbbc(inputs.cbbcAvg);
+  const fLi = readLiquidity(inputs.solTvlUsd);
+  const fVo = readVolatility(inputs.btcVol14d, inputs.ethVol14d, inputs.solVol14d);
+  const factors: FactorReading[] = [f200, fFg, fCb, fLi, fVo];
+
+  const defensiveLock = fVo.status === 'critical';
+
+  // Weighted bias → mapped to core weight 50..75 (high bias = more BTC = ACCUMULATION/DEFENSIVE).
+  // Positive bias → accumulate → tilt Core slightly higher (BTC anchor).
+  // Negative bias → distribution risk → keep Core dominant to defend.
+  // BALANCED midpoint sits at ~62 % Core.
+  const weights = { wma200: 0.25, fearGreed: 0.20, cbbc: 0.15, liquidity: 0.15, volatility: 0.25 };
+  const score = factors.reduce((s, f) => s + (f.bias || 0) * (weights[f.key] ?? 0), 0); // -1..+1
+
+  let coreWeight: number;
+  if (defensiveLock) {
+    coreWeight = 75; // max BTC anchor
+  } else if (score >= 0.45) {
+    // strong accumulation — slightly heavier satellites to capture upside
+    coreWeight = clamp(58 - score * 8, 50, 75);
+  } else if (score <= -0.45) {
+    coreWeight = clamp(70 + Math.abs(score) * 5, 50, 75);
+  } else {
+    coreWeight = clamp(62 - score * 10, 50, 75);
+  }
+  coreWeight = Math.round(coreWeight);
+  const satelliteWeight = 100 - coreWeight;
+
+  // Split satellites ETH:SOL ≈ 70:30 baseline, shifted by liquidity bias.
+  const liqBias = clamp(fLi.bias, -0.5, 0.5);
+  const solShare = clamp(0.30 + liqBias * 0.25, 0.20, 0.45); // 20..45 % of satellite
+  const ethShare = 1 - solShare;
+  const ethPct = Math.round(satelliteWeight * ethShare);
+  const solPct = satelliteWeight - ethPct;
+
+  const mode = inferMode(score, defensiveLock);
+
+  const narrative: string[] = [];
+  narrative.push(
+    `Alokácia BTC ${defensiveLock ? 'uzamknutá' : 'nastavená'} na ${coreWeight} % vďaka ${
+      f200.status === 'pos' ? '200WMA (POD)' : f200.status === 'neg' ? '200WMA (NAD)' : '200WMA neutrál'
+    } a F&G ${fFg.value}.`,
+  );
+  if (defensiveLock) {
+    narrative.push('Volatility Risk prekročil prah — DEFENSIVE mód aktivovaný, nové buy príkazy zmrazené.');
+  } else if (mode === 'ACCUMULATION') {
+    narrative.push(`Satelity ${satelliteWeight} % (ETH ${ethPct} % · SOL ${solPct} %) — likvidita ${fLi.value} podporuje rast.`);
+  } else if (mode === 'DISTRIBUTION') {
+    narrative.push(`Distribúcia — Core navýšený, satelity stlačené na ${satelliteWeight} %.`);
+  } else {
+    narrative.push(`Vyvážený režim — ${coreWeight}/${satelliteWeight} split medzi Core a satelitmi.`);
+  }
+  narrative.push(`CBBC kvalita ${fCb.value} · vol ${fVo.value}.`);
+
+  return {
+    factors,
+    mode,
+    coreWeight,
+    satelliteWeight,
+    perToken: { btc: coreWeight, eth: ethPct, sol: solPct },
+    narrative,
+    defensiveLock,
+  };
+}
