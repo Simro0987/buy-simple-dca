@@ -258,24 +258,36 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
             </PopoverTrigger>
             <PopoverContent align="end" className="w-72 text-[11px] space-y-1.5">
               <p className="font-bold text-foreground">Logika živej alokácie</p>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Fear &amp; Greed</span>
-                <span className="tabular-nums font-semibold text-foreground">{fgValue}/100 · {fgLabel}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">
+                  Fear &amp; Greed <span className="text-[9px] text-muted-foreground/70">· Alternative.me</span>
+                </span>
+                <span className="tabular-nums font-semibold text-foreground">
+                  {fg ? `${fgValue}/100 · ${fgLabel}` : 'DÁTA NEDOSTUPNÉ'}
+                </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">BTC Mayer · zóna</span>
-                <span className="tabular-nums font-semibold text-foreground">{mayer.toFixed(2)} · {mayerZone}</span>
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">
+                  BTC Mayer · zóna <span className="text-[9px] text-muted-foreground/70">· CoinGecko</span>
+                </span>
+                <span className="tabular-nums font-semibold text-foreground">
+                  {market?.btc?.mayerMultiple ? `${mayer.toFixed(2)} · ${mayerZone}` : 'DÁTA NEDOSTUPNÉ'}
+                </span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">Solana TVL</span>
-                <span className={`tabular-nums font-semibold ${tvlHealthy ? 'text-emerald-400' : 'text-amber-400'}`}>
-                  ${(solTvl / 1e9).toFixed(2)} B {tvlHealthy ? '🟢' : '🟡'}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground">
+                  Solana TVL <span className="text-[9px] text-muted-foreground/70">· DefiLlama</span>
+                </span>
+                <span className={`tabular-nums font-semibold ${solTvl > 0 ? (tvlHealthy ? 'text-emerald-400' : 'text-amber-400') : 'text-muted-foreground'}`}>
+                  {solTvl > 0 ? `$${(solTvl / 1e9).toFixed(2)} B ${tvlHealthy ? '🟢' : '🟡'}` : 'DÁTA NEDOSTUPNÉ'}
                 </span>
               </div>
               <div className="pt-1.5 mt-1 border-t border-border space-y-1">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">200WMA analýza</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+                  200WMA analýza <span className="text-[9px] normal-case text-muted-foreground/70">· Yahoo Finance</span>
+                </p>
                 {btcWmaDistPct === null ? (
-                  <p className="text-muted-foreground italic">200WMA: Dáta nedostupné</p>
+                  <p className="text-muted-foreground italic">200WMA: DÁTA NEDOSTUPNÉ</p>
                 ) : (
                   <>
                     <div className="flex items-center justify-between">
@@ -294,19 +306,24 @@ export function AllocationMatrixCard({ weeklyBudgetUsd }: Props) {
                     </div>
                   </>
                 )}
-                {ethWmaDistPct !== null && (
+                {ethWmaDistPct !== null ? (
                   <div className="flex items-center justify-between">
                     <span className="text-muted-foreground">ETH vs 200WMA</span>
                     <span className={`tabular-nums font-semibold ${ethWmaDistPct < 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
                       {ethWmaDistPct >= 0 ? '+' : ''}{ethWmaDistPct.toFixed(1)} %
                     </span>
                   </div>
+                ) : (
+                  <p className="text-muted-foreground italic">ETH 200WMA: DÁTA NEDOSTUPNÉ</p>
                 )}
               </div>
 
               <p className="text-muted-foreground leading-snug pt-1 border-t border-border">
                 <span className="text-sky-400 font-semibold">Anchors</span> (BTC/ETH) tvoria jadro – nižší risk, hlbšia likvidita.
                 <span className="text-violet-400 font-semibold"> Altcoins</span> (SOL+) reagujú silnejšie na sentiment a TVL.
+              </p>
+              <p className="text-[9px] text-muted-foreground/70 italic leading-snug pt-1 border-t border-border">
+                Zdroje: Yahoo Finance (200WMA), Alternative.me (F&amp;G), DefiLlama (TVL), Token Unlocks (unlocks). Pri výpadku zdroja sa použijú fallback konštanty (Realized 53 600 / Mining 50 000).
               </p>
               <div className="pt-1.5 border-t border-border space-y-1">
                 <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">Dôvody aktuálneho splitu</p>
