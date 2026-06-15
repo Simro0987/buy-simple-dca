@@ -1,8 +1,16 @@
 // Live market data aggregator for the DCA engine.
-// Endpoints: 200WMA (BTC/ETH via Yahoo), Mayer Multiple (BTC via CoinGecko),
-// BTC production cost (cluster fallback constants), Solana TVL (DefiLlama),
-// upcoming unlocks >3% (DefiLlama). Graceful degradation: every block falls
-// back to last cached value or hardcoded macro constants on failure.
+//
+// STRICT DATA SOURCE CONTRACT (hardcoded — do NOT swap providers):
+//   • BTC / ETH price & 200WMA  → Yahoo Finance  (query1.finance.yahoo.com)
+//   • BTC Mayer Multiple / 200d → CoinGecko      (api.coingecko.com)
+//   • Solana TVL                → DefiLlama      (api.llama.fi)
+//   • Token Unlocks (>3% supply, 30d) → DefiLlama emission index
+//                                 (token.unlocks.app compatible schema)
+//   • Fear & Greed (consumed client-side) → Alternative.me
+//
+// NO APPROXIMATIONS. If a source is unreachable the response uses the cached
+// value or the hardcoded fallback constants below (Realized 53600, Mining
+// 50000, 200WMA BTC 48500 / ETH 2350, Sol TVL 11.5B). Never fabricate data.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
