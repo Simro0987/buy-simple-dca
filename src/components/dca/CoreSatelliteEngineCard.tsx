@@ -272,6 +272,16 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
           </p>
         )}
       </div>
+
+      {/* STEP E — forward to execution */}
+      <div className="rounded-lg border border-dashed border-primary/40 bg-primary/5 px-2.5 py-2 flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-wide text-primary font-semibold">
+          ↓ Step E · Forward do Dynamic Execution Engine
+        </span>
+        <span className="text-[10px] tabular-nums text-foreground font-bold">
+          Core ${((weeklyBudgetUsd * engine.coreWeight) / 100).toFixed(0)} · Sat ${((weeklyBudgetUsd * engine.satelliteWeight) / 100).toFixed(0)}
+        </span>
+      </div>
     </div>
   );
 }
