@@ -66,6 +66,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
   const { data: fg } = useFearGreed();
+  const { engine } = useMarketEngine();
+  const tokenWeights: Record<CoinKey, number> = {
+    btc: (engine.perToken.btc ?? 0) / 100,
+    eth: (engine.perToken.eth ?? 0) / 100,
+    sol: (engine.perToken.sol ?? 0) / 100,
+  };
+  const tokenLabel: Record<CoinKey, string> = {
+    btc: `${engine.perToken.btc}%`,
+    eth: `${engine.perToken.eth}%`,
+    sol: `${engine.perToken.sol}%`,
+  };
   const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
   const fgLabel = fg?.classification ?? 'Neutral';
   const reservoir = useProfitReservoir();
