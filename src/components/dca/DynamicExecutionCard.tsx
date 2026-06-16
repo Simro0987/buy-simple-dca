@@ -281,8 +281,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
             </p>
           </div>
           <span className={`text-[10px] tabular-nums font-bold ${
-            fgMode === 'EXTREME_FEAR' ? 'text-emerald-300'
-            : fgMode === 'EXTREME_GREED' ? 'text-rose-300'
+            fgValue < 30 ? 'text-emerald-300'
+            : fgValue > 75 ? 'text-rose-300'
             : 'text-foreground'
           }`}>
             {fgValue}/100 · {fgLabel}
