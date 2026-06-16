@@ -699,7 +699,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
-                {e.rationale}
+                {splitReason} {e.rationale}
               </p>
             </div>
           );
