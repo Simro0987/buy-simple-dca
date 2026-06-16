@@ -401,6 +401,27 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               </div>
 
+              {/* PER-TOKEN MKT / LMT SLIDER BAR — dual-factor engine (F&G + vol) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[9px] tabular-nums">
+                  <span className="font-bold text-emerald-300">MKT {marketPct}%</span>
+                  <span className="text-muted-foreground uppercase tracking-wide">
+                    sent {Math.round(split.sentMarket)} · vol {Math.round(split.volMarket)}
+                  </span>
+                  <span className="font-bold text-amber-400">LMT {dynamicPct}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-background/60 overflow-hidden flex ring-1 ring-border">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-500 ease-out"
+                    style={{ width: `${marketPct}%` }}
+                  />
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-500 ease-out"
+                    style={{ width: `${dynamicPct}%` }}
+                  />
+                </div>
+              </div>
+
               {/* Suma pre token + držané */}
               <div className="flex items-center justify-between bg-background/40 rounded px-2 py-1.5">
                 <div>
