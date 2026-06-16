@@ -300,32 +300,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         </div>
       </div>
 
-      {/* MARKET / LIMIT DYNAMIC SPLIT — auto driven by F&G + Score */}
-      <div className="bg-secondary/40 rounded-lg p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            MARKET / LIMIT DYNAMIC SPLIT · AUTO
-          </p>
-          <span className="text-[10px] tabular-nums font-bold text-foreground">
-            MKT {marketPct}% / DYN {dynamicPct}%
-          </span>
-        </div>
-        <div className="h-2.5 rounded-full bg-background/50 overflow-hidden flex">
-          <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${marketPct}%` }} />
-          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${dynamicPct}%` }} />
-        </div>
-        <div className="flex items-start gap-1.5 pt-1 border-t border-border">
-          <Info className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
-          <p className="text-[10px] text-foreground/80 leading-snug">
-            <span className="font-semibold">
-              Plne automatické rozdelenie týždenného DCA rozpočtu podľa indikátorov a Fear &amp; Greed indexu.
-            </span>{' '}
-            Ľavá strana nakupuje ihneď za <span className="text-emerald-300 font-semibold">Market</span> cenu,
-            pravá čaká v <span className="text-primary font-semibold">Limit Dynamic</span> podľa per-coin volatility.
-            {' '}{splitReason}
-          </p>
-        </div>
-      </div>
+      {/* Global Market/Limit split panel removed — split is now computed PER-TOKEN below
+          via the Dual-Factor engine (Fear & Greed + per-coin 14D volatility). */}
+
 
       {/* PER-COIN ROWS */}
       <div className="space-y-2">
