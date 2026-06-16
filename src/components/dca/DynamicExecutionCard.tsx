@@ -224,36 +224,33 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { executions, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
 
-  // ===== TIER 2: MARKET vs LIMIT DYNAMIC split — riadený Fear & Greed indexom =====
-  //   Extrémny strach (<30) → 70 % MARKET / 30 % DYNAMIC (chytaj podhodnotené spoty)
-  //   Extrémna chamtivosť (>75) → 20 % MARKET / 80 % DYNAMIC (čakaj v hlbokých limitoch)
-  //   Neutral → kontinuálna interpolácia
-  const { marketPct, dynamicPct, fgMode } = useMemo(() => {
-    let mPct: number;
-    let mode: 'EXTREME_FEAR' | 'NEUTRAL' | 'EXTREME_GREED';
-    if (fgValue < 30) {
-      mPct = 70;
-      mode = 'EXTREME_FEAR';
-    } else if (fgValue > 75) {
-      mPct = 20;
-      mode = 'EXTREME_GREED';
-    } else {
-      // Lineárna interpolácia 30→75 : 70→20
-      mPct = Math.round(70 - ((fgValue - 30) / 45) * 50);
-      mode = 'NEUTRAL';
+  // ===== DUAL-FACTOR PER-TOKEN SPLIT ENGINE =====
+  // Each token has its OWN Market/Limit split derived from two factors (50/50 weight):
+  //   a) SENTIMENT (Fear & Greed): low F&G → more MARKET; high F&G → more LIMIT.
+  //      sentMarket = 80 − (fg/100)·60   (fg 0→80, fg 50→50, fg 100→20)
+  //   b) VOLATILITY (per-coin 14D σ): high vol → more MARKET (chytaj rýchle dná),
+  //      low vol → more LIMIT (čakaj na zľavu, neplať premium).
+  //      volMarket = 20 + clamp(vol/6, 0..1)·60   (vol 0→20, vol 3→50, vol 6+→80)
+  // Final marketPct = round(0.5·sent + 0.5·vol), clamp [20, 80].
+  const fgGlobal = fgValue;
+  function perTokenSplit(vol30d: number): { marketPct: number; limitPct: number; sentMarket: number; volMarket: number } {
+    const sentMarket = Math.max(20, Math.min(80, 80 - (fgGlobal / 100) * 60));
+    const volNorm = Math.max(0, Math.min(1, vol30d / 6));
+    const volMarket = Math.max(20, Math.min(80, 20 + volNorm * 60));
+    const marketPct = Math.round(Math.max(20, Math.min(80, 0.5 * sentMarket + 0.5 * volMarket)));
+    return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket };
+  }
+  function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>): string {
+    const fgTag = fgGlobal < 30 ? 'extrémny strach' : fgGlobal > 75 ? 'extrémna chamtivosť' : 'neutrálny sentiment';
+    const volTag = vol30d >= 4.5 ? 'vysoká' : vol30d >= 2.5 ? 'stredná' : 'nízka';
+    if (split.marketPct >= 65) {
+      return `${sym} MKT navýšený na ${split.marketPct} % kvôli kombinácii ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D volatility (${vol30d.toFixed(2)} %) — šanca zachytiť rýchle dno.`;
     }
-    return { marketPct: mPct, dynamicPct: 100 - mPct, fgMode: mode };
-  }, [fgValue]);
-
-  const splitReason = useMemo(() => {
-    if (fgMode === 'EXTREME_FEAR') {
-      return `🟢 Extrémny strach (F&G ${fgValue}/100) → posúvam váhu do MARKET 70/30, snap-up podhodnotených spotov.`;
+    if (split.marketPct <= 35) {
+      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) odporúčajú čakať na hlbšie sweep zóny a neplatiť market premium.`;
     }
-    if (fgMode === 'EXTREME_GREED') {
-      return `🔴 Extrémna chamtivosť (F&G ${fgValue}/100) → škrtím MARKET, kapitál čaká v hlbokých Limit Dynamic objednávkach 20/80.`;
-    }
-    return `🟡 Neutrálny sentiment (F&G ${fgValue}/100, ${fgLabel}) → vyvážený split ${marketPct}/${dynamicPct} (base Score ${score}, ${base.marketPct}/${base.limitPct}).`;
-  }, [fgMode, fgValue, fgLabel, marketPct, dynamicPct, score, base]);
+    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) v rovnováhe.`;
+  }
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -284,8 +281,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
             </p>
           </div>
           <span className={`text-[10px] tabular-nums font-bold ${
-            fgMode === 'EXTREME_FEAR' ? 'text-emerald-300'
-            : fgMode === 'EXTREME_GREED' ? 'text-rose-300'
+            fgValue < 30 ? 'text-emerald-300'
+            : fgValue > 75 ? 'text-rose-300'
             : 'text-foreground'
           }`}>
             {fgValue}/100 · {fgLabel}
@@ -303,32 +300,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         </div>
       </div>
 
-      {/* MARKET / LIMIT DYNAMIC SPLIT — auto driven by F&G + Score */}
-      <div className="bg-secondary/40 rounded-lg p-3 space-y-2">
-        <div className="flex items-center justify-between">
-          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-            MARKET / LIMIT DYNAMIC SPLIT · AUTO
-          </p>
-          <span className="text-[10px] tabular-nums font-bold text-foreground">
-            MKT {marketPct}% / DYN {dynamicPct}%
-          </span>
-        </div>
-        <div className="h-2.5 rounded-full bg-background/50 overflow-hidden flex">
-          <div className="h-full bg-emerald-500 transition-all duration-500" style={{ width: `${marketPct}%` }} />
-          <div className="h-full bg-primary transition-all duration-500" style={{ width: `${dynamicPct}%` }} />
-        </div>
-        <div className="flex items-start gap-1.5 pt-1 border-t border-border">
-          <Info className="w-3 h-3 text-primary mt-0.5 flex-shrink-0" />
-          <p className="text-[10px] text-foreground/80 leading-snug">
-            <span className="font-semibold">
-              Plne automatické rozdelenie týždenného DCA rozpočtu podľa indikátorov a Fear &amp; Greed indexu.
-            </span>{' '}
-            Ľavá strana nakupuje ihneď za <span className="text-emerald-300 font-semibold">Market</span> cenu,
-            pravá čaká v <span className="text-primary font-semibold">Limit Dynamic</span> podľa per-coin volatility.
-            {' '}{splitReason}
-          </p>
-        </div>
-      </div>
+      {/* Global Market/Limit split panel removed — split is now computed PER-TOKEN below
+          via the Dual-Factor engine (Fear & Greed + per-coin 14D volatility). */}
+
 
       {/* PER-COIN ROWS */}
       <div className="space-y-2">
@@ -354,6 +328,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
           const coinUsd = investableUsd * tokenWeights[c];
+          // PER-TOKEN dual-factor split (F&G + per-coin 14D volatility).
+          const split = perTokenSplit(e.volatility30d);
+          const marketPct = split.marketPct;
+          const dynamicPct = split.limitPct;
+          const splitReason = perTokenReason(e.symbol, e.volatility30d, split);
           let marketUsdRaw = coinUsd * (marketPct / 100);
           let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
@@ -419,6 +398,27 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     <MomIcon className="w-3 h-3" />
                     {e.momentum30d >= 0 ? '+' : ''}{e.momentum30d.toFixed(1)}%
                   </span>
+                </div>
+              </div>
+
+              {/* PER-TOKEN MKT / LMT SLIDER BAR — dual-factor engine (F&G + vol) */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between text-[9px] tabular-nums">
+                  <span className="font-bold text-emerald-300">MKT {marketPct}%</span>
+                  <span className="text-muted-foreground uppercase tracking-wide">
+                    sent {Math.round(split.sentMarket)} · vol {Math.round(split.volMarket)}
+                  </span>
+                  <span className="font-bold text-amber-400">LMT {dynamicPct}%</span>
+                </div>
+                <div className="h-2 rounded-full bg-background/60 overflow-hidden flex ring-1 ring-border">
+                  <div
+                    className="h-full bg-emerald-500 transition-all duration-500 ease-out"
+                    style={{ width: `${marketPct}%` }}
+                  />
+                  <div
+                    className="h-full bg-amber-500 transition-all duration-500 ease-out"
+                    style={{ width: `${dynamicPct}%` }}
+                  />
                 </div>
               </div>
 
@@ -699,7 +699,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
-                {e.rationale}
+                {splitReason} {e.rationale}
               </p>
             </div>
           );
