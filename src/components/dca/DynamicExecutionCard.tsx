@@ -224,36 +224,33 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { executions, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
 
-  // ===== TIER 2: MARKET vs LIMIT DYNAMIC split — riadený Fear & Greed indexom =====
-  //   Extrémny strach (<30) → 70 % MARKET / 30 % DYNAMIC (chytaj podhodnotené spoty)
-  //   Extrémna chamtivosť (>75) → 20 % MARKET / 80 % DYNAMIC (čakaj v hlbokých limitoch)
-  //   Neutral → kontinuálna interpolácia
-  const { marketPct, dynamicPct, fgMode } = useMemo(() => {
-    let mPct: number;
-    let mode: 'EXTREME_FEAR' | 'NEUTRAL' | 'EXTREME_GREED';
-    if (fgValue < 30) {
-      mPct = 70;
-      mode = 'EXTREME_FEAR';
-    } else if (fgValue > 75) {
-      mPct = 20;
-      mode = 'EXTREME_GREED';
-    } else {
-      // Lineárna interpolácia 30→75 : 70→20
-      mPct = Math.round(70 - ((fgValue - 30) / 45) * 50);
-      mode = 'NEUTRAL';
+  // ===== DUAL-FACTOR PER-TOKEN SPLIT ENGINE =====
+  // Each token has its OWN Market/Limit split derived from two factors (50/50 weight):
+  //   a) SENTIMENT (Fear & Greed): low F&G → more MARKET; high F&G → more LIMIT.
+  //      sentMarket = 80 − (fg/100)·60   (fg 0→80, fg 50→50, fg 100→20)
+  //   b) VOLATILITY (per-coin 14D σ): high vol → more MARKET (chytaj rýchle dná),
+  //      low vol → more LIMIT (čakaj na zľavu, neplať premium).
+  //      volMarket = 20 + clamp(vol/6, 0..1)·60   (vol 0→20, vol 3→50, vol 6+→80)
+  // Final marketPct = round(0.5·sent + 0.5·vol), clamp [20, 80].
+  const fgGlobal = fgValue;
+  function perTokenSplit(vol30d: number): { marketPct: number; limitPct: number; sentMarket: number; volMarket: number } {
+    const sentMarket = Math.max(20, Math.min(80, 80 - (fgGlobal / 100) * 60));
+    const volNorm = Math.max(0, Math.min(1, vol30d / 6));
+    const volMarket = Math.max(20, Math.min(80, 20 + volNorm * 60));
+    const marketPct = Math.round(Math.max(20, Math.min(80, 0.5 * sentMarket + 0.5 * volMarket)));
+    return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket };
+  }
+  function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>): string {
+    const fgTag = fgGlobal < 30 ? 'extrémny strach' : fgGlobal > 75 ? 'extrémna chamtivosť' : 'neutrálny sentiment';
+    const volTag = vol30d >= 4.5 ? 'vysoká' : vol30d >= 2.5 ? 'stredná' : 'nízka';
+    if (split.marketPct >= 65) {
+      return `${sym} MKT navýšený na ${split.marketPct} % kvôli kombinácii ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D volatility (${vol30d.toFixed(2)} %) — šanca zachytiť rýchle dno.`;
     }
-    return { marketPct: mPct, dynamicPct: 100 - mPct, fgMode: mode };
-  }, [fgValue]);
-
-  const splitReason = useMemo(() => {
-    if (fgMode === 'EXTREME_FEAR') {
-      return `🟢 Extrémny strach (F&G ${fgValue}/100) → posúvam váhu do MARKET 70/30, snap-up podhodnotených spotov.`;
+    if (split.marketPct <= 35) {
+      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) odporúčajú čakať na hlbšie sweep zóny a neplatiť market premium.`;
     }
-    if (fgMode === 'EXTREME_GREED') {
-      return `🔴 Extrémna chamtivosť (F&G ${fgValue}/100) → škrtím MARKET, kapitál čaká v hlbokých Limit Dynamic objednávkach 20/80.`;
-    }
-    return `🟡 Neutrálny sentiment (F&G ${fgValue}/100, ${fgLabel}) → vyvážený split ${marketPct}/${dynamicPct} (base Score ${score}, ${base.marketPct}/${base.limitPct}).`;
-  }, [fgMode, fgValue, fgLabel, marketPct, dynamicPct, score, base]);
+    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) v rovnováhe.`;
+  }
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
