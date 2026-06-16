@@ -219,7 +219,7 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
       {/* PER-TOKEN SYNC BARS */}
       <div className="space-y-1.5">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
-          Token alokácia (synchronizovaná)
+          Token alokácia · Amount to Buy (live)
         </p>
         {([
           { key: 'btc', label: 'BTC', pct: engine.perToken.btc, color: 'from-amber-400 to-amber-500', text: 'text-amber-300' },
