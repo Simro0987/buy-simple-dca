@@ -8,6 +8,7 @@ import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
 import { useFearGreed } from '@/hooks/usePrices';
+import { useMarketEngine } from '@/contexts/MarketContext';
 import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
 import {
   calcUnifiedExecution,
@@ -49,9 +50,8 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
   sol: 'solana',
 };
 
-// Cieľové portfólio váhy: BTC 64% / ETH 25% / SOL 11% (bez HYPE).
-const TARGET_WEIGHTS: Record<CoinKey, number> = { btc: 0.64, eth: 0.25, sol: 0.11 };
-const COIN_LABEL_WEIGHT: Record<CoinKey, string> = { btc: '64%', eth: '25%', sol: '11%' };
+// Cieľové portfólio váhy sú riadené Master Dynamic Allocation engine (Core ≥ 50 %).
+// Zdroj pravdy: useMarketEngine().engine.perToken.
 
 type Mode = 'market' | 'dynamic';
 
