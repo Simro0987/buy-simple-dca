@@ -239,9 +239,10 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
               key={row.pct}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="w-16 text-right text-[10px] tabular-nums text-foreground font-semibold"
+              className="w-24 text-right text-[10px] tabular-nums text-foreground font-bold"
             >
-              {row.pct}% · ${((weeklyBudgetUsd * row.pct) / 100).toFixed(0)}
+              <span className="text-foreground">${((weeklyBudgetUsd * row.pct) / 100).toFixed(0)}</span>
+              <span className="text-muted-foreground ml-1 font-normal">({row.pct}%)</span>
             </motion.span>
           </div>
         ))}
