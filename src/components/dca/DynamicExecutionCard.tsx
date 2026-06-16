@@ -328,6 +328,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
           const coinUsd = investableUsd * tokenWeights[c];
+          // PER-TOKEN dual-factor split (F&G + per-coin 14D volatility).
+          const split = perTokenSplit(e.volatility30d);
+          const marketPct = split.marketPct;
+          const dynamicPct = split.limitPct;
+          const splitReason = perTokenReason(e.symbol, e.volatility30d, split);
           let marketUsdRaw = coinUsd * (marketPct / 100);
           let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
