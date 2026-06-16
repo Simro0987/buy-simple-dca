@@ -91,7 +91,7 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
         <div className="flex items-center gap-2 min-w-0">
           <Shield className="w-4 h-4 text-primary flex-shrink-0" />
           <h2 className="text-xs font-bold uppercase tracking-wide text-foreground truncate">
-            Autonomous Core-Satellite Engine
+            Master Dynamic Allocation · Live Pipeline
           </h2>
         </div>
         {isDegraded && (
@@ -100,6 +100,39 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
           </span>
         )}
       </div>
+
+      {/* CAPITAL PIPELINE — Step A → B → C → D → E */}
+      <div className="rounded-lg border border-border bg-background/40 p-2.5 space-y-2">
+        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+          Capital Pipeline · tok kapitálu
+        </p>
+        <div className="grid grid-cols-5 gap-1 text-center text-[9px]">
+          {[
+            { k: 'A', t: 'Weekly $', v: `$${weeklyBudgetUsd.toFixed(0)}`, c: 'text-foreground' },
+            { k: 'B', t: '5 Factors', v: engine.mode.slice(0, 4), c: 'text-primary' },
+            { k: 'C', t: 'Core/Sat', v: `${engine.coreWeight}/${engine.satelliteWeight}`, c: 'text-sky-300' },
+            { k: 'D', t: 'Per token', v: `${engine.perToken.btc}·${engine.perToken.eth}·${engine.perToken.sol}`, c: 'text-violet-300' },
+            { k: 'E', t: 'Mkt / Lim', v: 'auto', c: 'text-emerald-300' },
+          ].map((s, i) => (
+            <div key={s.k} className="flex flex-col items-center gap-0.5">
+              <span className="w-5 h-5 rounded-full bg-secondary text-[9px] font-bold flex items-center justify-center text-foreground">
+                {s.k}
+              </span>
+              <span className="text-[8px] uppercase tracking-tight text-muted-foreground truncate w-full">{s.t}</span>
+              <motion.span
+                key={s.v}
+                initial={{ opacity: 0, y: 2 }}
+                animate={{ opacity: 1, y: 0 }}
+                className={`tabular-nums font-bold ${s.c} truncate w-full`}
+              >
+                {s.v}
+              </motion.span>
+              {i < 4 && <span className="hidden" />}
+            </div>
+          ))}
+        </div>
+      </div>
+
 
       {/* 5 FACTORS PANEL */}
       <div>
