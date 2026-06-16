@@ -4,7 +4,6 @@ import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, Tr
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
 import { MoneyModeSignal } from '@/components/dca/MoneyModeSignal';
-import { AllocationMatrixCard } from '@/components/dca/AllocationMatrixCard';
 import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCard';
 
 
@@ -372,8 +371,7 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* AUTONOMOUS CORE-SATELLITE ENGINE — 5 factors drive Core/Satellite weights live */}
       <CoreSatelliteEngineCard weeklyBudgetUsd={plan.investableUsd} />
 
-      {/* TARGET ALLOCATION MATRIX — dynamic per-token target weights with reactive weekly distribution */}
-      <AllocationMatrixCard weeklyBudgetUsd={plan.investableUsd} />
+      {/* Portfolio allocation matrix odstránená — váhy riadi Master Dynamic Allocation engine (Core ≥ 50 %). */}
 
       {/* MONEY MODE SIGNAL — BTC cycle-derived regime badge driving Market/Limit bias */}
       <MoneyModeSignal score={effectiveScore} />

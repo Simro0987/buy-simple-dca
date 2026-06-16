@@ -8,6 +8,7 @@ import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
 import { useFearGreed } from '@/hooks/usePrices';
+import { useMarketEngine } from '@/contexts/MarketContext';
 import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
 import {
   calcUnifiedExecution,
@@ -49,9 +50,8 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
   sol: 'solana',
 };
 
-// Cieľové portfólio váhy: BTC 64% / ETH 25% / SOL 11% (bez HYPE).
-const TARGET_WEIGHTS: Record<CoinKey, number> = { btc: 0.64, eth: 0.25, sol: 0.11 };
-const COIN_LABEL_WEIGHT: Record<CoinKey, string> = { btc: '64%', eth: '25%', sol: '11%' };
+// Cieľové portfólio váhy sú riadené Master Dynamic Allocation engine (Core ≥ 50 %).
+// Zdroj pravdy: useMarketEngine().engine.perToken.
 
 type Mode = 'market' | 'dynamic';
 
@@ -66,6 +66,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
   const { data: fg } = useFearGreed();
+  const { engine } = useMarketEngine();
+  const tokenWeights: Record<CoinKey, number> = {
+    btc: (engine.perToken.btc ?? 0) / 100,
+    eth: (engine.perToken.eth ?? 0) / 100,
+    sol: (engine.perToken.sol ?? 0) / 100,
+  };
+  const tokenLabel: Record<CoinKey, string> = {
+    btc: `${engine.perToken.btc}%`,
+    eth: `${engine.perToken.eth}%`,
+    sol: `${engine.perToken.sol}%`,
+  };
   const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
   const fgLabel = fg?.classification ?? 'Neutral';
   const reservoir = useProfitReservoir();
@@ -342,7 +353,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
-          const coinUsd = investableUsd * TARGET_WEIGHTS[c];
+          const coinUsd = investableUsd * tokenWeights[c];
           let marketUsdRaw = coinUsd * (marketPct / 100);
           let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
@@ -398,7 +409,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-foreground">{e.symbol}</span>
-                  <span className="text-[9px] text-muted-foreground">váha {COIN_LABEL_WEIGHT[c]}</span>
+                  <span className="text-[9px] text-muted-foreground">váha {tokenLabel[c]} <span className="text-primary/80">· engine</span></span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
                   <span className="text-muted-foreground flex items-center gap-1">
