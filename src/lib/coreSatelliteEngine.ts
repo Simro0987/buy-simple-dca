@@ -108,8 +108,12 @@ function readVolatility(btcVol: number, ethVol: number, solVol: number): FactorR
   return { key: 'volatility', label: 'Volatility OK', status: 'neu', bias: 0, value: `${btcVol.toFixed(1)}%`, detail: 'Štandardná volatilita' };
 }
 
-function inferMode(score: number, defensive: boolean): MarketMode {
+function inferMode(score: number, defensive: boolean, f200: FactorReading, fFg: FactorReading): MarketMode {
   if (defensive) return 'DEFENSIVE';
+  // Special case: 200WMA NAD + panic F&G (extreme fear) → cautious accumulation.
+  const wmaNad = f200.bias < 0;
+  const fgPanic = fFg.bias >= +0.9; // Extreme Fear bias = +1
+  if (wmaNad && fgPanic) return 'CAUTIOUS_ACCUMULATION';
   if (score >= 0.45) return 'ACCUMULATION';
   if (score <= -0.45) return 'DISTRIBUTION';
   return 'BALANCED';
