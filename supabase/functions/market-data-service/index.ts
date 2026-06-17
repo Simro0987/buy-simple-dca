@@ -33,6 +33,8 @@ function writeCache<T>(key: string, data: T) {
 }
 
 // Fallback constants — "Macro Support" cluster averages.
+// IMPORTANT: ATR fallbacks per-asset MUST be independent (no shared constant
+// between ETH and SOL) so the per-coin MKT/LMT splits diverge naturally.
 const FALLBACKS = {
   btc200wma: 48500,
   eth200wma: 2350,
@@ -41,6 +43,8 @@ const FALLBACKS = {
   btcMiningCost: 50000,
   solanaTvl: 11_500_000_000,
   unlocksWarning: [] as Array<{ symbol: string; pct: number; date: string }>,
+  // Per-asset 14D ATR % fallback — historicky distinct, NEVER shared.
+  atr14d: { BTC: 2.0, ETH: 2.8, SOL: 4.2 } as Record<string, number>,
 };
 
 async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown | null> {
