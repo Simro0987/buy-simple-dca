@@ -60,17 +60,37 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
   }
 }
 
-// Yahoo Finance weekly closes — 200 week MA. Symbol e.g. BTC-USD, ETH-USD.
+// Yahoo Finance weekly closes — strict 200 COMPLETED-week MA.
+// Fixes prior over-estimate: range=10y guarantees ≥200 full weeks, and the
+// CURRENT (incomplete) week is dropped so the MA reflects closed candles only.
 async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
   const key = `wma:${symbol}`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=5y`;
-  const json = await safeFetchJson(url) as { chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: number[] }> } }> } } | null;
-  const closes = json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close?.filter((n): n is number => typeof n === 'number' && n > 0) ?? [];
-  if (closes.length < 50) {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=10y`;
+  const json = await safeFetchJson(url) as {
+    chart?: { result?: Array<{
+      timestamp?: number[];
+      indicators?: { quote?: Array<{ close?: number[] }> };
+    }> }
+  } | null;
+  const result = json?.chart?.result?.[0];
+  const rawCloses = result?.indicators?.quote?.[0]?.close ?? [];
+  const timestamps = result?.timestamp ?? [];
+  // Pair timestamp ↔ close, drop nulls and the current (incomplete) week.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const oneWeekSec = 7 * 86400;
+  const pairs: Array<{ t: number; c: number }> = [];
+  for (let i = 0; i < rawCloses.length; i++) {
+    const c = rawCloses[i];
+    const t = timestamps[i] ?? 0;
+    if (typeof c !== 'number' || !(c > 0)) continue;
+    if (t > 0 && nowSec - t < oneWeekSec) continue; // skip current incomplete week
+    pairs.push({ t, c });
+  }
+  if (pairs.length < 200) {
     const cached = readCache<number>(key);
     return cached ?? fallback;
   }
-  const slice = closes.slice(-200);
+  const slice = pairs.slice(-200).map(p => p.c);
   const ma = slice.reduce((s, v) => s + v, 0) / slice.length;
   writeCache(key, ma);
   return ma;
