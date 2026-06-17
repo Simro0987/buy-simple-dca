@@ -76,6 +76,41 @@ async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
   return ma;
 }
 
+/**
+ * Independent 14D ATR % per asset from Yahoo daily OHLC.
+ * Each symbol uses its OWN history and its OWN fallback constant —
+ * NO shared constant across ETH/SOL so their splits diverge naturally.
+ */
+async function fetchAtr14d(symbol: string): Promise<number> {
+  const key = `atr14:${symbol}`;
+  const fallback = FALLBACKS.atr14d[symbol.split('-')[0]] ?? 3.0;
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2mo`;
+  const json = await safeFetchJson(url) as { chart?: { result?: Array<{ indicators?: { quote?: Array<{ high?: number[]; low?: number[]; close?: number[] }> } }> } } | null;
+  const q = json?.chart?.result?.[0]?.indicators?.quote?.[0];
+  const highs = q?.high ?? [];
+  const lows = q?.low ?? [];
+  const closes = q?.close ?? [];
+  const n = Math.min(highs.length, lows.length, closes.length);
+  if (n < 16) {
+    const cached = readCache<number>(key);
+    return cached ?? fallback;
+  }
+  const trs: number[] = [];
+  for (let i = Math.max(1, n - 14); i < n; i++) {
+    const h = highs[i], l = lows[i], pc = closes[i - 1];
+    if (typeof h !== 'number' || typeof l !== 'number' || typeof pc !== 'number') continue;
+    const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
+    if (pc > 0) trs.push((tr / pc) * 100);
+  }
+  if (trs.length < 7) {
+    const cached = readCache<number>(key);
+    return cached ?? fallback;
+  }
+  const atr = trs.reduce((s, v) => s + v, 0) / trs.length;
+  writeCache(key, atr);
+  return atr;
+}
+
 // Mayer Multiple = price / 200d MA (BTC).
 async function fetchMayerMultiple(): Promise<{ value: number; price: number; ma200d: number }> {
   const key = 'mayer';
