@@ -220,9 +220,9 @@ Deno.serve(async (req) => {
     // Last resort: full fallback payload
     return new Response(JSON.stringify({
       generatedAt: new Date().toISOString(),
-      btc: { ma200w: FALLBACKS.btc200wma, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost },
-      eth: { ma200w: FALLBACKS.eth200wma },
-      sol: { tvl: FALLBACKS.solanaTvl },
+      btc: { ma200w: FALLBACKS.btc200wma, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
+      eth: { ma200w: FALLBACKS.eth200wma, atr14d: FALLBACKS.atr14d.ETH },
+      sol: { tvl: FALLBACKS.solanaTvl, atr14d: FALLBACKS.atr14d.SOL },
       unlocks: FALLBACKS.unlocksWarning,
       degraded: true,
       error: String(e),
