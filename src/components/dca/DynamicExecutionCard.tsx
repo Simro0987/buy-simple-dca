@@ -228,28 +228,41 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   // Each token has its OWN Market/Limit split derived from two factors (50/50 weight):
   //   a) SENTIMENT (Fear & Greed): low F&G → more MARKET; high F&G → more LIMIT.
   //      sentMarket = 80 − (fg/100)·60   (fg 0→80, fg 50→50, fg 100→20)
-  //   b) VOLATILITY (per-coin 14D σ): high vol → more MARKET (chytaj rýchle dná),
-  //      low vol → more LIMIT (čakaj na zľavu, neplať premium).
-  //      volMarket = 20 + clamp(vol/6, 0..1)·60   (vol 0→20, vol 3→50, vol 6+→80)
-  // Final marketPct = round(0.5·sent + 0.5·vol), clamp [20, 80].
+  //   b) VOLATILITY (per-coin 14D σ): high vol → more MARKET, low vol → more LIMIT.
+  //      Per-asset dynamic scale reflects historický spread true range:
+  //        BTC scale 6 (úzky), ETH scale 5, SOL scale 4 (najširší → vyšší multiplier).
+  //      volMarket = 20 + clamp(vol/scale, 0..1)·60
+  // Weights (CALIBRATED for altcoin sensitivity):
+  //   • BTC: 50 % sent + 50 % vol
+  //   • ETH/SOL: 40 % sent + 60 % vol  (vol dominuje pri altcoinoch)
+  // Final marketPct = round(wS·sent + wV·vol), clamp [20, 80].
   const fgGlobal = fgValue;
-  function perTokenSplit(vol30d: number): { marketPct: number; limitPct: number; sentMarket: number; volMarket: number } {
+  const VOL_SCALE: Record<string, number> = { BTC: 6, ETH: 5, SOL: 4 };
+  const VOL_WEIGHT: Record<string, { sent: number; vol: number }> = {
+    BTC: { sent: 0.5, vol: 0.5 },
+    ETH: { sent: 0.4, vol: 0.6 },
+    SOL: { sent: 0.4, vol: 0.6 },
+  };
+  function perTokenSplit(sym: string, vol30d: number): { marketPct: number; limitPct: number; sentMarket: number; volMarket: number; wSent: number; wVol: number; scale: number } {
     const sentMarket = Math.max(20, Math.min(80, 80 - (fgGlobal / 100) * 60));
-    const volNorm = Math.max(0, Math.min(1, vol30d / 6));
+    const scale = VOL_SCALE[sym] ?? 6;
+    const w = VOL_WEIGHT[sym] ?? { sent: 0.5, vol: 0.5 };
+    const volNorm = Math.max(0, Math.min(1, vol30d / scale));
     const volMarket = Math.max(20, Math.min(80, 20 + volNorm * 60));
-    const marketPct = Math.round(Math.max(20, Math.min(80, 0.5 * sentMarket + 0.5 * volMarket)));
-    return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket };
+    const marketPct = Math.round(Math.max(20, Math.min(80, w.sent * sentMarket + w.vol * volMarket)));
+    return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket, wSent: w.sent, wVol: w.vol, scale };
   }
   function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>): string {
     const fgTag = fgGlobal < 30 ? 'extrémny strach' : fgGlobal > 75 ? 'extrémna chamtivosť' : 'neutrálny sentiment';
     const volTag = vol30d >= 4.5 ? 'vysoká' : vol30d >= 2.5 ? 'stredná' : 'nízka';
+    const wTag = `váhy ${Math.round(split.wSent * 100)}/${Math.round(split.wVol * 100)} (sent/vol), škála ${split.scale}`;
     if (split.marketPct >= 65) {
-      return `${sym} MKT navýšený na ${split.marketPct} % kvôli kombinácii ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D volatility (${vol30d.toFixed(2)} %) — šanca zachytiť rýchle dno.`;
+      return `${sym} MKT navýšený na ${split.marketPct} % kvôli kombinácii ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D volatility (${vol30d.toFixed(2)} %) — šanca zachytiť rýchle dno. ${wTag}.`;
     }
     if (split.marketPct <= 35) {
-      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) odporúčajú čakať na hlbšie sweep zóny a neplatiť market premium.`;
+      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) odporúčajú čakať na hlbšie sweep zóny a neplatiť market premium. ${wTag}.`;
     }
-    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) v rovnováhe.`;
+    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) v rovnováhe. ${wTag}.`;
   }
 
   const copy = (text: string) => {
