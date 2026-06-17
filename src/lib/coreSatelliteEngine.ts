@@ -2,7 +2,7 @@
 // Derives Core (BTC) vs Satellite (ETH+SOL) split from 5 Market Mode factors.
 // Pure / deterministic — UI components consume the result through MarketContext.
 
-export type MarketMode = 'ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
+export type MarketMode = 'ACCUMULATION' | 'CAUTIOUS_ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
 
 export type FactorKey = 'wma200' | 'fearGreed' | 'cbbc' | 'liquidity' | 'volatility';
 export type FactorStatus = 'pos' | 'neu' | 'neg' | 'critical';
