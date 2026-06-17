@@ -60,11 +60,14 @@ function read200wma(btc: number | null, eth: number | null): FactorReading {
   }
   const eAbs = eth !== null ? eth : btc;
   const avg = (btc + eAbs) / 2;
-  if (avg < -5) return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +1, value: `${btc.toFixed(1)}%`, detail: 'BTC/ETH hlboko pod 200WMA — akumulačná zóna' };
-  if (avg < 0)  return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +0.6, value: `${btc.toFixed(1)}%`, detail: 'Pod 200WMA — mierne akumulačné pásmo' };
-  if (avg > 25) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.8, value: `+${btc.toFixed(1)}%`, detail: 'Prehriaty trh — distribučná zóna' };
-  if (avg > 10) return { key: 'wma200', label: '200WMA NAD', status: 'neu', bias: -0.3, value: `+${btc.toFixed(1)}%`, detail: 'Nad 200WMA — opatrná expanzia' };
-  return { key: 'wma200', label: '200WMA Neutrál', status: 'neu', bias: 0, value: `${btc >= 0 ? '+' : ''}${btc.toFixed(1)}%`, detail: 'V neutrálnom pásme 200WMA' };
+  const fmt = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+  // Tighter, cycle-aware bands. ~+6% sits in NAD (mild distribution).
+  if (avg < -15) return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +1.0, value: `${fmt(btc)} | POD`, detail: 'BTC/ETH hlboko pod 200WMA — kapitulácia / akumulácia' };
+  if (avg < -3)  return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +0.7, value: `${fmt(btc)} | POD`, detail: 'Pod 200WMA — akumulačné pásmo' };
+  if (avg <= 3)  return { key: 'wma200', label: '200WMA Neutrál', status: 'neu', bias: 0, value: `${fmt(btc)} | NEUTRAL`, detail: 'Tesne pri 200WMA — neutrálne pásmo' };
+  if (avg <= 15) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.4, value: `${fmt(btc)} | NAD`, detail: 'Mierne nad 200WMA — opatrnosť / mierna distribúcia' };
+  if (avg <= 35) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.7, value: `${fmt(btc)} | NAD`, detail: 'Výrazne nad 200WMA — distribučná zóna' };
+  return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -1.0, value: `${fmt(btc)} | NAD`, detail: 'Prehriaty trh — silná distribúcia' };
 }
 
 function readFearGreed(v: number | null): FactorReading {
