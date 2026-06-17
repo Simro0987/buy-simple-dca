@@ -2,7 +2,7 @@
 // Derives Core (BTC) vs Satellite (ETH+SOL) split from 5 Market Mode factors.
 // Pure / deterministic — UI components consume the result through MarketContext.
 
-export type MarketMode = 'ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
+export type MarketMode = 'ACCUMULATION' | 'CAUTIOUS_ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
 
 export type FactorKey = 'wma200' | 'fearGreed' | 'cbbc' | 'liquidity' | 'volatility';
 export type FactorStatus = 'pos' | 'neu' | 'neg' | 'critical';
@@ -60,11 +60,14 @@ function read200wma(btc: number | null, eth: number | null): FactorReading {
   }
   const eAbs = eth !== null ? eth : btc;
   const avg = (btc + eAbs) / 2;
-  if (avg < -5) return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +1, value: `${btc.toFixed(1)}%`, detail: 'BTC/ETH hlboko pod 200WMA — akumulačná zóna' };
-  if (avg < 0)  return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +0.6, value: `${btc.toFixed(1)}%`, detail: 'Pod 200WMA — mierne akumulačné pásmo' };
-  if (avg > 25) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.8, value: `+${btc.toFixed(1)}%`, detail: 'Prehriaty trh — distribučná zóna' };
-  if (avg > 10) return { key: 'wma200', label: '200WMA NAD', status: 'neu', bias: -0.3, value: `+${btc.toFixed(1)}%`, detail: 'Nad 200WMA — opatrná expanzia' };
-  return { key: 'wma200', label: '200WMA Neutrál', status: 'neu', bias: 0, value: `${btc >= 0 ? '+' : ''}${btc.toFixed(1)}%`, detail: 'V neutrálnom pásme 200WMA' };
+  const fmt = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
+  // Tighter, cycle-aware bands. ~+6% sits in NAD (mild distribution).
+  if (avg < -15) return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +1.0, value: `${fmt(btc)} | POD`, detail: 'BTC/ETH hlboko pod 200WMA — kapitulácia / akumulácia' };
+  if (avg < -3)  return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +0.7, value: `${fmt(btc)} | POD`, detail: 'Pod 200WMA — akumulačné pásmo' };
+  if (avg <= 3)  return { key: 'wma200', label: '200WMA Neutrál', status: 'neu', bias: 0, value: `${fmt(btc)} | NEUTRAL`, detail: 'Tesne pri 200WMA — neutrálne pásmo' };
+  if (avg <= 15) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.4, value: `${fmt(btc)} | NAD`, detail: 'Mierne nad 200WMA — opatrnosť / mierna distribúcia' };
+  if (avg <= 35) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.7, value: `${fmt(btc)} | NAD`, detail: 'Výrazne nad 200WMA — distribučná zóna' };
+  return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -1.0, value: `${fmt(btc)} | NAD`, detail: 'Prehriaty trh — silná distribúcia' };
 }
 
 function readFearGreed(v: number | null): FactorReading {
@@ -105,8 +108,12 @@ function readVolatility(btcVol: number, ethVol: number, solVol: number): FactorR
   return { key: 'volatility', label: 'Volatility OK', status: 'neu', bias: 0, value: `${btcVol.toFixed(1)}%`, detail: 'Štandardná volatilita' };
 }
 
-function inferMode(score: number, defensive: boolean): MarketMode {
+function inferMode(score: number, defensive: boolean, f200: FactorReading, fFg: FactorReading): MarketMode {
   if (defensive) return 'DEFENSIVE';
+  // Special case: 200WMA NAD + panic F&G (extreme fear) → cautious accumulation.
+  const wmaNad = f200.bias < 0;
+  const fgPanic = fFg.bias >= +0.9; // Extreme Fear bias = +1
+  if (wmaNad && fgPanic) return 'CAUTIOUS_ACCUMULATION';
   if (score >= 0.45) return 'ACCUMULATION';
   if (score <= -0.45) return 'DISTRIBUTION';
   return 'BALANCED';
@@ -150,7 +157,7 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   const ethPct = Math.round(satelliteWeight * ethShare);
   const solPct = satelliteWeight - ethPct;
 
-  const mode = inferMode(score, defensiveLock);
+  const mode = inferMode(score, defensiveLock, f200, fFg);
 
   const narrative: string[] = [];
   narrative.push(
@@ -160,6 +167,8 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   );
   if (defensiveLock) {
     narrative.push('Volatility Risk prekročil prah — DEFENSIVE mód aktivovaný, nové buy príkazy zmrazené.');
+  } else if (mode === 'CAUTIOUS_ACCUMULATION') {
+    narrative.push(`Cautious Accumulation — 200WMA NAD (${f200.value}) brzdí, ale F&G ${fFg.value} (panika) tlačí na nákupy. Core navýšený na ${coreWeight} %.`);
   } else if (mode === 'ACCUMULATION') {
     narrative.push(`Satelity ${satelliteWeight} % (ETH ${ethPct} % · SOL ${solPct} %) — likvidita ${fLi.value} podporuje rast.`);
   } else if (mode === 'DISTRIBUTION') {

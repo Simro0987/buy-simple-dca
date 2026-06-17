@@ -33,6 +33,7 @@ function factorTone(f: FactorReading): { ring: string; text: string; chip: strin
 
 const MODE_STYLE: Record<MarketMode, { bg: string; text: string; label: string; icon: React.ComponentType<{ className?: string }> }> = {
   ACCUMULATION: { bg: 'bg-emerald-500/15 border-emerald-500/40', text: 'text-emerald-300', label: 'ACCUMULATION · Hromaď pozície', icon: TrendingUp },
+  CAUTIOUS_ACCUMULATION: { bg: 'bg-sky-500/15 border-sky-500/40', text: 'text-sky-300', label: 'CAUTIOUS ACCUMULATION · NAD + Panic F&G', icon: Shield },
   BALANCED:     { bg: 'bg-secondary border-border',              text: 'text-foreground',  label: 'BALANCED · Vyvážená alokácia', icon: Shield },
   DISTRIBUTION: { bg: 'bg-amber-500/15 border-amber-500/40',     text: 'text-amber-300',   label: 'DISTRIBUTION · Odľahčuj satelity', icon: TrendingDown },
   DEFENSIVE:    { bg: 'bg-rose-500/15 border-rose-500/50 animate-pulse', text: 'text-rose-200', label: 'DEFENSIVE · Freeze nových buyov', icon: ShieldAlert },
