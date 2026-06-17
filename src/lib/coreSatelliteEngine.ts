@@ -157,7 +157,7 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   const ethPct = Math.round(satelliteWeight * ethShare);
   const solPct = satelliteWeight - ethPct;
 
-  const mode = inferMode(score, defensiveLock);
+  const mode = inferMode(score, defensiveLock, f200, fFg);
 
   const narrative: string[] = [];
   narrative.push(
@@ -167,6 +167,8 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   );
   if (defensiveLock) {
     narrative.push('Volatility Risk prekročil prah — DEFENSIVE mód aktivovaný, nové buy príkazy zmrazené.');
+  } else if (mode === 'CAUTIOUS_ACCUMULATION') {
+    narrative.push(`Cautious Accumulation — 200WMA NAD (${f200.value}) brzdí, ale F&G ${fFg.value} (panika) tlačí na nákupy. Core navýšený na ${coreWeight} %.`);
   } else if (mode === 'ACCUMULATION') {
     narrative.push(`Satelity ${satelliteWeight} % (ETH ${ethPct} % · SOL ${solPct} %) — likvidita ${fLi.value} podporuje rast.`);
   } else if (mode === 'DISTRIBUTION') {
