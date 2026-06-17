@@ -342,7 +342,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
           const coinUsd = investableUsd * tokenWeights[c];
           // PER-TOKEN dual-factor split (F&G + per-coin 14D volatility).
-          const split = perTokenSplit(e.volatility30d);
+          const split = perTokenSplit(e.symbol, e.volatility30d);
           const marketPct = split.marketPct;
           const dynamicPct = split.limitPct;
           const splitReason = perTokenReason(e.symbol, e.volatility30d, split);
