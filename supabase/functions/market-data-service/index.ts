@@ -184,12 +184,15 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const [btc200wma, eth200wma, mayer, solTvl, unlocks] = await Promise.all([
+    const [btc200wma, eth200wma, mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
       fetch200WMA('BTC-USD', FALLBACKS.btc200wma),
       fetch200WMA('ETH-USD', FALLBACKS.eth200wma),
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
+      fetchAtr14d('BTC-USD'),
+      fetchAtr14d('ETH-USD'),
+      fetchAtr14d('SOL-USD'),
     ]);
 
     const payload = {
@@ -201,9 +204,10 @@ Deno.serve(async (req) => {
         price: mayer.price,
         realizedPrice: FALLBACKS.btcRealizedPrice,
         miningCost: FALLBACKS.btcMiningCost,
+        atr14d: btcAtr,
       },
-      eth: { ma200w: eth200wma },
-      sol: { tvl: solTvl },
+      eth: { ma200w: eth200wma, atr14d: ethAtr },
+      sol: { tvl: solTvl, atr14d: solAtr },
       unlocks,
       degraded: btc200wma === FALLBACKS.btc200wma && eth200wma === FALLBACKS.eth200wma,
     };
