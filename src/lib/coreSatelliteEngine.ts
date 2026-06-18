@@ -51,23 +51,22 @@ function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
 
-function read200wma(btc: number | null, eth: number | null): FactorReading {
+// BTC-ONLY 200WMA reading. NEVER apply to ETH/SOL.
+function read200wma(btc: number | null): FactorReading {
   if (btc === null) {
     return {
       key: 'wma200', label: '200WMA',
-      status: 'neu', bias: 0, value: 'N/A', detail: 'Yahoo Finance dáta nedostupné',
+      status: 'neu', bias: 0, value: 'N/A', detail: 'BTC 200WMA nedostupné (cache purge / sanity check)',
     };
   }
-  const eAbs = eth !== null ? eth : btc;
-  const avg = (btc + eAbs) / 2;
   const fmt = (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(2)}%`;
-  // Tighter, cycle-aware bands. ~+6% sits in NAD (mild distribution).
-  if (avg < -15) return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +1.0, value: `${fmt(btc)} | POD`, detail: 'BTC/ETH hlboko pod 200WMA — kapitulácia / akumulácia' };
-  if (avg < -3)  return { key: 'wma200', label: '200WMA POD', status: 'pos', bias: +0.7, value: `${fmt(btc)} | POD`, detail: 'Pod 200WMA — akumulačné pásmo' };
-  if (avg <= 3)  return { key: 'wma200', label: '200WMA Neutrál', status: 'neu', bias: 0, value: `${fmt(btc)} | NEUTRAL`, detail: 'Tesne pri 200WMA — neutrálne pásmo' };
-  if (avg <= 15) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.4, value: `${fmt(btc)} | NAD`, detail: 'Mierne nad 200WMA — opatrnosť / mierna distribúcia' };
-  if (avg <= 35) return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -0.7, value: `${fmt(btc)} | NAD`, detail: 'Výrazne nad 200WMA — distribučná zóna' };
-  return { key: 'wma200', label: '200WMA NAD', status: 'neg', bias: -1.0, value: `${fmt(btc)} | NAD`, detail: 'Prehriaty trh — silná distribúcia' };
+  // BTC-only bands.
+  if (btc < -15) return { key: 'wma200', label: 'BTC 200WMA POD', status: 'pos', bias: +1.0, value: `${fmt(btc)} | POD`, detail: 'BTC hlboko pod 200WMA — kapitulácia / akumulácia' };
+  if (btc < -3)  return { key: 'wma200', label: 'BTC 200WMA POD', status: 'pos', bias: +0.7, value: `${fmt(btc)} | POD`, detail: 'BTC pod 200WMA — akumulačné pásmo' };
+  if (btc <= 3)  return { key: 'wma200', label: 'BTC 200WMA Neutrál', status: 'neu', bias: 0, value: `${fmt(btc)} | NEUTRAL`, detail: 'BTC tesne pri 200WMA — neutrálne pásmo' };
+  if (btc <= 15) return { key: 'wma200', label: 'BTC 200WMA NAD', status: 'neg', bias: -0.4, value: `${fmt(btc)} | NAD`, detail: 'BTC mierne nad 200WMA — opatrnosť / mierna distribúcia' };
+  if (btc <= 35) return { key: 'wma200', label: 'BTC 200WMA NAD', status: 'neg', bias: -0.7, value: `${fmt(btc)} | NAD`, detail: 'BTC výrazne nad 200WMA — distribučná zóna' };
+  return { key: 'wma200', label: 'BTC 200WMA NAD', status: 'neg', bias: -1.0, value: `${fmt(btc)} | NAD`, detail: 'Prehriaty BTC — silná distribúcia' };
 }
 
 function readFearGreed(v: number | null): FactorReading {
