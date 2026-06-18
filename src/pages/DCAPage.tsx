@@ -9,9 +9,8 @@ import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCar
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 
-import { LearningEngineCard } from '@/components/dca/LearningEngineCard';
+import { ExecutionAdvisorCard } from '@/components/dca/ExecutionAdvisorCard';
 
-import { SwapCrossChainCard } from '@/components/dca/SwapCrossChainCard';
 
 
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
@@ -383,82 +382,9 @@ export function DCAPage({ lang: _lang }: Props) {
       <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
       {/* Unified Dynamic Execution Engine — Limit -1 % / Limit Dynamic split + Day 7 trigger sú integrované priamo dnu. */}
 
-      {/* SELF-LEARNING ENGINE — adaptívne parametre + história výkonu */}
-      <LearningEngineCard />
+      {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}
+      <ExecutionAdvisorCard />
 
-      {/* SWAP — Cross-Chain Native Optimizer */}
-      <SwapCrossChainCard />
-
-
-
-
-      {/* AUTO BTC SIGNALS */}
-      <div className="glass-card p-4">
-        <div className="flex items-center justify-between mb-2">
-          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground">BTC signály (auto)</h2>
-          {ma200 ? (
-            <span className={`text-[10px] px-2 py-0.5 rounded-full ${
-              ma200.above ? 'bg-emerald-500/15 text-emerald-400' : 'bg-amber-500/15 text-amber-400'
-            }`}>
-              {ma200.above ? 'Nad 200D MA ✅' : 'Pod 200D MA ⚠️'}
-            </span>
-          ) : maError ? (
-            <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/15 text-rose-400 flex items-center gap-1">
-              <AlertTriangle className="w-3 h-3" /> Dáta nedostupné
-            </span>
-          ) : (
-            <span className="text-[10px] text-muted-foreground">Načítavam…</span>
-          )}
-        </div>
-        {ma200 ? (
-          <div className="grid grid-cols-3 gap-2 text-xs">
-            <div className="bg-secondary/60 rounded-lg p-2">
-              <p className="text-[10px] uppercase text-muted-foreground">BTC cena</p>
-              <p className="font-semibold text-foreground tabular-nums">{formatPrice(ma200.currentPrice)}</p>
-            </div>
-            <div className="bg-secondary/60 rounded-lg p-2">
-              <p className="text-[10px] uppercase text-muted-foreground">200D / 50D</p>
-              <p className="font-semibold text-foreground tabular-nums text-[11px]">
-                {formatPrice(ma200.ma200)}<br/>{formatPrice(ma200.ma50)}
-              </p>
-            </div>
-            <div className="bg-secondary/60 rounded-lg p-2">
-              <p className="text-[10px] uppercase text-muted-foreground">vs 200D</p>
-              <p className={`font-semibold tabular-nums flex items-center gap-1 ${ma200.above ? 'text-emerald-400' : 'text-amber-400'}`}>
-                {ma200.above ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {ma200.distancePct >= 0 ? '+' : ''}{ma200.distancePct.toFixed(1)}%
-              </p>
-            </div>
-            <div className="bg-secondary/60 rounded-lg p-2">
-              <p className="text-[10px] uppercase text-muted-foreground">30D mom</p>
-              <p className={`font-semibold tabular-nums ${ma200.change30dPct >= 0 ? 'text-emerald-400' : 'text-rose-400'}`}>
-                {ma200.change30dPct >= 0 ? '+' : ''}{ma200.change30dPct.toFixed(1)}%
-              </p>
-            </div>
-            <div className="bg-secondary/60 rounded-lg p-2">
-              <p className="text-[10px] uppercase text-muted-foreground">Od 30D high</p>
-              <p className="font-semibold text-foreground tabular-nums">
-                {ma200.distanceFrom30dHighPct.toFixed(1)}%
-              </p>
-            </div>
-            <div className="bg-secondary/60 rounded-lg p-2">
-              <p className="text-[10px] uppercase text-muted-foreground">30D vol</p>
-              <p className="font-semibold text-foreground tabular-nums">
-                {ma200.volatility30dPct.toFixed(2)}%
-              </p>
-            </div>
-          </div>
-        ) : maError ? (
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            Nepodarilo sa načítať denné BTC sviečky. Skús Auto-fill.
-          </p>
-        ) : (
-          <div className="h-12 rounded-lg bg-secondary/40 animate-pulse" />
-        )}
-        <p className="text-[10px] text-muted-foreground mt-2">
-          Tieto signály automaticky riadia detekciu režimu (200D/50D, 30D high, 30D momentum, 30D volatilita).
-        </p>
-      </div>
 
       {/* EXECUTION PLAN — full per-coin orders + Hyperliquid links live on the Action page.
           Removed duplicate fixed 60/40 panel here to keep Dynamic Engine as single source of truth. */}
