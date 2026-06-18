@@ -207,9 +207,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const [btc200wma, eth200wma, mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
-      fetch200WMA('BTC-USD', FALLBACKS.btc200wma),
-      fetch200WMA('ETH-USD', FALLBACKS.eth200wma),
+    // Mayer first → gives us current BTC price for sanity-checking 200WMA.
+    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
@@ -218,10 +217,16 @@ Deno.serve(async (req) => {
       fetchAtr14d('SOL-USD'),
     ]);
 
+    // BTC-ONLY 200WMA — never applied to ETH/SOL per domain restriction.
+    const btc200 = await fetch200WMA('BTC-USD', FALLBACKS.btc200wma, mayer.price);
+    const btc_200wma_weekly = btc200.value;
+    const btc200wmaStale = btc200.stale;
+
     const payload = {
       generatedAt: new Date().toISOString(),
       btc: {
-        ma200w: btc200wma,
+        ma200w: btc_200wma_weekly,
+        ma200wStale: btc200wmaStale,
         mayerMultiple: mayer.value,
         ma200d: mayer.ma200d,
         price: mayer.price,
@@ -229,10 +234,11 @@ Deno.serve(async (req) => {
         miningCost: FALLBACKS.btcMiningCost,
         atr14d: btcAtr,
       },
-      eth: { ma200w: eth200wma, atr14d: ethAtr },
+      // ETH/SOL: NO 200WMA. CBBC + independent ATR only.
+      eth: { atr14d: ethAtr },
       sol: { tvl: solTvl, atr14d: solAtr },
       unlocks,
-      degraded: btc200wma === FALLBACKS.btc200wma && eth200wma === FALLBACKS.eth200wma,
+      degraded: btc200wmaStale,
     };
 
     return new Response(JSON.stringify(payload), {
