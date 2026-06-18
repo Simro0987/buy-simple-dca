@@ -22,12 +22,20 @@ export function MarketProvider({ children }: { children: ReactNode }) {
 
   const engine = useMemo<EngineResult>(() => {
     const btcPrice = market?.btc?.price && market.btc.price > 0 ? market.btc.price : (prices?.bitcoin?.usd ?? 0);
-    const ethPrice = prices?.ethereum?.usd ?? 0;
     const btcWma = market?.btc?.ma200w ?? 0;
-    const ethWma = market?.eth?.ma200w ?? 0;
+    const btcWmaStale = market?.btc?.ma200wStale === true;
+    // 200WMA is BTC-ONLY. Hard sanity guard: reject ghost values >20% deviation.
+    let btcWmaDist: number | null = null;
+    if (!btcWmaStale && btcPrice > 0 && btcWma > 0) {
+      const dev = ((btcPrice - btcWma) / btcWma) * 100;
+      if (Math.abs(dev) > 20) {
+        console.error(`[MarketContext] Cache Stale — BTC 200WMA dev ${dev.toFixed(1)}% > 20%. Suppressing.`);
+      } else {
+        btcWmaDist = dev;
+      }
+    }
     return runCoreSatelliteEngine({
-      btcWmaDistPct: btcPrice > 0 && btcWma > 0 ? ((btcPrice - btcWma) / btcWma) * 100 : null,
-      ethWmaDistPct: ethPrice > 0 && ethWma > 0 ? ((ethPrice - ethWma) / ethWma) * 100 : null,
+      btcWmaDistPct: btcWmaDist,
       fearGreed: typeof fg?.value === 'number' ? fg.value : null,
       cbbcAvg: CBBC_AVG,
       solTvlUsd: market?.sol?.tvl ?? null,
