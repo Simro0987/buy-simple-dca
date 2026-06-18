@@ -81,7 +81,7 @@ export function ExecutionAdvisorCard() {
           ...(Array.isArray(params.last_change_log) ? params.last_change_log : []).slice(-4),
           ...Object.entries(patch).map(([k, v]) => ({
             param: k,
-            from: Number((params as Record<string, unknown>)[k] ?? 0),
+            from: Number((params as unknown as Record<string, unknown>)[k] ?? 0),
             to: v,
             reason: `Active Advisor · ${suggestion.title}`,
           })),
