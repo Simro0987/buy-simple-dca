@@ -145,9 +145,15 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
 
       {/* 5 FACTORS PANEL */}
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">
-          5 faktorov trhového režimu
-        </p>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+            5 faktorov trhového režimu
+          </p>
+          <span className="text-[9px] text-muted-foreground tabular-nums flex items-center gap-1">
+            <Clock className="w-2.5 h-2.5" /> 200WMA · Yahoo Finance · {lastSyncLabel}
+          </span>
+        </div>
+
         <div className="grid grid-cols-5 gap-1.5">
           {engine.factors.map((f) => {
             const Icon = FACTOR_ICONS[f.key];
