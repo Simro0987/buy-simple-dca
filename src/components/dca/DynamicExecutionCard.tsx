@@ -9,6 +9,8 @@ import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
 import { useFearGreed } from '@/hooks/usePrices';
 import { useMarketEngine } from '@/contexts/MarketContext';
+import { useMarketData } from '@/hooks/useMarketData';
+
 import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
 import {
   calcUnifiedExecution,
@@ -57,16 +59,25 @@ type Mode = 'market' | 'dynamic';
 
 /**
  * Two-Tier Dynamic Allocation Matrix:
- *  - Tier 1: Cross-asset split (fixed target weights 64/25/11)
+ *  - Tier 1: Cross-asset split — riadený plne Master Dynamic Allocation engine (žiadne fixné cieľové váhy).
  *  - Tier 2: Execution split per coin — MARKET vs LIMIT DYNAMIC, riadené
  *    Final Score, per-coin volatilitou/momentom a Fear & Greed indexom.
  */
+
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
   const { data: fg } = useFearGreed();
   const { engine } = useMarketEngine();
+  const { data: market } = useMarketData();
+  const syncLabel = (() => {
+    const d = market?.generatedAt ? new Date(market.generatedAt) : null;
+    return d && !Number.isNaN(d.getTime())
+      ? d.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })
+      : '—';
+  })();
+
   const tokenWeights: Record<CoinKey, number> = {
     btc: (engine.perToken.btc ?? 0) / 100,
     eth: (engine.perToken.eth ?? 0) / 100,
@@ -402,6 +413,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-xs font-bold text-foreground">{e.symbol}</span>
                   <span className="text-[9px] text-muted-foreground">váha {tokenLabel[c]} <span className="text-primary/80">· engine</span></span>
+                  <span className="text-[9px] text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-2.5 h-2.5" /> Yahoo · {syncLabel}
+                  </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
                   <span className="text-muted-foreground flex items-center gap-1">
@@ -413,6 +427,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   </span>
                 </div>
               </div>
+
 
               {/* PER-TOKEN MKT / LMT SLIDER BAR — dual-factor engine (F&G + vol) */}
               <div className="space-y-1">
