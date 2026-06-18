@@ -61,12 +61,12 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
 }
 
 // Yahoo Finance weekly closes — strict 200 COMPLETED-week MA.
-// Fixes prior over-estimate: range=10y guarantees ≥200 full weeks, and the
-// CURRENT (incomplete) week is dropped so the MA reflects closed candles only.
-async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
-  const key = `wma:${symbol}`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=10y`;
-  const json = await safeFetchJson(url) as {
+// HARD PURGE: cache is bypassed for 200WMA. Every request performs a fresh
+// cold-start fetch. We also reject stale "ghost" values >20% deviation from
+// current price (sanity check) — caller will mark the field unavailable.
+async function fetch200WMA(symbol: string, fallback: number, currentPrice?: number): Promise<{ value: number; stale: boolean }> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=10y&_=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store' }) as {
     chart?: { result?: Array<{
       timestamp?: number[];
       indicators?: { quote?: Array<{ close?: number[] }> };
@@ -75,7 +75,6 @@ async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
   const result = json?.chart?.result?.[0];
   const rawCloses = result?.indicators?.quote?.[0]?.close ?? [];
   const timestamps = result?.timestamp ?? [];
-  // Pair timestamp ↔ close, drop nulls and the current (incomplete) week.
   const nowSec = Math.floor(Date.now() / 1000);
   const oneWeekSec = 7 * 86400;
   const pairs: Array<{ t: number; c: number }> = [];
@@ -83,17 +82,21 @@ async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
     const c = rawCloses[i];
     const t = timestamps[i] ?? 0;
     if (typeof c !== 'number' || !(c > 0)) continue;
-    if (t > 0 && nowSec - t < oneWeekSec) continue; // skip current incomplete week
+    if (t > 0 && nowSec - t < oneWeekSec) continue;
     pairs.push({ t, c });
   }
-  if (pairs.length < 200) {
-    const cached = readCache<number>(key);
-    return cached ?? fallback;
-  }
+  if (pairs.length < 200) return { value: fallback, stale: true };
   const slice = pairs.slice(-200).map(p => p.c);
   const ma = slice.reduce((s, v) => s + v, 0) / slice.length;
-  writeCache(key, ma);
-  return ma;
+  // HARD VALIDATION: if deviation from current price > 20%, treat as stale ghost.
+  if (typeof currentPrice === 'number' && currentPrice > 0) {
+    const dev = Math.abs((currentPrice - ma) / ma) * 100;
+    if (dev > 20) {
+      console.error(`[market-data-service] Cache Stale — ${symbol} 200WMA deviation ${dev.toFixed(1)}% > 20% threshold. Rejecting value.`);
+      return { value: ma, stale: true };
+    }
+  }
+  return { value: ma, stale: false };
 }
 
 /**
@@ -204,9 +207,8 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const [btc200wma, eth200wma, mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
-      fetch200WMA('BTC-USD', FALLBACKS.btc200wma),
-      fetch200WMA('ETH-USD', FALLBACKS.eth200wma),
+    // Mayer first → gives us current BTC price for sanity-checking 200WMA.
+    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
@@ -215,10 +217,16 @@ Deno.serve(async (req) => {
       fetchAtr14d('SOL-USD'),
     ]);
 
+    // BTC-ONLY 200WMA — never applied to ETH/SOL per domain restriction.
+    const btc200 = await fetch200WMA('BTC-USD', FALLBACKS.btc200wma, mayer.price);
+    const btc_200wma_weekly = btc200.value;
+    const btc200wmaStale = btc200.stale;
+
     const payload = {
       generatedAt: new Date().toISOString(),
       btc: {
-        ma200w: btc200wma,
+        ma200w: btc_200wma_weekly,
+        ma200wStale: btc200wmaStale,
         mayerMultiple: mayer.value,
         ma200d: mayer.ma200d,
         price: mayer.price,
@@ -226,10 +234,11 @@ Deno.serve(async (req) => {
         miningCost: FALLBACKS.btcMiningCost,
         atr14d: btcAtr,
       },
-      eth: { ma200w: eth200wma, atr14d: ethAtr },
+      // ETH/SOL: NO 200WMA. CBBC + independent ATR only.
+      eth: { atr14d: ethAtr },
       sol: { tvl: solTvl, atr14d: solAtr },
       unlocks,
-      degraded: btc200wma === FALLBACKS.btc200wma && eth200wma === FALLBACKS.eth200wma,
+      degraded: btc200wmaStale,
     };
 
     return new Response(JSON.stringify(payload), {
@@ -240,8 +249,8 @@ Deno.serve(async (req) => {
     // Last resort: full fallback payload
     return new Response(JSON.stringify({
       generatedAt: new Date().toISOString(),
-      btc: { ma200w: FALLBACKS.btc200wma, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
-      eth: { ma200w: FALLBACKS.eth200wma, atr14d: FALLBACKS.atr14d.ETH },
+      btc: { ma200w: FALLBACKS.btc200wma, ma200wStale: true, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
+      eth: { atr14d: FALLBACKS.atr14d.ETH },
       sol: { tvl: FALLBACKS.solanaTvl, atr14d: FALLBACKS.atr14d.SOL },
       unlocks: FALLBACKS.unlocksWarning,
       degraded: true,
