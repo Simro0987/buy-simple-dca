@@ -19,8 +19,8 @@ export interface FactorReading {
 }
 
 export interface EngineInputs {
-  btcWmaDistPct: number | null;   // % above/below 200WMA
-  ethWmaDistPct: number | null;
+  /** BTC-ONLY 200WMA deviation (%). 200WMA does not apply to ETH/SOL. */
+  btcWmaDistPct: number | null;
   fearGreed: number | null;       // 0..100
   cbbcAvg: number;                // 0..100 quality of held basket
   solTvlUsd: number | null;       // liquidity proxy
