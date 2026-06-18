@@ -119,7 +119,7 @@ function inferMode(score: number, defensive: boolean, f200: FactorReading, fFg: 
 }
 
 export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
-  const f200 = read200wma(inputs.btcWmaDistPct, inputs.ethWmaDistPct);
+  const f200 = read200wma(inputs.btcWmaDistPct);
   const fFg = readFearGreed(inputs.fearGreed);
   const fCb = readCbbc(inputs.cbbcAvg);
   const fLi = readLiquidity(inputs.solTvlUsd);
