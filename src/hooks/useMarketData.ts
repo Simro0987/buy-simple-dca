@@ -3,18 +3,19 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface MarketDataPayload {
   generatedAt: string;
-  btc: { ma200w: number; mayerMultiple: number; ma200d: number; price: number; realizedPrice: number; miningCost: number };
-  eth: { ma200w: number };
-  sol: { tvl: number };
+  btc: { ma200w: number; ma200wStale?: boolean; mayerMultiple: number; ma200d: number; price: number; realizedPrice: number; miningCost: number };
+  // 200WMA is BTC-only — ETH/SOL never carry this field.
+  eth: { atr14d?: number };
+  sol: { tvl: number; atr14d?: number };
   unlocks: Array<{ symbol: string; pct: number; date: string }>;
   degraded?: boolean;
 }
 
-const CACHE_KEY = 'dca-market-data-v1';
+const CACHE_KEY = 'dca-market-data-v2';
 const FALLBACK: MarketDataPayload = {
   generatedAt: new Date(0).toISOString(),
-  btc: { ma200w: 48500, mayerMultiple: 1.15, ma200d: 0, price: 0, realizedPrice: 53600, miningCost: 50000 },
-  eth: { ma200w: 2350 },
+  btc: { ma200w: 48500, ma200wStale: true, mayerMultiple: 1.15, ma200d: 0, price: 0, realizedPrice: 53600, miningCost: 50000 },
+  eth: {},
   sol: { tvl: 11_500_000_000 },
   unlocks: [],
   degraded: true,
