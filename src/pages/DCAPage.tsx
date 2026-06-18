@@ -375,12 +375,18 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* MONEY MODE SIGNAL — BTC cycle-derived regime badge driving Market/Limit bias */}
       <MoneyModeSignal score={effectiveScore} />
 
-
-
+      {/* PIPELINE CONNECTOR — 5 Factors → Dynamic Execution Engine */}
+      <div className="flex items-center justify-center gap-2 -my-1">
+        <div className="h-px flex-1 bg-gradient-to-r from-transparent via-primary/40 to-primary/60" />
+        <span className="text-[9px] uppercase tracking-widest text-primary font-bold whitespace-nowrap px-2 py-0.5 rounded-full border border-primary/40 bg-primary/5">
+          ↓ 5 Factors → BTC Core / ETH·SOL Satellites
+        </span>
+        <div className="h-px flex-1 bg-gradient-to-l from-transparent via-primary/40 to-primary/60" />
+      </div>
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
       <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
-      {/* Unified Dynamic Execution Engine — Limit -1 % / Limit Dynamic split + Day 7 trigger sú integrované priamo dnu. */}
+
 
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}
       <ExecutionAdvisorCard />
