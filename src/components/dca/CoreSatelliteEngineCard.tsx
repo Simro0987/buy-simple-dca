@@ -1,10 +1,12 @@
 import { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Activity, Droplets, Gauge, Shield, ShieldAlert, TrendingDown, TrendingUp, Waves, Zap } from 'lucide-react';
+import { Activity, Droplets, Gauge, Shield, ShieldAlert, TrendingDown, TrendingUp, Waves, Zap, Clock } from 'lucide-react';
 import { useMarketEngine } from '@/contexts/MarketContext';
+import { useMarketData } from '@/hooks/useMarketData';
 import type { FactorKey, FactorReading, MarketMode } from '@/lib/coreSatelliteEngine';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
 
 const FACTOR_ICONS: Record<FactorKey, React.ComponentType<{ className?: string }>> = {
   wma200: Waves,
@@ -48,7 +50,13 @@ interface Props {
 
 export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
   const { engine, isDegraded } = useMarketEngine();
+  const { data: market } = useMarketData();
+  const lastSync = market?.generatedAt ? new Date(market.generatedAt) : null;
+  const lastSyncLabel = lastSync && !Number.isNaN(lastSync.getTime())
+    ? lastSync.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })
+    : '—';
   const lastModeRef = useRef<MarketMode | null>(null);
+
 
   // Defensive lock → Telegram alert (one-shot, throttled).
   useEffect(() => {
@@ -137,9 +145,15 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
 
       {/* 5 FACTORS PANEL */}
       <div>
-        <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold mb-1.5">
-          5 faktorov trhového režimu
-        </p>
+        <div className="flex items-center justify-between mb-1.5">
+          <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">
+            5 faktorov trhového režimu
+          </p>
+          <span className="text-[9px] text-muted-foreground tabular-nums flex items-center gap-1">
+            <Clock className="w-2.5 h-2.5" /> 200WMA · Yahoo Finance · {lastSyncLabel}
+          </span>
+        </div>
+
         <div className="grid grid-cols-5 gap-1.5">
           {engine.factors.map((f) => {
             const Icon = FACTOR_ICONS[f.key];
