@@ -61,12 +61,12 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
 }
 
 // Yahoo Finance weekly closes — strict 200 COMPLETED-week MA.
-// Fixes prior over-estimate: range=10y guarantees ≥200 full weeks, and the
-// CURRENT (incomplete) week is dropped so the MA reflects closed candles only.
-async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
-  const key = `wma:${symbol}`;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=10y`;
-  const json = await safeFetchJson(url) as {
+// HARD PURGE: cache is bypassed for 200WMA. Every request performs a fresh
+// cold-start fetch. We also reject stale "ghost" values >20% deviation from
+// current price (sanity check) — caller will mark the field unavailable.
+async function fetch200WMA(symbol: string, fallback: number, currentPrice?: number): Promise<{ value: number; stale: boolean }> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=10y&_=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store' }) as {
     chart?: { result?: Array<{
       timestamp?: number[];
       indicators?: { quote?: Array<{ close?: number[] }> };
@@ -75,7 +75,6 @@ async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
   const result = json?.chart?.result?.[0];
   const rawCloses = result?.indicators?.quote?.[0]?.close ?? [];
   const timestamps = result?.timestamp ?? [];
-  // Pair timestamp ↔ close, drop nulls and the current (incomplete) week.
   const nowSec = Math.floor(Date.now() / 1000);
   const oneWeekSec = 7 * 86400;
   const pairs: Array<{ t: number; c: number }> = [];
@@ -83,17 +82,21 @@ async function fetch200WMA(symbol: string, fallback: number): Promise<number> {
     const c = rawCloses[i];
     const t = timestamps[i] ?? 0;
     if (typeof c !== 'number' || !(c > 0)) continue;
-    if (t > 0 && nowSec - t < oneWeekSec) continue; // skip current incomplete week
+    if (t > 0 && nowSec - t < oneWeekSec) continue;
     pairs.push({ t, c });
   }
-  if (pairs.length < 200) {
-    const cached = readCache<number>(key);
-    return cached ?? fallback;
-  }
+  if (pairs.length < 200) return { value: fallback, stale: true };
   const slice = pairs.slice(-200).map(p => p.c);
   const ma = slice.reduce((s, v) => s + v, 0) / slice.length;
-  writeCache(key, ma);
-  return ma;
+  // HARD VALIDATION: if deviation from current price > 20%, treat as stale ghost.
+  if (typeof currentPrice === 'number' && currentPrice > 0) {
+    const dev = Math.abs((currentPrice - ma) / ma) * 100;
+    if (dev > 20) {
+      console.error(`[market-data-service] Cache Stale — ${symbol} 200WMA deviation ${dev.toFixed(1)}% > 20% threshold. Rejecting value.`);
+      return { value: ma, stale: true };
+    }
+  }
+  return { value: ma, stale: false };
 }
 
 /**
