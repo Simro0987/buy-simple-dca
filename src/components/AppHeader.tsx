@@ -1,6 +1,7 @@
 import { RefreshCw } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
 import { NetworkSwitcher } from '@/components/NetworkSwitcher';
+import { EmergencyPauseButton } from '@/components/EmergencyPauseButton';
 
 interface AppHeaderProps {
   now: Date;
@@ -25,6 +26,7 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
               <p className="text-[10px] text-muted-foreground">Portfólio</p>
               <p className="text-sm font-bold text-foreground">{totalValue > 0 ? formatUsd(totalValue) : '—'}</p>
             </div>
+            <EmergencyPauseButton />
             <button
               onClick={onRefresh}
               disabled={isFetching}
