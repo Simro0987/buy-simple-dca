@@ -444,6 +444,30 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               </div>
 
+              {/* SATELLITE RSI ROW — ETH/SOL only, visible (never tooltip-hidden) */}
+              {(c === 'eth' || c === 'sol') && (() => {
+                const rsi = c === 'eth' ? market?.eth?.rsi14 : market?.sol?.rsi14;
+                const hasRsi = typeof rsi === 'number' && Number.isFinite(rsi);
+                const toOversold = hasRsi ? Math.max(0, (rsi as number) - 30) : null;
+                let toneCls = 'bg-secondary text-muted-foreground border-border';
+                if (hasRsi) {
+                  const v = rsi as number;
+                  if (v < 35) toneCls = 'bg-sky-500/15 text-sky-300 border-sky-500/40';
+                  else if (v > 65) toneCls = 'bg-orange-500/15 text-orange-300 border-orange-500/40';
+                  else toneCls = 'bg-secondary text-foreground/80 border-border';
+                }
+                return (
+                  <div className={`rounded border ${toneCls} px-2 py-1 flex items-center justify-between gap-2 text-[10px] tabular-nums`}>
+                    <span className="font-semibold">
+                      14D RSI: <span className="font-bold">{hasRsi ? (rsi as number).toFixed(1) : 'N/A (Syncing…)'}</span>
+                    </span>
+                    <span className="font-semibold">
+                      To Oversold (30): <span className="font-bold">{toOversold !== null ? `${toOversold.toFixed(1)} pts` : 'N/A'}</span>
+                    </span>
+                  </div>
+                );
+              })()}
+
 
               {/* PER-TOKEN MKT / LMT SLIDER BAR — dual-factor engine (F&G + vol) */}
               <div className="space-y-1">
