@@ -240,13 +240,15 @@ Deno.serve(async (req) => {
 
   try {
     // Mayer first → gives us current BTC price for sanity-checking 200WMA.
-    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
+    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr, ethRsi, solRsi] = await Promise.all([
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
       fetchAtr14d('BTC-USD'),
       fetchAtr14d('ETH-USD'),
       fetchAtr14d('SOL-USD'),
+      fetchRsi14d('ETH-USD'),
+      fetchRsi14d('SOL-USD'),
     ]);
 
     // BTC-ONLY 200WMA — never applied to ETH/SOL per domain restriction.
@@ -266,9 +268,9 @@ Deno.serve(async (req) => {
         miningCost: FALLBACKS.btcMiningCost,
         atr14d: btcAtr,
       },
-      // ETH/SOL: NO 200WMA. CBBC + independent ATR only.
-      eth: { atr14d: ethAtr },
-      sol: { tvl: solTvl, atr14d: solAtr },
+      // ETH/SOL: NO 200WMA. CBBC + independent ATR + independent RSI14 only.
+      eth: { atr14d: ethAtr, rsi14: ethRsi },
+      sol: { tvl: solTvl, atr14d: solAtr, rsi14: solRsi },
       unlocks,
       degraded: btc200wmaStale,
     };
