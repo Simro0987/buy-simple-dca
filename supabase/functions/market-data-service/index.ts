@@ -134,6 +134,38 @@ async function fetchAtr14d(symbol: string): Promise<number> {
   return atr;
 }
 
+/**
+ * 14D Wilder RSI from Yahoo daily closes. Cache busted (`Date.now()` + `no-store`).
+ * Returns null on failure so UI can show "N/A (Syncing...)" instead of crashing.
+ */
+async function fetchRsi14d(symbol: string): Promise<number | null> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&_=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store' }) as {
+    chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: number[] }> } }> }
+  } | null;
+  const closes = (json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [])
+    .filter((c): c is number => typeof c === 'number' && c > 0);
+  if (closes.length < 16) return null;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= 14; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / 14;
+  let avgLoss = losses / 14;
+  for (let i = 15; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    const g = d > 0 ? d : 0;
+    const l = d < 0 ? -d : 0;
+    avgGain = (avgGain * 13 + g) / 14;
+    avgLoss = (avgLoss * 13 + l) / 14;
+  }
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - 100 / (1 + rs);
+  return Math.max(0, Math.min(100, rsi));
+}
+
 // Mayer Multiple = price / 200d MA (BTC).
 async function fetchMayerMultiple(): Promise<{ value: number; price: number; ma200d: number }> {
   const key = 'mayer';
@@ -208,13 +240,15 @@ Deno.serve(async (req) => {
 
   try {
     // Mayer first → gives us current BTC price for sanity-checking 200WMA.
-    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr] = await Promise.all([
+    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr, ethRsi, solRsi] = await Promise.all([
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
       fetchAtr14d('BTC-USD'),
       fetchAtr14d('ETH-USD'),
       fetchAtr14d('SOL-USD'),
+      fetchRsi14d('ETH-USD'),
+      fetchRsi14d('SOL-USD'),
     ]);
 
     // BTC-ONLY 200WMA — never applied to ETH/SOL per domain restriction.
@@ -234,9 +268,9 @@ Deno.serve(async (req) => {
         miningCost: FALLBACKS.btcMiningCost,
         atr14d: btcAtr,
       },
-      // ETH/SOL: NO 200WMA. CBBC + independent ATR only.
-      eth: { atr14d: ethAtr },
-      sol: { tvl: solTvl, atr14d: solAtr },
+      // ETH/SOL: NO 200WMA. CBBC + independent ATR + independent RSI14 only.
+      eth: { atr14d: ethAtr, rsi14: ethRsi },
+      sol: { tvl: solTvl, atr14d: solAtr, rsi14: solRsi },
       unlocks,
       degraded: btc200wmaStale,
     };
@@ -250,8 +284,8 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       generatedAt: new Date().toISOString(),
       btc: { ma200w: FALLBACKS.btc200wma, ma200wStale: true, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
-      eth: { atr14d: FALLBACKS.atr14d.ETH },
-      sol: { tvl: FALLBACKS.solanaTvl, atr14d: FALLBACKS.atr14d.SOL },
+      eth: { atr14d: FALLBACKS.atr14d.ETH, rsi14: null },
+      sol: { tvl: FALLBACKS.solanaTvl, atr14d: FALLBACKS.atr14d.SOL, rsi14: null },
       unlocks: FALLBACKS.unlocksWarning,
       degraded: true,
       error: String(e),

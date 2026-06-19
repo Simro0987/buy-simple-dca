@@ -154,6 +154,38 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
           </span>
         </div>
 
+        {/* BTC LIVE PRICE + 200WMA DISTANCE — visible (never tooltip-hidden) */}
+        {(() => {
+          const btcPrice = market?.btc?.price ?? 0;
+          const btcWma = market?.btc?.ma200w ?? 0;
+          const stale = market?.btc?.ma200wStale === true;
+          const hasPrice = btcPrice > 0;
+          const hasDist = hasPrice && btcWma > 0 && !stale;
+          const dist = hasDist ? ((btcPrice - btcWma) / btcWma) * 100 : null;
+          let tone = 'bg-secondary text-muted-foreground border-border';
+          if (dist !== null) {
+            if (dist < 0) tone = 'bg-rose-500/15 text-rose-300 border-rose-500/40';
+            else if (dist > 10) tone = 'bg-amber-500/15 text-amber-300 border-amber-500/40';
+            else tone = 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40';
+          }
+          const priceLabel = hasPrice
+            ? `$${btcPrice.toLocaleString('en-US', { maximumFractionDigits: 0 })}`
+            : 'N/A (Syncing…)';
+          const distLabel = dist !== null
+            ? `${dist >= 0 ? '+' : ''}${dist.toFixed(2)}%`
+            : 'N/A';
+          return (
+            <div className={`mb-2 rounded-lg border ${tone} px-2.5 py-1.5 flex items-center justify-between gap-2 flex-wrap`}>
+              <span className="text-[10px] font-semibold tabular-nums">
+                BTC Live: <span className="font-bold">{priceLabel}</span>
+              </span>
+              <span className="text-[10px] font-bold tabular-nums">
+                Distance from 200WMA: {distLabel}
+              </span>
+            </div>
+          );
+        })()}
+
         <div className="grid grid-cols-5 gap-1.5">
           {engine.factors.map((f) => {
             const Icon = FACTOR_ICONS[f.key];
