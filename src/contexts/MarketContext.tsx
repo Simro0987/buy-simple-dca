@@ -13,6 +13,9 @@ interface MarketContextValue {
 const MarketContext = createContext<MarketContextValue | null>(null);
 
 const CBBC_AVG = (95 + 92 + 84) / 3; // BTC/ETH/SOL baseline composite
+const ETH_CBBC = 92;
+const SOL_CBBC = 84;
+const SOL_VOL_BASELINE = 4.0; // historical 14D daily stdev baseline for SOL
 
 export function MarketProvider({ children }: { children: ReactNode }) {
   const { data: fg, isLoading: fgLoading } = useFearGreed();
@@ -38,10 +41,13 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       btcWmaDistPct: btcWmaDist,
       fearGreed: typeof fg?.value === 'number' ? fg.value : null,
       cbbcAvg: CBBC_AVG,
+      ethCbbc: ETH_CBBC,
+      solCbbc: SOL_CBBC,
       solTvlUsd: market?.sol?.tvl ?? null,
       btcVol14d: metrics?.btc?.volatility30d ?? 2.0,
       ethVol14d: metrics?.eth?.volatility30d ?? 2.8,
       solVol14d: metrics?.sol?.volatility30d ?? 4.0,
+      solVol14dBaseline: SOL_VOL_BASELINE,
     });
   }, [fg, market, prices, metrics]);
 

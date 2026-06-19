@@ -154,10 +154,22 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   coreWeight = Math.round(coreWeight);
   const satelliteWeight = 100 - coreWeight;
 
-  // Split satellites ETH:SOL ≈ 70:30 baseline, shifted by liquidity bias.
-  const liqBias = clamp(fLi.bias, -0.5, 0.5);
-  const solShare = clamp(0.30 + liqBias * 0.25, 0.20, 0.45); // 20..45 % of satellite
-  const ethShare = 1 - solShare;
+  // === AUTONOMOUS SATELLITE SPLIT (ETH vs SOL) ===
+  // Baseline ETH-heavy (ETH = bluechip satellite, deeper liquidity, larger market cap).
+  // Inputs: per-coin CBBC quality + 14D volatility (independent ATR proxy).
+  // Rule 1 — QUALITY BIAS: if ETH CBBC > SOL CBBC → +10 pp weight advantage to ETH.
+  // Rule 2 — VOLATILITY DEFENSE: if SOL vol > baseline × 1.15 → shift +15 pp from SOL → ETH.
+  const ethCbbc = inputs.ethCbbc ?? 92;
+  const solCbbc = inputs.solCbbc ?? 84;
+  const solBaseline = inputs.solVol14dBaseline ?? 4.0;
+  let ethShare = 0.60; // ETH baseline 60 % of satellite bucket
+  const qualityBiasApplied = ethCbbc > solCbbc;
+  if (qualityBiasApplied) ethShare += 0.10;
+  const solVolRatio = solBaseline > 0 ? inputs.solVol14d / solBaseline : 1;
+  const volDefenseApplied = solVolRatio > 1.15;
+  if (volDefenseApplied) ethShare += 0.15;
+  ethShare = clamp(ethShare, 0.50, 0.95);
+  const solShare = 1 - ethShare;
   const ethPct = Math.round(satelliteWeight * ethShare);
   const solPct = satelliteWeight - ethPct;
 
@@ -181,6 +193,11 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
     narrative.push(`Vyvážený režim — ${coreWeight}/${satelliteWeight} split medzi Core a satelitmi.`);
   }
   narrative.push(`CBBC kvalita ${fCb.value} · vol ${fVo.value}.`);
+  if (volDefenseApplied) {
+    narrative.push(`⚠ Volatility Defense: SOL 14D vol ${inputs.solVol14d.toFixed(2)} % > baseline ${solBaseline.toFixed(2)} % × 1.15 → kapitál presunutý zo SOL do ETH (+15 pp).`);
+  } else if (qualityBiasApplied) {
+    narrative.push(`Quality Bias: ETH CBBC ${ethCbbc} > SOL CBBC ${solCbbc} → ETH dostáva +10 pp výhodu v satelite buckete.`);
+  }
 
   return {
     factors,
