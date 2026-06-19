@@ -140,6 +140,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
   // ============= INDEPENDENT ACTIVATIONS =============
   const activateMarket = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
+    if (emergencyPaused) { toast.error('SYSTEM HALTED — exekúcia zablokovaná'); return; }
     if (isMarketActive === coin) return;
     setIsMarketActive(coin);
     try {
@@ -161,6 +162,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   };
 
   const activateLimitDynamic = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
+    if (emergencyPaused) { toast.error('SYSTEM HALTED — Limit objednávky blokované'); return; }
     if (isDynamicActive === coin) return;
     setIsDynamicActive(coin);
     try {
