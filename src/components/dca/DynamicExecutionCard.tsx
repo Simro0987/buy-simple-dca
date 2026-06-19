@@ -12,6 +12,7 @@ import { useMarketEngine } from '@/contexts/MarketContext';
 import { useMarketData } from '@/hooks/useMarketData';
 
 import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
+import { useEmergencyPause } from '@/lib/emergencyPause';
 import {
   calcUnifiedExecution,
   fixedExecution,
@@ -71,6 +72,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: fg } = useFearGreed();
   const { engine } = useMarketEngine();
   const { data: market } = useMarketData();
+  const [emergencyPaused] = useEmergencyPause();
   const syncLabel = (() => {
     const d = market?.generatedAt ? new Date(market.generatedAt) : null;
     return d && !Number.isNaN(d.getTime())
@@ -260,7 +262,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     const w = VOL_WEIGHT[sym] ?? { sent: 0.5, vol: 0.5 };
     const volNorm = Math.max(0, Math.min(1, vol30d / scale));
     const volMarket = Math.max(20, Math.min(80, 20 + volNorm * 60));
-    const marketPct = Math.round(Math.max(20, Math.min(80, w.sent * sentMarket + w.vol * volMarket)));
+    let marketPct = Math.round(Math.max(20, Math.min(80, w.sent * sentMarket + w.vol * volMarket)));
+    if (emergencyPaused) marketPct = 0;
     return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket, wSent: w.sent, wVol: w.vol, scale };
   }
   function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>): string {
@@ -288,8 +291,19 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           <Zap className="w-4 h-4 text-primary" />
           <h3 className="text-sm font-bold text-foreground">Dynamic Execution Engine</h3>
         </div>
-        <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-primary/15 text-primary">AUTO</span>
+        <span className={`text-[9px] font-bold px-2 py-0.5 rounded ${emergencyPaused ? 'bg-rose-500 text-white animate-pulse' : 'bg-primary/15 text-primary'}`}>
+          {emergencyPaused ? 'HALTED' : 'AUTO'}
+        </span>
       </div>
+
+      {emergencyPaused && (
+        <div className="rounded-lg border border-rose-500/60 bg-rose-500/15 px-3 py-2 flex items-center gap-2 animate-pulse">
+          <AlertTriangle className="w-4 h-4 text-rose-300 flex-shrink-0" />
+          <p className="text-[11px] font-bold tracking-wide text-rose-200 leading-snug">
+            SYSTEM HALTED: MANUAL OVERRIDE — Market exekúcia 0 %, Limit objednávky blokované, engine zmrazený.
+          </p>
+        </div>
+      )}
 
       {isLoading && (
         <p className="text-[11px] text-muted-foreground">Načítavam 14D volatilitu a momentum…</p>
