@@ -22,11 +22,16 @@ export interface EngineInputs {
   /** BTC-ONLY 200WMA deviation (%). 200WMA does not apply to ETH/SOL. */
   btcWmaDistPct: number | null;
   fearGreed: number | null;       // 0..100
-  cbbcAvg: number;                // 0..100 quality of held basket
+  cbbcAvg: number;                // 0..100 quality of held basket (BTC/ETH/SOL composite)
+  /** Per-coin CBBC quality scores driving the satellite quality bias. */
+  ethCbbc?: number;               // 0..100
+  solCbbc?: number;               // 0..100
   solTvlUsd: number | null;       // liquidity proxy
   btcVol14d: number;              // % daily stdev
   ethVol14d: number;
   solVol14d: number;
+  /** SOL volatility baseline (historical avg). Used by Volatility Defense to detect spikes. */
+  solVol14dBaseline?: number;
 }
 
 export interface EngineResult {
