@@ -134,6 +134,38 @@ async function fetchAtr14d(symbol: string): Promise<number> {
   return atr;
 }
 
+/**
+ * 14D Wilder RSI from Yahoo daily closes. Cache busted (`Date.now()` + `no-store`).
+ * Returns null on failure so UI can show "N/A (Syncing...)" instead of crashing.
+ */
+async function fetchRsi14d(symbol: string): Promise<number | null> {
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&_=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store' }) as {
+    chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: number[] }> } }> }
+  } | null;
+  const closes = (json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [])
+    .filter((c): c is number => typeof c === 'number' && c > 0);
+  if (closes.length < 16) return null;
+  let gains = 0, losses = 0;
+  for (let i = 1; i <= 14; i++) {
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gains += d; else losses -= d;
+  }
+  let avgGain = gains / 14;
+  let avgLoss = losses / 14;
+  for (let i = 15; i < closes.length; i++) {
+    const d = closes[i] - closes[i - 1];
+    const g = d > 0 ? d : 0;
+    const l = d < 0 ? -d : 0;
+    avgGain = (avgGain * 13 + g) / 14;
+    avgLoss = (avgLoss * 13 + l) / 14;
+  }
+  if (avgLoss === 0) return 100;
+  const rs = avgGain / avgLoss;
+  const rsi = 100 - 100 / (1 + rs);
+  return Math.max(0, Math.min(100, rsi));
+}
+
 // Mayer Multiple = price / 200d MA (BTC).
 async function fetchMayerMultiple(): Promise<{ value: number; price: number; ma200d: number }> {
   const key = 'mayer';
