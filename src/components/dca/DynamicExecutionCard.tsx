@@ -677,7 +677,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                                 activateLimitDynamic(c, card.usd, card.effPrice, reservoirShare);
                               }
                             }}
-                            disabled={card.isFilled || card.isPending || cardBusy || cardDisabled || card.effPrice <= 0}
+                            disabled={emergencyPaused || card.isFilled || card.isPending || cardBusy || cardDisabled || card.effPrice <= 0}
                             className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
                               card.isFilled ? 'bg-emerald-500 text-background'
                               : card.isPending ? (triggered ? 'bg-emerald-500 text-background' : 'bg-amber-500 text-background')
