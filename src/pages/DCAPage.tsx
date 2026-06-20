@@ -8,8 +8,8 @@ import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCar
 
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
-
 import { ExecutionAdvisorCard } from '@/components/dca/ExecutionAdvisorCard';
+import { ConfluenceHexagon } from '@/components/ConfluenceHexagon';
 
 
 
@@ -391,9 +391,8 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}
       <ExecutionAdvisorCard />
 
-
-      {/* EXECUTION PLAN — full per-coin orders + Hyperliquid links live on the Action page.
-          Removed duplicate fixed 60/40 panel here to keep Dynamic Engine as single source of truth. */}
+      {/* CONFLUENCE HEXAGON — vizuálny radarový indikátor akumulácia vs. eufória */}
+      <ConfluenceHexagon />
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">
