@@ -124,27 +124,66 @@ function Pill({ l, c, bg }: { l: string; c: string; bg: string }) {
   );
 }
 
+// ─── reason generator ────────────────────────────────────────────────────────
+function generateReason(fg: number, rsi: number, pnlPct: number, sym: DcaT, score: number): string {
+  const fgC  = fg  * 0.4;
+  const rsiC = rsi * 0.4;
+  const pnlC = pnlPct * 0.2;
+  const max  = Math.max(fgC, rsiC, pnlC);
+
+  if (max === fgC && fg >= 70) {
+    if (fg > 85) return `Extrémne trhové FOMO. Globálna eufória (F&G: ${fg}) ťahá trh na vrchol. PnL: +${pnlPct.toFixed(1)}%. Ideálny čas na zníženie rizika – história ukazuje reverzie z takýchto úrovní.`;
+    return `Vysoká trhová eufória (F&G: ${fg}). Trh je v chamtivej fáze – emocionálne nákupy dominujú. PnL ${sym}: +${pnlPct.toFixed(1)}%. Odporúčam postupne znižovať expozíciu.`;
+  }
+  if (max === rsiC && rsi > 70) {
+    const mktMood = fg < 45 ? 'globálny trh je ešte v neutrálnej / bearish zóne' : 'globálny trh rastie';
+    return `Lokálna pumpa ${sym}. RSI(14d): ${rsi} – minca je výrazne prekúpená. ${mktMood} (F&G: ${fg}). PnL: +${pnlPct.toFixed(1)}%. Ideálne na parciálny výber pred korekciou.`;
+  }
+  if (score < 50) return `Mierny rast portfólia. ${sym} je v stabilnom zisku (+${pnlPct.toFixed(1)}%), F&G: ${fg}, RSI: ${rsi}. Plynulé odkrajovanie do Profit Reservoiru pre budúce Limit nákupy BTC.`;
+  return `Kombinovaný signál. F&G: ${fg}, RSI ${sym}: ${rsi}, PnL: +${pnlPct.toFixed(1)}%. Viacero indikátorov súčasne ukazuje na zníženie rizika.`;
+}
+
 // ─── Risk score progress bar ─────────────────────────────────────────────────
 function RiskBar({ score }: { score: number }) {
-  const pct  = Math.min(100, score);
-  const col  = scoreColor(score);
+  const pct = Math.min(100, Math.max(0, score));
+  const col = scoreColor(score);
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 5 }}>
         <span style={{ fontSize: 9, color: T.textMut, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Live Risk Score
         </span>
-        <span style={{ fontSize: 11, fontWeight: 800, color: col, fontVariantNumeric: 'tabular-nums' }}>
+        <span style={{ fontSize: 12, fontWeight: 800, color: col, fontVariantNumeric: 'tabular-nums' }}>
           {score.toFixed(1)} / 100
         </span>
       </div>
-      <div style={{ height: 5, borderRadius: 999, background: 'rgba(255,255,255,0.07)', overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, borderRadius: 999, background: col, transition: 'width 0.6s ease' }} />
+
+      {/* Gradient bar with animated position dot */}
+      <div style={{ position: 'relative', height: 8, borderRadius: 999,
+        background: 'linear-gradient(to right, #10b981, #f59e0b 50%, #ef4444)',
+        overflow: 'visible' }}>
+        {/* Background fill showing actual score */}
+        <div style={{ position: 'absolute', inset: 0, borderRadius: 999,
+          background: 'rgba(0,0,0,0.55)', right: `${100 - pct}%`, transition: 'right 0.8s ease' }} />
+        {/* Position indicator dot */}
+        <div
+          className={score >= 70 ? 'animate-pulse' : ''}
+          style={{
+            position: 'absolute', top: '50%', transform: 'translate(-50%, -50%)',
+            left: `${pct}%`, transition: 'left 0.8s ease',
+            width: 12, height: 12, borderRadius: '50%',
+            backgroundColor: col,
+            border: '2px solid rgba(255,255,255,0.9)',
+            boxShadow: `0 0 6px ${col}`,
+            zIndex: 2,
+          }}
+        />
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 3 }}>
+
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
         <span style={{ fontSize: 7.5, color: T.green }}>0 · Akumulácia</span>
         <span style={{ fontSize: 7.5, color: T.amber }}>50 · Pozor</span>
-        <span style={{ fontSize: 7.5, color: T.red }}>85 · Max výber</span>
+        <span style={{ fontSize: 7.5, color: T.red }}>85+ · Max výber</span>
       </div>
     </div>
   );
@@ -185,9 +224,25 @@ function TokenCard({
   const sc = status === 'SELL' ? T.red : status === 'HOLD' ? T.teal : T.green;
   const sb = status === 'SELL' ? T.redBg : status === 'HOLD' ? T.tealBg : T.greenBg;
 
+  // Dynamic glow border based on risk level
+  const glowClass  = status === 'SELL' && sellPct >= 10 ? 'animate-pulse' : '';
+  const glowBorder = status === 'SELL' && sellPct >= 10
+    ? 'rgba(239,68,68,0.85)'
+    : status === 'SELL' && sellPct >= 5
+    ? 'rgba(249,115,22,0.55)'
+    : T.border;
+  const glowShadow = status === 'SELL' && sellPct >= 10
+    ? '0 0 20px rgba(239,68,68,0.40), inset 0 0 20px rgba(239,68,68,0.04)'
+    : status === 'SELL' && sellPct >= 5
+    ? '0 0 14px rgba(249,115,22,0.25)'
+    : 'none';
+
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r,
-      borderLeft: `2px solid ${tc}`, overflow: 'hidden' }}>
+    <div
+      className={glowClass}
+      style={{ background: T.card, border: `1px solid ${glowBorder}`, borderRadius: T.r,
+        borderLeft: `2px solid ${tc}`, overflow: 'hidden', boxShadow: glowShadow,
+        transition: 'box-shadow 0.5s ease, border-color 0.5s ease' }}>
 
       {/* ── Always-visible header ── */}
       <button onClick={() => setOpen(v => !v)} style={{
@@ -307,6 +362,14 @@ function TokenCard({
                 letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 ⚡ LIVE RISK SCORE: {score.toFixed(1)} / 100 — ODPORÚČANÝ ODPREDAJ {sellPct}%
               </p>
+              {/* 🧠 Reason explanation */}
+              <div style={{ marginBottom: 10, padding: '8px 10px', background: 'rgba(239,68,68,0.05)',
+                border: '1px solid rgba(239,68,68,0.15)', borderRadius: T.rs }}>
+                <p style={{ fontSize: 9.5, color: T.textSub, lineHeight: 1.5 }}>
+                  <span style={{ fontWeight: 800, color: T.red }}>🧠 DÔVOD: </span>
+                  {generateReason(fg, rsi, pnlPct, sym, score)}
+                </p>
+              </div>
               {[
                 { ico: '🔴', lbl: 'LIVE AKCIA', val: `Predaj ${sellQty.toFixed(4)} ${sym}  (${sellPct}% pozície · na základe Risk Score ${score.toFixed(0)})` },
                 { ico: '📂', lbl: 'ZDROJ',      val: SOURCES[sym].join(' / ') },
