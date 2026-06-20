@@ -2,6 +2,7 @@ import { PieChart, Calculator, Shield, Activity, BarChart3, DollarSign, Coins, S
 import { TabId } from '@/components/BottomNav';
 import { AssetCardsRow } from '@/components/dashboard/AssetCardsRow';
 import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChart';
+import { AssetNarratives } from '@/components/dashboard/AssetNarratives';
 import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
@@ -62,6 +63,8 @@ export function HomePage({ onNavigate, lang }: Props) {
           })}
         </div>
       </div>
+
+      <AssetNarratives />
     </div>
   );
 }
