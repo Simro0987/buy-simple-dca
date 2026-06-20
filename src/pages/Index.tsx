@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { BottomNav, TabId } from '@/components/BottomNav';
 import { AppHeader } from '@/components/AppHeader';
+import { AppSidebar } from '@/components/AppSidebar';
 import { GasWatchdogBanner } from '@/components/GasWatchdogBanner';
 import { PinLock } from '@/components/PinLock';
 import { isUnlocked } from '@/lib/pin';
@@ -71,14 +72,24 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
-      <div className="max-w-lg mx-auto px-4 pt-2">
-        <GasWatchdogBanner />
+      {/* Sidebar — visible on md+ only */}
+      <AppSidebar active={tab} onChange={setTab} lang={lang} />
+
+      {/* Main content — offset right on md+ to clear sidebar */}
+      <div className="md:pl-[52px]">
+        <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
+        <div className="max-w-lg mx-auto px-4 pt-2">
+          <GasWatchdogBanner />
+        </div>
+        <main className="max-w-lg mx-auto px-4 pt-4 pb-24 md:pb-6">
+          {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
+        </main>
       </div>
-      <main className="max-w-lg mx-auto px-4 pt-4 pb-24">
-        {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
-      </main>
-      <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
+
+      {/* Bottom nav — mobile only */}
+      <div className="md:hidden">
+        <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
+      </div>
     </div>
   );
 };

@@ -2,6 +2,13 @@ import { useState } from 'react';
 import { Zap, ChevronLeft, ChevronRight, Radio } from 'lucide-react';
 import type { OctToken } from '@/hooks/useConfluenceMetrics';
 
+// CoinGecko small logos — free public CDN, no API key
+const TOKEN_IMG: Record<OctToken, string> = {
+  BTC: 'https://assets.coingecko.com/coins/images/1/small/bitcoin.png',
+  ETH: 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
+  SOL: 'https://assets.coingecko.com/coins/images/4128/small/solana.png',
+};
+
 // ─── internal news database ──────────────────────────────────────────────────
 
 type NewsType = 'normal' | 'alert';
@@ -193,16 +200,38 @@ export function MacroNewsTicker({ activeToken }: Props) {
           isFlash ? 'bg-amber-500/8 border border-amber-500/20' : 'bg-secondary/20'
         }`}
       >
-        {isFlash
-          ? <Zap   className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-          : <Radio className="w-3.5 h-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
-        }
+        {/* Token thumbnail */}
+        <div className="shrink-0 mt-0.5">
+          <img
+            src={TOKEN_IMG[activeToken]}
+            alt={activeToken}
+            width={22}
+            height={22}
+            className="rounded-full"
+            onError={e => {
+              // Fallback: hide img and show colored dot
+              (e.currentTarget as HTMLImageElement).style.display = 'none';
+              const next = e.currentTarget.nextElementSibling as HTMLElement | null;
+              if (next) next.style.display = 'flex';
+            }}
+          />
+          {/* Fallback dot (hidden by default) */}
+          <div
+            className="w-[22px] h-[22px] rounded-full items-center justify-center text-[8px] font-bold text-background"
+            style={{ backgroundColor: TOKEN_COLOR[activeToken], display: 'none' }}
+          >
+            {activeToken.slice(0, 1)}
+          </div>
+        </div>
         <div className="flex-1 min-w-0">
-          <p className={`text-[11px] font-semibold leading-snug ${
-            isFlash ? 'text-amber-100' : 'text-foreground'
-          }`}>
-            {item.title}
-          </p>
+          <div className="flex items-start gap-1">
+            {isFlash && <Zap className="w-3 h-3 text-amber-400 mt-0.5 shrink-0" />}
+            <p className={`text-[11px] font-semibold leading-snug ${
+              isFlash ? 'text-amber-100' : 'text-foreground'
+            }`}>
+              {item.title}
+            </p>
+          </div>
           <p className="text-[9px] text-muted-foreground/50 mt-1">{item.source}</p>
         </div>
       </div>

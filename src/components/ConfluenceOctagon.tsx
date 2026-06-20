@@ -192,6 +192,44 @@ export function ConfluenceOctagon({ activeToken: externalToken, onTokenChange }:
             </RadarChart>
           </ResponsiveContainer>
 
+          {/* Fear & Greed gauge bar */}
+          {(() => {
+            const fgVal = tokenData.axes.find(a => a.axis === 'Fear/Greed')?.value ?? 50;
+            const fgLabel =
+              fgVal <= 20 ? 'Extrémny strach' :
+              fgVal <= 40 ? 'Strach' :
+              fgVal <= 60 ? 'Neutrál' :
+              fgVal <= 80 ? 'Chamtivosť' : 'Extrémna chamtivosť';
+            const fgColor =
+              fgVal <= 20 ? '#ef4444' :
+              fgVal <= 40 ? '#f97316' :
+              fgVal <= 60 ? '#eab308' :
+              fgVal <= 80 ? '#84cc16' : '#22c55e';
+            return (
+              <div className="px-1 mt-1 mb-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[9px] text-muted-foreground font-semibold uppercase tracking-wide">Fear & Greed</span>
+                  <span className="text-[9px] font-bold tabular-nums" style={{ color: fgColor }}>
+                    {fgVal} · {fgLabel}
+                  </span>
+                </div>
+                <div
+                  className="relative h-2 rounded-full overflow-hidden"
+                  style={{ background: 'linear-gradient(to right,#ef4444,#f97316,#eab308,#84cc16,#22c55e)' }}
+                >
+                  <div
+                    className="absolute top-1/2 -translate-y-1/2 w-2 h-3.5 rounded-sm shadow-md"
+                    style={{ left: `calc(${fgVal}% - 4px)`, backgroundColor: '#fff', opacity: 0.9 }}
+                  />
+                </div>
+                <div className="flex justify-between mt-0.5">
+                  <span className="text-[7px] text-rose-400">Strach</span>
+                  <span className="text-[7px] text-emerald-400">Chamtivosť</span>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* Axis legend with live/approx badges */}
           <div className="grid grid-cols-4 gap-x-2 gap-y-1 mt-2 px-1">
             {tokenData.axes.map(a => (
@@ -218,11 +256,7 @@ export function ConfluenceOctagon({ activeToken: externalToken, onTokenChange }:
 
           {/* Data source footer */}
           <p className="text-[9px] text-muted-foreground/40 text-center mt-1 leading-relaxed">
-            {dataQuality === 'live'
-              ? 'Zdroje: Binance Spot/Futures · Alternative.me — všetko live'
-              : dataQuality === 'partial'
-              ? 'Zdroje: Binance Spot/Futures · Alternative.me — čiastočné dáta'
-              : 'Záložné dáta · Binance / Alternative.me nedostupné'}
+            Zdroje: Binance Spot/Futures · Alternative.me (F&G) · aprox. on-chain
           </p>
         </>
       )}
