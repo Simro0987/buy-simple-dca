@@ -67,7 +67,7 @@
     --popover: 220 22% 9%;
     --popover-foreground: 210 16% 88%;
 
-    --primary: 142 62% 40%;
+    --primary: 154 100% 38%;
     --primary-foreground: 219 29% 6%;
 
     --secondary: 220 18% 14%;
@@ -84,17 +84,17 @@
 
     --border: 220 14% 13%;
     --input: 220 14% 13%;
-    --ring: 142 62% 40%;
+    --ring: 154 100% 38%;
 
     --radius: 0.5rem;
 
-    --gain: 142 62% 40%;
+    --gain: 154 100% 38%;
     --loss: 0 72% 51%;
     --warning: 38 92% 50%;
 
     /* nav pitch-black */
     --nav-bg: 219 35% 4%;
-    --nav-active: 142 62% 40%;
+    --nav-active: 154 100% 38%;
     --nav-inactive: 215 10% 38%;
 
     --sidebar-background: 220 22% 9%;
@@ -208,4 +208,18 @@
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
+
+  /* ── data-value: monospace financial numbers ────────────────────────────── */
+  .data-value {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── terminal tag utilities ─────────────────────────────────────────────── */
+  .tag-crypto  { background: rgba( 34,197, 94,0.12); color: #22c55e; }
+  .tag-makro   { background: rgba( 20,184,166,0.12); color: #14b8a6; }
+  .tag-alert   { background: rgba(251,191, 36,0.12); color: #fbbf24; }
+  .tag-btc     { background: rgba(247,147, 26,0.12); color: #F7931A; }
+  .tag-eth     { background: rgba( 98,126,234,0.12); color: #627EEA; }
+  .tag-sol     { background: rgba(153, 69,255,0.12); color: #9945FF; }
 }
