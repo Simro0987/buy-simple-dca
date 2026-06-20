@@ -395,15 +395,23 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           // Market price = spot; Limit dynamic = spot * (1 + distance%)
           const marketOracle = price;
           const dynOracle = price > 0 ? price * (1 + e.limitDistancePct / 100) : 0;
-          const marketPriceEffective = editedPrices[c]?.market ?? marketOracle;
-          const dynPriceEffective = editedPrices[c]?.dynamic ?? dynOracle;
-          const marketDrift = marketOracle > 0 ? Math.abs(marketPriceEffective - marketOracle) / marketOracle * 100 : 0;
-          const dynDrift = dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
+          // STATE LOCK: once an order is PENDING/FILLED/EXECUTED, render the exact
+          // target_price stored in DB at activation — stop listening to the live feed.
+          const marketLockedPrice = mDone ? Number(st?.market?.target_price ?? 0) : 0;
+          const marketLockedUsd = mDone ? Number(st?.market?.amount_usd ?? 0) : 0;
+          const marketPriceEffective = (mDone && marketLockedPrice > 0)
+            ? marketLockedPrice
+            : (editedPrices[c]?.market ?? marketOracle);
+          const dynPriceEffective = ((lPending || lFilled) && lockedLimitPrice > 0)
+            ? lockedLimitPrice
+            : (editedPrices[c]?.dynamic ?? dynOracle);
+          const marketDrift = !mDone && marketOracle > 0 ? Math.abs(marketPriceEffective - marketOracle) / marketOracle * 100 : 0;
+          const dynDrift = !(lPending || lFilled) && dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
           const marketDriftAlert = marketDrift > 2;
           const dynDriftAlert = dynDrift > 2;
 
           const dynUsd = lockedLimitPrice > 0 ? lockedLimitUsd : dynUsdRaw;
-          const marketUsd = marketUsdRaw;
+          const marketUsd = (mDone && marketLockedUsd > 0) ? marketLockedUsd : marketUsdRaw;
 
           // BTC funding
           const isBtc = c === 'btc';
