@@ -17,6 +17,7 @@ const AnalysisRiskPage = lazy(() => import('@/pages/AnalysisRiskPage').then(m =>
 const StakingPage = lazy(() => import('@/pages/StakingPage').then(m => ({ default: m.StakingPage })));
 const WalletsPage = lazy(() => import('@/pages/WalletsPage').then(m => ({ default: m.WalletsPage })));
 const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })));
+const TerminalDashboard = lazy(() => import('@/components/TerminalDashboard').then(m => ({ default: m.TerminalDashboard })));
 const SwapPage = lazy(() => import('@/pages/SwapPage').then(m => ({ default: m.SwapPage })));
 const AgentPage = lazy(() => import('@/pages/AgentPage').then(m => ({ default: m.AgentPage })));
 const ExecutionTracker = lazy(() => import('@/components/ExecutionTracker').then(m => ({ default: m.ExecutionTracker })));
@@ -48,7 +49,7 @@ const Fallback = () => (
 const wrap = (node: JSX.Element) => <Suspense fallback={<Fallback />}>{node}</Suspense>;
 
 export const TAB_ROUTES: Record<TabId, TabRenderer> = {
-  home: ({ setTab, lang }) => wrap(<HomePage onNavigate={setTab} lang={lang} />),
+  home: ({ setTab, lang }) => wrap(<TerminalDashboard onNavigate={setTab} lang={lang} />),
   overview: ({ lang }) => wrap(<OverviewPage lang={lang} />),
   portfolio: ({ lang, prices, athData, cycleResult, advancedMarketData }) => wrap(
     <PortfolioProfitPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} advancedMarketData={advancedMarketData} />
