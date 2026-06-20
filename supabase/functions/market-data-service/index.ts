@@ -152,7 +152,8 @@ async function fetchAtr14d(symbol: string): Promise<number> {
  * Returns null on failure so UI can show "N/A (Syncing...)" instead of crashing.
  */
 async function fetchRsi14d(symbol: string): Promise<number | null> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&_=${Date.now()}`;
+  // 14D Wilder RSI requires ≥100 daily closes for proper smoothing convergence.
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo&_=${Date.now()}`;
   const json = await safeFetchJson(url, { cache: 'no-store' }) as {
     chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: number[] }> } }> }
   } | null;
