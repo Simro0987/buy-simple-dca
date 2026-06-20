@@ -72,6 +72,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: fg } = useFearGreed();
   const { engine } = useMarketEngine();
   const { data: market } = useMarketData();
+  const marketDebugError = market?.debugError || market?.error || null;
   const [emergencyPaused] = useEmergencyPause();
   const syncLabel = (() => {
     const d = market?.generatedAt ? new Date(market.generatedAt) : null;
@@ -304,6 +305,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           <p className="text-[11px] font-bold tracking-wide text-rose-200 leading-snug">
             SYSTEM HALTED: MANUAL OVERRIDE — Market exekúcia 0 %, Limit objednávky blokované, engine zmrazený.
           </p>
+        </div>
+      )}
+
+      {marketDebugError && (
+        <div className="rounded-lg border border-rose-500/70 bg-rose-500/15 px-3 py-2 text-[10px] font-bold leading-snug text-rose-200 break-words">
+          DEBUG market-data-service: {marketDebugError}
         </div>
       )}
 
