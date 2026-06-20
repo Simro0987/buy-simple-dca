@@ -15,6 +15,7 @@ import { useQuery } from '@tanstack/react-query';
 import {
   Target, RefreshCw, ShieldCheck, AlertTriangle,
   ChevronDown, ChevronUp, Lock, RotateCcw, ArrowRight, Zap,
+  Copy, Check,
 } from 'lucide-react';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { TOKENS, formatPrice } from '@/lib/crypto';
@@ -124,6 +125,28 @@ function Pill({ l, c, bg }: { l: string; c: string; bg: string }) {
   );
 }
 
+// ─── confirm-sell: updates holdings + free cash + cooldown ───────────────────
+function confirmSell(sym: DcaT, sellQty: number, currentPrice: number) {
+  // A) Reduce holdings in localStorage
+  const h   = loadHoldings();
+  const key = sym.toLowerCase();
+  h[key]    = Math.max(0, (h[key] ?? DEFAULT_HOLD[sym]) - sellQty);
+  localStorage.setItem('smart-alloc-holdings', JSON.stringify(h));
+
+  // B) Add sold USD value to Voľný cash (Profit Reservoir)
+  const soldUsd  = sellQty * currentPrice;
+  const prevCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
+  localStorage.setItem('free-cash', String(prevCash + soldUsd));
+
+  // C) Activate cascade cooldown for this symbol
+  const cd = loadCooldown();
+  cd[sym]  = currentPrice;
+  saveCooldown(cd);
+
+  // Notify TerminalDashboard to re-read localStorage
+  window.dispatchEvent(new Event('portfolio-updated'));
+}
+
 // ─── reason generator ────────────────────────────────────────────────────────
 function generateReason(fg: number, rsi: number, pnlPct: number, sym: DcaT, score: number): string {
   const fgC  = fg  * 0.4;
@@ -191,12 +214,14 @@ function RiskBar({ score }: { score: number }) {
 
 // ─── Single token card ────────────────────────────────────────────────────────
 function TokenCard({
-  sym, currentPrice, rsi, fg, dcaPrice, onDcaChange,
+  sym, currentPrice, rsi, fg, dcaPrice, onDcaChange, onConfirm,
 }: {
   sym: DcaT; currentPrice: number; rsi: number; fg: number;
   dcaPrice: number; onDcaChange: (v: number) => void;
+  onConfirm: () => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open,   setOpen]   = useState(false);
+  const [copied, setCopied] = useState(false);
   const tc = TC[sym];
 
   const holdings  = loadHoldings();
@@ -371,24 +396,64 @@ function TokenCard({
                 </p>
               </div>
               {[
-                { ico: '🔴', lbl: 'LIVE AKCIA', val: `Predaj ${sellQty.toFixed(4)} ${sym}  (${sellPct}% pozície · na základe Risk Score ${score.toFixed(0)})` },
-                { ico: '📂', lbl: 'ZDROJ',      val: SOURCES[sym].join(' / ') },
-                { ico: '🎯', lbl: 'CIEĽ',       val: 'Zameň za crvUSD → Profit Reservoir (Arbitrum)' },
-                { ico: '⚡', lbl: 'STRATÉGIA',  val: 'Zisk pripravený na budúci Limit Buy BTC' },
+                { ico: '🔴', lbl: 'LIVE AKCIA', val: `Predaj ${sellQty.toFixed(4)} ${sym}  (${sellPct}% pozície · Risk Score ${score.toFixed(0)})`, isSell: true },
+                { ico: '📂', lbl: 'ZDROJ',      val: SOURCES[sym].join(' / '), isSell: false },
+                { ico: '🎯', lbl: 'CIEĽ',       val: 'Zameň za crvUSD → Profit Reservoir (Arbitrum)', isSell: false },
+                { ico: '⚡', lbl: 'STRATÉGIA',  val: 'Zisk pripravený na budúci Limit Buy BTC', isSell: false },
               ].map(row => (
                 <div key={row.lbl} style={{ display: 'flex', alignItems: 'flex-start', gap: 6,
                   marginBottom: 5, fontSize: 10 }}>
                   <span style={{ fontSize: 12, lineHeight: 1, marginTop: 1, flexShrink: 0 }}>{row.ico}</span>
                   <span style={{ color: T.textMut, fontWeight: 700, minWidth: 80, flexShrink: 0 }}>{row.lbl}:</span>
-                  <span style={{ color: T.text, lineHeight: 1.35 }}>{row.val}</span>
+                  <span style={{ color: T.text, lineHeight: 1.35, flex: 1 }}>{row.val}</span>
+                  {/* Copy button on LIVE AKCIA row */}
+                  {row.isSell && (
+                    <button
+                      onClick={async () => {
+                        await navigator.clipboard.writeText(sellQty.toFixed(4));
+                        setCopied(true);
+                        setTimeout(() => setCopied(false), 1500);
+                      }}
+                      style={{ background: 'transparent', border: `1px solid ${copied ? T.green : T.border}`,
+                        borderRadius: 5, padding: '2px 6px', cursor: 'pointer',
+                        display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0,
+                        color: copied ? T.green : T.textMut, transition: 'all 0.2s ease' }}
+                      title="Kopírovať množstvo"
+                    >
+                      {copied
+                        ? <><Check size={9}/><span style={{ fontSize: 8, fontWeight: 700 }}>Skopírované!</span></>
+                        : <><Copy size={9}/><span style={{ fontSize: 8 }}>Kopírovať</span></>}
+                    </button>
+                  )}
                 </div>
               ))}
-              <button onClick={() => { const c = loadCooldown(); c[sym] = currentPrice; saveCooldown(c); setOpen(false); }}
-                style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 5,
-                  background: 'rgba(239,68,68,0.12)', border: '1px solid rgba(239,68,68,0.30)',
-                  borderRadius: 5, padding: '5px 10px', color: T.red, fontSize: 9, fontWeight: 700, cursor: 'pointer' }}>
-                <Lock size={9}/> Potvrď predaj → Aktivuj cooldown (+5% recovery)
+
+              {/* ── Confirm sell button ── */}
+              <button
+                className={sellPct >= 10 ? 'animate-pulse' : ''}
+                onClick={() => {
+                  confirmSell(sym, sellQty, currentPrice);
+                  onConfirm();
+                  setOpen(false);
+                }}
+                style={{
+                  marginTop: 10, width: '100%',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+                  background: sellPct >= 10 ? 'rgba(239,68,68,0.85)' : 'rgba(234,88,12,0.85)',
+                  border: `1px solid ${sellPct >= 10 ? 'rgba(239,68,68,0.6)' : 'rgba(249,115,22,0.6)'}`,
+                  borderRadius: 7, padding: '9px 14px',
+                  color: '#fff', fontSize: 11, fontWeight: 800, cursor: 'pointer',
+                  letterSpacing: '0.04em', textTransform: 'uppercase' as const,
+                  boxShadow: sellPct >= 10 ? '0 0 12px rgba(239,68,68,0.35)' : '0 0 8px rgba(234,88,12,0.25)',
+                  fontFamily: 'monospace',
+                }}
+              >
+                <Lock size={12}/>
+                Potvrdiť odpredaj · {sellQty.toFixed(4)} {sym} → Profit Reservoir
               </button>
+              <p style={{ fontSize: 8, color: T.textMut, textAlign: 'center' as const, marginTop: 5, lineHeight: 1.4 }}>
+                ↑ Odpočíta holdings · Pripočíta ${(sellQty * currentPrice).toFixed(2)} do Voľný cash · Aktivuje cooldown +5%
+              </p>
             </div>
           )}
 
@@ -422,6 +487,8 @@ export function LiveDcaOutRadar() {
   });
 
   const [dcaPrices, setDcaPricesState] = useState(loadDcaPrices);
+  // incrementing this forces TokenCard children to re-read localStorage after confirm
+  const [confirmKey, setConfirmKey] = useState(0);
   const updateDcaPrice = useCallback((sym: DcaT, v: number) => {
     setDcaPricesState(prev => { const n = { ...prev, [sym]: v }; saveDcaPrices(n); return n; });
   }, []);
@@ -528,13 +595,14 @@ export function LiveDcaOutRadar() {
         )}
         {(['BTC', 'ETH', 'SOL'] as DcaT[]).map(sym => (
           <TokenCard
-            key={sym}
+            key={`${sym}-${confirmKey}`}
             sym={sym}
             currentPrice={livePrices[sym]}
             rsi={rsi[sym]}
             fg={fgValue}
             dcaPrice={dcaPrices[sym] ?? 0}
             onDcaChange={v => updateDcaPrice(sym, v)}
+            onConfirm={() => setConfirmKey(k => k + 1)}
           />
         ))}
       </div>
