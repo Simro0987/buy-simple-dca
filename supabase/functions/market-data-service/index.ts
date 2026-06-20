@@ -1,16 +1,16 @@
 // Live market data aggregator for the DCA engine.
 //
 // STRICT DATA SOURCE CONTRACT (hardcoded — do NOT swap providers):
-//   • BTC / ETH price & 200WMA  → Yahoo Finance  (query1.finance.yahoo.com)
-//   • BTC Mayer Multiple / 200d → CoinGecko      (api.coingecko.com)
-//   • Solana TVL                → DefiLlama      (api.llama.fi)
+//   • BTC / ETH / SOL klines (price, 200WMA, ATR, RSI) → Binance Public REST
+//     (api.binance.com/api/v3/klines) — Yahoo Finance is BANNED because it
+//     hard-blocks serverless edge IPs (403/429).
+//   • BTC Mayer Multiple / 200d → CoinGecko (api.coingecko.com)
+//   • Solana TVL                → DefiLlama (api.llama.fi)
 //   • Token Unlocks (>3% supply, 30d) → DefiLlama emission index
-//                                 (token.unlocks.app compatible schema)
 //   • Fear & Greed (consumed client-side) → Alternative.me
 //
 // NO APPROXIMATIONS. If a source is unreachable the response uses the cached
-// value or the hardcoded fallback constants below (Realized 53600, Mining
-// 50000, 200WMA BTC 48500 / ETH 2350, Sol TVL 11.5B). Never fabricate data.
+// value or the hardcoded fallback constants below. Never fabricate data.
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,30 +25,24 @@ const TTL_MS = 6 * 60 * 60 * 1000;
 function readCache<T>(key: string): T | null {
   const c = cache.get(key) as Cached<T> | undefined;
   if (!c) return null;
-  if (Date.now() - c.ts > TTL_MS * 4) return c.data; // serve very stale on failure
+  if (Date.now() - c.ts > TTL_MS * 4) return c.data;
   return c.data;
 }
 function writeCache<T>(key: string, data: T) {
   cache.set(key, { ts: Date.now(), data: data as unknown });
 }
 
-// Fallback constants — "Macro Support" cluster averages.
-// IMPORTANT: ATR fallbacks per-asset MUST be independent (no shared constant
-// between ETH and SOL) so the per-coin MKT/LMT splits diverge naturally.
 const FALLBACKS = {
   btc200wma: 48500,
-  eth200wma: 2350,
   btcMayer: 1.15,
   btcRealizedPrice: 53600,
   btcMiningCost: 50000,
   solanaTvl: 11_500_000_000,
   unlocksWarning: [] as Array<{ symbol: string; pct: number; date: string }>,
-  // Per-asset 14D ATR % fallback — historicky distinct, NEVER shared.
   atr14d: { BTC: 2.0, ETH: 2.8, SOL: 4.2 } as Record<string, number>,
 };
 
 async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown | null> {
-  // 1-retry fallback: if Yahoo rejects (429/5xx/timeout), wait 1500ms and retry once.
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
@@ -56,7 +50,6 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
       const res = await fetch(url, { ...init, signal: ctrl.signal });
       clearTimeout(t);
       if (res.ok) return await res.json();
-      // Retry only on transient errors
       if (attempt === 0 && (res.status === 429 || res.status >= 500)) {
         await new Promise(r => setTimeout(r, 1500));
         continue;
@@ -73,92 +66,98 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
   return null;
 }
 
-// Yahoo Finance weekly closes — strict 200 COMPLETED-week MA.
-// HARD PURGE: cache is bypassed for 200WMA. Every request performs a fresh
-// cold-start fetch. We also reject stale "ghost" values >20% deviation from
-// current price (sanity check) — caller will mark the field unavailable.
-async function fetch200WMA(symbol: string, fallback: number, currentPrice?: number): Promise<{ value: number; stale: boolean }> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1wk&range=10y&_=${Date.now()}`;
-  const json = await safeFetchJson(url, { cache: 'no-store' }) as {
-    chart?: { result?: Array<{
-      timestamp?: number[];
-      indicators?: { quote?: Array<{ close?: number[] }> };
-    }> }
-  } | null;
-  const result = json?.chart?.result?.[0];
-  const rawCloses = result?.indicators?.quote?.[0]?.close ?? [];
-  const timestamps = result?.timestamp ?? [];
-  const nowSec = Math.floor(Date.now() / 1000);
-  const oneWeekSec = 7 * 86400;
-  const pairs: Array<{ t: number; c: number }> = [];
-  for (let i = 0; i < rawCloses.length; i++) {
-    const c = rawCloses[i];
-    const t = timestamps[i] ?? 0;
-    if (typeof c !== 'number' || !(c > 0)) continue;
-    if (t > 0 && nowSec - t < oneWeekSec) continue;
-    pairs.push({ t, c });
-  }
-  if (pairs.length < 200) return { value: fallback, stale: true };
-  const slice = pairs.slice(-200).map(p => p.c);
-  const ma = slice.reduce((s, v) => s + v, 0) / slice.length;
-  // HARD VALIDATION: if deviation from current price > 20%, treat as stale ghost.
-  if (typeof currentPrice === 'number' && currentPrice > 0) {
-    const dev = Math.abs((currentPrice - ma) / ma) * 100;
-    if (dev > 20) {
-      console.error(`[market-data-service] Cache Stale — ${symbol} 200WMA deviation ${dev.toFixed(1)}% > 20% threshold. Rejecting value.`);
-      return { value: ma, stale: true };
+type BinanceKline = [number, string, string, string, string, string, ...unknown[]];
+
+/**
+ * Fetch Binance klines and return parsed OHLC arrays.
+ * Index map: [openTime, open, high, low, close, volume, ...]
+ */
+async function fetchBinanceKlines(symbol: string, interval: string, limit: number): Promise<{
+  closes: number[]; highs: number[]; lows: number[];
+} | null> {
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&_=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store' }) as BinanceKline[] | null;
+  if (!Array.isArray(json) || json.length === 0) return null;
+  // Drop the last (possibly incomplete) candle — Binance returns the live one.
+  const completed = json.slice(0, -1);
+  const closes: number[] = [];
+  const highs: number[] = [];
+  const lows: number[] = [];
+  for (const k of completed) {
+    const c = parseFloat(k[4]);
+    const h = parseFloat(k[2]);
+    const l = parseFloat(k[3]);
+    if (Number.isFinite(c) && c > 0) {
+      closes.push(c);
+      highs.push(h);
+      lows.push(l);
     }
   }
-  return { value: ma, stale: false };
+  // Also expose the live last close as the current price (caller uses last of closes).
+  const lastLive = parseFloat(json[json.length - 1][4]);
+  if (Number.isFinite(lastLive) && lastLive > 0) {
+    closes.push(lastLive);
+    highs.push(parseFloat(json[json.length - 1][2]));
+    lows.push(parseFloat(json[json.length - 1][3]));
+  }
+  return { closes, highs, lows };
 }
 
 /**
- * Independent 14D ATR % per asset from Yahoo daily OHLC.
- * Each symbol uses its OWN history and its OWN fallback constant —
- * NO shared constant across ETH/SOL so their splits diverge naturally.
+ * BTC 200WMA from Binance weekly closes (excludes live in-progress weekly candle).
+ */
+async function fetch200WMA_BTC(currentPrice?: number): Promise<{ value: number; stale: boolean; price: number }> {
+  const k = await fetchBinanceKlines('BTCUSDT', '1w', 210);
+  if (!k || k.closes.length < 201) {
+    return { value: FALLBACKS.btc200wma, stale: true, price: currentPrice ?? 0 };
+  }
+  // Exclude the live candle (last element) from the 200WMA computation.
+  const completed = k.closes.slice(0, -1);
+  const slice = completed.slice(-200);
+  const ma = slice.reduce((s, v) => s + v, 0) / slice.length;
+  const livePrice = k.closes[k.closes.length - 1];
+  if (typeof currentPrice === 'number' && currentPrice > 0) {
+    const dev = Math.abs((currentPrice - ma) / ma) * 100;
+    if (dev > 50) {
+      console.error(`[market-data-service] BTC 200WMA sanity reject: dev ${dev.toFixed(1)}%`);
+      return { value: ma, stale: true, price: livePrice };
+    }
+  }
+  return { value: ma, stale: false, price: livePrice };
+}
+
+/**
+ * 14D Wilder ATR % from Binance daily OHLC.
  */
 async function fetchAtr14d(symbol: string): Promise<number> {
   const key = `atr14:${symbol}`;
-  const fallback = FALLBACKS.atr14d[symbol.split('-')[0]] ?? 3.0;
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=2mo`;
-  const json = await safeFetchJson(url) as { chart?: { result?: Array<{ indicators?: { quote?: Array<{ high?: number[]; low?: number[]; close?: number[] }> } }> } } | null;
-  const q = json?.chart?.result?.[0]?.indicators?.quote?.[0];
-  const highs = q?.high ?? [];
-  const lows = q?.low ?? [];
-  const closes = q?.close ?? [];
-  const n = Math.min(highs.length, lows.length, closes.length);
-  if (n < 16) {
-    const cached = readCache<number>(key);
-    return cached ?? fallback;
+  const baseSym = symbol.replace('USDT', '');
+  const fallback = FALLBACKS.atr14d[baseSym] ?? 3.0;
+  const k = await fetchBinanceKlines(symbol, '1d', 60);
+  if (!k || k.closes.length < 16) {
+    return readCache<number>(key) ?? fallback;
   }
+  const { highs, lows, closes } = k;
+  const n = closes.length;
   const trs: number[] = [];
   for (let i = Math.max(1, n - 14); i < n; i++) {
     const h = highs[i], l = lows[i], pc = closes[i - 1];
-    if (typeof h !== 'number' || typeof l !== 'number' || typeof pc !== 'number') continue;
     const tr = Math.max(h - l, Math.abs(h - pc), Math.abs(l - pc));
     if (pc > 0) trs.push((tr / pc) * 100);
   }
-  if (trs.length < 7) {
-    const cached = readCache<number>(key);
-    return cached ?? fallback;
-  }
+  if (trs.length < 7) return readCache<number>(key) ?? fallback;
   const atr = trs.reduce((s, v) => s + v, 0) / trs.length;
   writeCache(key, atr);
   return atr;
 }
 
 /**
- * 14D Wilder RSI from Yahoo daily closes. Cache busted (`Date.now()` + `no-store`).
- * Returns null on failure so UI can show "N/A (Syncing...)" instead of crashing.
+ * 14D Wilder RSI from Binance daily closes. 125 candles → proper smoothing convergence.
  */
 async function fetchRsi14d(symbol: string): Promise<number | null> {
-  // 14D Wilder RSI requires ≥100 daily closes for proper smoothing convergence.
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo&_=${Date.now()}`;
-  const json = await safeFetchJson(url, { cache: 'no-store' }) as {
-    chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: number[] }> } }> }
-  } | null;
-  const closes = (json?.chart?.result?.[0]?.indicators?.quote?.[0]?.close ?? [])
-    .filter((c): c is number => typeof c === 'number' && c > 0);
+  const k = await fetchBinanceKlines(symbol, '1d', 125);
+  if (!k) return null;
+  const closes = k.closes;
   if (closes.length < 16) return null;
   let gains = 0, losses = 0;
   for (let i = 1; i <= 14; i++) {
@@ -180,7 +179,6 @@ async function fetchRsi14d(symbol: string): Promise<number | null> {
   return Math.max(0, Math.min(100, rsi));
 }
 
-// Mayer Multiple = price / 200d MA (BTC).
 async function fetchMayerMultiple(): Promise<{ value: number; price: number; ma200d: number }> {
   const key = 'mayer';
   try {
@@ -188,7 +186,6 @@ async function fetchMayerMultiple(): Promise<{ value: number; price: number; ma2
     const json = await safeFetchJson(url) as { prices?: [number, number][] } | null;
     const prices = json?.prices ?? [];
     if (prices.length >= 200) {
-      // bucketize daily
       const buckets = new Map<string, number>();
       for (const [ts, p] of prices) {
         buckets.set(new Date(ts).toISOString().slice(0, 10), p);
@@ -219,9 +216,6 @@ async function fetchSolanaTvl(): Promise<number> {
   return readCache<number>(key) ?? FALLBACKS.solanaTvl;
 }
 
-// Approximation: DefiLlama doesn't have a free public "all unlocks" endpoint;
-// we query the emissions index for tracked symbols and flag >3% supply unlocks
-// in next 30 days. If the call fails, return [] (no warning rather than fake).
 async function fetchUpcomingUnlocks(symbols: string[]): Promise<Array<{ symbol: string; pct: number; date: string }>> {
   const key = 'unlocks';
   const results: Array<{ symbol: string; pct: number; date: string }> = [];
@@ -253,40 +247,39 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    // Mayer first → gives us current BTC price for sanity-checking 200WMA.
     const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr, ethRsi, solRsi] = await Promise.all([
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
-      fetchAtr14d('BTC-USD'),
-      fetchAtr14d('ETH-USD'),
-      fetchAtr14d('SOL-USD'),
-      fetchRsi14d('ETH-USD'),
-      fetchRsi14d('SOL-USD'),
+      fetchAtr14d('BTCUSDT'),
+      fetchAtr14d('ETHUSDT'),
+      fetchAtr14d('SOLUSDT'),
+      fetchRsi14d('ETHUSDT'),
+      fetchRsi14d('SOLUSDT'),
     ]);
 
-    // BTC-ONLY 200WMA — never applied to ETH/SOL per domain restriction.
-    const btc200 = await fetch200WMA('BTC-USD', FALLBACKS.btc200wma, mayer.price);
-    const btc_200wma_weekly = btc200.value;
-    const btc200wmaStale = btc200.stale;
+    // BTC-ONLY 200WMA (Binance weekly).
+    const btc200 = await fetch200WMA_BTC(mayer.price);
+
+    // Prefer live Binance price if Mayer (CoinGecko) returned 0.
+    const btcPrice = mayer.price > 0 ? mayer.price : btc200.price;
 
     const payload = {
       generatedAt: new Date().toISOString(),
       btc: {
-        ma200w: btc_200wma_weekly,
-        ma200wStale: btc200wmaStale,
+        ma200w: btc200.value,
+        ma200wStale: btc200.stale,
         mayerMultiple: mayer.value,
         ma200d: mayer.ma200d,
-        price: mayer.price,
+        price: btcPrice,
         realizedPrice: FALLBACKS.btcRealizedPrice,
         miningCost: FALLBACKS.btcMiningCost,
         atr14d: btcAtr,
       },
-      // ETH/SOL: NO 200WMA. CBBC + independent ATR + independent RSI14 only.
       eth: { atr14d: ethAtr, rsi14: ethRsi },
       sol: { tvl: solTvl, atr14d: solAtr, rsi14: solRsi },
       unlocks,
-      degraded: btc200wmaStale,
+      degraded: btc200.stale,
     };
 
     return new Response(JSON.stringify(payload), {
@@ -294,7 +287,6 @@ Deno.serve(async (req) => {
       headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=900' },
     });
   } catch (e) {
-    // Last resort: full fallback payload
     return new Response(JSON.stringify({
       generatedAt: new Date().toISOString(),
       btc: { ma200w: FALLBACKS.btc200wma, ma200wStale: true, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
@@ -302,6 +294,7 @@ Deno.serve(async (req) => {
       sol: { tvl: FALLBACKS.solanaTvl, atr14d: FALLBACKS.atr14d.SOL, rsi14: null },
       unlocks: FALLBACKS.unlocksWarning,
       degraded: true,
+      fallback: true,
       error: String(e),
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
