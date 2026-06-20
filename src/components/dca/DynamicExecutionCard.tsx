@@ -672,6 +672,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             <button
                               type="button"
                               onClick={() => {
+                                if (card.isFilled || card.isPending || (card.mode === 'market' && mDone)) {
+                                  toast.info('Cena je uzamknutá (order aktívny)');
+                                  return;
+                                }
                                 const current = card.effPrice;
                                 const input = window.prompt(
                                   `Upraviť cieľovú cenu pre ${symU} (${card.mode === 'market' ? 'Market' : 'Limit Dynamic'})`,
@@ -685,9 +689,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                                   [c]: { ...prev[c], [card.mode]: v },
                                 }));
                               }}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95"
+                              disabled={card.isFilled || card.isPending || (card.mode === 'market' && mDone)}
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                               aria-label="Upraviť cenu"
-                              title="Upraviť cenu"
+                              title={card.isFilled || card.isPending || (card.mode === 'market' && mDone) ? 'Cena uzamknutá' : 'Upraviť cenu'}
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
