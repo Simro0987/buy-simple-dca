@@ -25,6 +25,7 @@ import { WhatIfSimulator } from '@/components/portfolio/WhatIfSimulator';
 import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
 import { PnLOverviewCard } from '@/components/portfolio/PnLOverviewCard';
 import { DynamicTakeProfitCard } from '@/components/portfolio/DynamicTakeProfitCard';
+import { LiveDcaOutRadar } from '@/components/portfolio/LiveDcaOutRadar';
 
 
 interface Props { lang: Lang; }
@@ -334,6 +335,9 @@ function PortfolioPageInner({ lang }: Props) {
 
       {/* Manuálne držby & cost basis (pod per-token kartami) */}
       <InitialHoldingsCard />
+
+      {/* DCA-Out Radar — Live Risk Score model */}
+      <LiveDcaOutRadar />
     </div>
   );
 }
