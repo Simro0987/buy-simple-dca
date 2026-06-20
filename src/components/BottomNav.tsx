@@ -12,7 +12,7 @@ interface BottomNavProps {
 
 const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart3 }[] = [
   { id: 'home', labelSk: 'Domov', labelEn: 'Home', icon: Home },
-  { id: 'overview', labelSk: 'Prehľad', labelEn: 'Overview', icon: BarChart3 },
+  { id: 'overview', labelSk: 'Noviny', labelEn: 'Noviny', icon: BarChart3 },
   { id: 'portfolio', labelSk: 'Portfólio', labelEn: 'Portfolio', icon: PieChart },
   { id: 'dca', labelSk: 'DCA', labelEn: 'DCA', icon: Calculator },
   { id: 'swap', labelSk: 'Swap', labelEn: 'Swap', icon: Repeat },
