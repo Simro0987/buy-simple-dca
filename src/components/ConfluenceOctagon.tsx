@@ -13,6 +13,11 @@ import { useConfluenceMetrics, OctToken, DataQuality } from '@/hooks/useConfluen
 
 const TOKENS: OctToken[] = ['BTC', 'ETH', 'SOL'];
 
+interface Props {
+  activeToken?: OctToken;
+  onTokenChange?: (t: OctToken) => void;
+}
+
 function radarFill(avg: number): string {
   if (avg < 40) return '#10b981';
   if (avg > 70) return '#ef4444';
@@ -52,8 +57,14 @@ function StatusDot({ quality, liveCount }: { quality: DataQuality; liveCount: nu
   );
 }
 
-export function ConfluenceOctagon() {
-  const [active, setActive] = useState<OctToken>('BTC');
+export function ConfluenceOctagon({ activeToken: externalToken, onTokenChange }: Props) {
+  const [internalToken, setInternalToken] = useState<OctToken>('BTC');
+  const active = externalToken ?? internalToken;
+
+  function handleTokenChange(t: OctToken) {
+    setInternalToken(t);
+    onTokenChange?.(t);
+  }
   const { metrics, isLoading, dataQuality, liveCount, refetch } = useConfluenceMetrics();
 
   const tokenData = metrics[active];
@@ -99,7 +110,7 @@ export function ConfluenceOctagon() {
         {TOKENS.map(t => (
           <button
             key={t}
-            onClick={() => setActive(t)}
+            onClick={() => handleTokenChange(t)}
             className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-[0.97] ${
               active === t ? 'text-background' : 'bg-secondary/40 text-muted-foreground hover:text-foreground'
             }`}

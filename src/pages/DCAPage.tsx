@@ -1,5 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
@@ -11,6 +10,7 @@ import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { ExecutionAdvisorCard } from '@/components/dca/ExecutionAdvisorCard';
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 import { MacroNewsTicker } from '@/components/MacroNewsTicker';
+import type { OctToken } from '@/hooks/useConfluenceMetrics';
 
 
 
@@ -183,6 +183,7 @@ export function DCAPage({ lang: _lang }: Props) {
   };
 
   const loading = pricesLoading || fgLoading || maLoading;
+  const [octagonToken, setOctagonToken] = useState<OctToken>('BTC');
   const rs = regimeStyle(plan.regime);
   const confStyle = plan.confidence === 'high'
     ? { bg: 'bg-emerald-500/15', text: 'text-emerald-400', label: 'High' }
@@ -393,10 +394,10 @@ export function DCAPage({ lang: _lang }: Props) {
       <ExecutionAdvisorCard />
 
       {/* CONFLUENCE OCTAGON — 8-os makro radarový indikátor akumulácia vs. eufória */}
-      <ConfluenceOctagon />
+      <ConfluenceOctagon activeToken={octagonToken} onTokenChange={setOctagonToken} />
 
-      {/* MACRO NEWS TICKER — top headline dňa s Flash Alertom */}
-      <MacroNewsTicker />
+      {/* MACRO NEWS TICKER — token-špecifické správy v slovenčine s Flash Alertom */}
+      <MacroNewsTicker activeToken={octagonToken} />
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">

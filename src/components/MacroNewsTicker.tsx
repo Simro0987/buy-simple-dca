@@ -1,77 +1,104 @@
 /**
- * MacroNewsTicker — top macro headline of the day with Flash Alert
+ * MacroNewsTicker — token-specific top headline in Slovak with Flash Alert
  *
- * Data source (100 % free, no API key):
- *   rss2json.com  →  CoinDesk RSS  (primary)
- *                 →  Cointelegraph RSS  (fallback)
- * Free tier: 10 000 req/day per IP, no registration needed.
+ * Data sources (100 % free, no API key required):
+ *   rss2json.com   → CoinDesk / Cointelegraph / The Block RSS  (free, 10k req/day)
+ *   MyMemory API   → English → Slovak translation              (free, 5 000 chars/day)
+ *
+ * Headline is filtered for the active token (BTC / ETH / SOL).
+ * If no token-specific article exists, best macro article is shown instead.
+ * Flash Alert triggers on macro-critical keywords in the Slovak translation.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { Zap, ExternalLink, RefreshCw, Radio, AlertTriangle } from 'lucide-react';
+import type { OctToken } from '@/hooks/useConfluenceMetrics';
 
-// ─── types ───────────────────────────────────────────────────────────────────
-
-interface RssItem {
-  title: string;
-  link: string;
-  pubDate: string;
-  description: string;
-  author?: string;
-}
-
-interface Rss2JsonResponse {
-  status: string;
-  feed?: { title: string; link: string };
-  items?: RssItem[];
-}
+// ─── types ────────────────────────────────────────────────────────────────────
 
 export interface MacroNews {
-  title: string;
+  titleSk: string;     // Slovak translation
+  titleEn: string;     // Original English (used as fallback)
   url: string;
   pubDate: string;
   source: string;
   isFlash: boolean;
   flashTag: string;
   ageLabel: string;
+  tokenMatch: boolean; // whether article is specific to activeToken
 }
 
-// ─── flash keyword registry ──────────────────────────────────────────────────
+interface RssItem {
+  title: string;
+  link: string;
+  pubDate: string;
+  description?: string;
+}
+
+interface Rss2JsonResponse {
+  status: string;
+  items?: RssItem[];
+}
+
+// ─── token keyword maps ───────────────────────────────────────────────────────
+
+const TOKEN_KEYWORDS: Record<OctToken, string[]> = {
+  BTC: ['bitcoin', 'btc', 'satoshi', 'lightning', 'halving', 'miner', 'hash rate'],
+  ETH: ['ethereum', 'eth', 'ether', 'vitalik', 'defi', 'erc-20', 'staking', 'layer 2', 'l2'],
+  SOL: ['solana', 'sol', 'phantom', 'jito', 'raydium', 'pump.fun', 'meme coin'],
+};
+
+// ─── flash keywords (Slovak + English fallback) ───────────────────────────────
 
 const FLASH_KEYWORDS: { kw: string; tag: string }[] = [
-  { kw: 'fed',             tag: 'Fed'       },
-  { kw: 'federal reserve', tag: 'Fed'       },
-  { kw: 'rate cut',        tag: 'Rate Cut'  },
-  { kw: 'rate hike',       tag: 'Rate Hike' },
-  { kw: 'interest rate',   tag: 'Rates'     },
-  { kw: 'crash',           tag: 'Crash'     },
-  { kw: 'collapse',        tag: 'Kolaps'    },
-  { kw: 'dump',            tag: 'Dump'      },
-  { kw: 'surge',           tag: 'Surge'     },
-  { kw: 'all-time high',   tag: 'ATH'       },
-  { kw: 'etf',             tag: 'ETF'       },
-  { kw: 'sec',             tag: 'SEC'       },
-  { kw: 'hack',            tag: 'Hack'      },
-  { kw: 'exploit',         tag: 'Exploit'   },
-  { kw: 'bankrupt',        tag: 'Bankrot'   },
-  { kw: 'liquidat',        tag: 'Likvidácia'},
-  { kw: 'liquidity',       tag: 'Liquidita' },
-  { kw: 'ban',             tag: 'Zákaz'     },
-  { kw: 'regulation',      tag: 'Regulácia' },
-  { kw: 'inflation',       tag: 'Inflácia'  },
-  { kw: 'recession',       tag: 'Recesia'   },
-  { kw: 'emergency',       tag: 'Núdzový'   },
-  { kw: 'china',           tag: 'Čína'      },
-  { kw: 'war',             tag: 'Vojna'     },
-  { kw: 'sanction',        tag: 'Sankcie'   },
-  { kw: 'black swan',      tag: 'Black Swan'},
-  { kw: 'bubble',          tag: 'Bublina'   },
-  { kw: 'panic',           tag: 'Panika'    },
+  // Monetary policy
+  { kw: 'fed',         tag: 'Fed'       },
+  { kw: 'federal',     tag: 'Fed'       },
+  { kw: 'sadzb',       tag: 'Sadzby'    }, // sadzba/sadzby/sadzbách
+  { kw: 'rate cut',    tag: 'Rate Cut'  },
+  { kw: 'rate hike',   tag: 'Rate Hike' },
+  { kw: 'úrokov',      tag: 'Úroky'     },
+  // Market moves
+  { kw: 'crash',       tag: 'Crash'     },
+  { kw: 'krach',       tag: 'Krach'     },
+  { kw: 'kolaps',      tag: 'Kolaps'    },
+  { kw: 'pokles',      tag: 'Pokles'    },
+  { kw: 'dump',        tag: 'Dump'      },
+  { kw: 'surge',       tag: 'Surge'     },
+  { kw: 'nárast',      tag: 'Nárast'    },
+  { kw: 'all-time',    tag: 'ATH'       },
+  { kw: 'rekord',      tag: 'Rekord'    },
+  // Instruments / regulation
+  { kw: 'etf',         tag: 'ETF'       },
+  { kw: 'sec',         tag: 'SEC'       },
+  { kw: 'regulác',     tag: 'Regulácia' },
+  { kw: 'zákaz',       tag: 'Zákaz'     },
+  { kw: 'sankcí',      tag: 'Sankcie'   },
+  { kw: 'sanction',    tag: 'Sankcie'   },
+  { kw: 'ban',         tag: 'Zákaz'     },
+  // Liquidity / risk
+  { kw: 'likvid',      tag: 'Likvidita' }, // likvidita / likvidácia
+  { kw: 'liquidat',    tag: 'Likvidácia'},
+  { kw: 'hack',        tag: 'Hack'      },
+  { kw: 'exploit',     tag: 'Exploit'   },
+  { kw: 'bankrot',     tag: 'Bankrot'   },
+  { kw: 'bankrupt',    tag: 'Bankrot'   },
+  // Macro
+  { kw: 'inflác',      tag: 'Inflácia'  },
+  { kw: 'inflation',   tag: 'Inflácia'  },
+  { kw: 'recesia',     tag: 'Recesia'   },
+  { kw: 'recession',   tag: 'Recesia'   },
+  { kw: 'núdzov',      tag: 'Núdzový'   },
+  { kw: 'emergency',   tag: 'Núdzový'   },
+  { kw: 'čína',        tag: 'Čína'      },
+  { kw: 'china',       tag: 'Čína'      },
+  { kw: 'vojna',       tag: 'Vojna'     },
+  { kw: 'war',         tag: 'Vojna'     },
+  { kw: 'panik',       tag: 'Panika'    },
+  { kw: 'panic',       tag: 'Panika'    },
+  { kw: 'bublin',      tag: 'Bublina'   },
+  { kw: 'bubble',      tag: 'Bublina'   },
+  { kw: 'black swan',  tag: 'Black Swan'},
 ];
-
-const CRYPTO_KEYWORDS = ['bitcoin', 'btc', 'ethereum', 'eth', 'solana', 'sol',
-  'crypto', 'defi', 'nft', 'stablecoin', 'blockchain', 'coinbase', 'binance'];
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
 
 function detectFlash(text: string): { isFlash: boolean; tag: string } {
   const lower = text.toLowerCase();
@@ -81,166 +108,221 @@ function detectFlash(text: string): { isFlash: boolean; tag: string } {
   return { isFlash: false, tag: '' };
 }
 
-function scoreItem(item: RssItem): number {
-  const text  = (item.title + ' ' + (item.description ?? '')).toLowerCase();
-  let score   = 0;
-  if (detectFlash(item.title).isFlash) score += 20;
-  for (const kw of CRYPTO_KEYWORDS) if (text.includes(kw)) { score += 5; break; }
-  const ageMins = (Date.now() - new Date(item.pubDate).getTime()) / 60_000;
-  if (ageMins <  60) score += 12;
-  else if (ageMins < 360) score += 6;
-  else if (ageMins < 720) score += 2;
-  return score;
-}
+// ─── RSS sources ──────────────────────────────────────────────────────────────
+
+const RSS_SOURCES = [
+  { name: 'CoinDesk',      url: 'https://www.coindesk.com/arc/outboundfeeds/rss/'  },
+  { name: 'Cointelegraph', url: 'https://cointelegraph.com/rss'                    },
+  { name: 'The Block',     url: 'https://www.theblock.co/rss.xml'                  },
+];
+
+// ─── helpers ──────────────────────────────────────────────────────────────────
 
 function ageLabel(pubDate: string): string {
   const mins = Math.round((Date.now() - new Date(pubDate).getTime()) / 60_000);
   if (mins <   2) return 'práve teraz';
-  if (mins <  60) return `${mins}m`;
+  if (mins <  60) return `${mins} min`;
   const h = Math.floor(mins / 60);
-  if (h   <  24) return `${h}h`;
-  return `${Math.floor(h / 24)}d`;
+  if (h   <  24) return `${h} h`;
+  return `${Math.floor(h / 24)} d`;
 }
 
 async function fetchWithTimeout(url: string, ms: number): Promise<Response> {
   const ctrl  = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), ms);
-  try {
-    return await fetch(url, { signal: ctrl.signal });
-  } finally {
-    clearTimeout(timer);
-  }
+  try   { return await fetch(url, { signal: ctrl.signal }); }
+  finally { clearTimeout(timer); }
 }
 
-// ─── RSS sources ─────────────────────────────────────────────────────────────
-
-const SOURCES: { name: string; rssUrl: string }[] = [
-  {
-    name:   'CoinDesk',
-    rssUrl: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
-  },
-  {
-    name:   'Cointelegraph',
-    rssUrl: 'https://cointelegraph.com/rss',
-  },
-  {
-    name:   'The Block',
-    rssUrl: 'https://www.theblock.co/rss.xml',
-  },
-];
-
-async function fetchFromSource(source: { name: string; rssUrl: string }): Promise<MacroNews | null> {
-  const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(source.rssUrl)}&api_key=&count=10`;
-  const res  = await fetchWithTimeout(apiUrl, 9_000);
-  if (!res.ok) throw new Error(`rss2json ${source.name}: ${res.status}`);
-  const json = await res.json() as Rss2JsonResponse;
-  if (json.status !== 'ok' || !json.items?.length) throw new Error('empty feed');
-
-  const items   = json.items.slice(0, 10);
-  const best    = items.reduce((a, b) => scoreItem(a) >= scoreItem(b) ? a : b);
-  const { isFlash, tag } = detectFlash(best.title);
-
-  return {
-    title:    best.title.trim(),
-    url:      best.link,
-    pubDate:  best.pubDate,
-    source:   source.name,
-    isFlash,
-    flashTag: tag,
-    ageLabel: ageLabel(best.pubDate),
-  };
+/** MyMemory free translation API — 5 000 chars/day, no key required */
+async function translateToSk(text: string): Promise<string> {
+  try {
+    const url = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=en|sk`;
+    const res  = await fetchWithTimeout(url, 8_000);
+    if (!res.ok) return text;
+    const json = await res.json() as { responseStatus: number; responseData?: { translatedText: string } };
+    if (json.responseStatus === 200 && json.responseData?.translatedText) {
+      const t = json.responseData.translatedText.trim();
+      // MyMemory sometimes returns the original if it can't translate — detect
+      return t && t.toLowerCase() !== text.toLowerCase() ? t : text;
+    }
+  } catch { /* fallback to original */ }
+  return text;
 }
 
-// ─── localStorage cache ───────────────────────────────────────────────────────
+function scoreItem(item: RssItem, token: OctToken): number {
+  const text    = (item.title + ' ' + (item.description ?? '')).toLowerCase();
+  let score     = 0;
+  const ageMins = (Date.now() - new Date(item.pubDate).getTime()) / 60_000;
+  if (ageMins <  60) score += 12;
+  else if (ageMins < 360) score += 6;
+  else if (ageMins < 720) score += 2;
+  if (detectFlash(item.title).isFlash) score += 20;
+  for (const kw of TOKEN_KEYWORDS[token]) if (text.includes(kw)) { score += 30; break; }
+  return score;
+}
 
-const NEWS_CACHE_KEY = 'macro-news-cache-v1';
-const NEWS_CACHE_TTL = 15 * 60 * 1000; // 15 min
+// ─── localStorage cache per token ────────────────────────────────────────────
 
-function readNewsCache(): MacroNews | null {
+const CACHE_TTL = 20 * 60 * 1000; // 20 min
+
+function cacheKey(token: OctToken) { return `macro-news-v3-${token}`; }
+
+function readCache(token: OctToken): MacroNews | null {
   try {
-    const raw = localStorage.getItem(NEWS_CACHE_KEY);
+    const raw = localStorage.getItem(cacheKey(token));
     if (!raw) return null;
     const { ts, item } = JSON.parse(raw) as { ts: number; item: MacroNews };
-    if (Date.now() - ts > NEWS_CACHE_TTL) return null;
+    if (Date.now() - ts > CACHE_TTL) return null;
     return item;
   } catch { return null; }
 }
 
-function writeNewsCache(item: MacroNews) {
+function writeCache(token: OctToken, item: MacroNews) {
   try {
-    localStorage.setItem(NEWS_CACHE_KEY, JSON.stringify({ ts: Date.now(), item }));
+    localStorage.setItem(cacheKey(token), JSON.stringify({ ts: Date.now(), item }));
   } catch { /* quota — ignore */ }
 }
 
-// ─── static fallback shown when ALL RSS sources fail ─────────────────────────
+// ─── main fetch ───────────────────────────────────────────────────────────────
 
-const STATIC_FALLBACK: MacroNews = {
-  title:    'Správy momentálne nedostupné — skontroluj CoinDesk alebo Cointelegraph ručne.',
-  url:      'https://www.coindesk.com',
-  pubDate:  new Date().toISOString(),
-  source:   'Fallback',
-  isFlash:  false,
-  flashTag: '',
-  ageLabel: '—',
+async function fetchTopNews(token: OctToken): Promise<MacroNews> {
+  const tokenKws = TOKEN_KEYWORDS[token];
+
+  for (const src of RSS_SOURCES) {
+    try {
+      const apiUrl = `https://api.rss2json.com/v1/api.json?rss_url=${encodeURIComponent(src.url)}&count=15`;
+      const res    = await fetchWithTimeout(apiUrl, 10_000);
+      if (!res.ok) continue;
+      const json   = await res.json() as Rss2JsonResponse;
+      if (json.status !== 'ok' || !json.items?.length) continue;
+
+      const items = json.items.slice(0, 15);
+
+      // Score all items; prefer token-specific, then general flash, then freshest
+      const scored = items.map(i => ({ item: i, score: scoreItem(i, token) }));
+      scored.sort((a, b) => b.score - a.score);
+      const best = scored[0].item;
+
+      // Detect if best matches this token
+      const bodyLower   = (best.title + ' ' + (best.description ?? '')).toLowerCase();
+      const tokenMatch  = tokenKws.some(kw => bodyLower.includes(kw));
+
+      // Translate title to Slovak via MyMemory
+      const titleSk = await translateToSk(best.title);
+      const { isFlash, tag } = detectFlash(titleSk + ' ' + best.title);
+
+      const news: MacroNews = {
+        titleSk,
+        titleEn:    best.title,
+        url:        best.link,
+        pubDate:    best.pubDate,
+        source:     src.name,
+        isFlash,
+        flashTag:   tag,
+        ageLabel:   ageLabel(best.pubDate),
+        tokenMatch,
+      };
+      writeCache(token, news);
+      return news;
+    } catch { /* try next source */ }
+  }
+
+  throw new Error('all_sources_failed');
+}
+
+// ─── static per-token fallbacks ───────────────────────────────────────────────
+
+const FALLBACKS: Record<OctToken, MacroNews> = {
+  BTC: {
+    titleSk: 'Pre BTC nie sú momentálne dostupné správy. Skontroluj CoinDesk ručne.',
+    titleEn: 'No BTC news available. Check CoinDesk manually.',
+    url: 'https://www.coindesk.com', pubDate: new Date().toISOString(),
+    source: 'Fallback', isFlash: false, flashTag: '', ageLabel: '—', tokenMatch: false,
+  },
+  ETH: {
+    titleSk: 'Pre ETH nie sú momentálne dostupné správy. Skontroluj Cointelegraph ručne.',
+    titleEn: 'No ETH news available.',
+    url: 'https://cointelegraph.com', pubDate: new Date().toISOString(),
+    source: 'Fallback', isFlash: false, flashTag: '', ageLabel: '—', tokenMatch: false,
+  },
+  SOL: {
+    titleSk: 'Pre SOL nie sú momentálne dostupné správy. Skontroluj The Block ručne.',
+    titleEn: 'No SOL news available.',
+    url: 'https://www.theblock.co', pubDate: new Date().toISOString(),
+    source: 'Fallback', isFlash: false, flashTag: '', ageLabel: '—', tokenMatch: false,
+  },
 };
 
 // ─── component ────────────────────────────────────────────────────────────────
 
-export function MacroNewsTicker() {
-  const [news,    setNews]    = useState<MacroNews | null>(() => readNewsCache());
-  const [loading, setLoading] = useState(!readNewsCache());
-  const [error,   setError]   = useState(false);
+interface Props { activeToken: OctToken }
 
-  const load = useCallback(async () => {
+const TOKEN_LABEL: Record<OctToken, string> = {
+  BTC: 'Bitcoin', ETH: 'Ethereum', SOL: 'Solana',
+};
+
+export function MacroNewsTicker({ activeToken }: Props) {
+  const [news,    setNews]    = useState<MacroNews | null>(() => readCache(activeToken));
+  const [loading, setLoading] = useState(!readCache(activeToken));
+  const [apiErr,  setApiErr]  = useState(false);
+
+  const load = useCallback(async (token: OctToken) => {
+    // Serve cache instantly if fresh
+    const cached = readCache(token);
+    if (cached) { setNews(cached); setLoading(false); return; }
+
     setLoading(true);
-    setError(false);
-
-    for (const source of SOURCES) {
-      try {
-        const item = await fetchFromSource(source);
-        if (item) {
-          setNews(item);
-          writeNewsCache(item);
-          setLoading(false);
-          return;
-        }
-      } catch {
-        // try next source
-      }
+    setApiErr(false);
+    try {
+      const item = await fetchTopNews(token);
+      setNews(item);
+    } catch {
+      setNews(FALLBACKS[token]);
+      setApiErr(true);
+    } finally {
+      setLoading(false);
     }
-
-    // All sources failed — use cache if available, else static fallback
-    const cached = readNewsCache();
-    setNews(cached ?? STATIC_FALLBACK);
-    setError(true);
-    setLoading(false);
   }, []);
 
+  // Reload when token changes
   useEffect(() => {
-    if (!news) { void load(); }
-    // Auto-refresh every 15 min
-    const id = setInterval(() => { void load(); }, NEWS_CACHE_TTL);
+    void load(activeToken);
+    const id = setInterval(() => { void load(activeToken); }, CACHE_TTL);
     return () => clearInterval(id);
-  }, [load, news]);
+  }, [activeToken, load]);
 
   const isFlash = !!news?.isFlash;
+  const tokenColor: Record<OctToken, string> = {
+    BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF',
+  };
 
   return (
     <div
-      className={`glass-card p-3 transition-colors ${
-        isFlash
-          ? 'border-amber-500/40 bg-amber-500/5'
-          : ''
+      className={`glass-card p-3 transition-all ${
+        isFlash ? 'border-amber-500/40 bg-amber-500/5' : ''
       }`}
     >
-      {/* Header row */}
+      {/* Header */}
       <div className="flex items-center gap-1.5 mb-2">
         <Radio className="w-3 h-3 text-muted-foreground" />
-        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold flex-1">
-          Macro News · Top Story
-        </p>
+        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">
+            Makro správy
+          </p>
+          {/* Token badge */}
+          <span
+            className="px-1.5 py-0.5 rounded text-[8px] font-bold text-background"
+            style={{ backgroundColor: tokenColor[activeToken] }}
+          >
+            {activeToken}
+          </span>
+          {!loading && news?.tokenMatch && (
+            <span className="text-[8px] text-muted-foreground/50">· špecifické pre {TOKEN_LABEL[activeToken]}</span>
+          )}
+        </div>
         {isFlash && (
-          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40">
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 shrink-0">
             <Zap className="w-2.5 h-2.5 text-amber-400" />
             <span className="text-[8px] font-bold text-amber-400 uppercase tracking-wide">
               Flash · {news?.flashTag}
@@ -248,30 +330,31 @@ export function MacroNewsTicker() {
           </span>
         )}
         <button
-          onClick={load}
+          onClick={() => { void load(activeToken); }}
           disabled={loading}
-          className="p-0.5 rounded hover:bg-secondary transition-colors disabled:opacity-40"
+          className="p-0.5 rounded hover:bg-secondary transition-colors disabled:opacity-40 shrink-0"
           title="Obnoviť správy"
         >
           <RefreshCw className={`w-3 h-3 text-muted-foreground ${loading ? 'animate-spin' : ''}`} />
         </button>
       </div>
 
-      {/* Loading */}
+      {/* Loading skeleton */}
       {loading && (
-        <div className="space-y-1.5">
+        <div className="space-y-1.5 py-1">
           <div className="h-3 bg-secondary/50 rounded animate-pulse w-full" />
-          <div className="h-3 bg-secondary/30 rounded animate-pulse w-3/4" />
+          <div className="h-3 bg-secondary/30 rounded animate-pulse w-4/5" />
+          <div className="h-2.5 bg-secondary/20 rounded animate-pulse w-1/3 mt-1" />
         </div>
       )}
 
-      {/* Error + content (show fallback chart, not blank) */}
+      {/* Content */}
       {!loading && news && (
         <>
-          {error && (
+          {apiErr && (
             <div className="flex items-center gap-1.5 mb-1.5 text-[9px] text-rose-400/80">
               <AlertTriangle className="w-3 h-3 shrink-0" />
-              RSS nedostupné — zobrazená posledná cachovaná správa
+              RSS nedostupné — zobrazený fallback
             </div>
           )}
 
@@ -279,23 +362,29 @@ export function MacroNewsTicker() {
             href={news.url}
             target="_blank"
             rel="noopener noreferrer"
-            className={`group flex items-start gap-1.5 rounded-lg p-2 transition-colors hover:bg-secondary/40 ${
+            className={`group flex items-start gap-2 rounded-lg p-2 transition-colors hover:bg-secondary/40 ${
               isFlash ? 'bg-amber-500/8' : 'bg-secondary/20'
             }`}
           >
             {isFlash
-              ? <Zap    className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
-              : <Radio  className="w-3.5 h-3.5 text-muted-foreground/50 mt-0.5 shrink-0" />
+              ? <Zap   className="w-3.5 h-3.5 text-amber-400 mt-0.5 shrink-0" />
+              : <Radio className="w-3.5 h-3.5 text-muted-foreground/40 mt-0.5 shrink-0" />
             }
             <div className="flex-1 min-w-0">
               <p className={`text-[11px] font-semibold leading-snug ${
                 isFlash ? 'text-amber-100' : 'text-foreground'
               }`}>
-                {news.title}
+                {news.titleSk}
               </p>
+              {/* Show English original if translation differs */}
+              {news.titleSk !== news.titleEn && (
+                <p className="text-[9px] text-muted-foreground/40 mt-0.5 italic leading-tight line-clamp-1">
+                  {news.titleEn}
+                </p>
+              )}
               <div className="flex items-center gap-1.5 mt-1">
                 <span className="text-[9px] text-muted-foreground font-medium">{news.source}</span>
-                <span className="text-[9px] text-muted-foreground/50">·</span>
+                <span className="text-[9px] text-muted-foreground/40">·</span>
                 <span className="text-[9px] text-muted-foreground/60 tabular-nums">{news.ageLabel}</span>
               </div>
             </div>
@@ -306,7 +395,7 @@ export function MacroNewsTicker() {
 
       {/* Footer */}
       <p className="text-[9px] text-muted-foreground/40 text-center mt-2">
-        Správy: CoinDesk / Cointelegraph / The Block RSS · rss2json.com (free)
+        Správy: CoinDesk / Cointelegraph / The Block RSS (Preložené · MyMemory free)
       </p>
     </div>
   );
