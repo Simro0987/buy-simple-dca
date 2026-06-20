@@ -30,7 +30,6 @@ const CARDS: HubCard[] = [
   { id: 'profit', label: 'Zisky', desc: 'PnL & profit-taking', icon: DollarSign, gradient: 'from-emerald-500/20 to-emerald-500/5' },
   { id: 'staking', label: 'Staking', desc: 'ETH & SOL výnosy', icon: Coins, gradient: 'from-yellow-500/20 to-yellow-500/5' },
   { id: 'wallets', label: 'Wallety', desc: 'On-chain balance', icon: Wallet, gradient: 'from-orange-500/20 to-orange-500/5' },
-  { id: 'allocator', label: 'Alokátor', desc: 'Hold/Stake/Lend', icon: Calculator, gradient: 'from-fuchsia-500/20 to-fuchsia-500/5' },
   { id: 'settings', label: 'Nastavenia', desc: 'Telegram & alerty', icon: Settings, gradient: 'from-muted to-muted/30' },
 ];
 

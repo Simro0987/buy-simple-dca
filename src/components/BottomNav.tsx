@@ -1,7 +1,7 @@
-import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet, Home, Calculator as CalcIcon, Repeat, Bot } from 'lucide-react';
+import { BarChart3, Calculator, Zap, ClipboardList, Shield, Target, Settings, Sparkles, Activity, PieChart, DollarSign, Coins, Wallet, Home, Repeat, Bot } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 
-export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'swap' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'allocator' | 'agent' | 'settings';
+export type TabId = 'home' | 'overview' | 'portfolio' | 'dca' | 'swap' | 'risk' | 'analysis' | 'market' | 'profit' | 'staking' | 'wallets' | 'agent' | 'settings';
 
 interface BottomNavProps {
   active: TabId;
@@ -19,7 +19,6 @@ const tabs: { id: TabId; labelSk: string; labelEn: string; icon: typeof BarChart
   { id: 'analysis', labelSk: 'Analýza & Riziko', labelEn: 'Analysis & Risk', icon: Activity },
   { id: 'staking', labelSk: 'Stake', labelEn: 'Stake', icon: Coins },
   { id: 'wallets', labelSk: 'Wallet', labelEn: 'Wallet', icon: Wallet },
-  { id: 'allocator', labelSk: 'Alokátor', labelEn: 'Allocator', icon: CalcIcon },
   { id: 'agent', labelSk: 'AI Agent', labelEn: 'AI Agent', icon: Bot },
   { id: 'settings', labelSk: 'Nastav.', labelEn: 'Settings', icon: Settings },
 ];
