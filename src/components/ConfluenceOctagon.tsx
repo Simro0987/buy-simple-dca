@@ -208,10 +208,10 @@ export function ConfluenceOctagon() {
           {/* Data source footer */}
           <p className="text-[9px] text-muted-foreground/40 text-center mt-1 leading-relaxed">
             {dataQuality === 'live'
-              ? 'Všetky dostupné dáta live · jasné os = live, tmavé = aproximácia'
+              ? 'Binance Weekly Klines · alternative.me · Binance Futures — všetko live'
               : dataQuality === 'partial'
-              ? 'Čiastočné live dáta · jasné = live, tmavé = aproximácia'
-              : 'Záložné dáta · API nedostupné'}
+              ? 'Čiastočné live dáta · niektoré tokeny používajú fallback hodnoty'
+              : 'Záložné dáta · Binance / alternative.me nedostupné'}
           </p>
         </>
       )}
