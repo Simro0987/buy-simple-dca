@@ -5,14 +5,49 @@ import { useMarketData } from './useMarketData';
 import { useAdvancedMarket } from './useAdvancedMarket';
 
 export type OctToken = 'BTC' | 'ETH' | 'SOL';
+export type DataQuality = 'live' | 'partial' | 'disconnected';
 
-export interface AxisPoint { axis: string; value: number }
+export interface AxisPoint { axis: string; value: number; live: boolean }
 export interface OctTokenMetrics { axes: AxisPoint[]; color: string }
 
 const COLORS: Record<OctToken, string> = {
   BTC: '#F7931A',
   ETH: '#627EEA',
   SOL: '#9945FF',
+};
+
+// Neutral baseline shown when all APIs fail
+const FALLBACK_METRICS: Record<OctToken, OctTokenMetrics> = {
+  BTC: { color: COLORS.BTC, axes: [
+    { axis: 'W-RSI',      value: 45, live: false },
+    { axis: 'Macro MFI',  value: 42, live: false },
+    { axis: 'Bollinger',  value: 50, live: false },
+    { axis: 'Fear/Greed', value: 40, live: false },
+    { axis: '200WMA',     value: 48, live: false },
+    { axis: 'On-chain',   value: 44, live: false },
+    { axis: 'MVRV',       value: 46, live: false },
+    { axis: 'Funding',    value: 50, live: false },
+  ]},
+  ETH: { color: COLORS.ETH, axes: [
+    { axis: 'W-RSI',      value: 55, live: false },
+    { axis: 'Macro MFI',  value: 52, live: false },
+    { axis: 'Bollinger',  value: 50, live: false },
+    { axis: 'Fear/Greed', value: 40, live: false },
+    { axis: '200WMA',     value: 56, live: false },
+    { axis: 'On-chain',   value: 58, live: false },
+    { axis: 'MVRV',       value: 54, live: false },
+    { axis: 'Funding',    value: 50, live: false },
+  ]},
+  SOL: { color: COLORS.SOL, axes: [
+    { axis: 'W-RSI',      value: 62, live: false },
+    { axis: 'Macro MFI',  value: 58, live: false },
+    { axis: 'Bollinger',  value: 50, live: false },
+    { axis: 'Fear/Greed', value: 40, live: false },
+    { axis: '200WMA',     value: 60, live: false },
+    { axis: 'On-chain',   value: 64, live: false },
+    { axis: 'MVRV',       value: 59, live: false },
+    { axis: 'Funding',    value: 50, live: false },
+  ]},
 };
 
 function clamp(v: number, lo = 0, hi = 100) {
@@ -23,39 +58,25 @@ function bollingerToScore(pos: 'upper' | 'middle' | 'lower'): number {
   return pos === 'upper' ? 82 : pos === 'lower' ? 18 : 50;
 }
 
-/** Macro MFI proxy — price momentum with weekly bias */
 function approxMFI(change24h: number, change7d: number): number {
   return clamp(50 + change24h * 1.8 + change7d * 1.1);
 }
 
-/** 200WMA distance % → 0-100 */
 function wmaDistToScore(distPct: number): number {
   return clamp(50 + distPct * 0.55);
 }
 
-/** On-chain momentum proxy: 30d momentum + network health */
 function approxOnchain(change30d: number, health: 'strong' | 'moderate' | 'weak'): number {
   const base = (change30d + 35) / 70 * 100;
   const bonus = health === 'strong' ? 8 : health === 'weak' ? -8 : 0;
   return clamp(base + bonus);
 }
 
-/**
- * MVRV Z-Score proxy → 0-100
- * price / realizedPrice:  <1 = bottom (5–20), 1–2 = DCA zone (20–55),
- * 2–3.5 = caution (55–80), >3.5 = euphoria (80–95)
- */
 function mvrvToScore(price: number, realizedPrice: number): number {
   if (realizedPrice <= 0) return 50;
-  const mvrv = price / realizedPrice;
-  return clamp(((mvrv - 0.5) / 5) * 100);
+  return clamp(((price / realizedPrice - 0.5) / 5) * 100);
 }
 
-/**
- * Funding Rate → 0-100
- * Negative funding = shorts paying = bullish DCA context → low score
- * High positive = crowded longs = euphoria risk → high score
- */
 function fundingToScore(rate: number): number {
   return clamp(50 + rate * 1200);
 }
@@ -86,7 +107,20 @@ export function useConfluenceMetrics() {
   const { data: prices } = usePrices();
 
   const isLoading = tokenLoading || fgLoading || maLoading;
-  const hasError  = !!(tokenError && fgError);
+
+  // --- data quality ---------------------------------------------------------
+  // disconnected: no token data at all (primary CoinGecko API failed, no stale cache)
+  // partial     : token data present, but MVRV/Funding are approximated or market-data-service is in fallback mode
+  // live        : token data + fearGreed + market-data-service all fresh
+  const isDisconnected = !tokenData && !!tokenError;
+  const isMvrvFallback = !marketData || !!(marketData as { fallback?: boolean }).fallback;
+  const isFgFallback   = !fg && !!fgError;
+
+  const dataQuality: DataQuality = isDisconnected
+    ? 'disconnected'
+    : (isMvrvFallback || isFgFallback)
+      ? 'partial'
+      : 'live';
 
   async function refetch() {
     await Promise.allSettled([
@@ -95,52 +129,70 @@ export function useConfluenceMetrics() {
     ]);
   }
 
-  let metrics: Record<OctToken, OctTokenMetrics> | undefined;
+  // --- metrics computation --------------------------------------------------
+  let metrics: Record<OctToken, OctTokenMetrics>;
 
-  if (tokenData) {
+  if (!tokenData) {
+    // Use neutral fallback so the chart always renders
+    metrics = FALLBACK_METRICS;
+  } else {
     const fgValue      = fg?.value ?? 50;
+    const fgLive       = !!fg && !fgError;
     const fundingRate  = advMarket?.tradingMetrics?.fundingRate ?? 0;
     const fundingScore = fundingToScore(fundingRate);
+    const fundingLive  = !!advMarket;
 
     metrics = (['BTC', 'ETH', 'SOL'] as OctToken[]).reduce((acc, sym) => {
       const t = tokenData.find(x => x.symbol === sym);
-      if (!t) return acc;
+      if (!t) { acc[sym] = FALLBACK_METRICS[sym]; return acc; }
 
-      // 200WMA: BTC → actual distancePct; ETH/SOL → ATH-distance proxy
+      // 200WMA: BTC actual, ETH/SOL proxy
       let wmaScore: number;
+      let wmaLive: boolean;
       if (sym === 'BTC' && ma200) {
         wmaScore = wmaDistToScore(ma200.distancePct);
+        wmaLive  = true;
       } else {
         wmaScore = clamp(50 - t.athChangePercentage * 0.3);
+        wmaLive  = false;
       }
 
-      // MVRV: BTC → live price / realized price; ETH/SOL → ATH proxy
+      // MVRV: BTC from market-data-service; ETH/SOL proxy
       let mvrvScore: number;
-      if (sym === 'BTC') {
-        const livePrice     = prices?.bitcoin?.usd ?? marketData?.btc?.price ?? 0;
+      let mvrvLive: boolean;
+      if (sym === 'BTC' && !isMvrvFallback && marketData) {
+        const livePrice     = prices?.bitcoin?.usd ?? marketData.btc?.price ?? 0;
+        const realizedPrice = marketData.btc?.realizedPrice ?? 53600;
+        mvrvScore = mvrvToScore(livePrice, realizedPrice);
+        mvrvLive  = true;
+      } else if (sym === 'BTC') {
+        const livePrice     = prices?.bitcoin?.usd ?? 0;
         const realizedPrice = marketData?.btc?.realizedPrice ?? 53600;
         mvrvScore = mvrvToScore(livePrice, realizedPrice);
+        mvrvLive  = false; // market-data-service in fallback
       } else {
-        // athChangePercentage is negative (e.g. −40 = 40% below ATH = cheap)
         mvrvScore = clamp(50 - t.athChangePercentage * 0.28);
+        mvrvLive  = false;
       }
 
       acc[sym] = {
         color: COLORS[sym],
         axes: [
-          { axis: 'W-RSI',      value: clamp(t.rsi14) },
-          { axis: 'Macro MFI',  value: approxMFI(t.change24h, t.change7d) },
-          { axis: 'Bollinger',  value: bollingerToScore(t.bollingerPosition) },
-          { axis: 'Fear/Greed', value: clamp(fgValue) },
-          { axis: '200WMA',     value: wmaScore },
-          { axis: 'On-chain',   value: approxOnchain(t.change30d, t.networkHealth) },
-          { axis: 'MVRV',       value: mvrvScore },
-          { axis: 'Funding',    value: fundingScore },
+          { axis: 'W-RSI',      value: clamp(t.rsi14),                                     live: true        },
+          { axis: 'Macro MFI',  value: approxMFI(t.change24h, t.change7d),                 live: false       },
+          { axis: 'Bollinger',  value: bollingerToScore(t.bollingerPosition),               live: true        },
+          { axis: 'Fear/Greed', value: clamp(fgValue),                                     live: fgLive      },
+          { axis: '200WMA',     value: wmaScore,                                            live: wmaLive     },
+          { axis: 'On-chain',   value: approxOnchain(t.change30d, t.networkHealth),         live: false       },
+          { axis: 'MVRV',       value: mvrvScore,                                           live: mvrvLive    },
+          { axis: 'Funding',    value: fundingScore,                                        live: fundingLive },
         ],
       };
       return acc;
     }, {} as Record<OctToken, OctTokenMetrics>);
   }
 
-  return { metrics, isLoading, hasError, refetch };
+  const liveCount = metrics[(['BTC', 'ETH', 'SOL'] as OctToken[])[0]].axes.filter(a => a.live).length;
+
+  return { metrics, isLoading, dataQuality, liveCount, refetch };
 }
