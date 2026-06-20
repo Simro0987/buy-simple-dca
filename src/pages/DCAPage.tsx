@@ -9,7 +9,7 @@ import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCar
 
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { ExecutionAdvisorCard } from '@/components/dca/ExecutionAdvisorCard';
-import { ConfluenceHexagon } from '@/components/ConfluenceHexagon';
+import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 
 
 
@@ -391,8 +391,8 @@ export function DCAPage({ lang: _lang }: Props) {
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}
       <ExecutionAdvisorCard />
 
-      {/* CONFLUENCE HEXAGON — vizuálny radarový indikátor akumulácia vs. eufória */}
-      <ConfluenceHexagon />
+      {/* CONFLUENCE OCTAGON — 8-os makro radarový indikátor akumulácia vs. eufória */}
+      <ConfluenceOctagon />
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">
