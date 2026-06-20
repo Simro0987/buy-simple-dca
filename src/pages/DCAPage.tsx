@@ -10,6 +10,7 @@ import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCar
 import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { ExecutionAdvisorCard } from '@/components/dca/ExecutionAdvisorCard';
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
+import { MacroNewsTicker } from '@/components/MacroNewsTicker';
 
 
 
@@ -393,6 +394,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* CONFLUENCE OCTAGON — 8-os makro radarový indikátor akumulácia vs. eufória */}
       <ConfluenceOctagon />
+
+      {/* MACRO NEWS TICKER — top headline dňa s Flash Alertom */}
+      <MacroNewsTicker />
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">
