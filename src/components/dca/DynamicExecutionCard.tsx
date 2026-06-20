@@ -445,7 +445,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   <span className="text-xs font-bold text-foreground">{e.symbol}</span>
                   <span className="text-[9px] text-muted-foreground">váha {tokenLabel[c]} <span className="text-primary/80">· engine</span></span>
                   <span className="text-[9px] text-muted-foreground flex items-center gap-1">
-                    <Clock className="w-2.5 h-2.5" /> Yahoo · {syncLabel}
+                    <Clock className="w-2.5 h-2.5" /> Binance · {syncLabel}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">
