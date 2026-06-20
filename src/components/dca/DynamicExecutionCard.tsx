@@ -72,6 +72,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: fg } = useFearGreed();
   const { engine } = useMarketEngine();
   const { data: market } = useMarketData();
+  const marketDebugError = market?.debugError || market?.error || null;
   const [emergencyPaused] = useEmergencyPause();
   const syncLabel = (() => {
     const d = market?.generatedAt ? new Date(market.generatedAt) : null;
@@ -307,6 +308,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         </div>
       )}
 
+      {marketDebugError && (
+        <div className="rounded-lg border border-rose-500/70 bg-rose-500/15 px-3 py-2 text-[10px] font-bold leading-snug text-rose-200 break-words">
+          DEBUG market-data-service: {marketDebugError}
+        </div>
+      )}
+
       {isLoading && (
         <p className="text-[11px] text-muted-foreground">Načítavam 14D volatilitu a momentum…</p>
       )}
@@ -438,7 +445,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   <span className="text-xs font-bold text-foreground">{e.symbol}</span>
                   <span className="text-[9px] text-muted-foreground">váha {tokenLabel[c]} <span className="text-primary/80">· engine</span></span>
                   <span className="text-[9px] text-muted-foreground flex items-center gap-1">
-                    <Clock className="w-2.5 h-2.5" /> Yahoo · {syncLabel}
+                    <Clock className="w-2.5 h-2.5" /> Binance · {syncLabel}
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[10px] tabular-nums">

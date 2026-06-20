@@ -15,7 +15,17 @@
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Max-Age': '86400',
 };
+
+const debugErrors: string[] = [];
+
+function addDebug(message: string) {
+  const line = `[market-data-service] ${message}`;
+  debugErrors.push(line);
+  console.error(line);
+}
 
 // In-memory cache (per isolate). 6h TTL — graceful degradation source.
 type Cached<T> = { ts: number; data: T };
@@ -42,7 +52,7 @@ const FALLBACKS = {
   atr14d: { BTC: 2.0, ETH: 2.8, SOL: 4.2 } as Record<string, number>,
 };
 
-async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown | null> {
+async function safeFetchJson(url: string, init?: RequestInit, logFailures = true): Promise<unknown | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
@@ -50,12 +60,15 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
       const res = await fetch(url, { ...init, signal: ctrl.signal });
       clearTimeout(t);
       if (res.ok) return await res.json();
+      const body = await res.text().catch(() => 'unreadable body');
+      if (logFailures) addDebug(`fetch failed attempt=${attempt + 1} status=${res.status} url=${url} body=${body.slice(0, 220)}`);
       if (attempt === 0 && (res.status === 429 || res.status >= 500)) {
         await new Promise(r => setTimeout(r, 1500));
         continue;
       }
       return null;
-    } catch {
+    } catch (e) {
+      if (logFailures) addDebug(`fetch exception attempt=${attempt + 1} url=${url} error=${e instanceof Error ? e.message : String(e)}`);
       if (attempt === 0) {
         await new Promise(r => setTimeout(r, 1500));
         continue;
@@ -75,8 +88,8 @@ type BinanceKline = [number, string, string, string, string, string, ...unknown[
 async function fetchBinanceKlines(symbol: string, interval: string, limit: number): Promise<{
   closes: number[]; highs: number[]; lows: number[];
 } | null> {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&_=${Date.now()}`;
-  const json = await safeFetchJson(url, { cache: 'no-store' }) as BinanceKline[] | null;
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&endTime=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-store' } }) as BinanceKline[] | null;
   if (!Array.isArray(json) || json.length === 0) return null;
   // Drop the last (possibly incomplete) candle — Binance returns the live one.
   const completed = json.slice(0, -1);
@@ -220,7 +233,7 @@ async function fetchUpcomingUnlocks(symbols: string[]): Promise<Array<{ symbol: 
   const key = 'unlocks';
   const results: Array<{ symbol: string; pct: number; date: string }> = [];
   for (const sym of symbols) {
-    const json = await safeFetchJson(`https://api.llama.fi/emission/${sym.toLowerCase()}`) as {
+    const json = await safeFetchJson(`https://api.llama.fi/emission/${sym.toLowerCase()}`, undefined, false) as {
       metadata?: { circSupply?: number };
       unlockEvents?: Array<{ timestamp: number; noOfTokens?: number[] }>;
     } | null;
@@ -244,7 +257,8 @@ async function fetchUpcomingUnlocks(symbols: string[]): Promise<Array<{ symbol: 
 }
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  debugErrors.length = 0;
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
     const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr, ethRsi, solRsi] = await Promise.all([
@@ -280,13 +294,15 @@ Deno.serve(async (req) => {
       sol: { tvl: solTvl, atr14d: solAtr, rsi14: solRsi },
       unlocks,
       degraded: btc200.stale,
+      debugError: debugErrors.length ? debugErrors.join(' | ') : null,
     };
 
     return new Response(JSON.stringify(payload), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=900' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store, max-age=0' },
     });
   } catch (e) {
+    addDebug(`top-level error=${e instanceof Error ? e.message : String(e)}`);
     return new Response(JSON.stringify({
       generatedAt: new Date().toISOString(),
       btc: { ma200w: FALLBACKS.btc200wma, ma200wStale: true, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
@@ -295,7 +311,8 @@ Deno.serve(async (req) => {
       unlocks: FALLBACKS.unlocksWarning,
       degraded: true,
       fallback: true,
-      error: String(e),
+      error: e instanceof Error ? e.message : String(e),
+      debugError: debugErrors.join(' | '),
     }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

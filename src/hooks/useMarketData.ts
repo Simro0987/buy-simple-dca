@@ -4,11 +4,14 @@ import { supabase } from '@/integrations/supabase/client';
 export interface MarketDataPayload {
   generatedAt: string;
   btc: { ma200w: number; ma200wStale?: boolean; mayerMultiple: number; ma200d: number; price: number; realizedPrice: number; miningCost: number; atr14d?: number };
-  // 200WMA is BTC-only — ETH/SOL never carry this field. RSI14 (Yahoo daily) added for satellites.
+  // 200WMA is BTC-only — ETH/SOL never carry this field. RSI14 comes from Binance daily klines.
   eth: { atr14d?: number; rsi14?: number | null };
   sol: { tvl: number; atr14d?: number; rsi14?: number | null };
   unlocks: Array<{ symbol: string; pct: number; date: string }>;
   degraded?: boolean;
+  fallback?: boolean;
+  error?: string;
+  debugError?: string | null;
 }
 
 const CACHE_KEY = 'dca-market-data-v2';
@@ -31,12 +34,18 @@ function readCache(): MarketDataPayload | null {
 async function fetchMarketData(): Promise<MarketDataPayload> {
   try {
     const { data, error } = await supabase.functions.invoke('market-data-service');
-    if (error || !data) throw error ?? new Error('empty');
+    if (error || !data) {
+      const message = error?.message ?? 'empty market-data-service response';
+      const cached = readCache();
+      return { ...(cached ?? FALLBACK), fallback: true, debugError: message, error: message };
+    }
     const payload = data as MarketDataPayload;
     try { localStorage.setItem(CACHE_KEY, JSON.stringify(payload)); } catch { /* noop */ }
     return payload;
-  } catch {
-    return readCache() ?? FALLBACK;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    const cached = readCache();
+    return { ...(cached ?? FALLBACK), fallback: true, debugError: message, error: message };
   }
 }
 
