@@ -4,7 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 export interface MarketDataPayload {
   generatedAt: string;
   btc: { ma200w: number; ma200wStale?: boolean; mayerMultiple: number; ma200d: number; price: number; realizedPrice: number; miningCost: number; atr14d?: number };
-  // 200WMA is BTC-only — ETH/SOL never carry this field. RSI14 (Yahoo daily) added for satellites.
+  // 200WMA is BTC-only — ETH/SOL never carry this field. RSI14 comes from Binance daily klines.
   eth: { atr14d?: number; rsi14?: number | null };
   sol: { tvl: number; atr14d?: number; rsi14?: number | null };
   unlocks: Array<{ symbol: string; pct: number; date: string }>;

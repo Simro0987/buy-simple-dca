@@ -299,7 +299,7 @@ Deno.serve(async (req) => {
 
     return new Response(JSON.stringify(payload), {
       status: 200,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=900' },
+      headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Cache-Control': 'no-store, max-age=0' },
     });
   } catch (e) {
     addDebug(`top-level error=${e instanceof Error ? e.message : String(e)}`);
