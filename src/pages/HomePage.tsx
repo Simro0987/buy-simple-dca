@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import {
   PieChart, Calculator, Shield, Activity, BarChart3,
-  DollarSign, Coins, Settings, Wallet, Terminal,
+  DollarSign, Coins, Settings, Wallet,
 } from 'lucide-react';
 import { TabId } from '@/components/BottomNav';
 import { AssetCardsRow } from '@/components/dashboard/AssetCardsRow';
@@ -46,16 +46,6 @@ export function HomePage({ onNavigate, lang }: Props) {
     <div className="space-y-2.5">
       {/* Alert banner */}
       <LiquidationAlertBanner lang={lang} />
-
-      {/* ── Terminal header bar ─────────────────────────────────────────── */}
-      <div className="flex items-center gap-2 px-0.5">
-        <Terminal className="w-3.5 h-3.5 text-primary shrink-0" />
-        <p className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold flex-1">
-          Edge Trader · Inštitucionálny terminál
-        </p>
-        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-        <span className="text-[9px] text-primary font-mono">LIVE</span>
-      </div>
 
       {/* ── Asset price strip ───────────────────────────────────────────── */}
       <AssetCardsRow metrics={metrics} prices={prices} />
