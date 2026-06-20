@@ -52,7 +52,7 @@ const FALLBACKS = {
   atr14d: { BTC: 2.0, ETH: 2.8, SOL: 4.2 } as Record<string, number>,
 };
 
-async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown | null> {
+async function safeFetchJson(url: string, init?: RequestInit, logFailures = true): Promise<unknown | null> {
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
@@ -61,14 +61,14 @@ async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown |
       clearTimeout(t);
       if (res.ok) return await res.json();
       const body = await res.text().catch(() => 'unreadable body');
-      addDebug(`fetch failed attempt=${attempt + 1} status=${res.status} url=${url} body=${body.slice(0, 220)}`);
+      if (logFailures) addDebug(`fetch failed attempt=${attempt + 1} status=${res.status} url=${url} body=${body.slice(0, 220)}`);
       if (attempt === 0 && (res.status === 429 || res.status >= 500)) {
         await new Promise(r => setTimeout(r, 1500));
         continue;
       }
       return null;
     } catch (e) {
-      addDebug(`fetch exception attempt=${attempt + 1} url=${url} error=${e instanceof Error ? e.message : String(e)}`);
+      if (logFailures) addDebug(`fetch exception attempt=${attempt + 1} url=${url} error=${e instanceof Error ? e.message : String(e)}`);
       if (attempt === 0) {
         await new Promise(r => setTimeout(r, 1500));
         continue;
@@ -88,8 +88,8 @@ type BinanceKline = [number, string, string, string, string, string, ...unknown[
 async function fetchBinanceKlines(symbol: string, interval: string, limit: number): Promise<{
   closes: number[]; highs: number[]; lows: number[];
 } | null> {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&_=${Date.now()}`;
-  const json = await safeFetchJson(url, { cache: 'no-store' }) as BinanceKline[] | null;
+  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}&endTime=${Date.now()}`;
+  const json = await safeFetchJson(url, { cache: 'no-store', headers: { 'Cache-Control': 'no-store' } }) as BinanceKline[] | null;
   if (!Array.isArray(json) || json.length === 0) return null;
   // Drop the last (possibly incomplete) candle — Binance returns the live one.
   const completed = json.slice(0, -1);
@@ -233,7 +233,7 @@ async function fetchUpcomingUnlocks(symbols: string[]): Promise<Array<{ symbol: 
   const key = 'unlocks';
   const results: Array<{ symbol: string; pct: number; date: string }> = [];
   for (const sym of symbols) {
-    const json = await safeFetchJson(`https://api.llama.fi/emission/${sym.toLowerCase()}`) as {
+    const json = await safeFetchJson(`https://api.llama.fi/emission/${sym.toLowerCase()}`, undefined, false) as {
       metadata?: { circSupply?: number };
       unlockEvents?: Array<{ timestamp: number; noOfTokens?: number[] }>;
     } | null;
