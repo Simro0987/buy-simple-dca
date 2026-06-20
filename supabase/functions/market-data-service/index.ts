@@ -48,16 +48,29 @@ const FALLBACKS = {
 };
 
 async function safeFetchJson(url: string, init?: RequestInit): Promise<unknown | null> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(url, { ...init, signal: ctrl.signal });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
+  // 1-retry fallback: if Yahoo rejects (429/5xx/timeout), wait 1500ms and retry once.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 8000);
+      const res = await fetch(url, { ...init, signal: ctrl.signal });
+      clearTimeout(t);
+      if (res.ok) return await res.json();
+      // Retry only on transient errors
+      if (attempt === 0 && (res.status === 429 || res.status >= 500)) {
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
+      return null;
+    } catch {
+      if (attempt === 0) {
+        await new Promise(r => setTimeout(r, 1500));
+        continue;
+      }
+      return null;
+    }
   }
+  return null;
 }
 
 // Yahoo Finance weekly closes — strict 200 COMPLETED-week MA.
@@ -139,7 +152,8 @@ async function fetchAtr14d(symbol: string): Promise<number> {
  * Returns null on failure so UI can show "N/A (Syncing...)" instead of crashing.
  */
 async function fetchRsi14d(symbol: string): Promise<number | null> {
-  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=3mo&_=${Date.now()}`;
+  // 14D Wilder RSI requires ≥100 daily closes for proper smoothing convergence.
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${symbol}?interval=1d&range=6mo&_=${Date.now()}`;
   const json = await safeFetchJson(url, { cache: 'no-store' }) as {
     chart?: { result?: Array<{ indicators?: { quote?: Array<{ close?: number[] }> } }> }
   } | null;

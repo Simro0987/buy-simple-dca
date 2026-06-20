@@ -395,15 +395,23 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           // Market price = spot; Limit dynamic = spot * (1 + distance%)
           const marketOracle = price;
           const dynOracle = price > 0 ? price * (1 + e.limitDistancePct / 100) : 0;
-          const marketPriceEffective = editedPrices[c]?.market ?? marketOracle;
-          const dynPriceEffective = editedPrices[c]?.dynamic ?? dynOracle;
-          const marketDrift = marketOracle > 0 ? Math.abs(marketPriceEffective - marketOracle) / marketOracle * 100 : 0;
-          const dynDrift = dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
+          // STATE LOCK: once an order is PENDING/FILLED/EXECUTED, render the exact
+          // target_price stored in DB at activation — stop listening to the live feed.
+          const marketLockedPrice = mDone ? Number(st?.market?.target_price ?? 0) : 0;
+          const marketLockedUsd = mDone ? Number(st?.market?.amount_usd ?? 0) : 0;
+          const marketPriceEffective = (mDone && marketLockedPrice > 0)
+            ? marketLockedPrice
+            : (editedPrices[c]?.market ?? marketOracle);
+          const dynPriceEffective = ((lPending || lFilled) && lockedLimitPrice > 0)
+            ? lockedLimitPrice
+            : (editedPrices[c]?.dynamic ?? dynOracle);
+          const marketDrift = !mDone && marketOracle > 0 ? Math.abs(marketPriceEffective - marketOracle) / marketOracle * 100 : 0;
+          const dynDrift = !(lPending || lFilled) && dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
           const marketDriftAlert = marketDrift > 2;
           const dynDriftAlert = dynDrift > 2;
 
           const dynUsd = lockedLimitPrice > 0 ? lockedLimitUsd : dynUsdRaw;
-          const marketUsd = marketUsdRaw;
+          const marketUsd = (mDone && marketLockedUsd > 0) ? marketLockedUsd : marketUsdRaw;
 
           // BTC funding
           const isBtc = c === 'btc';
@@ -664,6 +672,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             <button
                               type="button"
                               onClick={() => {
+                                if (card.isFilled || card.isPending || (card.mode === 'market' && mDone)) {
+                                  toast.info('Cena je uzamknutá (order aktívny)');
+                                  return;
+                                }
                                 const current = card.effPrice;
                                 const input = window.prompt(
                                   `Upraviť cieľovú cenu pre ${symU} (${card.mode === 'market' ? 'Market' : 'Limit Dynamic'})`,
@@ -677,9 +689,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                                   [c]: { ...prev[c], [card.mode]: v },
                                 }));
                               }}
-                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95"
+                              disabled={card.isFilled || card.isPending || (card.mode === 'market' && mDone)}
+                              className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                               aria-label="Upraviť cenu"
-                              title="Upraviť cenu"
+                              title={card.isFilled || card.isPending || (card.mode === 'market' && mDone) ? 'Cena uzamknutá' : 'Upraviť cenu'}
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
