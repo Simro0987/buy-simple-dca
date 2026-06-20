@@ -14,6 +14,7 @@ import {
 import { TabId } from '@/components/BottomNav';
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 import { MacroNewsTicker } from '@/components/MacroNewsTicker';
+import { DcaOutRadar } from '@/components/DcaOutRadar';
 import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
@@ -222,8 +223,7 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
         </div>
       </div>
 
-      {/* ── Token price strip ────────────────────────────────────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+      {/* ── Token price strip ────────────────────────────────────────────── */}      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         {TOKENS.map(t => {
           const a    = metrics.assets.find(x => x.symbol === t.symbol);
           const ch24 = prices?.[t.coingeckoId]?.usd_24h_change ?? 0;
@@ -248,6 +248,9 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
           );
         })}
       </div>
+
+      {/* ── DCA-Out Radar ────────────────────────────────────────────────── */}
+      <DcaOutRadar />
 
       {/* ── Confluence Octagon + News ─────────────────────────────────────── */}
       <ConfluenceOctagon activeToken={octagonToken} onTokenChange={setOctagonToken} />
