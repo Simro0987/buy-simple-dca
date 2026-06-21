@@ -21,10 +21,11 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
         WebkitBackdropFilter: 'blur(16px)',
       }}
     >
-      <div className="max-w-lg mx-auto px-4 py-2 md:pl-[52px] space-y-2">
-        <div className="flex items-center justify-between">
+      <div className="max-w-lg mx-auto px-4 py-2 md:pl-[52px] space-y-2">        <div className="flex items-center justify-between">
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-foreground truncate tracking-tight">Edge Trader Terminal</h1>
+            <h1 className="text-[15px] font-black text-white truncate tracking-tight leading-tight">
+              Edge Trader Terminal
+            </h1>
             <p className="text-[10px] text-muted-foreground font-mono">
               {now.toLocaleDateString('sk', { weekday: 'short', day: 'numeric', month: 'short' })} · {now.toLocaleTimeString('sk', { hour: '2-digit', minute: '2-digit' })}
             </p>

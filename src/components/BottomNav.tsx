@@ -28,13 +28,13 @@ export function BottomNav({ active, onChange, lang, unreadNewsCount = 0 }: Botto
     <nav
       className="fixed bottom-0 left-0 right-0 nav-safe-bottom z-50"
       style={{
-        background: 'rgba(8,10,17,0.97)',
+        background: 'rgba(0, 0, 0, 0.55)',
         borderTop: '1px solid rgba(255,255,255,0.05)',
-        backdropFilter: 'blur(16px)',
-        WebkitBackdropFilter: 'blur(16px)',
+        backdropFilter: 'blur(28px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(28px) saturate(180%)',
       }}
     >
-      <div className="flex items-stretch h-14 max-w-lg mx-auto overflow-x-auto scrollbar-hide">
+      <div className="flex items-stretch h-[58px] max-w-lg mx-auto overflow-x-auto scrollbar-hide">
         {tabs.map(({ id, labelSk, labelEn, icon: Icon }) => {
           const isActive = active === id;
           const showBadge = id === 'home' && unreadNewsCount > 0;
@@ -42,28 +42,39 @@ export function BottomNav({ active, onChange, lang, unreadNewsCount = 0 }: Botto
             <button
               key={id}
               onClick={() => onChange(id)}
-              className="relative flex flex-col items-center justify-center gap-0.5 shrink-0 min-w-[52px] h-full px-1 transition-all"
-              style={{ color: isActive ? 'hsl(142 62% 40%)' : 'rgba(255,255,255,0.32)' }}
+              className="relative flex flex-col items-center justify-center gap-[3px] shrink-0 min-w-[52px] h-full px-1 transition-all duration-200"
+              style={{ color: isActive ? '#14F195' : 'rgba(255,255,255,0.30)' }}
             >
-              {/* Active indicator line at top */}
+              {/* Active top-line indicator */}
               {isActive && (
                 <span
-                  className="absolute top-0 left-1/2 -translate-x-1/2 w-6 h-0.5 rounded-b"
-                  style={{ background: 'hsl(142 62% 40%)' }}
+                  className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-[2px] rounded-b-full"
+                  style={{ background: '#14F195', boxShadow: '0 0 8px 2px #14F19580' }}
                 />
               )}
 
+              {/* Icon */}
               <div className="relative">
-                <Icon className="w-[15px] h-[15px]" strokeWidth={isActive ? 2.5 : 1.8} />
+                <Icon
+                  className="transition-all duration-200"
+                  style={{
+                    width: isActive ? 17 : 15,
+                    height: isActive ? 17 : 15,
+                    strokeWidth: isActive ? 2.2 : 1.6,
+                    filter: isActive ? 'drop-shadow(0 0 6px #14F19560)' : 'none',
+                  }}
+                />
                 {showBadge && (
                   <span className="absolute -top-1.5 -right-2.5 min-w-[14px] h-3.5 flex items-center justify-center rounded-full bg-rose-500 text-white text-[8px] font-bold px-1">
                     {unreadNewsCount > 9 ? '9+' : unreadNewsCount}
                   </span>
                 )}
               </div>
+
+              {/* Label */}
               <span
-                className="text-[8px] font-medium leading-none"
-                style={{ opacity: isActive ? 0.9 : 0.55 }}
+                className="text-[8px] font-semibold leading-none tracking-wide transition-all duration-200"
+                style={{ opacity: isActive ? 1 : 0.45, letterSpacing: isActive ? '0.03em' : '0.01em' }}
               >
                 {lang === 'sk' ? labelSk : labelEn}
               </span>

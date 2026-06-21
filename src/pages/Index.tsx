@@ -71,7 +71,32 @@ const Index = () => {
   const renderTab = TAB_ROUTES[tab] ?? TAB_ROUTES.home;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-background relative overflow-x-hidden">
+
+      {/* ── Deep Space ambient gradient blobs (fixed, behind everything) ── */}
+      <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden" aria-hidden="true">
+        {/* Top-left: Solana purple */}
+        <div
+          className="absolute -top-48 -left-48 w-96 h-96 rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(circle, #9945FF 0%, transparent 65%)', opacity: 0.07 }}
+        />
+        {/* Top-right: neon green */}
+        <div
+          className="absolute -top-32 right-0 w-80 h-80 rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(circle, #14F195 0%, transparent 65%)', opacity: 0.05 }}
+        />
+        {/* Mid-right: ETH blue-violet */}
+        <div
+          className="absolute top-1/2 -right-40 w-96 h-96 rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(circle, #627EEA 0%, transparent 65%)', opacity: 0.04 }}
+        />
+        {/* Bottom-left: magenta accent */}
+        <div
+          className="absolute bottom-0 -left-24 w-64 h-64 rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(circle, #FF007A 0%, transparent 65%)', opacity: 0.04 }}
+        />
+      </div>
+
       {/* Sidebar — visible on md+ only */}
       <AppSidebar active={tab} onChange={setTab} lang={lang} />
 
