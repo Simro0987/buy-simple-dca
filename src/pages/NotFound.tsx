@@ -1,5 +1,6 @@
-import { useLocation } from "react-router-dom";
+import { useLocation, Link } from "react-router-dom";
 import { useEffect } from "react";
+import { Bento, Label, Money } from "@/components/deep-space/primitives";
 
 const NotFound = () => {
   const location = useLocation();
@@ -9,14 +10,15 @@ const NotFound = () => {
   }, [location.pathname]);
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-muted">
-      <div className="text-center">
-        <h1 className="mb-4 text-4xl font-bold">404</h1>
-        <p className="mb-4 text-xl text-muted-foreground">Oops! Page not found</p>
-        <a href="/" className="text-primary underline hover:text-primary/90">
-          Return to Home
-        </a>
-      </div>
+    <div className="flex min-h-screen items-center justify-center bg-[#050505] p-6">
+      <Bento className="p-8 text-center max-w-sm">
+        <Money size="xl" className="block mb-2">404</Money>
+        <Label className="mb-4 block">Stránka neexistuje</Label>
+        <p className="text-sm text-white/40 mb-6">{location.pathname}</p>
+        <Link to="/" className="text-[#14F195] text-sm font-semibold hover:underline">
+          Späť na domov
+        </Link>
+      </Bento>
     </div>
   );
 };

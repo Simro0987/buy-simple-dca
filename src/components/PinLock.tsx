@@ -80,14 +80,14 @@ export function PinLock({ onUnlock }: PinLockProps) {
     mode === 'enter' ? 'Enter PIN' : mode === 'set' ? 'Create 4-digit PIN' : 'Confirm PIN';
 
   return (
-    <div className="min-h-screen bg-background flex flex-col items-center justify-center p-6 select-none">
+    <div className="min-h-screen bg-[#050505] flex flex-col items-center justify-center p-6 select-none">
       <div className="w-full max-w-xs flex flex-col items-center gap-8">
         <div className="flex flex-col items-center gap-3">
-          <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center">
-            <Lock className="w-6 h-6 text-primary" />
+          <div className="w-14 h-14 rounded-2xl bg-[#14F195]/10 border border-[#14F195]/25 flex items-center justify-center">
+            <Lock className="w-6 h-6 text-[#14F195]" />
           </div>
-          <h1 className="text-lg font-semibold">{title}</h1>
-          <p className="text-xs text-muted-foreground">Buy Simple DCA</p>
+          <h1 className="text-lg font-semibold text-white">{title}</h1>
+          <p className="text-xs text-white/35">Edge Trader Terminal</p>
         </div>
 
         <div className="flex gap-3">
@@ -95,7 +95,7 @@ export function PinLock({ onUnlock }: PinLockProps) {
             <div
               key={i}
               className={`w-3.5 h-3.5 rounded-full border transition-colors ${
-                pin.length > i ? 'bg-primary border-primary' : 'border-border'
+                pin.length > i ? 'bg-[#14F195] border-[#14F195]' : 'border-white/20'
               }`}
             />
           ))}
@@ -109,7 +109,7 @@ export function PinLock({ onUnlock }: PinLockProps) {
             <Button
               key={d}
               variant="ghost"
-              className="h-14 text-xl font-light rounded-2xl bg-card hover:bg-accent"
+              className="h-14 text-xl font-light rounded-2xl bg-[#0A0A0A] border border-white/10 hover:border-[#14F195]/30 text-white"
               onClick={() => press(d)}
             >
               {d}
@@ -118,14 +118,14 @@ export function PinLock({ onUnlock }: PinLockProps) {
           <div />
           <Button
             variant="ghost"
-            className="h-14 text-xl font-light rounded-2xl bg-card hover:bg-accent"
+            className="h-14 text-xl font-light rounded-2xl bg-[#0A0A0A] border border-white/10 hover:border-[#14F195]/30 text-white"
             onClick={() => press('0')}
           >
             0
           </Button>
           <Button
             variant="ghost"
-            className="h-14 rounded-2xl hover:bg-accent"
+            className="h-14 rounded-2xl bg-[#0A0A0A] border border-white/10 hover:border-[#14F195]/30 text-white"
             onClick={back}
             aria-label="Backspace"
           >

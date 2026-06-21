@@ -2,6 +2,8 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 
+document.documentElement.classList.add("dark");
+
 // Guard: never register SW in iframe or Lovable preview
 const isInIframe = (() => {
   try {

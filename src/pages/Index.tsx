@@ -15,6 +15,7 @@ import { useDynamicLimits } from '@/hooks/useDynamicLimits';
 import { useUnreadHighImpact } from '@/hooks/useUnreadHighImpact';
 import { TOKENS } from '@/lib/crypto';
 import { TAB_ROUTES } from '@/lib/tabRoutes';
+import { TabPanel } from '@/components/deep-space/primitives';
 
 function loadHoldings(): Record<string, number> {
   try {
@@ -34,7 +35,7 @@ const Index = () => {
   const cycleResult = useMarketCycleScore({ fearGreed, altSeason, prices, athData, lang });
   const { data: advancedMarketData } = useAdvancedMarket();
   usePriceAlerts(prices, lang);
-  useDynamicLimits(); // počíta a publikuje dynamické limit zľavy podľa volatility
+  useDynamicLimits();
   const unreadNewsCount = useUnreadHighImpact(lang);
 
   const [now, setNow] = useState(new Date());
@@ -43,7 +44,6 @@ const Index = () => {
     return () => clearInterval(id);
   }, []);
 
-  // Cross-module navigation (RebalanceCard → Swap, DCA → Stake, …)
   useEffect(() => {
     const handler = (e: Event) => {
       const ce = e as CustomEvent<string>;
@@ -71,47 +71,42 @@ const Index = () => {
   const renderTab = TAB_ROUTES[tab] ?? TAB_ROUTES.home;
 
   return (
-    <div className="min-h-screen bg-background relative overflow-x-hidden">
+    <div className="min-h-screen bg-[#050505] relative overflow-x-hidden">
 
-      {/* ── Deep Space ambient gradient blobs (fixed, behind everything) ── */}
+      {/* Deep Space ambient blobs */}
       <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden" aria-hidden="true">
-        {/* Top-left: Solana purple */}
         <div
-          className="absolute -top-48 -left-48 w-96 h-96 rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(circle, #9945FF 0%, transparent 65%)', opacity: 0.07 }}
+          className="absolute -top-48 -left-48 w-[28rem] h-[28rem] rounded-full blur-3xl"
+          style={{ background: 'radial-gradient(circle, #9945FF 0%, transparent 65%)', opacity: 0.08 }}
         />
-        {/* Top-right: neon green */}
         <div
           className="absolute -top-32 right-0 w-80 h-80 rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(circle, #14F195 0%, transparent 65%)', opacity: 0.05 }}
+          style={{ background: 'radial-gradient(circle, #14F195 0%, transparent 65%)', opacity: 0.06 }}
         />
-        {/* Mid-right: ETH blue-violet */}
         <div
           className="absolute top-1/2 -right-40 w-96 h-96 rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(circle, #627EEA 0%, transparent 65%)', opacity: 0.04 }}
+          style={{ background: 'radial-gradient(circle, #627EEA 0%, transparent 65%)', opacity: 0.05 }}
         />
-        {/* Bottom-left: magenta accent */}
         <div
           className="absolute bottom-0 -left-24 w-64 h-64 rounded-full blur-3xl"
-          style={{ background: 'radial-gradient(circle, #FF007A 0%, transparent 65%)', opacity: 0.04 }}
+          style={{ background: 'radial-gradient(circle, #FF007A 0%, transparent 65%)', opacity: 0.05 }}
         />
       </div>
 
-      {/* Sidebar — visible on md+ only */}
       <AppSidebar active={tab} onChange={setTab} lang={lang} />
 
-      {/* Main content — offset right on md+ to clear sidebar */}
       <div className="md:pl-[52px]">
         <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
         <div className="max-w-lg mx-auto px-4 pt-2">
           <GasWatchdogBanner />
         </div>
         <main className="max-w-lg mx-auto px-4 pt-4 pb-24 md:pb-6">
-          {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
+          <TabPanel tabKey={tab}>
+            {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
+          </TabPanel>
         </main>
       </div>
 
-      {/* Bottom nav — mobile only */}
       <div className="md:hidden">
         <BottomNav active={tab} onChange={setTab} lang={lang} unreadNewsCount={unreadNewsCount} />
       </div>

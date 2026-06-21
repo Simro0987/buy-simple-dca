@@ -28,34 +28,26 @@ interface Props {
   lang: Lang;
 }
 
+const NEON = '#14F195';
+
 export function AppSidebar({ active, onChange }: Props) {
   return (
-    <aside
-      className="hidden md:flex flex-col fixed left-0 top-0 h-full z-40 py-3 gap-0.5"
-      style={{
-        width: 52,
-        backgroundColor: '#050508',
-        borderRight: '1px solid rgba(255,255,255,0.05)',
-      }}
-    >
-      {/* Brand mark */}
+    <aside className="hidden md:flex flex-col fixed left-0 top-0 h-full z-40 py-3 gap-0.5 w-[52px] bg-[#050505] border-r border-white/[0.06]">
       <div className="flex justify-center mb-3 px-1.5">
         <div
-          className="w-8 h-8 rounded flex items-center justify-center text-[10px] font-bold"
+          className="w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold"
           style={{
-            background: 'rgba(34,197,94,0.12)',
-            border: '1px solid rgba(34,197,94,0.25)',
-            color: 'hsl(142 65% 42%)',
+            background: 'rgba(20,241,149,0.10)',
+            border: '1px solid rgba(20,241,149,0.25)',
+            color: NEON,
           }}
         >
           ET
         </div>
       </div>
 
-      {/* Thin divider */}
-      <div className="mx-2 mb-2 h-px bg-white/5" />
+      <div className="mx-2 mb-2 h-px bg-white/[0.06]" />
 
-      {/* Nav items */}
       {ITEMS.map(item => {
         const Icon = item.icon;
         const isActive = active === item.id;
@@ -64,39 +56,16 @@ export function AppSidebar({ active, onChange }: Props) {
             key={item.id}
             onClick={() => onChange(item.id)}
             title={item.labelSk}
-            className="flex flex-col items-center justify-center gap-0.5 mx-1.5 py-2 rounded transition-all"
+            className="flex flex-col items-center justify-center gap-0.5 mx-1.5 py-2 rounded-xl transition-all"
             style={{
-              border: isActive
-                ? '1px solid rgba(34,197,94,0.28)'
-                : '1px solid transparent',
-              background: isActive
-                ? 'rgba(34,197,94,0.10)'
-                : 'transparent',
-              color: isActive
-                ? 'hsl(142 65% 42%)'
-                : 'rgba(255,255,255,0.28)',
-            }}
-            onMouseEnter={e => {
-              if (!isActive) {
-                (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.65)';
-                (e.currentTarget as HTMLButtonElement).style.background = 'rgba(255,255,255,0.04)';
-              }
-            }}
-            onMouseLeave={e => {
-              if (!isActive) {
-                (e.currentTarget as HTMLButtonElement).style.color = 'rgba(255,255,255,0.28)';
-                (e.currentTarget as HTMLButtonElement).style.background = 'transparent';
-              }
+              border: isActive ? '1px solid rgba(20,241,149,0.30)' : '1px solid transparent',
+              background: isActive ? 'rgba(20,241,149,0.08)' : 'transparent',
+              color: isActive ? NEON : 'rgba(255,255,255,0.28)',
+              boxShadow: isActive ? '0 0 16px -4px rgba(20,241,149,0.35)' : 'none',
             }}
           >
-            <Icon
-              className="w-[15px] h-[15px]"
-              strokeWidth={isActive ? 2.5 : 1.8}
-            />
-            <span
-              className="text-[6.5px] font-semibold leading-none truncate max-w-[44px] text-center"
-              style={{ opacity: 0.7 }}
-            >
+            <Icon className="w-[15px] h-[15px]" strokeWidth={isActive ? 2.5 : 1.8} />
+            <span className="text-[6.5px] font-semibold leading-none truncate max-w-[44px] text-center opacity-70">
               {item.labelSk}
             </span>
           </button>

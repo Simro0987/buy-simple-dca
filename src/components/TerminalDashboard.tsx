@@ -1,6 +1,5 @@
 /**
- * TerminalDashboard — Hlavná stránka (Edge Trader Terminal štýl)
- * DCA-Out Radar bol presunutý do sekcie PORTFÓLIO (PortfolioPage.tsx).
+ * TerminalDashboard — Domovská stránka (Deep Space Bento Grid)
  */
 import { useState, useEffect } from 'react';
 import {
@@ -17,40 +16,10 @@ import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { formatUsd, formatPrice, TOKENS } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import type { OctToken } from '@/hooks/useConfluenceMetrics';
+import { Bento, Label, Money, Chip } from '@/components/deep-space/primitives';
 
 interface Props { onNavigate: (tab: TabId) => void; lang: Lang }
 
-// ─── design tokens — Web3 Bento absolute black ───────────────────────────────
-const T = {
-  card:      '#0A0A0A',
-  cardHover: '#111111',
-  border:    'rgba(255,255,255,0.10)',
-  borderHov: 'rgba(168,85,247,0.45)',
-  teal:      '#0ea5e9', tealBg:  'rgba(14,165,233,0.12)',
-  green:     '#10b981', greenBg: 'rgba(16,185,129,0.12)',
-  red:       '#ef4444', redBg:   'rgba(239,68,68,0.12)',
-  amber:     '#f59e0b', amberBg: 'rgba(245,158,11,0.12)',
-  text:      '#ffffff',
-  textSub:   'rgba(255,255,255,0.65)',
-  textMuted: 'rgba(255,255,255,0.35)',
-  r:         '1.5rem', rs: '0.875rem',
-};
-
-const CARD  = (e?: React.CSSProperties): React.CSSProperties =>
-  ({ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, ...e });
-const IBOX  = (bg: string): React.CSSProperties =>
-  ({ width: 28, height: 28, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 });
-
-function Pill({ label, color, bg }: { label: string; color: string; bg: string }) {
-  return (
-    <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.05em',
-      textTransform: 'uppercase' as const, padding: '2px 6px', borderRadius: 4, color, background: bg }}>
-      {label}
-    </span>
-  );
-}
-
-// ─── module nav ───────────────────────────────────────────────────────────────
 const MODULES: { id: TabId; label: string; icon: typeof PieChart }[] = [
   { id: 'portfolio', label: 'Portfólio', icon: PieChart   },
   { id: 'dca',       label: 'DCA',       icon: Calculator },
@@ -63,7 +32,6 @@ const MODULES: { id: TabId; label: string; icon: typeof PieChart }[] = [
   { id: 'settings',  label: 'Nastav.',   icon: Settings   },
 ];
 
-// ─── helpers ──────────────────────────────────────────────────────────────────
 function loadInvested(): number {
   try { return parseFloat(localStorage.getItem('total-invested') || '0') || 0; } catch { return 0; }
 }
@@ -71,157 +39,114 @@ function loadFreeCash(): number {
   try { return parseFloat(localStorage.getItem('free-cash') || '0') || 0; } catch { return 0; }
 }
 
-// ─── component ────────────────────────────────────────────────────────────────
 export function TerminalDashboard({ onNavigate, lang }: Props) {
   const { data: prices, isFetching, refetch } = usePrices();
   const metrics = usePortfolioMetrics(prices);
   const [octagonToken, setOctagonToken] = useState<OctToken>('BTC');
 
-  const invested   = loadInvested();
+  const invested = loadInvested();
   const [freeCash, setFreeCash] = useState(loadFreeCash);
   const totalValue = metrics.totalValue;
-  const pnlUsd     = totalValue - invested;
-  const pnlPct     = invested > 0 ? (pnlUsd / invested) * 100 : 0;
-  const pnlPos     = pnlUsd >= 0;
+  const pnlUsd = totalValue - invested;
+  const pnlPct = invested > 0 ? (pnlUsd / invested) * 100 : 0;
+  const pnlPos = pnlUsd >= 0;
 
   useEffect(() => {
     try { localStorage.setItem('free-cash', String(freeCash)); } catch { /* quota */ }
   }, [freeCash]);
 
+  const dayChange = metrics.assets.reduce((s, a) => {
+    const ch = prices?.[TOKENS.find(t => t.symbol === a.symbol)?.coingeckoId ?? '']?.usd_24h_change ?? 0;
+    return s + a.value * ch / 100;
+  }, 0);
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+    <div className="space-y-4">
       <LiquidationAlertBanner lang={lang} />
 
-      {/* ────────────── PORTFÓLIO STATS ────────────── */}
-      <div>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingLeft: 2 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Briefcase size={12} style={{ color: T.textMuted }} />
-            <span style={{ fontSize: 10, fontWeight: 600, color: T.textMuted, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Moje portfólio
-            </span>
+      {/* Portfolio hero */}
+      <Bento delay={0.04} className="p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Briefcase className="w-4 h-4 text-white/35" />
+            <Label>Moje portfólio · USD</Label>
           </div>
-          <button onClick={() => void refetch()} style={{ background: 'transparent', border: 'none', cursor: 'pointer', padding: 4 }}>
-            <RefreshCw size={11} style={{ color: T.textMuted }} className={isFetching ? 'animate-spin' : ''} />
+          <button onClick={() => void refetch()} className="p-1.5 rounded-lg hover:bg-white/[0.06]">
+            <RefreshCw className={`w-3.5 h-3.5 text-white/40 ${isFetching ? 'animate-spin' : ''}`} />
           </button>
         </div>
+        <Money size="hero">{totalValue > 0 ? formatUsd(totalValue) : '$0.00'}</Money>
+        <p className="text-xs text-white/35 font-mono mt-2">{metrics.assets.length} pozícií</p>
+      </Bento>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-          {/* Celková hodnota */}
-          <div style={CARD()}>
-            <div style={IBOX(T.tealBg)}><BarChart2 size={14} style={{ color: T.teal }} /></div>
-            <p style={{ fontSize: 9.5, color: T.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Celková hodnota</p>
-            <p style={{ fontSize: 34, fontWeight: 800, color: T.text, lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
-              {totalValue > 0 ? formatUsd(totalValue) : '$0.00'}
-            </p>
-            <p style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>{metrics.assets.length} pozícií</p>
-          </div>
-
-          {/* Reálny vklad */}
-          <div style={CARD()}>
-            <div style={IBOX(T.tealBg)}><Wallet size={14} style={{ color: T.teal }} /></div>
-            <p style={{ fontSize: 9.5, color: T.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Reálny vklad</p>
-            <p style={{ fontSize: 19, fontWeight: 700, color: T.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-              {invested > 0 ? formatUsd(invested) : '$0.00'}
-            </p>
-            <p style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>investovaný kapitál</p>
-          </div>
-
-          {/* Zisk / strata */}
-          <div style={CARD()}>
-            <div style={IBOX(pnlPos ? T.greenBg : T.redBg)}>
-              {pnlPos ? <TrendingUp size={14} style={{ color: T.green }} /> : <TrendingDown size={14} style={{ color: T.red }} />}
-            </div>
-            <p style={{ fontSize: 9.5, color: T.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Zisk / strata</p>
-            <p style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', color: pnlPos ? T.green : T.red }}>
-              {pnlPos ? '+' : ''}{formatUsd(pnlUsd)}
-            </p>
-            <Pill label={`${pnlPos ? '+' : ''}${pnlPct.toFixed(2)}%`} color={pnlPos ? T.green : T.red} bg={pnlPos ? T.greenBg : T.redBg} />
-          </div>
-
-          {/* Zmena dnes */}
-          <div style={CARD()}>
-            <div style={IBOX(T.tealBg)}><BarChart3 size={14} style={{ color: T.teal }} /></div>
-            <p style={{ fontSize: 9.5, color: T.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Zmena dnes</p>
-            {(() => {
-              const d = metrics.assets.reduce((s, a) => {
-                const ch = prices?.[TOKENS.find(t => t.symbol === a.symbol)?.coingeckoId ?? '']?.usd_24h_change ?? 0;
-                return s + a.value * ch / 100;
-              }, 0);
-              const pos = d >= 0;
-              return (
-                <>
-                  <p style={{ fontSize: 19, fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums', color: pos ? T.green : T.red }}>
-                    {pos ? '+' : ''}{formatUsd(d)}
-                  </p>
-                  <Pill label={pos ? 'RAST' : 'POKLES'} color={pos ? T.green : T.red} bg={pos ? T.greenBg : T.redBg} />
-                </>
-              );
-            })()}
-          </div>
-
-          {/* Voľný cash — editable */}
-          <div style={{ ...CARD(), gridColumn: '1 / -1' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <div style={IBOX(T.amberBg)}><DollarSign size={14} style={{ color: T.amber }} /></div>
-                <div>
-                  <p style={{ fontSize: 9.5, color: T.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Voľný cash</p>
-                  <p style={{ fontSize: 19, fontWeight: 700, color: T.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
-                    {freeCash > 0 ? formatUsd(freeCash) : '$0.00'}
-                  </p>
-                  <p style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>rezerva / nedeployovaný kapitál</p>
-                </div>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 9, color: T.textMuted }}>$</span>
-                <input type="number" min="0" step="10" value={freeCash || ''} placeholder="0"
-                  onChange={e => setFreeCash(parseFloat(e.target.value) || 0)}
-                  style={{ width: 80, background: 'rgba(255,255,255,0.04)', border: `1px solid ${T.border}`,
-                    borderRadius: 6, color: T.text, fontSize: 11, padding: '4px 8px',
-                    outline: 'none', fontVariantNumeric: 'tabular-nums', textAlign: 'right' as const }} />
-              </div>
-            </div>
-          </div>
-        </div>
+      {/* Stats bento */}
+      <div className="grid grid-cols-2 gap-3">
+        <Bento delay={0.08} className="p-4">
+          <Label>Reálny vklad</Label>
+          <Money size="md" className="mt-2 block">{invested > 0 ? formatUsd(invested) : '$0.00'}</Money>
+        </Bento>
+        <Bento delay={0.1} className="p-4">
+          <Label>Zisk / strata</Label>
+          <Money size="md" positive={pnlPos} negative={!pnlPos} className="mt-2 block">
+            {pnlPos ? '+' : ''}{formatUsd(pnlUsd)}
+          </Money>
+          <Chip color={pnlPos ? 'green' : 'red'}>
+            {pnlPos ? '+' : ''}{pnlPct.toFixed(2)}%
+          </Chip>
+        </Bento>
+        <Bento delay={0.12} className="p-4">
+          <Label>Zmena dnes</Label>
+          <Money size="md" positive={dayChange >= 0} negative={dayChange < 0} className="mt-2 block">
+            {dayChange >= 0 ? '+' : ''}{formatUsd(dayChange)}
+          </Money>
+        </Bento>
+        <Bento delay={0.14} className="p-4">
+          <Label>Voľný cash</Label>
+          <Money size="md" className="mt-2 block">{freeCash > 0 ? formatUsd(freeCash) : '$0.00'}</Money>
+          <input
+            type="number"
+            min="0"
+            step="10"
+            value={freeCash || ''}
+            placeholder="0"
+            onChange={e => setFreeCash(parseFloat(e.target.value) || 0)}
+            className="mt-2 w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 font-mono text-sm text-white outline-none focus:border-white/25"
+          />
+        </Bento>
       </div>
 
-      {/* ────────────── TOKEN PRICE STRIP ────────────── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-        {TOKENS.map(t => {
-          const a   = metrics.assets.find(x => x.symbol === t.symbol);
-          const ch  = prices?.[t.coingeckoId]?.usd_24h_change ?? 0;
+      {/* Token strip */}
+      <div className="grid grid-cols-3 gap-3">
+        {TOKENS.map((t, i) => {
+          const a = metrics.assets.find(x => x.symbol === t.symbol);
+          const ch = prices?.[t.coingeckoId]?.usd_24h_change ?? 0;
           const pos = ch >= 0;
           return (
-            <div key={t.symbol} style={{ ...CARD(), padding: 10, borderLeft: `2px solid ${t.color}` }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: T.text }}>{t.symbol}</span>
-                <Pill label={`${pos ? '▲' : '▼'} ${Math.abs(ch).toFixed(1)}%`} color={pos ? T.green : T.red} bg={pos ? T.greenBg : T.redBg} />
+            <Bento key={t.symbol} delay={0.16 + i * 0.03} className="p-3" style={{ borderLeftWidth: 2, borderLeftColor: t.color }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-bold text-white">{t.symbol}</span>
+                <Chip color={pos ? 'green' : 'red'}>{pos ? '▲' : '▼'}{Math.abs(ch).toFixed(1)}%</Chip>
               </div>
-              <p style={{ fontSize: 12, fontWeight: 700, color: T.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
-                {a ? formatPrice(a.currentPrice) : '—'}
-              </p>
-              <p style={{ fontSize: 9, color: T.textMuted, marginTop: 4 }}>{Math.round(t.allocation * 100)}% alok.</p>
-            </div>
+              <p className="font-mono text-sm font-bold text-white">{a ? formatPrice(a.currentPrice) : '—'}</p>
+              <p className="text-[9px] text-white/30 mt-1">{Math.round(t.allocation * 100)}% alok.</p>
+            </Bento>
           );
         })}
       </div>
 
-      {/* ────────────── OCTAGON + NEWS ────────────── */}
       <ConfluenceOctagon activeToken={octagonToken} onTokenChange={setOctagonToken} />
       <MacroNewsTicker activeToken={octagonToken} />
 
-      {/* ────────────── MODULE GRID ────────────── */}
+      {/* Module grid */}
       <div>
-        <p style={{ fontSize: 9, fontWeight: 600, color: T.textMuted, textTransform: 'uppercase',
-          letterSpacing: '0.1em', paddingLeft: 2, marginBottom: 8 }}>Moduly</p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
+        <Label className="mb-3 block">Moduly</Label>
+        <div className="grid grid-cols-3 gap-3">
           {MODULES.map(mod => {
             const Icon = mod.icon;
             return (
               <button key={mod.id} onClick={() => onNavigate(mod.id)} className="terminal-btn">
-                <Icon size={15} />
-                <span style={{ fontSize: 9, fontWeight: 600, lineHeight: 1 }}>{mod.label}</span>
+                <Icon size={16} className="text-[#14F195]/80" />
+                <span className="text-[9px] font-semibold">{mod.label}</span>
               </button>
             );
           })}
