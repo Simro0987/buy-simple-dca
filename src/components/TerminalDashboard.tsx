@@ -20,24 +20,24 @@ import type { OctToken } from '@/hooks/useConfluenceMetrics';
 
 interface Props { onNavigate: (tab: TabId) => void; lang: Lang }
 
-// ─── design tokens ────────────────────────────────────────────────────────────
+// ─── design tokens — Web3 Bento absolute black ───────────────────────────────
 const T = {
-  card:      'rgba(17,24,39,0.90)',
-  cardHover: 'rgba(22,32,52,0.95)',
-  border:    'rgba(255,255,255,0.07)',
-  borderHov: 'rgba(14,165,233,0.30)',
-  teal:      '#0ea5e9', tealBg:  'rgba(14,165,233,0.11)',
-  green:     '#10b981', greenBg: 'rgba(16,185,129,0.11)',
-  red:       '#ef4444', redBg:   'rgba(239,68,68,0.11)',
-  amber:     '#f59e0b', amberBg: 'rgba(245,158,11,0.11)',
-  text:      '#f1f5f9',
-  textSub:   'rgba(148,163,184,0.70)',
-  textMuted: 'rgba(100,116,139,0.55)',
-  r:         '10px', rs: '7px',
+  card:      '#0A0A0A',
+  cardHover: '#111111',
+  border:    'rgba(255,255,255,0.10)',
+  borderHov: 'rgba(168,85,247,0.45)',
+  teal:      '#0ea5e9', tealBg:  'rgba(14,165,233,0.12)',
+  green:     '#10b981', greenBg: 'rgba(16,185,129,0.12)',
+  red:       '#ef4444', redBg:   'rgba(239,68,68,0.12)',
+  amber:     '#f59e0b', amberBg: 'rgba(245,158,11,0.12)',
+  text:      '#ffffff',
+  textSub:   'rgba(255,255,255,0.65)',
+  textMuted: 'rgba(255,255,255,0.35)',
+  r:         '1.5rem', rs: '0.875rem',
 };
 
 const CARD  = (e?: React.CSSProperties): React.CSSProperties =>
-  ({ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 12, ...e });
+  ({ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, padding: 16, ...e });
 const IBOX  = (bg: string): React.CSSProperties =>
   ({ width: 28, height: 28, borderRadius: 8, background: bg, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 8 });
 
@@ -111,10 +111,10 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
           <div style={CARD()}>
             <div style={IBOX(T.tealBg)}><BarChart2 size={14} style={{ color: T.teal }} /></div>
             <p style={{ fontSize: 9.5, color: T.textSub, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Celková hodnota</p>
-            <p style={{ fontSize: 19, fontWeight: 700, color: T.text, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+            <p style={{ fontSize: 34, fontWeight: 800, color: T.text, lineHeight: 1, fontVariantNumeric: 'tabular-nums', letterSpacing: '-0.02em' }}>
               {totalValue > 0 ? formatUsd(totalValue) : '$0.00'}
             </p>
-            <p style={{ fontSize: 10, color: T.textMuted, marginTop: 3 }}>{metrics.assets.length} pozícií</p>
+            <p style={{ fontSize: 10, color: T.textMuted, marginTop: 4 }}>{metrics.assets.length} pozícií</p>
           </div>
 
           {/* Reálny vklad */}

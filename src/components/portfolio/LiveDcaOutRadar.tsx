@@ -24,16 +24,16 @@ type DcaT = 'BTC' | 'ETH' | 'SOL';
 
 // ─── design tokens ────────────────────────────────────────────────────────────
 const T = {
-  card:    'rgba(17,24,39,0.90)',
-  border:  'rgba(255,255,255,0.07)',
-  teal:    '#0ea5e9', tealBg:  'rgba(14,165,233,0.11)',
-  green:   '#10b981', greenBg: 'rgba(16,185,129,0.11)',
-  red:     '#ef4444', redBg:   'rgba(239,68,68,0.11)',
-  amber:   '#f59e0b', amberBg: 'rgba(245,158,11,0.11)',
-  text:    '#f1f5f9',
-  textSub: 'rgba(148,163,184,0.70)',
-  textMut: 'rgba(100,116,139,0.55)',
-  r:       '10px', rs: '7px',
+  card:    '#0A0A0A',
+  border:  'rgba(255,255,255,0.10)',
+  teal:    '#0ea5e9', tealBg:  'rgba(14,165,233,0.12)',
+  green:   '#10b981', greenBg: 'rgba(16,185,129,0.12)',
+  red:     '#ef4444', redBg:   'rgba(239,68,68,0.12)',
+  amber:   '#f59e0b', amberBg: 'rgba(245,158,11,0.12)',
+  text:    '#ffffff',
+  textSub: 'rgba(255,255,255,0.65)',
+  textMut: 'rgba(255,255,255,0.35)',
+  r:       '1.5rem', rs: '0.875rem',
 };
 
 const TC: Record<DcaT, string> = { BTC: '#F7931A', ETH: '#627EEA', SOL: '#9945FF' };
@@ -580,7 +580,8 @@ export function LiveDcaOutRadar() {
   const isLoading = rsiLoading;
 
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, overflow: 'hidden' }}>
+    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, overflow: 'hidden',
+      boxShadow: '0 0 50px -12px rgba(168,85,247,0.30)' }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
         borderBottom: `1px solid ${T.border}`, background: 'rgba(14,165,233,0.04)' }}>
