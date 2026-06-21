@@ -9,6 +9,7 @@
 
 import { TOKENS, MARKET_SPLIT, LIMIT_SPLIT, type PriceData } from './crypto';
 import { getEffectiveLimitInfo } from './dynamicLimits';
+import { continuousBudgetPct, continuousTokenSplit, tokenWeightFraction, budgetWhyText } from './dcaAllocationEngine';
 
 export type Regime = 'bull' | 'bear' | 'sideways' | 'panic' | 'euphoria';
 
@@ -280,18 +281,13 @@ export interface AllocationTuning {
   maReclaimActive?: boolean;
 }
 
-export function smoothAllocation(score: number, regime: Regime, tuning?: AllocationTuning): {
-  pct: number;                                  // 0..100
+export function smoothAllocation(score: number, _regime?: Regime, tuning?: AllocationTuning): {
+  pct: number;
   override: 'panic_floor' | 'euphoria_ceiling' | null;
 } {
-  const lo = tuning?.minAllocationPct ?? 22;
-  const hi = tuning?.maxAllocationPct ?? 80;
-  if (regime === 'panic' && score < 15) return { pct: 85, override: 'panic_floor' };
-  if (regime === 'euphoria' && score > 90) return { pct: 20, override: 'euphoria_ceiling' };
-  let raw = 82 - score * 0.62;
-  if (score > 75 && tuning?.highScoreReducerPct) raw -= tuning.highScoreReducerPct;
-  if (tuning?.maReclaimActive && tuning?.maReclaimBonusPct) raw += tuning.maReclaimBonusPct;
-  return { pct: clamp(raw, lo, hi), override: null };
+  void tuning;
+  const pct = continuousBudgetPct(score);
+  return { pct, override: null };
 }
 
 // ============================================================
@@ -351,22 +347,16 @@ function rationaleFor(p: {
   basePct: number;
   finalPct: number;
   conf: ConfidenceLevel;
-  override: 'panic_floor' | 'euphoria_ceiling' | null;
+  capital: number;
 }): string {
   const head = `Režim ${REGIME_LABEL_SK[p.regime]} · skóre ${p.score}/100`;
-  if (p.override === 'panic_floor') {
-    return `${head}. Panická kapitulácia + extrémne lacné valuation → override 85 % (agresívna akumulácia).`;
-  }
-  if (p.override === 'euphoria_ceiling') {
-    return `${head}. Eufória + prehriate skóre > 90 → override 20 % (defenzíva).`;
-  }
   const confTxt = p.conf === 'high' ? 'vysoká zhoda faktorov'
     : p.conf === 'medium' ? 'mierne rozporné faktory'
     : 'rozporné faktory';
   const tail = p.finalPct === Math.round(p.basePct)
     ? ''
-    : ` · z ${Math.round(p.basePct)} % na ${p.finalPct} % (${confTxt})`;
-  return `${head}. Vyhladená alokácia podľa vzorca 82 − skóre×0.62${tail}.`;
+    : ` · confidence ×${p.conf === 'high' ? '1.00' : p.conf === 'medium' ? '0.93' : '0.85'} (${confTxt})`;
+  return `${head}. ${budgetWhyText(p.score, p.finalPct, p.capital)}${tail}`;
 }
 
 // ============================================================
@@ -408,7 +398,7 @@ export function buildPlan(
     high: tuning?.confHighMult,
   });
 
-  const finalPctRaw = override ? basePct : basePct * conf.multiplier;
+  const finalPctRaw = basePct * conf.multiplier;
   const finalPct = Math.round(clamp(finalPctRaw, 0, 100));
   const finalFraction = finalPct / 100;
 
@@ -416,6 +406,8 @@ export function buildPlan(
   const reservedUsd = inputs.capital - investableUsd;
   const marketUsd = investableUsd * MARKET_SPLIT;
   const limitUsd = investableUsd * LIMIT_SPLIT;
+
+  const tokenSplit = continuousTokenSplit(factorScore);
 
   // Regime-based baseline discount (applied to BTC; ETH/SOL get +1pp/+2pp minimum spread).
   const regimeBaselinePct = limitDiscountFor(regime, tuning?.limitDiscountDefaultPct);
@@ -428,8 +420,9 @@ export function buildPlan(
   const btcDiscountPct = Math.max(regimeBaselinePct, btcDynPct);
 
   const perAsset: AssetPlan[] = TOKENS.map(t => {
-    const assetMarket = marketUsd * t.allocation;
-    const assetLimit = limitUsd * t.allocation;
+    const weight = tokenWeightFraction(t.symbol, tokenSplit);
+    const assetMarket = marketUsd * weight;
+    const assetLimit = limitUsd * weight;
     const livePrice = prices?.[t.coingeckoId]?.usd;
     const currentPrice = livePrice && livePrice > 0
       ? livePrice
@@ -448,7 +441,7 @@ export function buildPlan(
       name: t.name,
       color: t.color,
       coingeckoId: t.coingeckoId,
-      weight: t.allocation,
+      weight,
       marketUsd: assetMarket,
       limitUsd: assetLimit,
       currentPrice,
@@ -494,7 +487,7 @@ export function buildPlan(
 
     rationale: rationaleFor({
       regime, score: factorScore, basePct, finalPct,
-      conf: conf.level, override,
+      conf: conf.level, capital: inputs.capital,
     }),
 
     // Back-compat

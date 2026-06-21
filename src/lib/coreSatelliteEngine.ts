@@ -1,6 +1,9 @@
 // Autonomous Core-Satellite Engine
-// Derives Core (BTC) vs Satellite (ETH+SOL) split from 5 Market Mode factors.
+// Derives Core (BTC) vs Satellite (ETH+SOL) split from market score + 5 factors.
 // Pure / deterministic — UI components consume the result through MarketContext.
+
+import { continuousTokenSplit } from '@/lib/dcaAllocationEngine';
+import { getLatestMarketScore } from '@/lib/dcaScoreBridge';
 
 export type MarketMode = 'ACCUMULATION' | 'CAUTIOUS_ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
 
@@ -32,6 +35,8 @@ export interface EngineInputs {
   solVol14d: number;
   /** SOL volatility baseline (historical avg). Used by Volatility Defense to detect spikes. */
   solVol14dBaseline?: number;
+  /** Komozitné skóre 0..100 z Monday Controller (plynulý token split). */
+  marketScore?: number;
 }
 
 export interface EngineResult {
@@ -140,64 +145,22 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   const weights = { wma200: 0.25, fearGreed: 0.20, cbbc: 0.15, liquidity: 0.15, volatility: 0.25 };
   const score = factors.reduce((s, f) => s + (f.bias || 0) * (weights[f.key] ?? 0), 0); // -1..+1
 
-  let coreWeight: number;
-  if (defensiveLock) {
-    coreWeight = 75; // max BTC anchor
-  } else if (score >= 0.45) {
-    // strong accumulation — slightly heavier satellites to capture upside
-    coreWeight = clamp(58 - score * 8, 50, 75);
-  } else if (score <= -0.45) {
-    coreWeight = clamp(70 + Math.abs(score) * 5, 50, 75);
-  } else {
-    coreWeight = clamp(62 - score * 10, 50, 75);
-  }
-  coreWeight = Math.round(coreWeight);
-  const satelliteWeight = 100 - coreWeight;
-
-  // === AUTONOMOUS SATELLITE SPLIT (ETH vs SOL) ===
-  // Baseline ETH-heavy (ETH = bluechip satellite, deeper liquidity, larger market cap).
-  // Inputs: per-coin CBBC quality + 14D volatility (independent ATR proxy).
-  // Rule 1 — QUALITY BIAS: if ETH CBBC > SOL CBBC → +10 pp weight advantage to ETH.
-  // Rule 2 — VOLATILITY DEFENSE: if SOL vol > baseline × 1.15 → shift +15 pp from SOL → ETH.
-  const ethCbbc = inputs.ethCbbc ?? 92;
-  const solCbbc = inputs.solCbbc ?? 84;
-  const solBaseline = inputs.solVol14dBaseline ?? 4.0;
-  let ethShare = 0.60; // ETH baseline 60 % of satellite bucket
-  const qualityBiasApplied = ethCbbc > solCbbc;
-  if (qualityBiasApplied) ethShare += 0.10;
-  const solVolRatio = solBaseline > 0 ? inputs.solVol14d / solBaseline : 1;
-  const volDefenseApplied = solVolRatio > 1.15;
-  if (volDefenseApplied) ethShare += 0.15;
-  ethShare = clamp(ethShare, 0.50, 0.95);
-  const solShare = 1 - ethShare;
-  const ethPct = Math.round(satelliteWeight * ethShare);
-  const solPct = satelliteWeight - ethPct;
-
   const mode = inferMode(score, defensiveLock, f200, fFg);
 
+  const marketScore = inputs.marketScore ?? getLatestMarketScore();
+  const split = continuousTokenSplit(marketScore);
+  let coreWeight = Math.round(defensiveLock ? Math.max(split.btc, 75) : split.btc);
+  const satelliteWeight = 100 - coreWeight;
+  const satSplit = split.eth + split.sol;
+  const ethPct = satSplit > 0 ? Math.round(satelliteWeight * (split.eth / satSplit)) : 0;
+  const solPct = satelliteWeight - ethPct;
+
   const narrative: string[] = [];
-  narrative.push(
-    `Alokácia BTC ${defensiveLock ? 'uzamknutá' : 'nastavená'} na ${coreWeight} % vďaka ${
-      f200.status === 'pos' ? '200WMA (POD)' : f200.status === 'neg' ? '200WMA (NAD)' : '200WMA neutrál'
-    } a F&G ${fFg.value}.`,
-  );
+  narrative.push(split.why);
   if (defensiveLock) {
-    narrative.push('Volatility Risk prekročil prah — DEFENSIVE mód aktivovaný, nové buy príkazy zmrazené.');
-  } else if (mode === 'CAUTIOUS_ACCUMULATION') {
-    narrative.push(`Cautious Accumulation — 200WMA NAD (${f200.value}) brzdí, ale F&G ${fFg.value} (panika) tlačí na nákupy. Core navýšený na ${coreWeight} %.`);
-  } else if (mode === 'ACCUMULATION') {
-    narrative.push(`Satelity ${satelliteWeight} % (ETH ${ethPct} % · SOL ${solPct} %) — likvidita ${fLi.value} podporuje rast.`);
-  } else if (mode === 'DISTRIBUTION') {
-    narrative.push(`Distribúcia — Core navýšený, satelity stlačené na ${satelliteWeight} %.`);
-  } else {
-    narrative.push(`Vyvážený režim — ${coreWeight}/${satelliteWeight} split medzi Core a satelitmi.`);
+    narrative.push('Volatility Risk prekročil prah — DEFENSIVE mód, BTC kotva navýšená, nové buy príkazy zmrazené.');
   }
-  narrative.push(`CBBC kvalita ${fCb.value} · vol ${fVo.value}.`);
-  if (volDefenseApplied) {
-    narrative.push(`⚠ Volatility Defense: SOL 14D vol ${inputs.solVol14d.toFixed(2)} % > baseline ${solBaseline.toFixed(2)} % × 1.15 → kapitál presunutý zo SOL do ETH (+15 pp).`);
-  } else if (qualityBiasApplied) {
-    narrative.push(`Quality Bias: ETH CBBC ${ethCbbc} > SOL CBBC ${solCbbc} → ETH dostáva +10 pp výhodu v satelite buckete.`);
-  }
+  narrative.push(`5 faktorov: 200WMA ${f200.value} · F&G ${fFg.value} · CBBC ${fCb.value}.`);
 
   return {
     factors,
