@@ -14,7 +14,6 @@ import { TOKENS, formatUsd, formatPrice } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
-import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
@@ -58,9 +57,9 @@ function ModernPortfolioInner({ lang }: Props) {
   const { data: prices, isFetching } = usePrices();
   const { data: fg } = useFearGreed();
   const { data: settings } = useAppSettings();
-  const metrics = usePortfolioMetrics(prices);
   const reservoir = useProfitReservoir();
   const {
+    metrics,
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, breakdown,
   } = usePortfolio();

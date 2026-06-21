@@ -42,7 +42,12 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
   if (highImpact.length === 0) return;
 
   const sentKey = 'telegram_sent_news_ids';
-  const sentIds: string[] = JSON.parse(localStorage.getItem(sentKey) || '[]');
+  let sentIds: string[] = [];
+  try {
+    sentIds = JSON.parse(localStorage.getItem(sentKey) || '[]');
+  } catch {
+    sentIds = [];
+  }
   const newItems = highImpact.filter(n => !sentIds.includes(String(n.id)));
   if (newItems.length === 0) return;
 
