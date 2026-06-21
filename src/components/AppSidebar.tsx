@@ -34,7 +34,7 @@ export function AppSidebar({ active, onChange }: Props) {
       className="hidden md:flex flex-col fixed left-0 top-0 h-full z-40 py-3 gap-0.5"
       style={{
         width: 52,
-        backgroundColor: '#0B0E14',
+        backgroundColor: '#050508',
         borderRight: '1px solid rgba(255,255,255,0.05)',
       }}
     >

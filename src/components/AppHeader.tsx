@@ -15,7 +15,7 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
     <header
       className="sticky top-0 z-30 border-b"
       style={{
-        background: 'rgba(11,14,20,0.92)',
+        background: 'rgba(5,5,8,0.94)',
         borderBottomColor: 'rgba(255,255,255,0.06)',
         backdropFilter: 'blur(16px)',
         WebkitBackdropFilter: 'blur(16px)',

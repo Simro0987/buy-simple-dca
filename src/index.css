@@ -54,36 +54,36 @@
     --sidebar-ring: 142 70% 40%;
   }
 
-  /* ── Terminal dark theme ────────────────────────────────────────────────── */
+  /* ── Web3 "Deep Space" dark theme ──────────────────────────────────────── */
   .dark {
-    /* #0B0E14 = hsl(219, 29%, 6%) */
-    --background: 219 29% 6%;
-    --foreground: 210 16% 88%;
+    /* Absolute deep black — #050505 / hsl(240 10% 2%) */
+    --background: 240 10% 2%;
+    --foreground: 0 0% 96%;
 
-    /* card slightly lighter than background */
-    --card: 220 22% 9%;
-    --card-foreground: 210 16% 88%;
+    --card: 240 8% 5%;
+    --card-foreground: 0 0% 96%;
 
-    --popover: 220 22% 9%;
-    --popover-foreground: 210 16% 88%;
+    --popover: 240 8% 5%;
+    --popover-foreground: 0 0% 96%;
 
+    /* Neon green primary (Solana-inspired #14F195) */
     --primary: 154 100% 38%;
-    --primary-foreground: 219 29% 6%;
+    --primary-foreground: 240 10% 2%;
 
-    --secondary: 220 18% 14%;
-    --secondary-foreground: 210 16% 78%;
+    --secondary: 240 6% 11%;
+    --secondary-foreground: 0 0% 78%;
 
-    --muted: 220 18% 11%;
-    --muted-foreground: 215 10% 44%;
+    --muted: 240 6% 8%;
+    --muted-foreground: 240 5% 44%;
 
     --accent: 199 89% 48%;
-    --accent-foreground: 219 29% 6%;
+    --accent-foreground: 240 10% 2%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 220 14% 13%;
-    --input: 220 14% 13%;
+    --border: 240 6% 11%;
+    --input: 240 6% 11%;
     --ring: 154 100% 38%;
 
     --radius: 0.5rem;
@@ -92,26 +92,32 @@
     --loss: 0 72% 51%;
     --warning: 38 92% 50%;
 
-    /* nav pitch-black */
-    --nav-bg: 219 35% 4%;
+    --nav-bg: 240 10% 1%;
     --nav-active: 154 100% 38%;
-    --nav-inactive: 215 10% 38%;
+    --nav-inactive: 240 5% 38%;
 
-    --sidebar-background: 220 22% 9%;
-    --sidebar-foreground: 210 16% 88%;
-    --sidebar-primary: 142 62% 40%;
-    --sidebar-primary-foreground: 219 29% 6%;
-    --sidebar-accent: 220 18% 14%;
-    --sidebar-accent-foreground: 210 16% 88%;
-    --sidebar-border: 220 14% 13%;
-    --sidebar-ring: 142 62% 40%;
+    --sidebar-background: 240 8% 5%;
+    --sidebar-foreground: 0 0% 96%;
+    --sidebar-primary: 154 100% 38%;
+    --sidebar-primary-foreground: 240 10% 2%;
+    --sidebar-accent: 240 6% 11%;
+    --sidebar-accent-foreground: 0 0% 96%;
+    --sidebar-border: 240 6% 11%;
+    --sidebar-ring: 154 100% 38%;
+
+    /* ── Web3 glow CSS variables ─────────────────────────────────── */
+    --glow-purple:  0 0 20px 3px rgba(153, 69, 255, 0.35);
+    --glow-green:   0 0 20px 3px rgba( 20,241, 149, 0.35);
+    --glow-magenta: 0 0 20px 3px rgba(255,  0, 122, 0.35);
+    --glow-cyan:    0 0 20px 3px rgba(  0,229, 255, 0.35);
+    --glow-gold:    0 0 20px 3px rgba(255,184,   0, 0.35);
   }
 }
 
 @layer base {
-  /* Force the terminal background on html so it's never white */
+  /* Force the deep space background on html — never shows white flash */
   html {
-    background-color: #0B0E14;
+    background-color: #050505;
   }
 
   * {
@@ -144,9 +150,9 @@
   .bg-loss      { background-color: hsl(var(--loss)); }
   .bg-warning   { background-color: hsl(var(--warning)); }
 
-  /* ── glass-card: exact terminal glassmorphism ───────────────────────────── */
+  /* ── glass-card: exact deep space glassmorphism ────────────────────────── */
   .glass-card {
-    background: rgba(15, 20, 32, 0.88);
+    background: rgba(10, 10, 18, 0.88);
     border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: var(--radius);
     backdrop-filter: blur(12px);
@@ -222,4 +228,32 @@
   .tag-btc     { background: rgba(247,147, 26,0.12); color: #F7931A; }
   .tag-eth     { background: rgba( 98,126,234,0.12); color: #627EEA; }
   .tag-sol     { background: rgba(153, 69,255,0.12); color: #9945FF; }
+
+  /* ── Web3 glow utilities ─────────────────────────────────────────── */
+  .glow-purple  { box-shadow: var(--glow-purple,  0 0 20px 3px #9945FF40); }
+  .glow-green   { box-shadow: var(--glow-green,   0 0 20px 3px #14F19540); }
+  .glow-magenta { box-shadow: var(--glow-magenta, 0 0 20px 3px #FF007A40); }
+  .glow-cyan    { box-shadow: var(--glow-cyan,    0 0 20px 3px #00E5FF40); }
+  .glow-gold    { box-shadow: var(--glow-gold,    0 0 20px 3px #FFB80040); }
+
+  /* Gradient border helper */
+  .border-neon-purple { border-color: #9945FF; }
+  .border-neon-green  { border-color: #14F195; }
+  .border-neon-magenta{ border-color: #FF007A; }
+
+  /* Web3 card — glass on absolute black */
+  .web3-card {
+    background: rgba(15, 15, 25, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: var(--radius);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+
+  /* Neon text utilities */
+  .text-neon-purple  { color: #9945FF; }
+  .text-neon-green   { color: #14F195; }
+  .text-neon-magenta { color: #FF007A; }
+  .text-neon-cyan    { color: #00E5FF; }
+  .text-neon-gold    { color: #FFB800; }
 }
