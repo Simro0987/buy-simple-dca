@@ -10,7 +10,7 @@
  *  • F&G    — useFearGreed (5 min)
  *  • RSI    — Binance daily klines (10 min)
  */
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   Target, RefreshCw, ShieldCheck, AlertTriangle,
@@ -18,7 +18,7 @@ import {
   Copy, Check,
 } from 'lucide-react';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
-import { TOKENS, formatPrice } from '@/lib/crypto';
+import { TOKENS, formatPrice, formatUsd } from '@/lib/crypto';
 
 type DcaT = 'BTC' | 'ETH' | 'SOL';
 
@@ -335,6 +335,51 @@ function TokenCard({
                 outline: 'none', fontVariantNumeric: 'tabular-nums', maxWidth: 140 }} />
           </div>
 
+          {/* ── Per-token financial metrics ── */}
+          {dcaPrice > 0 && currentPrice > 0 && (
+            <div style={{ marginBottom: 12 }}>
+              <p style={{ fontSize: 8.5, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: 6, fontWeight: 700 }}>
+                Finančné metriky · {sym}
+              </p>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                {[
+                  { l: 'DCA cena',          v: `$${dcaPrice.toLocaleString('en-US',{maximumFractionDigits:2})}`,   c: T.textSub },
+                  { l: 'Celk. investované', v: formatUsd(hold * dcaPrice),                                         c: T.textSub },
+                  { l: 'Aktuálna hodnota',  v: formatUsd(hold * currentPrice),                                     c: T.teal    },
+                  { l: 'Holdings',          v: `${hold.toPrecision(5)} ${sym}`,                                    c: T.textSub },
+                ].map(item => (
+                  <div key={item.l} style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${T.border}`,
+                    borderRadius: 7, padding: '8px 10px' }}>
+                    <p style={{ fontSize: 8.5, color: T.textMut, marginBottom: 3, textTransform: 'uppercase', letterSpacing: '0.05em' }}>{item.l}</p>
+                    <p style={{ fontSize: 12, fontWeight: 700, color: item.c, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>{item.v}</p>
+                  </div>
+                ))}
+              </div>
+              {/* PnL row — full width, prominent */}
+              <div style={{ marginTop: 6, background: pnlPct >= 0 ? T.greenBg : T.redBg,
+                border: `1px solid ${pnlPct >= 0 ? T.green : T.red}30`,
+                borderRadius: 7, padding: '8px 12px',
+                display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <p style={{ fontSize: 9, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 700 }}>PnL (Zisk / Strata)</p>
+                <div style={{ textAlign: 'right' as const }}>
+                  <p style={{ fontSize: 15, fontWeight: 800, color: pnlPct >= 0 ? T.green : T.red,
+                    fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                    {pnlPct >= 0 ? '+' : ''}{formatUsd(hold * currentPrice - hold * dcaPrice)}
+                  </p>
+                  <p style={{ fontSize: 10, fontWeight: 700, color: pnlPct >= 0 ? T.green : T.red, fontVariantNumeric: 'tabular-nums', marginTop: 2 }}>
+                    {pnlPct >= 0 ? '+' : ''}{pnlPct.toFixed(2)}%
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+          {dcaPrice === 0 && (
+            <p style={{ fontSize: 9, color: T.textMut, marginBottom: 12, padding: '6px 8px',
+              background: 'rgba(255,255,255,0.03)', borderRadius: 6 }}>
+              Nastav priemernú DCA cenu pre zobrazenie finančných metrík.
+            </p>
+          )}
+
           {/* Live Risk Score bar (only when in profit) */}
           {inProfit ? (
             <div style={{ marginBottom: 12 }}>
@@ -503,6 +548,25 @@ export function LiveDcaOutRadar() {
     SOL: prices?.[CG_ID.SOL]?.usd ?? 0,
   };
 
+  // ── Portfolio financial summary ──────────────────────────────────────────
+  const holdings = useMemo(() => loadHoldings(), [confirmKey]);
+  const freeCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
+
+  const portfolioTotals = useMemo(() => {
+    let totalInvested = 0, totalValue = 0;
+    (['BTC', 'ETH', 'SOL'] as DcaT[]).forEach(sym => {
+      const hold  = holdings[sym.toLowerCase()] ?? DEFAULT_HOLD[sym];
+      const dca   = dcaPrices[sym] ?? 0;
+      const price = livePrices[sym];
+      if (dca > 0)   totalInvested += hold * dca;
+      if (price > 0) totalValue    += hold * price;
+    });
+    const pnlUsd = totalValue - totalInvested;
+    const pnlPct = totalInvested > 0 ? (pnlUsd / totalInvested) * 100 : 0;
+    return { totalInvested, totalValue, pnlUsd, pnlPct };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [holdings, dcaPrices, livePrices.BTC, livePrices.ETH, livePrices.SOL]);
+
   const sellSignals = (['BTC', 'ETH', 'SOL'] as DcaT[]).filter(sym => {
     const p     = livePrices[sym];
     const dca   = dcaPrices[sym];
@@ -584,6 +648,58 @@ export function LiveDcaOutRadar() {
           </div>
         ))}
       </div>
+
+      {/* ── Portfolio financial summary ── */}
+      {portfolioTotals.totalInvested > 0 && (
+        <div style={{ padding: '10px 12px', borderBottom: `1px solid ${T.border}` }}>
+          <p style={{ fontSize: 8.5, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700, marginBottom: 8 }}>
+            Súhrn portfólia · BTC + ETH + SOL
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 8 }}>
+            {/* Celkovo investované */}
+            <div style={{ background: 'rgba(255,255,255,0.03)', border: `1px solid ${T.border}`, borderRadius: 8, padding: '8px 10px' }}>
+              <p style={{ fontSize: 8, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Invest.</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.text, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {formatUsd(portfolioTotals.totalInvested)}
+              </p>
+            </div>
+            {/* Aktuálna hodnota */}
+            <div style={{ background: 'rgba(14,165,233,0.07)', border: `1px solid ${T.teal}30`, borderRadius: 8, padding: '8px 10px' }}>
+              <p style={{ fontSize: 8, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>Hodnota</p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.teal, fontVariantNumeric: 'tabular-nums', lineHeight: 1 }}>
+                {formatUsd(portfolioTotals.totalValue)}
+              </p>
+            </div>
+            {/* Celkový PnL */}
+            <div style={{
+              background: portfolioTotals.pnlUsd >= 0 ? T.greenBg : T.redBg,
+              border: `1px solid ${portfolioTotals.pnlUsd >= 0 ? T.green : T.red}30`,
+              borderRadius: 8, padding: '8px 10px' }}>
+              <p style={{ fontSize: 8, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 4 }}>PnL</p>
+              <p style={{ fontSize: 13, fontWeight: 800, fontVariantNumeric: 'tabular-nums', lineHeight: 1,
+                color: portfolioTotals.pnlUsd >= 0 ? T.green : T.red }}>
+                {portfolioTotals.pnlUsd >= 0 ? '+' : ''}{formatUsd(portfolioTotals.pnlUsd)}
+              </p>
+              <p style={{ fontSize: 9, fontWeight: 700, fontVariantNumeric: 'tabular-nums', marginTop: 2,
+                color: portfolioTotals.pnlUsd >= 0 ? T.green : T.red }}>
+                {portfolioTotals.pnlPct >= 0 ? '+' : ''}{portfolioTotals.pnlPct.toFixed(2)}%
+              </p>
+            </div>
+          </div>
+          {/* Voľný cash row */}
+          {freeCash > 0 && (
+            <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              background: 'rgba(245,158,11,0.07)', border: `1px solid ${T.amber}25`, borderRadius: 8, padding: '7px 10px' }}>
+              <p style={{ fontSize: 8.5, color: T.textMut, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                Voľný cash · Profit Reservoir
+              </p>
+              <p style={{ fontSize: 13, fontWeight: 700, color: T.amber, fontVariantNumeric: 'tabular-nums' }}>
+                {formatUsd(freeCash)}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Token cards */}
       <div style={{ padding: '10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
