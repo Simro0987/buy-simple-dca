@@ -60,9 +60,9 @@ const DECIMALS: Record<AdvisorSymbol, number> = { BTC: 4, ETH: 3, SOL: 2 };
 
 // Default + diversification protocols (match stakingLedger PROTOCOL_PRESETS).
 const PROTOCOL_DEFAULTS: Record<AdvisorSymbol, { primary: string; fallback: string; alternates: string[] }> = {
-  ETH: { primary: 'Lido (stETH)',   fallback: 'Kiln (Solo Manage)', alternates: ['Rocket Pool', 'EigenLayer (weETH)'] },
-  SOL: { primary: 'Jito Staking',   fallback: 'Marinade',           alternates: ['Kamino Autopilot', 'Renzo (ezSOL)'] },
-  BTC: { primary: 'Babylon Staking', fallback: 'Babylon Staking',   alternates: ['Lombard LBTC', 'Morpho Blue LBTC'] },
+  ETH: { primary: 'Rocket Pool (rETH)',     fallback: 'ether.fi (weETH)',    alternates: ['Kiln (Solo Manage)', 'Aave V3 Lending'] },
+  SOL: { primary: 'Marinade Native (mSOL)', fallback: 'Sanctum INF (INF)',   alternates: ['Kamino Autopilot'] },
+  BTC: { primary: 'Babylon Staking',        fallback: 'Babylon Staking',     alternates: ['Lombard LBTC', 'Morpho Blue LBTC'] },
 };
 
 // ===== Curve & zones =====
