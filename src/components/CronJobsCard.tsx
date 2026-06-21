@@ -9,6 +9,7 @@ const JOB_TO_FUNCTION: Record<string, { fn: string; body?: Record<string, unknow
   'weekly-dca-reminder': { fn: 'telegram-dca-reminder' },
   'limit-proximity-alert': { fn: 'telegram-price-alert' },
   'hourly-news-alert': { fn: 'telegram-news-alert' },
+  'daily-risk-report-19cet': { fn: 'telegram-daily-risk-report' },
   'staking-maturity-14th': { fn: 'telegram-staking-maturity' },
   'staking-maturity-15th': { fn: 'telegram-staking-maturity' },
   'poll-telegram-callbacks': { fn: 'telegram-poll-callbacks' },
@@ -52,6 +53,7 @@ function describeSchedule(schedule: string, lang: Lang): string {
     '0 * * * *': { sk: 'každú hodinu', en: 'hourly' },
     '0 0 * * *': { sk: 'denne o 00:00', en: 'daily at 00:00' },
     '0 8 * * *': { sk: 'denne o 08:00', en: 'daily at 08:00' },
+    '0 18 * * *': { sk: 'denne o 19:00 (SEČ)', en: 'daily at 19:00 CET' },
     '0 8 * * 1': { sk: 'pondelok 08:00', en: 'Monday 08:00' },
     '0 20 * * 0': { sk: 'nedeľa 20:00', en: 'Sunday 20:00' },
   };

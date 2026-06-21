@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, RefreshCw, Copy, Check, Lock, RotateCcw,
   TrendingUp, TrendingDown, Target,
-  AlertTriangle, Sparkles,
+  AlertTriangle, Sparkles, Send,
 } from 'lucide-react';
 import { TOKENS, formatUsd, formatPrice } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
@@ -17,6 +17,8 @@ import { useAppSettings } from '@/hooks/useAppSettings';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
+import { generateDailyRiskReport } from '@/lib/dailyRiskReport';
+import { sendDailyRiskReportToTelegram } from '@/lib/telegramService';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
 import {
@@ -43,6 +45,8 @@ const GOAL_BTC = 1;
 const LAST_HALVING = new Date('2024-04-19');
 const NEXT_HALVING = new Date('2028-04-19');
 const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
+const DAILY_REPORT_KEY = 'daily-risk-report-last';
+const DAILY_REPORT_SENT_IDS_KEY = 'telegram_sent_news_ids';
 
 export function ModernPortfolioPage({ lang }: Props) {
   return (
@@ -69,6 +73,12 @@ function ModernPortfolioInner({ lang }: Props) {
   const [expandedRadar, setExpandedRadar] = useState<DcaToken | null>('BTC');
   const [copied, setCopied] = useState<string | null>(null);
   const [busyTp, setBusyTp] = useState<string | null>(null);
+  const [reportSending, setReportSending] = useState(false);
+  const [dailyReport, setDailyReport] = useState<string>(() =>
+    localStorage.getItem(DAILY_REPORT_KEY) || (lang === 'sk'
+      ? 'Denný report ešte nebol vygenerovaný.'
+      : 'Daily report has not been generated yet.'),
+  );
 
   const fgValue = fg?.value ?? 50;
   const weeklyCapital = Number(settings?.default_amount ?? 0);
@@ -164,6 +174,64 @@ function ModernPortfolioInner({ lang }: Props) {
     () => takeProfitRows.filter(r => r.eligible),
     [takeProfitRows],
   );
+  const pnl24hUsd = useMemo(() => {
+    return metrics.assets.reduce((sum, asset) => {
+      const tokenMeta = TOKENS.find(t => t.symbol === asset.symbol);
+      if (!tokenMeta) return sum;
+      const changePct = prices?.[tokenMeta.coingeckoId]?.usd_24h_change ?? 0;
+      return sum + (asset.value * changePct) / 100;
+    }, 0);
+  }, [metrics.assets, prices]);
+
+  const buildDailyReport = useCallback(() => {
+    return generateDailyRiskReport({
+      totalPortfolioValueUsd: metrics.totalValue,
+      cleanLiquidityUsd: freeCash + reservoir.stable,
+      pnl24hUsd,
+      cumulativePnlUsd: metrics.totalPnl,
+      globalRiskScore: maxRisk,
+      assets: metrics.assets.map((asset) => ({
+        symbol: asset.symbol,
+        allocationPct: asset.actualPct * 100,
+        spotPrice: asset.currentPrice,
+        holdings: asset.holdings,
+        investedUsd: asset.invested,
+      })),
+    });
+  }, [freeCash, maxRisk, metrics, pnl24hUsd, reservoir.stable]);
+
+  const handleManualReport = useCallback(async () => {
+    setReportSending(true);
+    try {
+      const report = buildDailyReport();
+      setDailyReport(report);
+      localStorage.setItem(DAILY_REPORT_KEY, report);
+
+      const chatId = localStorage.getItem('telegram_chat_id')?.trim();
+      const sendResult = await sendDailyRiskReportToTelegram(report, chatId);
+      if (!sendResult.success) {
+        throw new Error(sendResult.error || (sk ? 'Odoslanie reportu zlyhalo' : 'Report delivery failed'));
+      }
+
+      // localStorage hardening for sent ids history
+      let sentIds: string[] = [];
+      try {
+        sentIds = JSON.parse(localStorage.getItem(DAILY_REPORT_SENT_IDS_KEY) || '[]');
+      } catch {
+        sentIds = [];
+      }
+      const reportId = `daily-risk-report:${new Date().toISOString().slice(0, 10)}`;
+      if (!sentIds.includes(reportId)) {
+        sentIds = [...sentIds, reportId].slice(-200);
+      }
+      localStorage.setItem(DAILY_REPORT_SENT_IDS_KEY, JSON.stringify(sentIds));
+      toast.success(sk ? 'Denný report odoslaný na Telegram' : 'Daily report sent to Telegram');
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : (sk ? 'Report sa nepodarilo odoslať' : 'Failed to send report'));
+    } finally {
+      setReportSending(false);
+    }
+  }, [buildDailyReport, sk]);
 
   return (
     <div className="relative space-y-5 pb-8 -mx-1">
@@ -232,6 +300,27 @@ function ModernPortfolioInner({ lang }: Props) {
           </Bento>
         ))}
       </div>
+
+      {/* ═══ DAILY RISK REPORT ═══════════════════════════════════════════════ */}
+      <Bento delay={0.18} className="bg-[#0A0A0A] border border-white/10 p-5">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <Label>Daily Risk Report</Label>
+            <p className="text-[11px] text-white/35 font-mono mt-1">Portfolio + WACB + LiveRiskScore + concentration risk</p>
+          </div>
+          <button
+            onClick={() => void handleManualReport()}
+            disabled={reportSending}
+            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60"
+          >
+            <Send className="w-3.5 h-3.5" />
+            {reportSending ? 'Sending…' : 'Generate & Send'}
+          </button>
+        </div>
+        <pre className="mt-4 text-[11px] leading-relaxed text-white/75 whitespace-pre-wrap break-words font-mono">
+          {dailyReport}
+        </pre>
+      </Bento>
 
       {/* ═══ DCA-OUT RADAR — VIZUÁLNA DOMINANTA ═══════════════════════════ */}
       <Bento
