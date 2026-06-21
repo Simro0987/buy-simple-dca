@@ -43,6 +43,7 @@ const TOKEN_DECIMALS: Record<string, number> = { BTC: 6, ETH: 5, SOL: 3 };
 const GOAL_BTC = 1;
 const LAST_HALVING = new Date('2024-04-19');
 const NEXT_HALVING = new Date('2028-04-19');
+const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
 
 export function ModernPortfolioPage({ lang }: Props) {
   return (
@@ -81,13 +82,16 @@ function ModernPortfolioInner({ lang }: Props) {
     staleTime: 10 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
   });
-  const rsi = rsiData ?? { BTC: 50, ETH: 50, SOL: 50 };
+  const rsi = useMemo<Record<DcaToken, number>>(
+    () => rsiData ?? DEFAULT_RSI,
+    [rsiData],
+  );
 
-  const livePrices: Record<DcaToken, number> = {
+  const livePrices = useMemo<Record<DcaToken, number>>(() => ({
     BTC: prices?.[DCA_CG_ID.BTC]?.usd ?? 0,
     ETH: prices?.[DCA_CG_ID.ETH]?.usd ?? 0,
     SOL: prices?.[DCA_CG_ID.SOL]?.usd ?? 0,
-  };
+  }), [prices]);
 
   const updateDcaPrice = useCallback((sym: DcaToken, v: number) => {
     setDcaPrices(prev => { const n = { ...prev, [sym]: v }; saveDcaPrices(n); return n; });

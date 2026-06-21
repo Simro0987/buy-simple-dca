@@ -83,6 +83,25 @@ function loadHoldings(): Record<string, number> {
   } catch { return {}; }
 }
 
+function sameNumberMap(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if ((a[k] ?? 0) !== (b[k] ?? 0)) return false;
+  }
+  return true;
+}
+
+function sameSourceMap(
+  a: Record<string, 'auto' | 'manual'>,
+  b: Record<string, 'auto' | 'manual'>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if ((a[k] ?? 'manual') !== (b[k] ?? 'manual')) return false;
+  }
+  return true;
+}
+
 export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResult, advancedData }: Props) {
   const { data: hookPrices } = usePrices();
   const prices = propPrices || hookPrices;
@@ -152,9 +171,12 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
       }
     }
 
-    setAvgCostBasis(newBasis);
-    setAvgCosts(newBasis);
-    setCostSource(sources);
+    const storedBasis = getAvgCostBasis();
+    if (!sameNumberMap(storedBasis, newBasis)) {
+      setAvgCostBasis(newBasis);
+    }
+    setAvgCosts(prev => (sameNumberMap(prev, newBasis) ? prev : newBasis));
+    setCostSource(prev => (sameSourceMap(prev, sources) ? prev : sources));
   }, [prices, portfolioAvgCosts]);
 
   const saveAvgCost = (tokenId: string) => {
@@ -353,25 +375,39 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const totalPL = totalCurrent - totalInvested;
   const totalPLPct = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
+  const btcPL = plData.find(d => d.token.id === 'bitcoin')?.plUsd ?? 0;
+  const ethPL = plData.find(d => d.token.id === 'ethereum')?.plUsd ?? 0;
+  const solPL = plData.find(d => d.token.id === 'solana')?.plUsd ?? 0;
+
   // Save daily P/L snapshot
   const [plHistory, setPlHistory] = useState<PLSnapshot[]>(getPLHistory);
-  useEffect(() => {
-    if (totalInvested <= 0) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const btcD = plData.find(d => d.token.id === 'bitcoin');
-    const ethD = plData.find(d => d.token.id === 'ethereum');
-    const solD = plData.find(d => d.token.id === 'solana');
-    const snapshot: PLSnapshot = {
-      date: today,
+  const dailySnapshot = useMemo<PLSnapshot | null>(() => {
+    if (totalInvested <= 0) return null;
+    return {
+      date: new Date().toISOString().slice(0, 10),
       totalPL,
       totalPLPct,
-      btcPL: btcD?.plUsd ?? 0,
-      ethPL: ethD?.plUsd ?? 0,
-      solPL: solD?.plUsd ?? 0,
+      btcPL,
+      ethPL,
+      solPL,
     };
-    savePLSnapshot(snapshot);
+  }, [totalInvested, totalPL, totalPLPct, btcPL, ethPL, solPL]);
+
+  useEffect(() => {
+    if (!dailySnapshot) return;
+    const historyNow = getPLHistory();
+    const existing = historyNow.find(h => h.date === dailySnapshot.date);
+    const unchanged = !!existing
+      && existing.totalPL === dailySnapshot.totalPL
+      && existing.totalPLPct === dailySnapshot.totalPLPct
+      && existing.btcPL === dailySnapshot.btcPL
+      && existing.ethPL === dailySnapshot.ethPL
+      && existing.solPL === dailySnapshot.solPL;
+
+    if (unchanged) return;
+    savePLSnapshot(dailySnapshot);
     setPlHistory(getPLHistory());
-  }, [totalPL, totalPLPct, totalInvested, plData]);
+  }, [dailySnapshot]);
 
   return (
     <div className="space-y-4">
