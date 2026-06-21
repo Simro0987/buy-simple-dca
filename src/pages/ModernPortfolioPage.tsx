@@ -15,6 +15,8 @@ import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
+import { useDailyRiskReport } from '@/hooks/useDailyRiskReport';
+import { DailyRiskReportCard } from '@/components/portfolio/DailyRiskReportCard';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
@@ -69,6 +71,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const [expandedRadar, setExpandedRadar] = useState<DcaToken | null>('BTC');
   const [copied, setCopied] = useState<string | null>(null);
   const [busyTp, setBusyTp] = useState<string | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
 
   const fgValue = fg?.value ?? 50;
   const weeklyCapital = Number(settings?.default_amount ?? 0);
@@ -154,6 +157,27 @@ function ModernPortfolioInner({ lang }: Props) {
 
   const isGain = metrics.totalPnl >= 0;
 
+  const reportInput = useMemo(() => ({
+    assets: metrics.assets,
+    prices,
+    fearGreed: fgValue,
+    rsi,
+    freeCash,
+    reservoirStable: reservoir.stable,
+    totalStakedValue,
+  }), [metrics.assets, prices, fgValue, rsi, freeCash, reservoir.stable, totalStakedValue]);
+
+  const metricsReady = !metrics.loading && metrics.totalValue > 0;
+  const {
+    report, reportText, lastGeneratedAt, needsToday, generate: generateReport,
+  } = useDailyRiskReport(metricsReady ? reportInput : null, metricsReady);
+
+  const handleGenerateReport = useCallback(() => {
+    setReportBusy(true);
+    generateReport('manual');
+    setTimeout(() => setReportBusy(false), 400);
+  }, [generateReport]);
+
   return (
     <div className="relative space-y-5 pb-8 -mx-1">
 
@@ -221,6 +245,17 @@ function ModernPortfolioInner({ lang }: Props) {
           </Bento>
         ))}
       </div>
+
+      {/* ═══ DENNÝ ANALYTICKÝ REPORT ═══════════════════════════════════════ */}
+      <DailyRiskReportCard
+        lang={lang}
+        report={report}
+        reportText={reportText}
+        lastGeneratedAt={lastGeneratedAt}
+        needsToday={needsToday}
+        onGenerate={handleGenerateReport}
+        generating={reportBusy}
+      />
 
       {/* ═══ DCA-OUT RADAR — VIZUÁLNA DOMINANTA ═══════════════════════════ */}
       <Bento
