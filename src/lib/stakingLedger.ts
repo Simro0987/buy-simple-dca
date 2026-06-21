@@ -17,8 +17,8 @@ const EVT = 'staking-ledger-change';
 // Predefined protocols matching planner categories (user can extend via free text).
 export const PROTOCOL_PRESETS: Record<LedgerSymbol, string[]> = {
   BTC: ['Babylon Staking', 'Lombard LBTC', 'Morpho Blue LBTC'],
-  ETH: ['Lido (stETH)', 'Kiln (Solo Manage)', 'Rocket Pool', 'EigenLayer (weETH)', 'Aave V3 Lending'],
-  SOL: ['Jito Staking', 'Marinade', 'Kamino Autopilot', 'Renzo (ezSOL)'],
+  ETH: ['Rocket Pool (rETH)', 'ether.fi (weETH)', 'Kiln (Solo Manage)', 'Aave V3 Lending'],
+  SOL: ['Marinade Native (mSOL)', 'Sanctum INF (INF)', 'Kamino Autopilot'],
 };
 
 export function getLedger(): StakedEntry[] {
