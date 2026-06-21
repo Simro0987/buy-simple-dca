@@ -5,12 +5,15 @@ import { PriceData, AthData } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { AdvancedMarketData } from '@/hooks/useAdvancedMarket';
 
-const PortfolioPage = lazy(() => import('@/pages/PortfolioPage').then(m => ({ default: m.PortfolioPage })));
+const ModernPortfolioPage = lazy(() =>
+  import('@/pages/ModernPortfolioPage').then(m => ({ default: m.ModernPortfolioPage })),
+);
 
 const Fallback = () => (
-  <div className="space-y-3">
-    <Skeleton className="h-8 w-2/3" />
-    <Skeleton className="h-32 w-full" />
+  <div className="space-y-4">
+    <Skeleton className="h-16 w-full bg-white/5 rounded-3xl" />
+    <Skeleton className="h-48 w-full bg-white/5 rounded-3xl" />
+    <Skeleton className="h-64 w-full bg-white/5 rounded-3xl" />
   </div>
 );
 
@@ -24,8 +27,8 @@ interface Props {
 
 export function PortfolioProfitPage({ lang }: Props) {
   return (
-    <div className="space-y-6">
-      <Suspense fallback={<Fallback />}><PortfolioPage lang={lang} /></Suspense>
-    </div>
+    <Suspense fallback={<Fallback />}>
+      <ModernPortfolioPage lang={lang} />
+    </Suspense>
   );
 }
