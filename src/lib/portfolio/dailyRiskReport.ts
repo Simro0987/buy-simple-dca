@@ -65,14 +65,36 @@ export interface DailyRiskReportInput {
   totalStakedValue?: number;
 }
 
-const REPORT_HOUR = 19;
+export const REPORT_HOUR = 19;
+export const REPORT_TZ = 'Europe/Bratislava';
 
-export function todayReportKey(d = new Date()): string {
-  return d.toISOString().slice(0, 10);
+function getZonedTime(d: Date) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: REPORT_TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).formatToParts(d);
+  const hour = Number(parts.find(p => p.type === 'hour')?.value ?? 0);
+  const minute = Number(parts.find(p => p.type === 'minute')?.value ?? 0);
+  return { hour, minute };
 }
 
+/** Dátum reportu v časovej zóne SEČ/CEST (Europe/Bratislava). */
+export function todayReportKey(d = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: REPORT_TZ }).format(d);
+}
+
+/** True ak je v SEČ/CEST už 19:00 alebo neskôr. */
 export function isPastReportTime(d = new Date()): boolean {
-  return d.getHours() > REPORT_HOUR || (d.getHours() === REPORT_HOUR && d.getMinutes() >= 0);
+  const { hour, minute } = getZonedTime(d);
+  return hour > REPORT_HOUR || (hour === REPORT_HOUR && minute >= 0);
+}
+
+/** True ak je presne 19:00 SEČ/CEST (prvá minúta slotu). */
+export function isReportSlot(d = new Date()): boolean {
+  const { hour, minute } = getZonedTime(d);
+  return hour === REPORT_HOUR && minute === 0;
 }
 
 function computeWacbRows(assets: AssetMetric[]): WacbRow[] {
@@ -296,6 +318,8 @@ export interface DailyReportState {
   reportDate: string;
   reportText: string;
   report: DailyRiskReport;
+  telegramSentAt?: string;
+  telegramSentDate?: string;
 }
 
 export function loadDailyReportState(): DailyReportState | null {

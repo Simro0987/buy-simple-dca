@@ -13,6 +13,7 @@ const JOB_TO_FUNCTION: Record<string, { fn: string; body?: Record<string, unknow
   'staking-maturity-15th': { fn: 'telegram-staking-maturity' },
   'poll-telegram-callbacks': { fn: 'telegram-poll-callbacks' },
   'weekly-callback-cleanup': { fn: 'telegram-callback-cleanup', body: { olderThanDays: 30 } },
+  'daily-portfolio-risk-report': { fn: 'telegram-daily-risk-report' },
 };
 
 interface CronJob {
@@ -49,7 +50,7 @@ function describeSchedule(schedule: string, lang: Lang): string {
     '*/10 * * * *': { sk: 'každých 10 min', en: 'every 10 min' },
     '*/15 * * * *': { sk: 'každých 15 min', en: 'every 15 min' },
     '*/30 * * * *': { sk: 'každých 30 min', en: 'every 30 min' },
-    '0 * * * *': { sk: 'každú hodinu', en: 'hourly' },
+    '0 * * * *': { sk: 'každú hodinu (denný report 19:00 SEČ)', en: 'hourly (daily report 19:00 CET)' },
     '0 0 * * *': { sk: 'denne o 00:00', en: 'daily at 00:00' },
     '0 8 * * *': { sk: 'denne o 08:00', en: 'daily at 08:00' },
     '0 8 * * 1': { sk: 'pondelok 08:00', en: 'Monday 08:00' },

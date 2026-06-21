@@ -1,5 +1,5 @@
 /**
- * useDailyRiskReport — plánovač dennej analytiky (19:00) + persistencia.
+ * useDailyRiskReport — plánovač dennej analytiky (19:00 SEČ) + Telegram odoslanie.
  */
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSyncExternalStore } from 'react';
@@ -10,10 +10,11 @@ import {
   saveDailyReportState,
   todayReportKey,
   isPastReportTime,
+  isReportSlot,
   type DailyReportState,
 } from '@/lib/portfolio/dailyRiskReport';
+import { sendDailyReportToTelegram } from '@/lib/telegramService';
 
-const REPORT_HOUR = 19;
 const TICK_MS = 60_000;
 
 function subscribe(cb: () => void) {
@@ -29,9 +30,28 @@ function getSnapshot(): DailyReportState | null {
   return loadDailyReportState();
 }
 
+async function maybeSendTelegram(state: DailyReportState): Promise<void> {
+  const today = todayReportKey();
+  if (state.telegramSentDate === today) return;
+
+  const result = await sendDailyReportToTelegram(state.report);
+  if (result.ok) {
+    const updated: DailyReportState = {
+      ...state,
+      telegramSentAt: new Date().toISOString(),
+      telegramSentDate: today,
+    };
+    saveDailyReportState(updated);
+    console.info('[DailyReport] Report odoslaný na Telegram.');
+  } else if (!result.skipped) {
+    console.error('[DailyReport] Telegram odoslanie zlyhalo:', result.reason);
+  }
+}
+
 export function useDailyRiskReport(input: DailyRiskReportInput | null, enabled = true) {
   const state = useSyncExternalStore(subscribe, getSnapshot, () => null);
   const generatingRef = useRef(false);
+  const sendingRef = useRef(false);
   const inputRef = useRef(input);
   inputRef.current = input;
 
@@ -53,6 +73,7 @@ export function useDailyRiskReport(input: DailyRiskReportInput | null, enabled =
       if (reason === 'manual') {
         console.info('[DailyReport] Manuálne vygenerovaný report.');
       }
+      void maybeSendTelegram(next);
       return next;
     } finally {
       generatingRef.current = false;
@@ -63,11 +84,18 @@ export function useDailyRiskReport(input: DailyRiskReportInput | null, enabled =
     if (!enabled || !inputRef.current) return;
     const today = todayReportKey();
     const existing = loadDailyReportState();
-    if (existing?.reportDate === today) return;
 
     const now = new Date();
-    const atSlot = now.getHours() === REPORT_HOUR && now.getMinutes() === 0;
+    const atSlot = isReportSlot(now);
     const catchUp = isPastReportTime(now);
+
+    if (existing?.reportDate === today) {
+      if (existing.telegramSentDate !== today && !sendingRef.current) {
+        sendingRef.current = true;
+        void maybeSendTelegram(existing).finally(() => { sendingRef.current = false; });
+      }
+      return;
+    }
 
     if (atSlot || catchUp) {
       generate(atSlot ? 'scheduled' : 'catchup');
@@ -86,12 +114,28 @@ export function useDailyRiskReport(input: DailyRiskReportInput | null, enabled =
     return !state || state.reportDate !== today;
   }, [state]);
 
+  const sendToTelegram = useCallback(async () => {
+    const cur = state ?? loadDailyReportState();
+    if (!cur) return false;
+    const result = await sendDailyReportToTelegram(cur.report);
+    if (result.ok) {
+      saveDailyReportState({
+        ...cur,
+        telegramSentAt: new Date().toISOString(),
+        telegramSentDate: todayReportKey(),
+      });
+    }
+    return result.ok;
+  }, [state]);
+
   return {
     state,
     report: state?.report ?? null,
     reportText: state?.reportText ?? null,
     needsToday,
     generate,
+    sendToTelegram,
+    telegramSentAt: state?.telegramSentAt ?? null,
     lastGeneratedAt: state?.generatedAt ?? null,
   };
 }

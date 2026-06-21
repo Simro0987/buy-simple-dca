@@ -2,7 +2,7 @@
  * DailyRiskReportCard — inštitucionálny denný analytický report (Deep Space Bento).
  */
 import { useState } from 'react';
-import { FileText, RefreshCw, Copy, Check, Clock, AlertTriangle } from 'lucide-react';
+import { FileText, RefreshCw, Copy, Check, Clock, AlertTriangle, Send } from 'lucide-react';
 import { Bento, Label, Money, Chip } from '@/components/deep-space/primitives';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
@@ -15,7 +15,10 @@ interface Props {
   lastGeneratedAt: string | null;
   needsToday: boolean;
   onGenerate: () => void;
+  onSendTelegram?: () => Promise<boolean>;
   generating?: boolean;
+  sendingTelegram?: boolean;
+  telegramSentAt?: string | null;
 }
 
 function formatWhen(iso: string | null, sk: boolean): string {
@@ -44,7 +47,8 @@ function Bullet({ children, warn }: { children: React.ReactNode; warn?: boolean 
 }
 
 export function DailyRiskReportCard({
-  lang, report, reportText, lastGeneratedAt, needsToday, onGenerate, generating,
+  lang, report, reportText, lastGeneratedAt, needsToday, onGenerate, onSendTelegram,
+  generating, sendingTelegram, telegramSentAt,
 }: Props) {
   const sk = lang === 'sk';
   const [copied, setCopied] = useState(false);
@@ -68,6 +72,12 @@ export function DailyRiskReportCard({
           <Chip color={needsToday ? 'amber' : 'green'}>
             {needsToday ? (sk ? 'ČAKÁ 19:00' : 'PENDING 19:00') : (sk ? 'AKTUÁLNY' : 'CURRENT')}
           </Chip>
+          {telegramSentAt && (
+            <Chip color="purple">
+              <Send className="w-3 h-3 inline mr-0.5" />
+              TG
+            </Chip>
+          )}
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {reportText && (
@@ -87,6 +97,16 @@ export function DailyRiskReportCard({
             <RefreshCw className={`w-3.5 h-3.5 ${generating ? 'animate-spin' : ''}`} />
             {sk ? 'Generovať' : 'Generate'}
           </button>
+          {report && onSendTelegram && (
+            <button
+              onClick={() => void onSendTelegram()}
+              disabled={sendingTelegram}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-[#14F195]/30 text-xs font-mono text-[#14F195]/80 hover:text-[#14F195] hover:border-[#14F195]/50 transition-colors disabled:opacity-40"
+            >
+              <Send className={`w-3.5 h-3.5 ${sendingTelegram ? 'animate-pulse' : ''}`} />
+              Telegram
+            </button>
+          )}
         </div>
       </div>
 
@@ -95,7 +115,13 @@ export function DailyRiskReportCard({
         <span>
           {sk ? 'Posledný report' : 'Last report'}: {formatWhen(lastGeneratedAt, sk)}
           {' · '}
-          {sk ? 'automaticky denne o 19:00' : 'auto daily at 19:00'}
+          {sk ? 'automaticky denne o 19:00 SEČ' : 'auto daily at 19:00 CET'}
+          {telegramSentAt && (
+            <>
+              {' · '}
+              {sk ? 'Telegram' : 'Telegram'}: {formatWhen(telegramSentAt, sk)}
+            </>
+          )}
         </span>
       </div>
 

@@ -72,6 +72,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const [copied, setCopied] = useState<string | null>(null);
   const [busyTp, setBusyTp] = useState<string | null>(null);
   const [reportBusy, setReportBusy] = useState(false);
+  const [telegramBusy, setTelegramBusy] = useState(false);
 
   const fgValue = fg?.value ?? 50;
   const weeklyCapital = Number(settings?.default_amount ?? 0);
@@ -170,6 +171,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const metricsReady = !metrics.loading && metrics.totalValue > 0;
   const {
     report, reportText, lastGeneratedAt, needsToday, generate: generateReport,
+    sendToTelegram, telegramSentAt,
   } = useDailyRiskReport(metricsReady ? reportInput : null, metricsReady);
 
   const handleGenerateReport = useCallback(() => {
@@ -177,6 +179,18 @@ function ModernPortfolioInner({ lang }: Props) {
     generateReport('manual');
     setTimeout(() => setReportBusy(false), 400);
   }, [generateReport]);
+
+  const handleSendTelegram = useCallback(async () => {
+    setTelegramBusy(true);
+    try {
+      const ok = await sendToTelegram();
+      if (ok) toast.success(sk ? 'Report odoslaný na Telegram' : 'Report sent to Telegram');
+      else toast.error(sk ? 'Telegram odoslanie zlyhalo — skontroluj Chat ID' : 'Telegram send failed — check Chat ID');
+      return ok;
+    } finally {
+      setTimeout(() => setTelegramBusy(false), 400);
+    }
+  }, [sendToTelegram, sk]);
 
   return (
     <div className="relative space-y-5 pb-8 -mx-1">
@@ -254,7 +268,10 @@ function ModernPortfolioInner({ lang }: Props) {
         lastGeneratedAt={lastGeneratedAt}
         needsToday={needsToday}
         onGenerate={handleGenerateReport}
+        onSendTelegram={handleSendTelegram}
         generating={reportBusy}
+        sendingTelegram={telegramBusy}
+        telegramSentAt={telegramSentAt}
       />
 
       {/* ═══ DCA-OUT RADAR — VIZUÁLNA DOMINANTA ═══════════════════════════ */}
