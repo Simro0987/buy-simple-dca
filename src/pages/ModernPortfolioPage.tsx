@@ -74,7 +74,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const fgValue = fg?.value ?? 50;
   const weeklyCapital = Number(settings?.default_amount ?? 0);
   const freeCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
-  const warnings = computeConcentrationWarnings(prices);
+  const warnings = useMemo(() => computeConcentrationWarnings(prices), [prices]);
 
   const { data: rsiData, isLoading: rsiLoading, refetch: rsiRefetch } = useQuery({
     queryKey: ['modern-dca-rsi'],
@@ -151,12 +151,20 @@ function ModernPortfolioInner({ lang }: Props) {
   }), [metrics.assets, reservoir.sells]);
 
   const copyText = async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 1500);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      toast.error(sk ? 'Kopírovanie zlyhalo' : 'Copy failed');
+    }
   };
 
   const isGain = metrics.totalPnl >= 0;
+  const eligibleTakeProfitRows = useMemo(
+    () => takeProfitRows.filter(r => r.eligible),
+    [takeProfitRows],
+  );
 
   return (
     <div className="relative space-y-5 pb-8 -mx-1">
@@ -578,11 +586,11 @@ function ModernPortfolioInner({ lang }: Props) {
           </div>
           <Chip color="green">Rezervoár {formatUsd(reservoir.stable)}</Chip>
         </div>
-        {takeProfitRows.filter(r => r.eligible).length === 0 ? (
+        {eligibleTakeProfitRows.length === 0 ? (
           <p className="text-sm text-white/35 text-center py-4">Všetky aktíva akumulujú.</p>
         ) : (
           <div className="space-y-3">
-            {takeProfitRows.filter(r => r.eligible).map(r => {
+            {eligibleTakeProfitRows.map(r => {
               const dec = TOKEN_DECIMALS[r.symbol] ?? 4;
               const tokensStr = r.sellTokens.toFixed(dec);
               return (
@@ -628,7 +636,7 @@ function ModernPortfolioInner({ lang }: Props) {
             <span className="text-sm font-bold text-white">Koncentračné riziko</span>
           </div>
           {warnings.map((w, i) => (
-            <div key={i} className="rounded-2xl border border-orange-500/20 bg-orange-500/[0.04] p-3">
+            <div key={`${w.title}-${i}`} className="rounded-2xl border border-orange-500/20 bg-orange-500/[0.04] p-3">
               <p className="text-sm font-bold text-white">{w.title}</p>
               <p className="text-xs text-white/50 mt-1">{w.message}</p>
               <p className="text-xs text-orange-300/80 mt-1">→ {w.recommendation}</p>

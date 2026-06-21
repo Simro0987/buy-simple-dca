@@ -43,7 +43,11 @@ export function calcRSI(closes: number[]): number {
   if (closes.length < p + 1) return 50;
   const sl = closes.slice(-(p + 1));
   let g = 0, l = 0;
-  for (let i = 1; i < sl.length; i++) { const d = sl[i] - sl[i - 1]; d > 0 ? g += d : l -= d; }
+  for (let i = 1; i < sl.length; i++) {
+    const d = sl[i] - sl[i - 1];
+    if (d > 0) g += d;
+    else l -= d;
+  }
   const ag = g / p, al = l / p;
   if (al === 0) return 99;
   return Math.round(Math.max(0, Math.min(100, 100 - 100 / (1 + ag / al))));
@@ -51,9 +55,10 @@ export function calcRSI(closes: number[]): number {
 
 export async function fetchAllRSI(): Promise<Record<DcaToken, number>> {
   const fetch1 = async (sym: string): Promise<number> => {
+    let timeoutId: ReturnType<typeof setTimeout> | null = null;
     try {
       const ctrl = new AbortController();
-      setTimeout(() => ctrl.abort(), 10_000);
+      timeoutId = setTimeout(() => ctrl.abort(), 10_000);
       const r = await fetch(
         `https://api.binance.com/api/v3/klines?symbol=${sym}&interval=1d&limit=30`,
         { signal: ctrl.signal },
@@ -62,6 +67,9 @@ export async function fetchAllRSI(): Promise<Record<DcaToken, number>> {
       const d = await r.json() as [number, string, string, string, string, string, ...unknown[]][];
       return calcRSI(d.map(k => parseFloat(k[4])));
     } catch { return 50; }
+    finally {
+      if (timeoutId) clearTimeout(timeoutId);
+    }
   };
   const [btc, eth, sol] = await Promise.all([fetch1('BTCUSDT'), fetch1('ETHUSDT'), fetch1('SOLUSDT')]);
   return { BTC: btc, ETH: eth, SOL: sol };

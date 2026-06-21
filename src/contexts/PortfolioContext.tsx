@@ -114,9 +114,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     }
 
     const markProfitMoved = (usd: number) => {
-      const next = movedProfit + usd;
-      setMovedProfit(next);
-      try { localStorage.setItem(MOVED_KEY, String(next)); } catch { /* ignore */ }
+      setMovedProfit(prev => {
+        const next = prev + usd;
+        try { localStorage.setItem(MOVED_KEY, String(next)); } catch { /* ignore */ }
+        return next;
+      });
     };
 
     const toggleSelected = (s: Exclude<AssetFilter, null>) =>

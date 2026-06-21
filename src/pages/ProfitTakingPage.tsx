@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { PLHistoryChart, PLSnapshot, savePLSnapshot, getPLHistory } from '@/components/PLHistoryChart';
+import { type PLSnapshot, savePLSnapshot, getPLHistory } from '@/components/PLHistoryChart';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData, AthData } from '@/lib/crypto';
@@ -32,9 +32,13 @@ function getAlertedLevels(): Record<string, number> {
 }
 
 function markAlertSent(tokenId: string, profitPct: number) {
-  const alerted = getAlertedLevels();
-  alerted[`${tokenId}_${profitPct}`] = Date.now();
-  localStorage.setItem(PROFIT_ALERT_KEY, JSON.stringify(alerted));
+  try {
+    const alerted = getAlertedLevels();
+    alerted[`${tokenId}_${profitPct}`] = Date.now();
+    localStorage.setItem(PROFIT_ALERT_KEY, JSON.stringify(alerted));
+  } catch {
+    // Ignore storage quota errors; alert delivery already happened.
+  }
 }
 
 function wasAlertSent(tokenId: string, profitPct: number): boolean {
@@ -110,7 +114,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [, forceUpdate] = useState(0);
-  const [showPL, setShowPL] = useState(true);
   const [showAddPurchase, setShowAddPurchase] = useState<string | null>(null);
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseQty, setPurchaseQty] = useState('');
@@ -135,9 +138,11 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     return map;
   }, [portfolio.assets]);
 
-  // Auto-import from execution history on first load
+  // Auto-import from execution history on first load.
+  const importAttemptedRef = useRef(false);
   useEffect(() => {
-    if (!prices) return;
+    if (!prices || importAttemptedRef.current) return;
+    importAttemptedRef.current = true;
     const imported = importFromExecutionHistory(prices);
     if (imported > 0) {
       toast.success(`Importovaných ${imported} nákupov z DCA histórie`);
@@ -200,13 +205,17 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
       toast.error('Zadaj platnú cenu a množstvo');
       return;
     }
-    addDcaPurchase({ tokenId, quantity: qty, priceUsd: price, totalUsd: price * qty, type: purchaseType });
-    setAvgCosts(getAvgCostBasis());
-    setShowAddPurchase(null);
-    setPurchasePrice('');
-    setPurchaseQty('');
-    toast.success('Nákup zaznamenaný ✓');
-    forceUpdate(n => n + 1);
+    try {
+      addDcaPurchase({ tokenId, quantity: qty, priceUsd: price, totalUsd: price * qty, type: purchaseType });
+      setAvgCosts(getAvgCostBasis());
+      setShowAddPurchase(null);
+      setPurchasePrice('');
+      setPurchaseQty('');
+      toast.success('Nákup zaznamenaný ✓');
+      forceUpdate(n => n + 1);
+    } catch {
+      toast.error('Nákup sa nepodarilo uložiť');
+    }
   };
 
   const handleExecuteLevel = (tokenId: string, profitPct: number) => {
@@ -380,7 +389,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const solPL = plData.find(d => d.token.id === 'solana')?.plUsd ?? 0;
 
   // Save daily P/L snapshot
-  const [plHistory, setPlHistory] = useState<PLSnapshot[]>(getPLHistory);
   const dailySnapshot = useMemo<PLSnapshot | null>(() => {
     if (totalInvested <= 0) return null;
     return {
@@ -406,7 +414,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
 
     if (unchanged) return;
     savePLSnapshot(dailySnapshot);
-    setPlHistory(getPLHistory());
   }, [dailySnapshot]);
 
   return (
@@ -737,8 +744,8 @@ function TokenProfitCard({
                 <ChevronDown className="w-3 h-3 ml-auto" />
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-1">
-                {purchases.slice(-10).reverse().map((p, i) => (
-                  <div key={i} className="flex items-center justify-between text-[10px] bg-secondary/30 rounded px-2 py-1.5">
+                {purchases.slice(-10).reverse().map((p) => (
+                  <div key={`${p.date}-${p.type}-${p.priceUsd}-${p.quantity}`} className="flex items-center justify-between text-[10px] bg-secondary/30 rounded px-2 py-1.5">
                     <span className="text-muted-foreground">
                       {new Date(p.date).toLocaleDateString('sk')} · {p.type === 'market' ? 'Market' : 'Limit'}
                     </span>
