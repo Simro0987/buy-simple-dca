@@ -48,9 +48,11 @@ const NEXT_HALVING = new Date('2028-04-19');
 
 export function ModernPortfolioPage({ lang }: Props) {
   return (
-    <PortfolioProvider>
-      <ModernPortfolioInner lang={lang} />
-    </PortfolioProvider>
+    <div className="min-h-screen w-full flex flex-col text-white">
+      <PortfolioProvider>
+        <ModernPortfolioInner lang={lang} />
+      </PortfolioProvider>
+    </div>
   );
 }
 
@@ -193,11 +195,11 @@ function ModernPortfolioInner({ lang }: Props) {
   }, [sendToTelegram, sk]);
 
   return (
-    <div className="relative space-y-5 pb-8 -mx-1">
+    <div className="relative flex-1 w-full min-h-[60vh] space-y-5 pb-8">
 
       {/* ═══ HERO ═══════════════════════════════════════════════════════════ */}
       <motion.section
-        initial={{ opacity: 0, y: -16 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.45 }}
         className="pt-2 pb-1"

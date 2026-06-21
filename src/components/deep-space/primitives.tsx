@@ -34,9 +34,7 @@ export function Bento({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 24 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.48, delay, ease: [0.22, 1, 0.36, 1] }}
+      initial={false}
       className={cn(
         'bg-[#0A0A0A] border border-white/10 rounded-3xl overflow-hidden',
         glowCls,
