@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 
 interface Props { lang: Lang; }
 
@@ -61,31 +62,31 @@ export function NextActionBanner({ lang }: Props) {
   const totalUsd = lastDca?.total_amount ?? 0;
 
   return (
-    <div className="glass-card p-3 space-y-1.5">
+    <BentoCard padding="sm" className="space-y-2">
       {lastDate && (
         <div className="flex items-center gap-2 text-xs">
-          <CheckCircle2 className="w-3.5 h-3.5 text-gain shrink-0" />
-          <span className="text-muted-foreground">{sk ? 'Posledný DCA:' : 'Last DCA:'}</span>
-          <span className="text-foreground font-medium">{relTime(lastDate, new Date(), sk)}</span>
-          <span className="ml-auto text-foreground font-semibold tabular-nums">
+          <CheckCircle2 className="w-3.5 h-3.5 text-neon-green shrink-0" />
+          <span className="text-white/40">{sk ? 'Posledný DCA:' : 'Last DCA:'}</span>
+          <span className="text-white/80 font-medium">{relTime(lastDate, new Date(), sk)}</span>
+          <span className="ml-auto font-mono font-semibold text-white tabular-nums">
             {totalUsd > 0 ? formatUsd(Number(totalUsd)) : '—'}
           </span>
         </div>
       )}
       <div className="flex items-center gap-2 text-xs">
-        <Clock className="w-3.5 h-3.5 text-primary shrink-0" />
-        <span className="text-muted-foreground">{sk ? 'Ďalšia akcia:' : 'Next action:'}</span>
-        <span className="text-foreground font-medium">
+        <Clock className="w-3.5 h-3.5 text-neon-green shrink-0" />
+        <span className="text-white/40">{sk ? 'Ďalšia akcia:' : 'Next action:'}</span>
+        <span className="text-white/80 font-medium">
           {nextDate.toLocaleDateString(sk ? 'sk-SK' : 'en-US', { weekday: 'short', day: 'numeric', month: 'short' })}
           {' · '}
           {relTime(nextDate, new Date(), sk)}
         </span>
         {weeklyBudget > 0 && (
-          <span className="ml-auto text-foreground font-semibold tabular-nums">
+          <span className="ml-auto font-mono font-semibold text-white tabular-nums">
             DCA {formatUsd(weeklyBudget)}
           </span>
         )}
       </div>
-    </div>
+    </BentoCard>
   );
 }

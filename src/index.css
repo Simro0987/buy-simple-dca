@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700;800&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -150,13 +150,20 @@
   .bg-loss      { background-color: hsl(var(--loss)); }
   .bg-warning   { background-color: hsl(var(--warning)); }
 
-  /* ── glass-card: exact deep space glassmorphism ────────────────────────── */
+  /* ── Bento card: Deep Space Web3 grid tiles ───────────────────────────── */
+  .bento-card {
+    background: #0A0A0A;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 1.5rem;
+    overflow: hidden;
+  }
+
+  /* Legacy alias — portfolio uses bento-card styling */
   .glass-card {
-    background: rgba(10, 10, 10, 0.92);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: var(--radius);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    background: #0A0A0A;
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 1.5rem;
+    overflow: hidden;
   }
 
   /* ── token-card: asset strip cards ─────────────────────────────────────── */
@@ -216,9 +223,11 @@
   }
 
   /* ── data-value: monospace financial numbers ────────────────────────────── */
-  .data-value {
+  .data-value,
+  .money-value {
+    font-family: 'JetBrains Mono', 'Fira Code', monospace;
     font-variant-numeric: tabular-nums;
-    letter-spacing: -0.01em;
+    letter-spacing: -0.02em;
   }
 
   /* ── terminal tag utilities ─────────────────────────────────────────────── */

@@ -1,5 +1,4 @@
 import { useMemo, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Copy, Check, Target, History as HistoryIcon, ChevronDown, ChevronUp, Wallet, Flame } from 'lucide-react';
@@ -10,6 +9,7 @@ import { useProfitReservoir, addTakeProfit, resetReservoir } from '@/lib/profitR
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
 import { toast } from 'sonner';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 
 const TOKEN_DECIMALS: Record<string, number> = { BTC: 6, ETH: 5, SOL: 3 };
 
@@ -95,9 +95,12 @@ export function DynamicTakeProfitCard({ lang }: Props) {
 
 
   return (
-    <Card className={`border-border bg-card overflow-hidden ${parabolic ? 'ring-2 ring-rose-500/60 shadow-[0_0_30px_-5px_rgba(244,63,94,0.45)]' : ''}`}>
-      <div className={`h-1 ${parabolic ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-rose-600' : 'bg-gradient-to-r from-amber-500 via-orange-500 to-emerald-500'}`} />
-      <CardContent className="p-5 space-y-4">
+    <BentoCard
+      padding="lg"
+      className={`h-full overflow-hidden ${parabolic ? 'ring-2 ring-rose-500/60 shadow-[0_0_30px_-5px_rgba(244,63,94,0.45)]' : ''}`}
+    >
+      <div className={`h-0.5 ${parabolic ? 'bg-gradient-to-r from-rose-500 via-orange-500 to-rose-600' : 'bg-gradient-to-r from-neon-gold via-orange-500 to-neon-green'}`} />
+      <div className="space-y-4 mt-4">
         {parabolic && (
           <div className="flex items-start gap-2 rounded-lg border border-rose-500/40 bg-rose-500/10 p-2.5">
             <Flame className="w-4 h-4 text-rose-300 mt-0.5 shrink-0" />
@@ -243,7 +246,7 @@ export function DynamicTakeProfitCard({ lang }: Props) {
             </div>
           )}
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </BentoCard>
   );
 }

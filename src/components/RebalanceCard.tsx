@@ -5,6 +5,7 @@ import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send, C
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { setPendingRebalance, navigateToTab } from '@/lib/pendingActions';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 
 const REBALANCE_CONFIRM_KEY = 'rebalance-last-confirmed-at';
 
@@ -169,14 +170,14 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
   };
 
   return (
-    <div className="glass-card p-4 space-y-4">
+    <BentoCard padding="md" className="space-y-4">
       <div className="flex items-center gap-2">
-        <Scale className="w-5 h-5 text-warning" />
-        <span className="text-sm font-semibold text-foreground">
+        <Scale className="w-5 h-5 text-neon-gold" />
+        <span className="text-sm font-semibold text-white">
           {sk ? 'Rebalancing odporúčania' : 'Rebalancing Suggestions'}
         </span>
         {hasActionable && (
-          <span className="ml-auto px-2 py-0.5 rounded-full bg-warning/20 text-warning text-[10px] font-bold">
+          <span className="ml-auto px-2 py-0.5 rounded-full bg-neon-gold/15 text-neon-gold text-[10px] font-bold border border-neon-gold/30">
             {sk ? 'Akcia potrebná' : 'Action needed'}
           </span>
         )}
@@ -190,7 +191,7 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
           </p>
         )}
         {filteredDrifts.map(d => (
-          <div key={d.symbol} className="flex items-center gap-3 p-2.5 rounded-lg bg-secondary/50">
+          <div key={d.symbol} className="flex items-center gap-3 p-2.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
             <div
               className="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
               style={{ backgroundColor: d.color + '20', color: d.color }}
@@ -330,11 +331,11 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
         {sk ? 'Pošli na Telegram' : 'Send to Telegram'}
       </button>
 
-      <p className="text-[10px] text-muted-foreground">
+      <p className="text-[10px] text-white/35">
         {sk
           ? `⚠️ Odchýlka ≥${DRIFT_THRESHOLD}% od cieľa. Len spotové obchody — žiadna páka!`
           : `⚠️ Drift ≥${DRIFT_THRESHOLD}% from target. Spot trades only — no leverage!`}
       </p>
-    </div>
+    </BentoCard>
   );
 }

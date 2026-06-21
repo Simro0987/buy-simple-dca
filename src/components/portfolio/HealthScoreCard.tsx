@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Activity, ChevronDown, Info } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { Lang } from '@/lib/i18n';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 
 interface Props { lang: Lang; }
 
@@ -44,10 +45,10 @@ export function HealthScoreCard({ lang }: Props) {
 
   if (!score) return null;
 
-  const grade = score.total >= 85 ? { label: sk ? 'Výborné' : 'Excellent', color: 'hsl(var(--gain))' }
-    : score.total >= 65 ? { label: sk ? 'Dobré' : 'Good', color: 'hsl(var(--primary))' }
-    : score.total >= 45 ? { label: sk ? 'Priemerné' : 'Average', color: '#eab308' }
-    : { label: sk ? 'Slabé' : 'Poor', color: 'hsl(var(--loss))' };
+  const grade = score.total >= 85 ? { label: sk ? 'Výborné' : 'Excellent', color: '#14F195' }
+    : score.total >= 65 ? { label: sk ? 'Dobré' : 'Good', color: '#14F195' }
+    : score.total >= 45 ? { label: sk ? 'Priemerné' : 'Average', color: '#FFB800' }
+    : { label: sk ? 'Slabé' : 'Poor', color: '#ef4444' };
 
   const indicators = [
     {
@@ -97,23 +98,23 @@ export function HealthScoreCard({ lang }: Props) {
   ];
 
   return (
-    <div className="glass-card p-4 space-y-3">
+    <BentoCard padding="md" className="space-y-3 h-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Activity className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">
+          <Activity className="w-4 h-4 text-neon-green" />
+          <span className="text-sm font-semibold text-white">
             {sk ? 'Zdravie portfólia' : 'Portfolio Health'}
           </span>
         </div>
         <div className="flex items-baseline gap-1">
-          <span className="text-xl font-bold tabular-nums" style={{ color: grade.color }}>
+          <span className="font-mono text-xl font-bold tabular-nums" style={{ color: grade.color }}>
             {score.total}
           </span>
-          <span className="text-[10px] text-muted-foreground">/100</span>
+          <span className="text-[10px] text-white/35">/100</span>
         </div>
       </div>
 
-      <div className="w-full bg-secondary rounded-full h-1.5 overflow-hidden">
+      <div className="w-full bg-white/[0.06] rounded-full h-1.5 overflow-hidden">
         <div className="h-full rounded-full transition-all" style={{ width: `${score.total}%`, background: grade.color }} />
       </div>
 
@@ -124,9 +125,11 @@ export function HealthScoreCard({ lang }: Props) {
           { k: 'Stake', v: score.parts.stakeScore, max: 20 },
           { k: 'P/L', v: score.parts.ddScore, max: 20 },
         ].map(p => (
-          <div key={p.k} className="bg-secondary/40 rounded-md py-1.5">
-            <p className="text-[9px] text-muted-foreground">{p.k}</p>
-            <p className="text-xs font-bold text-foreground tabular-nums">{p.v}<span className="text-muted-foreground text-[9px]">/{p.max}</span></p>
+          <div key={p.k} className="bg-white/[0.03] border border-white/[0.06] rounded-xl py-2">
+            <p className="text-[9px] text-white/35">{p.k}</p>
+            <p className="font-mono text-xs font-bold text-white tabular-nums">
+              {p.v}<span className="text-white/35 text-[9px]">/{p.max}</span>
+            </p>
           </div>
         ))}
       </div>
@@ -137,7 +140,7 @@ export function HealthScoreCard({ lang }: Props) {
 
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors pt-1 border-t border-border"
+        className="w-full flex items-center justify-center gap-1 text-[11px] text-white/40 hover:text-white/70 transition-colors pt-2 border-t border-white/[0.06]"
       >
         <Info className="w-3 h-3" />
         {open ? (sk ? 'Skryť detail' : 'Hide detail') : (sk ? 'Z čoho sa skóre počíta?' : 'How is the score calculated?')}
@@ -146,32 +149,32 @@ export function HealthScoreCard({ lang }: Props) {
 
       {open && (
         <div className="space-y-2 pt-1">
-          <p className="text-[10px] text-muted-foreground">
+          <p className="text-[10px] text-white/35">
             {sk
               ? 'Skóre 0–100 hodnotí 4 indikátory. Pomáha rýchlo zistiť, či tvoje portfólio drží stratégiu (alokácia 64/25/11, spot-only, akumulácia 1 BTC).'
               : 'Score 0–100 evaluates 4 indicators against your strategy (64/25/11 allocation, spot-only, 1 BTC goal).'}
           </p>
           {indicators.map(i => {
             const pct = (i.value / i.max) * 100;
-            const color = pct >= 80 ? 'hsl(var(--gain))' : pct >= 50 ? 'hsl(var(--primary))' : pct >= 25 ? '#eab308' : 'hsl(var(--loss))';
+            const color = pct >= 80 ? '#14F195' : pct >= 50 ? '#14F195' : pct >= 25 ? '#FFB800' : '#ef4444';
             return (
-              <div key={i.key} className="rounded-md bg-secondary/30 p-2.5 space-y-1.5">
+              <div key={i.key} className="rounded-xl bg-white/[0.03] border border-white/[0.06] p-2.5 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-semibold text-foreground">{i.label}</span>
-                  <span className="text-[10px] tabular-nums" style={{ color }}>
+                  <span className="text-xs font-semibold text-white">{i.label}</span>
+                  <span className="text-[10px] font-mono tabular-nums" style={{ color }}>
                     {i.value}/{i.max} · váha {i.weight}
                   </span>
                 </div>
-                <div className="w-full bg-secondary rounded-full h-1 overflow-hidden">
+                <div className="w-full bg-white/[0.06] rounded-full h-1 overflow-hidden">
                   <div className="h-full rounded-full" style={{ width: `${pct}%`, background: color }} />
                 </div>
-                <p className="text-[10px] text-muted-foreground leading-relaxed">{i.detail}</p>
-                <p className="text-[10px] text-primary/80">{i.hint}</p>
+                <p className="text-[10px] text-white/40 leading-relaxed">{i.detail}</p>
+                <p className="text-[10px] text-neon-green/80">{i.hint}</p>
               </div>
             );
           })}
         </div>
       )}
-    </div>
+    </BentoCard>
   );
 }

@@ -1,6 +1,6 @@
 import { useState, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Wallet, RefreshCw, TrendingUp, Shield, Landmark, ChevronDown, ChevronUp } from 'lucide-react';
+import { TrendingUp, Shield, Landmark, ChevronDown, ChevronUp } from 'lucide-react';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import { usePrices, useAthData } from '@/hooks/usePrices';
 import { useDefiApys } from '@/hooks/useDefiApys';
@@ -26,7 +26,10 @@ import { YieldEarnedCard } from '@/components/portfolio/YieldEarnedCard';
 import { PnLOverviewCard } from '@/components/portfolio/PnLOverviewCard';
 import { DynamicTakeProfitCard } from '@/components/portfolio/DynamicTakeProfitCard';
 import { LiveDcaOutRadar } from '@/components/portfolio/LiveDcaOutRadar';
-
+import { BentoSection } from '@/components/portfolio/ui/BentoSection';
+import { BentoCard, BentoGrid } from '@/components/portfolio/ui/BentoCard';
+import { MoneyValue } from '@/components/portfolio/ui/MoneyValue';
+import { fadeUp } from '@/components/portfolio/ui/motion';
 
 interface Props { lang: Lang; }
 
@@ -47,9 +50,9 @@ function typeIcon(type: string) {
 
 function typeColor(type: string) {
   switch (type) {
-    case 'staking': return 'text-green-400';
-    case 'lending': return 'text-yellow-400';
-    default: return 'text-blue-400';
+    case 'staking': return 'text-neon-green';
+    case 'lending': return 'text-neon-gold';
+    default: return 'text-neon-cyan';
   }
 }
 
@@ -61,42 +64,9 @@ export function PortfolioPage({ lang }: Props) {
   );
 }
 
-// ─── animation presets ────────────────────────────────────────────────────────
-const fadeUp = (delay = 0) => ({
-  initial: { opacity: 0, y: 22 },
-  animate: { opacity: 1, y: 0 },
-  transition: { duration: 0.45, delay, ease: [0.25, 0.4, 0.25, 1] as const },
-});
-
-// ─── terminal section divider ─────────────────────────────────────────────────
-function SectionDivider({ title, icon }: { title: string; icon?: React.ReactNode }) {
-  return (
-    <div className="flex items-center gap-3 py-1">
-      <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.05)' }} />
-      <div
-        className="flex items-center gap-1.5 px-3 py-1 rounded-full"
-        style={{
-          background: 'rgba(255,255,255,0.04)',
-          border: '1px solid rgba(255,255,255,0.07)',
-        }}
-      >
-        {icon}
-        <span style={{
-          fontSize: 8.5, fontWeight: 800, color: 'rgba(255,255,255,0.25)',
-          textTransform: 'uppercase' as const, letterSpacing: '0.14em',
-        }}>
-          {title}
-        </span>
-      </div>
-      <div className="h-px flex-1" style={{ background: 'rgba(255,255,255,0.05)' }} />
-    </div>
-  );
-}
-
 function PortfolioPageInner({ lang }: Props) {
   const { selected, toggleSelected, breakdown } = usePortfolio();
-  const sk = lang === 'sk';
-  const { data: prices, refetch, isFetching } = usePrices();
+  const { data: prices } = usePrices();
   const { data: athData } = useAthData();
   const { data: apys } = useDefiApys();
   const { data: settings } = useAppSettings();
@@ -121,19 +91,8 @@ function PortfolioPageInner({ lang }: Props) {
     });
   }, [prices, athData, holdings]);
 
-  const totalValue = tokenData.reduce((sum, t) => sum + t.valueUsd, 0);
-  const hasHoldings = totalValue > 0;
-
-  // Actual allocation percentages
-  const actualAlloc = tokenData.map(t => ({
-    symbol: t.symbol,
-    actual: totalValue > 0 ? (t.valueUsd / totalValue) * 100 : 0,
-    target: t.allocation * 100,
-  }));
-
-
   return (
-    <div className="space-y-2.5">
+    <div className="relative space-y-4 pb-2">
 
       {/* ═══ S1: GLOBAL HEADER ═══════════════════════════════════════ */}
       <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
@@ -141,55 +100,59 @@ function PortfolioPageInner({ lang }: Props) {
       </motion.div>
 
       {/* ═══ S2: MAKRO CIELE ══════════════════════════════════════════ */}
-      <motion.div {...fadeUp(0.06)} className="space-y-2.5">
-        <SectionDivider title="Makro ciele" />
+      <BentoSection title="Makro ciele" delay={0.04}>
         <NextActionBanner lang={lang} />
-        <HalvingCycleTracker lang={lang} />
-        <BtcGoalTracker lang={lang} />
-      </motion.div>
+        <BentoGrid>
+          <HalvingCycleTracker lang={lang} />
+          <BtcGoalTracker lang={lang} />
+        </BentoGrid>
+      </BentoSection>
 
       {/* ═══ S3: CORE FINANCIALS ══════════════════════════════════════ */}
-      <motion.div {...fadeUp(0.12)} className="space-y-2.5">
-        <SectionDivider title="Core Financials · USD" />
+      <BentoSection title="Core Financials · USD" delay={0.08}>
         <PortfolioSummaryCard metrics={metrics} weeklyCapital={weeklyCapital} cashReserve={cashReserve} />
         <PnLOverviewCard lang={lang} />
         <PortfolioHistoryChart lang={lang} prices={prices} selected={selected} />
-      </motion.div>
+      </BentoSection>
 
       {/* ═══ S4: ANALYTIKA ════════════════════════════════════════════ */}
-      <motion.div {...fadeUp(0.18)} className="space-y-2.5">
-        <SectionDivider title="Analytika & Alokácia" />
-        <HealthScoreCard lang={lang} />
-        <AllocationDonut metrics={metrics} selected={selected} onSelect={(s) => toggleSelected(s as "BTC" | "ETH" | "SOL")} />
+      <BentoSection title="Analytika & Alokácia" delay={0.12}>
+        <BentoGrid>
+          <HealthScoreCard lang={lang} />
+          <AllocationDonut metrics={metrics} selected={selected} onSelect={(s) => toggleSelected(s as 'BTC' | 'ETH' | 'SOL')} />
+        </BentoGrid>
         <ConcentrationWarnings />
         <RebalanceCard lang={lang} prices={prices} selected={selected} />
-      </motion.div>
+      </BentoSection>
 
-      {/* ═══ S5: AKTÍVNA STRATÉGIA ════════════════════════════════════ */}
-      <motion.div {...fadeUp(0.24)} className="space-y-2.5">
-        <SectionDivider title="Aktívna stratégia" />
-        <LiveDcaOutRadar />
-        <DynamicTakeProfitCard lang={lang} />
-        <div id="yield-profit-router" className="scroll-mt-20">
-          <AIYieldProfitRouter lang={lang} />
-        </div>
-        <YieldEarnedCard lang={lang} />
-        <WhatIfSimulator lang={lang} />
-      </motion.div>
+      {/* ═══ S5: AKTÍVNA STRATÉGIA — DCA Radar dominant ═══════════════ */}
+      <BentoSection title="Aktívna stratégia" delay={0.16}>
+        <motion.div {...fadeUp(0.18)}>
+          <LiveDcaOutRadar />
+        </motion.div>
+        <BentoGrid className="mt-3">
+          <DynamicTakeProfitCard lang={lang} />
+          <div id="yield-profit-router" className="scroll-mt-20">
+            <AIYieldProfitRouter lang={lang} />
+          </div>
+        </BentoGrid>
+        <BentoGrid>
+          <YieldEarnedCard lang={lang} />
+          <WhatIfSimulator lang={lang} />
+        </BentoGrid>
+      </BentoSection>
 
       {/* ═══ DETAILNÉ POZÍCIE — Bento Cards ══════════════════════════ */}
-      <motion.div {...fadeUp(0.30)} className="space-y-2.5">
-        <SectionDivider title="Detailné pozície" />
-
+      <BentoSection title="Detailné pozície" delay={0.22}>
         {tokenData.map((t, tokenIndex) => {
-          const isExpanded  = expandedToken === t.symbol;
-          const positions   = t.config?.positions || [];
-          const dimmed      = selected !== null && selected !== t.symbol;
+          const isExpanded = expandedToken === t.symbol;
+          const positions = t.config?.positions || [];
+          const dimmed = selected !== null && selected !== t.symbol;
           const assetMetric = metrics.assets.find(a => a.symbol === t.symbol);
-          const invested    = assetMetric?.invested ?? 0;
-          const pnl         = assetMetric?.pnl ?? 0;
-          const pnlPct      = assetMetric?.pnlPct ?? 0;
-          const avgCost     = assetMetric && assetMetric.holdings > 0
+          const invested = assetMetric?.invested ?? 0;
+          const pnl = assetMetric?.pnl ?? 0;
+          const pnlPct = assetMetric?.pnlPct ?? 0;
+          const avgCost = assetMetric && assetMetric.holdings > 0
             ? invested / assetMetric.holdings : 0;
 
           return (
@@ -197,139 +160,141 @@ function PortfolioPageInner({ lang }: Props) {
               key={t.id}
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.4, delay: 0.32 + tokenIndex * 0.07, ease: [0.25, 0.4, 0.25, 1] }}
-              className={`overflow-hidden rounded-3xl transition-all ${dimmed ? "opacity-40" : ""}`}
-              style={{
-                background: "#0a0a0a",
-                border: `1px solid ${selected === t.symbol ? t.color + "55" : "rgba(255,255,255,0.08)"}`,
-                boxShadow: selected === t.symbol ? `0 0 24px ${t.color}18` : "none",
-              }}
+              transition={{ duration: 0.4, delay: 0.24 + tokenIndex * 0.06, ease: [0.25, 0.4, 0.25, 1] }}
+              className={dimmed ? 'opacity-40 transition-opacity' : 'transition-opacity'}
             >
-              {/* Gradient accent line */}
-              <div style={{ height: 2, background: `linear-gradient(90deg, ${t.color}, transparent)` }} />
-
-              {/* Token header */}
-              <button
-                onClick={() => {
-                  setExpandedToken(isExpanded ? null : t.symbol);
-                  toggleSelected(t.symbol as "BTC" | "ETH" | "SOL");
-                }}
-                className="w-full p-4 flex items-center gap-3 text-left"
+              <BentoCard
+                accentColor={selected === t.symbol ? t.color : undefined}
+                className={selected === t.symbol ? '' : ''}
+                padding="none"
+                style={selected === t.symbol ? { boxShadow: `0 0 24px ${t.color}18` } : undefined}
               >
-                <div
-                  className="w-9 h-9 rounded-2xl flex items-center justify-center text-[10px] font-bold shrink-0"
-                  style={{ background: t.color + "18", color: t.color, border: `1px solid ${t.color}30` }}
-                >
-                  {t.symbol.slice(0, 2)}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-bold text-white tracking-tight">{t.symbol}</span>
-                    <span className="text-sm font-bold text-white tabular-nums">{t.qty > 0 ? formatUsd(t.valueUsd) : "—"}</span>
-                  </div>
-                  <div className="flex items-center justify-between mt-0.5">
-                    <span className="text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.45)" }}>{formatUsd(t.price)}</span>
-                    <div className="flex items-center gap-2">
-                      {t.qty > 0 && (
-                        <span className="text-[10px] tabular-nums" style={{ color: "rgba(255,255,255,0.35)" }}>
-                          {t.symbol === "BTC" ? t.qty.toFixed(8) : t.qty >= 100 ? t.qty.toFixed(2) : t.qty.toFixed(4)} {t.symbol}
-                        </span>
-                      )}
-                      <span className={`text-[10px] font-semibold tabular-nums ${t.change24h >= 0 ? "text-gain" : "text-loss"}`}>
-                        {t.change24h >= 0 ? "+" : ""}{t.change24h.toFixed(2)}%
-                      </span>
-                    </div>
-                  </div>
-                  {invested > 0 && (
-                    <div className="flex items-center justify-between mt-1 text-[10px]">
-                      <span className="tabular-nums" style={{ color: "rgba(255,255,255,0.30)" }}>Avg {formatUsd(avgCost)}</span>
-                      <span className={`font-semibold tabular-nums ${pnl >= 0 ? "text-gain" : "text-loss"}`}>
-                        {pnl >= 0 ? "+" : ""}{formatUsd(pnl)} ({pnl >= 0 ? "+" : ""}{pnlPct.toFixed(1)}%)
-                      </span>
-                    </div>
-                  )}
-                  {(() => {
-                    const b = breakdown.find(x => x.symbol === t.symbol);
-                    if (!b || t.qty <= 0 || b.stakedQty <= 0) return null;
-                    const protos = b.stakedEntries.map((e: { protocol: string }) => e.protocol).join(", ") || "protokol";
-                    return (
-                      <p className="text-[9px] mt-1 tabular-nums leading-snug" style={{ color: "rgba(255,255,255,0.28)" }}>
-                        <span style={{ color: "rgba(255,255,255,0.55)", fontWeight: 600 }}>{t.symbol} Total:</span>{" "}
-                        {t.qty.toFixed(8)} {t.symbol}{" "}
-                        <span style={{ color: "#60a5fa" }}>[{b.liquidQty.toFixed(8)} Liquid</span>
-                        {" / "}
-                        <span style={{ color: "#14F195" }}>{b.stakedQty.toFixed(8)} Staked in {protos}]</span>
-                      </p>
-                    );
-                  })()}
-                </div>
-                {t.qty > 0 && (isExpanded
-                  ? <ChevronUp className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(255,255,255,0.30)" }} />
-                  : <ChevronDown className="w-3.5 h-3.5 shrink-0" style={{ color: "rgba(255,255,255,0.30)" }} />
-                )}
-              </button>
+                <div className="h-0.5" style={{ background: `linear-gradient(90deg, ${t.color}, transparent)` }} />
 
-              {/* Expanded detail */}
-              {isExpanded && t.qty > 0 && (
-                <div className="px-4 pb-4 space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div className="flex items-center justify-between text-xs mt-3">
-                    <span style={{ color: "rgba(255,255,255,0.40)" }}>ATH: {formatUsd(t.ath)}</span>
-                    <span className="text-loss tabular-nums">{t.athDrop.toFixed(1)}% od ATH</span>
+                <button
+                  onClick={() => {
+                    setExpandedToken(isExpanded ? null : t.symbol);
+                    toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL');
+                  }}
+                  className="w-full p-4 flex items-center gap-3 text-left"
+                >
+                  <div
+                    className="w-10 h-10 rounded-2xl flex items-center justify-center text-[10px] font-bold shrink-0"
+                    style={{ background: t.color + '18', color: t.color, border: `1px solid ${t.color}30` }}
+                  >
+                    {t.symbol.slice(0, 2)}
                   </div>
-                  {positions.length > 0 && (
-                    <>
-                      <p className="text-[10px] font-bold uppercase tracking-wider" style={{ color: "rgba(255,255,255,0.40)" }}>
-                        Rozdelenie pozícií
-                      </p>
-                      {positions.map((pos: { type: string; label: string; percentage: number; protocol?: string; apy?: number }, i: number) => {
-                        const Icon = typeIcon(pos.type);
-                        const amount = t.qty * (pos.percentage / 100);
-                        const amountUsd = amount * t.price;
-                        let liveApy = pos.apy ?? null;
-                        if (apys) {
-                          if (pos.protocol === "Rocket Pool") liveApy = apys.rocketPool;
-                          else if (pos.label?.includes("wstETH") && pos.type !== "lending") liveApy = apys.lido;
-                          else if (pos.protocol === "Aave V3") liveApy = apys.aaveEth;
-                          else if (pos.protocol === "Jito") liveApy = apys.jito;
-                          else if (pos.protocol === "Kamino") liveApy = apys.kaminoSol;
-                        }
-                        return (
-                          <div key={i} className="flex items-center gap-2 rounded-2xl px-3 py-2" style={{ background: "rgba(255,255,255,0.04)" }}>
-                            <Icon className={`w-3.5 h-3.5 shrink-0 ${typeColor(pos.type)}`} />
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[11px] font-medium text-white/80">{pos.label}</span>
-                                <span className="text-[11px] font-bold text-white tabular-nums">{formatUsd(amountUsd)}</span>
-                              </div>
-                              <div className="flex items-center justify-between mt-0.5">
-                                <span className="text-[9px] text-white/40 tabular-nums">
-                                  {t.symbol === "BTC" ? amount.toFixed(8) : amount >= 100 ? amount.toFixed(2) : amount.toFixed(4)} {t.symbol}
-                                  {pos.protocol ? ` · ${pos.protocol}` : ""}
-                                </span>
-                                {liveApy != null && (
-                                  <span className="text-[9px] font-medium" style={{ color: "#14F195" }}>{liveApy.toFixed(1)}% APY</span>
-                                )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-bold text-white tracking-tight">{t.symbol}</span>
+                      <MoneyValue size="sm">{t.qty > 0 ? formatUsd(t.valueUsd) : '—'}</MoneyValue>
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="text-[10px] font-mono text-white/45 tabular-nums">{formatUsd(t.price)}</span>
+                      <div className="flex items-center gap-2">
+                        {t.qty > 0 && (
+                          <span className="text-[10px] font-mono text-white/35 tabular-nums">
+                            {t.symbol === 'BTC' ? t.qty.toFixed(8) : t.qty >= 100 ? t.qty.toFixed(2) : t.qty.toFixed(4)} {t.symbol}
+                          </span>
+                        )}
+                        <span className={`text-[10px] font-mono font-semibold tabular-nums ${t.change24h >= 0 ? 'text-gain' : 'text-loss'}`}>
+                          {t.change24h >= 0 ? '+' : ''}{t.change24h.toFixed(2)}%
+                        </span>
+                      </div>
+                    </div>
+                    {invested > 0 && (
+                      <div className="flex items-center justify-between mt-1.5 text-[10px]">
+                        <span className="font-mono text-white/30 tabular-nums">Avg {formatUsd(avgCost)}</span>
+                        <span className={`font-mono font-semibold tabular-nums ${pnl >= 0 ? 'text-gain' : 'text-loss'}`}>
+                          {pnl >= 0 ? '+' : ''}{formatUsd(pnl)} ({pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%)
+                        </span>
+                      </div>
+                    )}
+                    {(() => {
+                      const b = breakdown.find(x => x.symbol === t.symbol);
+                      if (!b || t.qty <= 0 || b.stakedQty <= 0) return null;
+                      const protos = b.stakedEntries.map((e: { protocol: string }) => e.protocol).join(', ') || 'protokol';
+                      return (
+                        <p className="text-[9px] mt-1 font-mono tabular-nums leading-snug text-white/28">
+                          <span className="text-white/55 font-semibold">{t.symbol} Total:</span>{' '}
+                          {t.qty.toFixed(8)} {t.symbol}{' '}
+                          <span className="text-neon-cyan">[{b.liquidQty.toFixed(8)} Liquid</span>
+                          {' / '}
+                          <span className="text-neon-green">{b.stakedQty.toFixed(8)} Staked in {protos}]</span>
+                        </p>
+                      );
+                    })()}
+                  </div>
+                  {t.qty > 0 && (isExpanded
+                    ? <ChevronUp className="w-3.5 h-3.5 shrink-0 text-white/30" />
+                    : <ChevronDown className="w-3.5 h-3.5 shrink-0 text-white/30" />
+                  )}
+                </button>
+
+                {isExpanded && t.qty > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="px-4 pb-4 space-y-3 border-t border-white/[0.06]"
+                  >
+                    <div className="flex items-center justify-between text-xs mt-3">
+                      <span className="text-white/40 font-mono">ATH: {formatUsd(t.ath)}</span>
+                      <span className="text-loss font-mono tabular-nums">{t.athDrop.toFixed(1)}% od ATH</span>
+                    </div>
+                    {positions.length > 0 && (
+                      <>
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-white/40">
+                          Rozdelenie pozícií
+                        </p>
+                        {positions.map((pos: { type: string; label: string; percentage: number; protocol?: string; apy?: number }, i: number) => {
+                          const Icon = typeIcon(pos.type);
+                          const amount = t.qty * (pos.percentage / 100);
+                          const amountUsd = amount * t.price;
+                          let liveApy = pos.apy ?? null;
+                          if (apys) {
+                            if (pos.protocol === 'Rocket Pool') liveApy = apys.rocketPool;
+                            else if (pos.label?.includes('wstETH') && pos.type !== 'lending') liveApy = apys.lido;
+                            else if (pos.protocol === 'Aave V3') liveApy = apys.aaveEth;
+                            else if (pos.protocol === 'Jito') liveApy = apys.jito;
+                            else if (pos.protocol === 'Kamino') liveApy = apys.kaminoSol;
+                          }
+                          return (
+                            <div key={i} className="flex items-center gap-2 rounded-2xl px-3 py-2.5 bg-white/[0.04] border border-white/[0.06]">
+                              <Icon className={`w-3.5 h-3.5 shrink-0 ${typeColor(pos.type)}`} />
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center justify-between">
+                                  <span className="text-[11px] font-medium text-white/80">{pos.label}</span>
+                                  <MoneyValue size="sm" className="text-sm">{formatUsd(amountUsd)}</MoneyValue>
+                                </div>
+                                <div className="flex items-center justify-between mt-0.5">
+                                  <span className="text-[9px] text-white/40 font-mono tabular-nums">
+                                    {t.symbol === 'BTC' ? amount.toFixed(8) : amount >= 100 ? amount.toFixed(2) : amount.toFixed(4)} {t.symbol}
+                                    {pos.protocol ? ` · ${pos.protocol}` : ''}
+                                  </span>
+                                  {liveApy != null && (
+                                    <span className="text-[9px] font-medium text-neon-green">{liveApy.toFixed(1)}% APY</span>
+                                  )}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        );
-                      })}
-                      <div className="flex h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                        {positions.map((pos: { type: string; percentage: number }, i: number) => {
-                          const c: Record<string, string> = { hold: "#60a5fa50", staking: "#14F19560", lending: "#fbbf2450" };
-                          return <div key={i} style={{ width: `${pos.percentage}%`, background: c[pos.type] || "#ffffff18" }} />;
+                          );
                         })}
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+                        <div className="flex h-1 rounded-full overflow-hidden bg-white/[0.06]">
+                          {positions.map((pos: { type: string; percentage: number }, i: number) => {
+                            const c: Record<string, string> = { hold: '#60a5fa50', staking: '#14F19560', lending: '#fbbf2450' };
+                            return <div key={i} style={{ width: `${pos.percentage}%`, background: c[pos.type] || '#ffffff18' }} />;
+                          })}
+                        </div>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </BentoCard>
             </motion.div>
           );
         })}
-
         <InitialHoldingsCard />
-      </motion.div>
+      </BentoSection>
     </div>
   );
 }

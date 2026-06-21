@@ -13,6 +13,8 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { usePortfolio } from '@/contexts/PortfolioContext';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
+import { MoneyValue } from '@/components/portfolio/ui/MoneyValue';
 
 const STORAGE_KEY = 'portfolio-history-v2';
 const MAX_POINTS = 90;
@@ -129,32 +131,30 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
     : (changePct >= 0 ? 'hsl(var(--gain))' : 'hsl(var(--loss))');
 
   return (
-    <div className="glass-card p-4 space-y-3">
-      {/* Header */}
+    <BentoCard padding="md" className="space-y-3">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <TrendingUp className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">
+          <TrendingUp className="w-4 h-4 text-neon-green" />
+          <span className="text-sm font-semibold text-white">
             {sk ? 'Vývoj portfólia' : 'Portfolio History'}
-            {selected && <span className="ml-1.5 text-[10px] text-muted-foreground">· {selected}</span>}
+            {selected && <span className="ml-1.5 text-[10px] text-white/35">· {selected}</span>}
           </span>
         </div>
         {hasMultiple && (
           <div className="flex items-center gap-2">
-            <span className={`text-sm font-bold ${changePct >= 0 ? 'text-gain' : 'text-loss'}`}>
+            <MoneyValue size="sm" positive={changePct >= 0} negative={changePct < 0}>
               {changePct >= 0 ? '+' : ''}{changePct.toFixed(1)}%
-            </span>
-            <span className={`text-xs ${changeUsd >= 0 ? 'text-gain' : 'text-loss'}`}>
+            </MoneyValue>
+            <span className={`text-xs font-mono ${changeUsd >= 0 ? 'text-gain' : 'text-loss'}`}>
               ({changeUsd >= 0 ? '+' : ''}{formatUsd(changeUsd)})
             </span>
           </div>
         )}
         {!hasMultiple && (
-          <span className="text-sm font-bold text-foreground">{formatUsd(latest)}</span>
+          <MoneyValue size="sm">{formatUsd(latest)}</MoneyValue>
         )}
       </div>
 
-      {/* Range toggle */}
       <div className="flex gap-1">
         {([7, 30] as const).map(r => (
           <button
@@ -162,8 +162,8 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
             onClick={() => setRange(r)}
             className={`px-3 py-1 text-xs rounded-full transition-colors ${
               range === r
-                ? 'bg-primary text-primary-foreground'
-                : 'bg-secondary text-secondary-foreground hover:bg-secondary/80'
+                ? 'bg-neon-green/15 text-neon-green border border-neon-green/30'
+                : 'bg-white/[0.04] text-white/40 border border-white/[0.06] hover:text-white/70'
             }`}
           >
             {r}{sk ? 'd' : 'd'}
@@ -181,11 +181,11 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
                 <stop offset="100%" stopColor={seriesColor} stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" opacity={0.3} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" opacity={0.3} />
             <XAxis
               dataKey="date"
               tickFormatter={(d: string) => d.slice(5)}
-              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
               axisLine={false}
               tickLine={false}
               minTickGap={30}
@@ -193,7 +193,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
             <YAxis
               domain={[minVal - padding, maxVal + padding]}
               tickFormatter={(v: number) => `$${(v / 1000).toFixed(1)}k`}
-              tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
               axisLine={false}
               tickLine={false}
               width={45}
@@ -214,13 +214,12 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
       </div>
 
       {buyDates.size > 0 && (
-        <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <ShoppingCart className="w-3 h-3 text-gain" />
+        <div className="flex items-center gap-1.5 text-[10px] text-white/35">
+          <ShoppingCart className="w-3 h-3 text-neon-green" />
           <span>{sk ? `${buyDates.size} DCA nákupov v tomto období` : `${buyDates.size} DCA buys in range`}</span>
         </div>
       )}
 
-      {/* Current per-token breakdown */}
       {filtered.length > 0 && Object.keys(filtered[filtered.length - 1].tokens).length > 0 && (
         <div className="grid grid-cols-2 gap-2">
           {TOKENS.map(token => {
@@ -229,13 +228,13 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
             const firstVal = filtered[0].tokens?.[token.id] || 0;
             const pct = firstVal > 0 ? ((val - firstVal) / firstVal) * 100 : 0;
             return (
-              <div key={token.id} className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-secondary/50">
+              <div key={token.id} className="flex items-center gap-2 px-2 py-1.5 rounded-xl bg-white/[0.03] border border-white/[0.06]">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: token.color }} />
                 <div className="flex-1 min-w-0">
-                  <span className="text-xs font-medium text-foreground">{token.symbol}</span>
-                  <span className="text-xs text-muted-foreground ml-1">{formatUsd(val)}</span>
+                  <span className="text-xs font-medium text-white">{token.symbol}</span>
+                  <span className="text-xs font-mono text-white/40 ml-1">{formatUsd(val)}</span>
                 </div>
-                <span className={`text-[10px] font-medium ${pct >= 0 ? 'text-gain' : 'text-loss'}`}>
+                <span className={`text-[10px] font-mono font-medium ${pct >= 0 ? 'text-gain' : 'text-loss'}`}>
                   {pct >= 0 ? '+' : ''}{pct.toFixed(1)}%
                 </span>
               </div>
@@ -244,13 +243,12 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
         </div>
       )}
 
-      {/* Info text */}
-      <p className="text-[10px] text-muted-foreground text-center">
+      <p className="text-[10px] text-white/30 text-center">
         {sk
           ? `📊 Dáta sa zbierajú denne · ${filtered.length} ${filtered.length === 1 ? 'záznam' : filtered.length < 5 ? 'záznamy' : 'záznamov'}`
           : `📊 Data collected daily · ${filtered.length} ${filtered.length === 1 ? 'record' : 'records'}`}
       </p>
-    </div>
+    </BentoCard>
   );
 }
 
@@ -262,17 +260,17 @@ function CustomTooltip({ active, payload, label, sk }: { active?: boolean; paylo
   if (!data) return null;
 
   return (
-    <div className="bg-card border border-border rounded-lg p-3 shadow-lg space-y-1.5 text-xs">
-      <p className="font-semibold text-foreground">{data.date}</p>
-      <p className="text-sm font-bold text-foreground">{formatUsd(data.value)}</p>
+    <div className="bg-[#0A0A0A] border border-white/10 rounded-2xl p-3 shadow-xl space-y-1.5 text-xs">
+      <p className="font-semibold text-white">{data.date}</p>
+      <p className="font-mono text-sm font-bold text-white">{formatUsd(data.value)}</p>
       {TOKENS.map(token => {
         const val = Number(data[token.id] ?? 0);
         if (!val || val <= 0) return null;
         return (
           <div key={token.id} className="flex items-center gap-1.5">
             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: token.color }} />
-            <span className="text-muted-foreground">{token.symbol}</span>
-            <span className="ml-auto font-medium text-foreground">{formatUsd(val)}</span>
+            <span className="text-white/40">{token.symbol}</span>
+            <span className="ml-auto font-mono font-medium text-white">{formatUsd(val)}</span>
           </div>
         );
       })}

@@ -12,6 +12,7 @@
  */
 import { useState, useCallback, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { motion } from 'framer-motion';
 import {
   Target, RefreshCw, ShieldCheck, AlertTriangle,
   ChevronDown, ChevronUp, Lock, RotateCcw, ArrowRight, Zap,
@@ -580,8 +581,20 @@ export function LiveDcaOutRadar() {
   const isLoading = rsiLoading;
 
   return (
-    <div style={{ background: T.card, border: `1px solid ${T.border}`, borderRadius: T.r, overflow: 'hidden',
-      boxShadow: '0 0 50px -12px rgba(168,85,247,0.30)' }}>
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.25, 0.4, 0.25, 1] }}
+    >
+    <div style={{
+      background: T.card,
+      border: `1px solid rgba(255,255,255,0.12)`,
+      borderRadius: '1.75rem',
+      overflow: 'hidden',
+      boxShadow: sellSignals > 0
+        ? '0 0 80px -8px rgba(239,68,68,0.45), 0 0 60px -12px rgba(168,85,247,0.35)'
+        : '0 0 60px -12px rgba(168,85,247,0.30)',
+    }}>
       {/* Header */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 12px',
         borderBottom: `1px solid ${T.border}`, background: 'rgba(14,165,233,0.04)' }}>
@@ -731,5 +744,6 @@ export function LiveDcaOutRadar() {
         <p style={{ fontSize: 8.5, color: T.textMut }}>Klikni na token pre detail</p>
       </div>
     </div>
+    </motion.div>
   );
 }

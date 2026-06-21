@@ -1,10 +1,11 @@
 import { useMemo, useState } from 'react';
 import { Sparkles, TrendingUp, ShieldCheck, Activity, ArrowRight, Loader2, ExternalLink, Info, ChevronDown } from 'lucide-react';
-import { Card, CardContent } from '@/components/ui/card';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { toast } from '@/hooks/use-toast';
 import { usePortfolio } from '@/contexts/PortfolioContext';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
+import { MoneyValue } from '@/components/portfolio/ui/MoneyValue';
 
 interface Props {
   lang: Lang;
@@ -183,31 +184,28 @@ export function AIYieldProfitRouter({ lang }: Props) {
   };
 
   return (
-    <Card className="border-border bg-card overflow-hidden">
-      <div className="h-1 bg-gradient-to-r from-primary via-purple-500 to-pink-500" />
-      <CardContent className="p-5 space-y-4">
+    <BentoCard padding="lg" className="h-full overflow-hidden">
+      <div className="h-0.5 bg-gradient-to-r from-neon-green via-neon-purple to-neon-magenta" />
+      <div className="space-y-4 mt-4">
         <div className="flex items-center gap-2">
-          <Sparkles className="w-4 h-4 text-primary" />
-          <h3 className="text-sm font-semibold text-foreground">
+          <Sparkles className="w-4 h-4 text-neon-green" />
+          <h3 className="text-sm font-semibold text-white">
             {sk ? 'AI Yield Profit Router' : 'AI Yield Profit Router'}
           </h3>
         </div>
 
-        {/* Profit available */}
-        <div className="rounded-lg bg-secondary/40 p-3 space-y-2">
+        <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-3 space-y-2">
           <div className="flex items-baseline justify-between">
-            <p className="text-[11px] text-muted-foreground">
+            <p className="text-[11px] text-white/40">
               {sk ? 'Dostupný zisk na presun' : 'Profit available'}
             </p>
             {hasProfit && (
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-[10px] text-white/35">
                 → {recommended.id} · {recommended.network}
               </p>
             )}
           </div>
-          <p className="text-2xl font-bold text-foreground">
-            {hasProfit ? formatUsd(profitAvailable) : '$0.00'}
-          </p>
+          <MoneyValue size="xl">{hasProfit ? formatUsd(profitAvailable) : '$0.00'}</MoneyValue>
           {hasProfit && Object.keys(profitBySymbol).length > 0 && (
             <div className="space-y-1.5 pt-1">
               <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
@@ -408,7 +406,7 @@ export function AIYieldProfitRouter({ lang }: Props) {
         <button
           onClick={handleMove}
           disabled={!hasProfit || moving}
-          className="w-full flex items-center justify-center gap-2 rounded-lg bg-primary text-primary-foreground py-2.5 text-sm font-semibold disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 rounded-2xl bg-neon-green text-black py-2.5 text-sm font-semibold disabled:opacity-50"
         >
           {moving ? (
             <Loader2 className="w-4 h-4 animate-spin" />
@@ -419,12 +417,12 @@ export function AIYieldProfitRouter({ lang }: Props) {
             </>
           )}
         </button>
-        <p className="text-[10px] text-muted-foreground text-center">
+        <p className="text-[10px] text-white/35 text-center">
           {sk
             ? 'Appka nič nepresunie automaticky — transakciu potvrdíš vo svojom walleti.'
             : 'Nothing is moved automatically — you confirm the transaction in your wallet.'}
         </p>
-      </CardContent>
-    </Card>
+      </div>
+    </BentoCard>
   );
 }

@@ -1,9 +1,9 @@
 import { Clock } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 
 interface Props { lang: Lang; }
 
-// Bitcoin Halving dates
 const LAST_HALVING_DATE = new Date('2024-04-19T00:00:00Z');
 const NEXT_HALVING_DATE = new Date('2028-04-19T00:00:00Z');
 const LAST_HALVING_PRICE = 64000;
@@ -21,62 +21,56 @@ export function HalvingCycleTracker({ lang }: Props) {
   const daysRemaining = Math.max(0, daysTotal - daysElapsed);
 
   const barColor = progress >= 75
-    ? 'bg-amber-400'
+    ? 'bg-neon-gold'
     : progress >= 50
-      ? 'bg-emerald-400'
-      : 'bg-primary';
+      ? 'bg-neon-green'
+      : 'bg-neon-green';
 
   return (
-    <div className="glass-card p-3 space-y-2" style={{ borderLeft: '2px solid rgba(247,147,26,0.6)' }}>
-      {/* Header */}
+    <BentoCard accentColor="rgba(247,147,26,0.6)" padding="sm" className="space-y-2 h-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Clock className="w-3 h-3 text-muted-foreground" />
-          <span className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+          <Clock className="w-3 h-3 text-white/40" />
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
             {sk ? 'Bitcoin Halving Cyklus' : 'Bitcoin Halving Cycle'}
           </span>
         </div>
-        <span className="text-[10px] font-bold tabular-nums text-foreground">
+        <span className="text-[10px] font-mono font-bold tabular-nums text-white">
           {progress.toFixed(1)}%
         </span>
       </div>
 
-      {/* Thin progress bar */}
-      <div className="w-full bg-secondary rounded-full h-1 overflow-hidden">
+      <div className="w-full bg-white/[0.06] rounded-full h-1 overflow-hidden">
         <div
           className={`h-full rounded-full transition-all ${barColor}`}
           style={{ width: `${progress}%` }}
         />
       </div>
 
-      {/* Tiny tick marks */}
       <div className="relative w-full h-2">
         {[0, 25, 50, 75, 100].map(pct => (
           <div
             key={pct}
-            className="absolute top-0 w-px h-1.5 bg-border"
+            className="absolute top-0 w-px h-1.5 bg-white/10"
             style={{ left: `${pct}%` }}
           />
         ))}
       </div>
 
-      {/* Contextual metrics */}
-      <div className="flex items-center justify-between text-[9px] text-muted-foreground leading-tight">
+      <div className="flex items-center justify-between text-[9px] text-white/35 leading-tight">
         <span>
           {sk ? 'Posledný' : 'Last'}: Apr 2024 · ${LAST_HALVING_PRICE.toLocaleString()} USD
         </span>
-        <span className="tabular-nums">
+        <span className="font-mono tabular-nums">
           {daysRemaining}d {sk ? 'do ďalšieho' : 'to next'}
         </span>
       </div>
-      <div className="flex items-center justify-between text-[9px] text-muted-foreground leading-tight">
-        <span>
-          {sk ? 'Ďalší' : 'Next'}: Apr 2028
-        </span>
-        <span className="tabular-nums opacity-60">
+      <div className="flex items-center justify-between text-[9px] text-white/35 leading-tight">
+        <span>{sk ? 'Ďalší' : 'Next'}: Apr 2028</span>
+        <span className="font-mono tabular-nums opacity-60">
           {daysElapsed}/{daysTotal}d
         </span>
       </div>
-    </div>
+    </BentoCard>
   );
 }

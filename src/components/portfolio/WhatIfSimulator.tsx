@@ -3,6 +3,8 @@ import { Sliders } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
+import { MoneyLabel, MoneyValue } from '@/components/portfolio/ui/MoneyValue';
 
 interface Props { lang: Lang; }
 
@@ -24,18 +26,18 @@ export function WhatIfSimulator({ lang }: Props) {
   const positive = delta >= 0;
 
   return (
-    <div className="glass-card p-4 space-y-3">
+    <BentoCard padding="md" className="space-y-3 h-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Sliders className="w-4 h-4 text-primary" />
-          <span className="text-sm font-semibold text-foreground">
+          <Sliders className="w-4 h-4 text-neon-purple" />
+          <span className="text-sm font-semibold text-white">
             {sk ? 'Čo ak…' : 'What if…'}
-            {selected && <span className="ml-1.5 text-[10px] text-muted-foreground">· {selected}</span>}
+            {selected && <span className="ml-1.5 text-[10px] text-white/35">· {selected}</span>}
           </span>
         </div>
-        <span className={`text-sm font-bold tabular-nums ${positive ? 'text-gain' : 'text-loss'}`}>
+        <MoneyValue size="sm" positive={positive} negative={!positive}>
           {pct >= 0 ? '+' : ''}{pct}%
-        </span>
+        </MoneyValue>
       </div>
 
       <input
@@ -45,7 +47,7 @@ export function WhatIfSimulator({ lang }: Props) {
         step={5}
         value={pct}
         onChange={(e) => setPct(Number(e.target.value))}
-        className="w-full accent-primary"
+        className="w-full accent-neon-green"
       />
 
       <div className="flex flex-wrap gap-1">
@@ -53,32 +55,24 @@ export function WhatIfSimulator({ lang }: Props) {
           <button
             key={p}
             onClick={() => setPct(p)}
-            className={`text-[10px] px-2 py-0.5 rounded-full border transition ${
+            className={`text-[10px] px-2.5 py-0.5 rounded-full border transition ${
               pct === p
-                ? 'border-primary bg-primary text-primary-foreground'
-                : 'border-border text-muted-foreground hover:text-foreground'
+                ? 'border-neon-green bg-neon-green/15 text-neon-green'
+                : 'border-white/10 text-white/40 hover:text-white/70'
             }`}
           >
-            {p > 0 ? '+' : ''}{p}%
+            {p >= 0 ? '+' : ''}{p}%
           </button>
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 pt-1">
-        <div className="bg-secondary/40 rounded-md p-2">
-          <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Teraz' : 'Now'}</p>
-          <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(baseValue)}</p>
-        </div>
-        <div className="bg-secondary/40 rounded-md p-2">
-          <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Scenár' : 'Scenario'}</p>
-          <p className={`text-sm font-bold tabular-nums ${positive ? 'text-gain' : 'text-loss'}`}>
-            {formatUsd(projected)}
-          </p>
-          <p className={`text-[10px] tabular-nums ${positive ? 'text-gain' : 'text-loss'}`}>
-            {positive ? '+' : ''}{formatUsd(delta)}
-          </p>
-        </div>
+      <div className="rounded-2xl bg-white/[0.03] border border-white/[0.06] p-3 space-y-1">
+        <MoneyLabel>{sk ? 'Projekcia hodnoty' : 'Projected value'}</MoneyLabel>
+        <MoneyValue size="lg">{formatUsd(projected)}</MoneyValue>
+        <p className={`text-xs font-mono tabular-nums ${positive ? 'text-gain' : 'text-loss'}`}>
+          {positive ? '+' : ''}{formatUsd(delta)} {sk ? 'od aktuálnej' : 'from current'}
+        </p>
       </div>
-    </div>
+    </BentoCard>
   );
 }

@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
+import { BentoCard, BentoStat } from '@/components/portfolio/ui/BentoCard';
 
 interface Props { lang: Lang; }
 
@@ -37,37 +38,28 @@ export function YieldEarnedCard({ lang }: Props) {
   const projectedAnnual = totalStakedValue * (blendedApy / 100);
 
   return (
-    <div className="glass-card p-4 space-y-3">
+    <BentoCard padding="md" className="space-y-3 h-full">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <Coins className="w-4 h-4 text-gain" />
-          <span className="text-sm font-semibold text-foreground">
+          <Coins className="w-4 h-4 text-neon-green" />
+          <span className="text-sm font-semibold text-white">
             {sk ? 'Yield zarobený' : 'Yield earned'}
           </span>
         </div>
-        <span className="text-[10px] text-muted-foreground">~{blendedApy.toFixed(1)}% APY</span>
+        <span className="text-[10px] text-white/35 font-mono">~{blendedApy.toFixed(1)}% APY</span>
       </div>
 
       <div className="grid grid-cols-3 gap-2">
-        <div className="bg-secondary/40 rounded-md p-2">
-          <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Doteraz' : 'To date'}</p>
-          <p className="text-sm font-bold text-gain tabular-nums">{formatUsd(totalEarned)}</p>
-        </div>
-        <div className="bg-secondary/40 rounded-md p-2">
-          <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Posl. mesiac' : 'Last month'}</p>
-          <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(last30)}</p>
-        </div>
-        <div className="bg-secondary/40 rounded-md p-2">
-          <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Projekcia/rok' : 'Projected/yr'}</p>
-          <p className="text-sm font-bold text-foreground tabular-nums">{formatUsd(projectedAnnual)}</p>
-        </div>
+        <BentoStat label={sk ? 'Doteraz' : 'To date'} value={formatUsd(totalEarned)} valueClassName="text-sm text-neon-green" />
+        <BentoStat label={sk ? 'Posl. mesiac' : 'Last month'} value={formatUsd(last30)} valueClassName="text-sm" />
+        <BentoStat label={sk ? 'Projekcia' : 'Projected'} value={formatUsd(projectedAnnual)} valueClassName="text-sm" />
       </div>
 
-      {(!rewards || rewards.length === 0) && (
-        <p className="text-[10px] text-center text-muted-foreground">
-          {sk ? 'Zatiaľ žiadne zaznamenané odmeny.' : 'No recorded rewards yet.'}
-        </p>
-      )}
-    </div>
+      <p className="text-[10px] text-white/30 text-center">
+        {sk
+          ? 'Historické staking rewards z databázy · všetky sumy v USD.'
+          : 'Historical staking rewards from database · all amounts in USD.'}
+      </p>
+    </BentoCard>
   );
 }

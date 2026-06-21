@@ -2,6 +2,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import type { PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { usePortfolio } from '@/contexts/PortfolioContext';
+import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 
 interface Props {
   metrics: PortfolioMetrics;
@@ -52,8 +53,8 @@ export function AllocationDonut({ metrics, selected, onSelect }: Props) {
   const chartData = empty ? [{ name: '—', label: '—', value: 1, color: 'hsl(var(--muted))', staked: false }] : slices;
 
   return (
-    <div className="glass-card p-4">
-      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold mb-2">Alokácia</p>
+    <BentoCard padding="md" className="h-full">
+      <p className="text-[10px] uppercase tracking-wider text-white/40 font-semibold mb-2">Alokácia · USD</p>
       <div className="relative h-44">
         <ResponsiveContainer width="100%" height="100%">
           <PieChart>
@@ -92,8 +93,8 @@ export function AllocationDonut({ metrics, selected, onSelect }: Props) {
           </PieChart>
         </ResponsiveContainer>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <p className="text-[9px] uppercase text-muted-foreground tracking-wider">{selected ?? 'Total'}</p>
-          <p className="text-base font-bold text-foreground tabular-nums">
+          <p className="text-[9px] uppercase text-white/35 tracking-wider">{selected ?? 'Total'}</p>
+          <p className="font-mono text-base font-bold text-white tabular-nums">
             {formatUsd(selected ? (legend.find(d => d.name === selected)?.value ?? 0) : metrics.totalValue)}
           </p>
         </div>
@@ -104,26 +105,26 @@ export function AllocationDonut({ metrics, selected, onSelect }: Props) {
           const dim = selected && !active;
           const drift = d.actual - d.target;
           const driftAbs = Math.abs(drift);
-          const driftColor = driftAbs < 2 ? 'text-muted-foreground' : driftAbs < 5 ? 'text-yellow-400' : 'text-loss';
+          const driftColor = driftAbs < 2 ? 'text-white/35' : driftAbs < 5 ? 'text-neon-gold' : 'text-loss';
           const arrow = driftAbs < 0.5 ? '·' : drift > 0 ? '▲' : '▼';
           return (
             <button
               key={d.name}
               onClick={() => onSelect?.(d.name as 'BTC' | 'ETH' | 'SOL')}
-              className={`bg-secondary/60 rounded-md p-1.5 text-center transition-opacity ${dim ? 'opacity-40' : ''} ${active ? 'ring-1 ring-primary' : ''}`}
+              className={`bg-white/[0.03] border border-white/[0.06] rounded-xl p-1.5 text-center transition-all ${dim ? 'opacity-40' : ''} ${active ? 'ring-1 ring-neon-green border-neon-green/30' : ''}`}
             >
               <div className="flex items-center justify-center gap-1">
                 <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                <span className="text-[10px] font-bold text-foreground">{d.name}</span>
+                <span className="text-[10px] font-bold text-white">{d.name}</span>
               </div>
-              <p className="text-[10px] text-muted-foreground tabular-nums mt-0.5">
+              <p className="text-[10px] text-white/40 font-mono tabular-nums mt-0.5">
                 {d.actual.toFixed(1)}% / <span className="opacity-60">{d.target.toFixed(0)}%</span>
               </p>
-              <p className={`text-[9px] tabular-nums font-medium ${driftColor}`}>
+              <p className={`text-[9px] font-mono tabular-nums font-medium ${driftColor}`}>
                 {arrow} {drift >= 0 ? '+' : ''}{drift.toFixed(1)}pp
               </p>
               {d.stakedValue > 0 && (
-                <p className="text-[9px] tabular-nums text-primary/80 mt-0.5">
+                <p className="text-[9px] font-mono tabular-nums text-neon-green/80 mt-0.5">
                   🔒 {d.stakedPct.toFixed(0)}% staked
                 </p>
               )}
@@ -131,6 +132,6 @@ export function AllocationDonut({ metrics, selected, onSelect }: Props) {
           );
         })}
       </div>
-    </div>
+    </BentoCard>
   );
 }
