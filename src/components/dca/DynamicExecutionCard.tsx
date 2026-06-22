@@ -220,7 +220,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   };
 
   // ── ATR-based dynamic discount indicators (merged from AutoLimitTracker) ──
-  const { indicators: atrIndicators, getDiscount: getAtrDiscount } = useAutoLimitTracker();
+  const { getDiscount: getAtrDiscount } = useAutoLimitTracker();
 
   // Auto-write to portfolio holdings when a limit order becomes FILLED.
   // Tracks written orders by ID to prevent duplicate writes.
@@ -294,17 +294,19 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     if (emergencyPaused) marketPct = 0;
     return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket, wSent: w.sent, wVol: w.vol, scale };
   }
-  function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>): string {
-    const fgTag = fgGlobal < 30 ? 'extrémny strach' : fgGlobal > 75 ? 'extrémna chamtivosť' : 'neutrálny sentiment';
+  function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>, atrDiscount: number): string {
+    const fgTag  = fgGlobal < 30 ? 'extrémny strach' : fgGlobal > 75 ? 'extrémna chamtivosť' : 'neutrálny sentiment';
     const volTag = vol30d >= 4.5 ? 'vysoká' : vol30d >= 2.5 ? 'stredná' : 'nízka';
-    const wTag = `váhy ${Math.round(split.wSent * 100)}/${Math.round(split.wVol * 100)} (sent/vol), škála ${split.scale}`;
+    const wTag   = `váhy ${Math.round(split.wSent * 100)}/${Math.round(split.wVol * 100)} (sent/vol), škála ${split.scale}`;
+    const mult   = sym === 'BTC' ? '×1.0' : sym === 'ETH' ? '×1.6' : '×2.15';
+    const atrTag = `ATR(7d) volatilita driví limit –${atrDiscount.toFixed(1)}% (Binance týžd. knôty ${mult})`;
     if (split.marketPct >= 65) {
-      return `${sym} MKT navýšený na ${split.marketPct} % kvôli kombinácii ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D volatility (${vol30d.toFixed(2)} %) — šanca zachytiť rýchle dno. ${wTag}.`;
+      return `${sym} MKT navýšený na ${split.marketPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D vol (${vol30d.toFixed(2)} %). ${atrTag}. ${wTag}.`;
     }
     if (split.marketPct <= 35) {
-      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) odporúčajú čakať na hlbšie sweep zóny a neplatiť market premium. ${wTag}.`;
+      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} a ${volTag} vol odporúčajú čakať na sweep zóny. ${atrTag} zapísaná do cieľovej ceny. ${wTag}.`;
     }
-    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) v rovnováhe. ${wTag}.`;
+    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}), ${volTag} 14D vol (${vol30d.toFixed(2)} %). ${atrTag}. ${wTag}.`;
   }
 
   const copy = (text: string) => {
@@ -402,9 +404,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const coinUsd = investableUsd * tokenWeights[c];
           // PER-TOKEN dual-factor split (F&G + per-coin 14D volatility).
           const split = perTokenSplit(e.symbol, e.volatility30d);
-          const marketPct = split.marketPct;
+          const marketPct  = split.marketPct;
           const dynamicPct = split.limitPct;
-          const splitReason = perTokenReason(e.symbol, e.volatility30d, split);
+
+          // ── ATR7 INTEGRATION: dynamic limit depth driven by weekly volatility ──
+          // atrDiscountPct = how deep below market the limit should sit, calibrated
+          // per-asset (BTC ×1.0, ETH ×1.6, SOL ×2.15).  Rises with weekly ATR,
+          // falls when market is calm.  Only active when order is NOT locked —
+          // lock state (PENDING/FILLED) freezes dynPriceEffective via lockedLimitPrice.
+          const atrDiscountPct = getAtrDiscount(e.symbol as LimitSymbol, price);
+          const splitReason    = perTokenReason(e.symbol, e.volatility30d, split, atrDiscountPct);
           let marketUsdRaw = coinUsd * (marketPct / 100);
           let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
@@ -424,9 +433,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
             marketMergedIntoDyn = true;
           }
 
-          // Market price = spot; Limit dynamic = spot * (1 + distance%)
+          // Market price = spot
+          // Limit Dynamic = spot × (1 − atrDiscountPct/100) — ATR7-driven depth
+          // Lock state: dynPriceEffective ignores dynOracle when PENDING/FILLED
           const marketOracle = price;
-          const dynOracle = price > 0 ? price * (1 + e.limitDistancePct / 100) : 0;
+          const dynOracle    = price > 0 ? price * (1 - atrDiscountPct / 100) : 0;
           // STATE LOCK: once an order is PENDING/FILLED/EXECUTED, render the exact
           // target_price stored in DB at activation — stop listening to the live feed.
           const marketLockedPrice = mDone ? Number(st?.market?.target_price ?? 0) : 0;
@@ -483,25 +494,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   </span>
                 </div>
               </div>
-
-              {/* ATR(7d) Dynamic discount indicator — merged from AutoLimitTracker */}
-              {(() => {
-                const sym = e.symbol as LimitSymbol;
-                const atrDiscount = getAtrDiscount(sym, price);
-                const atrTarget   = price > 0 ? price * (1 - atrDiscount / 100) : 0;
-                const ind         = atrIndicators?.[sym];
-                return (
-                  <div className="flex items-center justify-between text-[9.5px] bg-primary/5 rounded px-2 py-1 ring-1 ring-primary/20">
-                    <span className="text-primary/80 font-semibold uppercase tracking-wide">
-                      ATR(7d) · Volatilita ×{sym === 'BTC' ? '1.0' : sym === 'ETH' ? '1.6' : '2.15'}
-                    </span>
-                    <span className="tabular-nums text-primary font-bold">
-                      –{atrDiscount}% → {atrTarget > 0 ? formatLimitPrice(atrTarget) : '…'}
-                      {ind?.atr7 ? ` (ATR $${ind.atr7.toFixed(0)})` : ''}
-                    </span>
-                  </div>
-                );
-              })()}
 
               {/* SATELLITE RSI ROW — ETH/SOL only, visible (never tooltip-hidden) */}
               {(c === 'eth' || c === 'sol') && (() => {
@@ -633,7 +625,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     label: 'LIMIT DYNAMIC',
                     title: marketMergedIntoDyn
                       ? `LIMIT DYNAMIC · ${(marketPct + dynamicPct)}% (zlúčené)`
-                      : `LIMIT DYNAMIC · ${dynamicPct}% (${e.limitDistancePct.toFixed(1)}%)`,
+                      : `LIMIT DYNAMIC · ${dynamicPct}% (ATR7: –${atrDiscountPct.toFixed(1)}%)`,
                     usd: dynUsd,
                     oracle: dynOracle,
                     effPrice: dynPriceEffective,
