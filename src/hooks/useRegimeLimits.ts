@@ -44,19 +44,16 @@ export type Regime = 'bull' | 'bear';
 
 export interface RegimeLimitInfo {
   regime: Regime;
-  /** Aktuálna spot cena z Binance daily klines. */
   price: number;
-  /** 50-dňový EMA. */
   ema50: number;
-  /** Cieľová limit cena (po failsafe clampingu). */
+  /** 7-dňové low z uzavretých sviečok. */
+  sevenDayLow: number;
+  /** 7-dňové ATR z uzavretých sviečok. */
+  atr7: number;
   limitPrice: number;
-  /** Drop v % oproti aktuálnej cene (kladné číslo). */
   discountPct: number;
-  /** Krátke 1–2 vetné vysvetlenie pre používateľa. */
   reason: string;
-  /** True ak bola hodnota orezaná failsafom. */
   clamped: boolean;
-  /** True ak sme nemali dáta a použili sme fallback. */
   fallback: boolean;
 }
 
