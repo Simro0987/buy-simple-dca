@@ -19,7 +19,7 @@ import {
   type CoinKey,
 } from '@/lib/dynamicExecution';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
-import { useAutoLimitTracker, type LimitSymbol } from '@/hooks/useAutoLimitTracker';
+import { useRegimeLimits } from '@/hooks/useRegimeLimits';
 
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
