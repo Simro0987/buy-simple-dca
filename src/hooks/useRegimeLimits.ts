@@ -44,19 +44,16 @@ export type Regime = 'bull' | 'bear';
 
 export interface RegimeLimitInfo {
   regime: Regime;
-  /** Aktuálna spot cena z Binance daily klines. */
   price: number;
-  /** 50-dňový EMA. */
   ema50: number;
-  /** Cieľová limit cena (po failsafe clampingu). */
+  /** 7-dňové low z uzavretých sviečok. */
+  sevenDayLow: number;
+  /** 7-dňové ATR z uzavretých sviečok. */
+  atr7: number;
   limitPrice: number;
-  /** Drop v % oproti aktuálnej cene (kladné číslo). */
   discountPct: number;
-  /** Krátke 1–2 vetné vysvetlenie pre používateľa. */
   reason: string;
-  /** True ak bola hodnota orezaná failsafom. */
   clamped: boolean;
-  /** True ak sme nemali dáta a použili sme fallback. */
   fallback: boolean;
 }
 
@@ -97,6 +94,8 @@ function buildFallback(coin: CoinKey, price: number): RegimeLimitInfo {
     regime: 'bull',
     price,
     ema50: 0,
+    sevenDayLow: 0,
+    atr7: 0,
     limitPrice: price > 0 ? price * (1 - drop / 100) : 0,
     discountPct: drop,
     reason: 'Dáta z Binance momentálne nedostupné. Používame konzervatívny fallback limit, aby cyklus akumulácie nestál.',
@@ -153,11 +152,20 @@ async function fetchRegimeForCoin(coin: CoinKey, livePrice: number): Promise<Reg
     dropPct = clamp(dropPct, MIN_DROP_PCT, MAX_DROP_PCT);
     const limitPrice = price * (1 - dropPct / 100);
 
-    const reason = regime === 'bull'
-      ? `Trh je nad 50D EMA — rastúci trend. Cielime na ${dropPct.toFixed(1)} % pullback, aby nám akumulácia neušla a kapitál pracoval.`
-      : `Trh je pod 50D EMA — výplachy. Čakáme na výber likvidity ${coin === 'btc' ? 'na 7D supporte' : 'pod 7D supportom (− 0.5×ATR7)'}, aby sme nakúpili vo výhodnejšej zóne.`;
+    const fmt = (v: number) => {
+      if (!Number.isFinite(v) || v <= 0) return '—';
+      if (v >= 1000) return `$${v.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+      if (v >= 1) return `$${v.toFixed(2)}`;
+      return `$${v.toFixed(4)}`;
+    };
 
-    return { regime, price, ema50, limitPrice, discountPct: dropPct, reason, clamped, fallback: false };
+    const reason = regime === 'bull'
+      ? `${coin.toUpperCase()} je nad 50D EMA (${fmt(ema50)}). Cielime na ${dropPct.toFixed(1)} % pullback na ${fmt(limitPrice)}, aby nám akumulácia neušla a kapitál pracoval.`
+      : coin === 'btc'
+        ? `BTC je pod 50D EMA (${fmt(ema50)}). Cielime presne na 7D support na cene ${fmt(limitPrice)} (cena teraz ${fmt(price)}).`
+        : `${coin.toUpperCase()} je v medveďom režime (pod 50D EMA ${fmt(ema50)}). Cielime na ${fmt(limitPrice)}, čo je 7D support (${fmt(sevenDayLow)}) znížený o 0.5× ATR volatility (${fmt(atr)}), aby sme chytili hlboký knôt.`;
+
+    return { regime, price, ema50, sevenDayLow, atr7: atr, limitPrice, discountPct: dropPct, reason, clamped, fallback: false };
   } catch {
     return buildFallback(coin, livePrice);
   }
