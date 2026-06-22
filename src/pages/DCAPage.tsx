@@ -10,6 +10,7 @@ import { DynamicExecutionCard } from '@/components/dca/DynamicExecutionCard';
 import { ExecutionAdvisorCard } from '@/components/dca/ExecutionAdvisorCard';
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 import { MacroNewsTicker } from '@/components/MacroNewsTicker';
+import { AutoLimitTrackerCard } from '@/components/dca/AutoLimitTrackerCard';
 import type { OctToken } from '@/hooks/useConfluenceMetrics';
 
 
@@ -392,6 +393,9 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}
       <ExecutionAdvisorCard />
+
+      {/* DYNAMIC LIMIT AUTO-TRACKER — ATR volatility, 7-day lock, auto-fill → portfolio */}
+      <AutoLimitTrackerCard />
 
       {/* CONFLUENCE OCTAGON — 8-os makro radarový indikátor akumulácia vs. eufória */}
       <ConfluenceOctagon activeToken={octagonToken} onTokenChange={setOctagonToken} />
