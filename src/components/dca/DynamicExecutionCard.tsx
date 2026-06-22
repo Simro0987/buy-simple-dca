@@ -834,10 +834,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </button>
               )}
 
-              <p className="text-[10px] text-muted-foreground leading-snug">
-                <span className="font-semibold text-foreground/80">Prečo? </span>
-                {splitReason} {e.rationale}
-              </p>
+              <div className="space-y-1">
+                <p className="text-[10px] text-foreground/90 leading-snug bg-background/40 rounded px-2 py-1.5 border-l-2 border-primary/60">
+                  <span className="font-bold text-primary">Prečo limit? </span>
+                  {regimeReason}
+                </p>
+                <p className="text-[10px] text-muted-foreground leading-snug">
+                  <span className="font-semibold text-foreground/80">Split: </span>
+                  {splitReason} {e.rationale}
+                </p>
+              </div>
             </div>
           );
         })}
