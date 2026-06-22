@@ -162,14 +162,6 @@ export interface CoinMetrics {
   momentum30d: number;
 }
 
-export interface MacroDistanceInputs {
-  btcBaseDistancePct: number; // negative value
-  coin: CoinKey;
-  atr7Pct: number;
-  btcAtr7Pct: number;
-  distanceFromEma50Pct: number;
-}
-
 /**
  * Per-coin execution.
  * Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich celkové Score + agregované momentum) —
@@ -332,51 +324,4 @@ export function overallNarrative(executions: CoinExecution[]): string {
   if (avgMarket > 70) return '🟢 Lacný/volatilný trh — uprednostni okamžitú expozíciu.';
   if (avgMarket >= 50) return '🟡 Normálne podmienky — vyvážená exekúcia.';
   return '🔴 Drahý/pokojný trh — buď trpezlivý s limitmi.';
-}
-
-/**
- * Macro-aware LIMIT DYNAMIC depth.
- * ETH must stay 1.5–1.7x deeper than BTC.
- * SOL must stay 2.0–2.3x deeper than BTC.
- * Multiplier reacts to ATR7 relative risk and distance from EMA50.
- */
-export function computeMacroAwareLimitDistance(inputs: MacroDistanceInputs): {
-  distancePct: number;
-  multiplier: number;
-  reason: string;
-} {
-  const baseAbs = Math.abs(inputs.btcBaseDistancePct || -4);
-  const btcAtr = Math.max(0.8, inputs.btcAtr7Pct || 2);
-  const atrSignal = Math.max(-1, Math.min(1, (inputs.atr7Pct - btcAtr) / btcAtr));
-  const emaSignal = Math.max(-1, Math.min(1, -inputs.distanceFromEma50Pct / 8));
-
-  if (inputs.coin === 'btc') {
-    return {
-      distancePct: -Math.max(1.5, baseAbs),
-      multiplier: 1,
-      reason: `BTC baseline: ATR7 ${inputs.atr7Pct.toFixed(2)}% · EMA50 dist ${inputs.distanceFromEma50Pct.toFixed(2)}%.`,
-    };
-  }
-
-  if (inputs.coin === 'eth') {
-    const multiplier = Math.max(1.5, Math.min(1.7, 1.6 + atrSignal * 0.08 + emaSignal * 0.06));
-    const distancePct = -Math.max(1.5, Math.min(20, baseAbs * multiplier));
-    return {
-      distancePct,
-      multiplier,
-      reason:
-        `ETH multiplier ${multiplier.toFixed(2)}x (1.5–1.7x) z ATR7 ${inputs.atr7Pct.toFixed(2)}% ` +
-        `a EMA50 distance ${inputs.distanceFromEma50Pct.toFixed(2)}%.`,
-    };
-  }
-
-  const multiplier = Math.max(2.0, Math.min(2.3, 2.15 + atrSignal * 0.1 + emaSignal * 0.08));
-  const distancePct = -Math.max(1.5, Math.min(20, baseAbs * multiplier));
-  return {
-    distancePct,
-    multiplier,
-    reason:
-      `SOL multiplier ${multiplier.toFixed(2)}x (2.0–2.3x) z ATR7 ${inputs.atr7Pct.toFixed(2)}% ` +
-      `a EMA50 distance ${inputs.distanceFromEma50Pct.toFixed(2)}%.`,
-  };
 }

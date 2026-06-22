@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins, Pencil, AlertTriangle, ShoppingCart, Gauge } from 'lucide-react';
 import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
@@ -7,7 +7,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
-import { useDcaMacroData } from '@/hooks/useDcaMacroData';
+import { useFearGreed } from '@/hooks/usePrices';
 import { useMarketEngine } from '@/contexts/MarketContext';
 import { useMarketData } from '@/hooks/useMarketData';
 
@@ -15,7 +15,6 @@ import { useProfitReservoir, deductReservoir } from '@/lib/profitReservoir';
 import { useEmergencyPause } from '@/lib/emergencyPause';
 import {
   calcUnifiedExecution,
-  computeMacroAwareLimitDistance,
   fixedExecution,
   type CoinKey,
 } from '@/lib/dynamicExecution';
@@ -58,47 +57,6 @@ const COIN_PRICE_KEY: Record<CoinKey, string> = {
 // Zdroj pravdy: useMarketEngine().engine.perToken.
 
 type Mode = 'market' | 'dynamic';
-const LOCKS_KEY = 'dca-execution-locks-v1';
-
-interface OfferLockSnapshot {
-  isActivated: boolean;
-  lockedPrice: number;
-  lockedPercentage: number;
-  lockedUsd: number;
-  lockedQuantity: number;
-  lockedDistancePct?: number;
-  timestamp: number;
-}
-
-interface CoinLockState {
-  isActivated: boolean;
-  activatedMode: Mode;
-  timestamp: number;
-  market: OfferLockSnapshot;
-  dynamic: OfferLockSnapshot;
-}
-
-type ExecutionLocks = Partial<Record<CoinKey, CoinLockState>>;
-
-interface ExecutionRow {
-  id: string;
-  coin: string;
-  kind: string;
-  status: string;
-  target_price: number | null;
-  amount_usd: number | null;
-  quantity: number | null;
-}
-
-function loadExecutionLocks(): ExecutionLocks {
-  try {
-    const raw = localStorage.getItem(LOCKS_KEY);
-    if (!raw) return {};
-    return JSON.parse(raw) as ExecutionLocks;
-  } catch {
-    return {};
-  }
-}
 
 /**
  * Two-Tier Dynamic Allocation Matrix:
@@ -109,9 +67,9 @@ function loadExecutionLocks(): ExecutionLocks {
 
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
-  const { data: macroData } = useDcaMacroData();
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
+  const { data: fg } = useFearGreed();
   const { engine } = useMarketEngine();
   const { data: market } = useMarketData();
   const marketDebugError = market?.debugError || market?.error || null;
@@ -133,8 +91,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     eth: `${engine.perToken.eth}%`,
     sol: `${engine.perToken.sol}%`,
   };
-  const fgValue = typeof macroData?.fearGreed?.value === 'number' ? macroData.fearGreed.value : 50;
-  const fgLabel = macroData?.fearGreed?.classification ?? 'Neutral';
+  const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
+  const fgLabel = fg?.classification ?? 'Neutral';
   const reservoir = useProfitReservoir();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
@@ -143,7 +101,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const [isMarketActive, setIsMarketActive] = useState<string | null>(null);
   const [isDynamicActive, setIsDynamicActive] = useState<string | null>(null);
   const [cancelBusy, setCancelBusy] = useState<string | null>(null);
-  const [executionLocks, setExecutionLocks] = useState<ExecutionLocks>(loadExecutionLocks);
 
   // Per-coin/per-mode edited prices (override oracle baseline)
   const [editedPrices, setEditedPrices] = useState<Record<CoinKey, Partial<Record<Mode, number>>>>(() => {
@@ -154,13 +111,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       return { btc: p.btc ?? {}, eth: p.eth ?? {}, sol: p.sol ?? {} };
     } catch { return { btc: {}, eth: {}, sol: {} }; }
   });
-  useEffect(() => {
+  useMemo(() => {
     try { localStorage.setItem('dca-target-prices-v2', JSON.stringify(editedPrices)); } catch { /* noop */ }
   }, [editedPrices]);
-
-  useEffect(() => {
-    try { localStorage.setItem(LOCKS_KEY, JSON.stringify(executionLocks)); } catch { /* noop */ }
-  }, [executionLocks]);
 
   const { data: executionsRows } = useQuery({
     queryKey: ['dca_executions', week],
@@ -176,8 +129,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   });
 
   const execStatus = useMemo(() => {
-    const m = new Map<string, { market?: ExecutionRow; limit?: ExecutionRow }>();
-    for (const r of (executionsRows ?? []) as ExecutionRow[]) {
+    const m = new Map<string, { market?: any; limit?: any }>();
+    for (const r of (executionsRows ?? []) as any[]) {
       const cur = m.get(r.coin) ?? {};
       if (r.kind === 'market') cur.market = r;
       else cur.limit = r;
@@ -187,20 +140,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   }, [executionsRows]);
 
   // ============= INDEPENDENT ACTIVATIONS =============
-  const activateMarket = async (
-    coin: CoinKey,
-    amount: number,
-    price: number,
-    snapshots: {
-      market: { pct: number; usd: number; price: number; qty: number; distancePct: number };
-      dynamic: { pct: number; usd: number; price: number; qty: number; distancePct: number };
-    },
-    fromReservoir = 0,
-  ) => {
+  const activateMarket = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
     if (emergencyPaused) { toast.error('SYSTEM HALTED — exekúcia zablokovaná'); return; }
-    if (isMarketActive === coin || executionLocks[coin]?.isActivated) return;
+    if (isMarketActive === coin) return;
     setIsMarketActive(coin);
-    lockCoinOffer(coin, 'market', snapshots.market, snapshots.dynamic);
     try {
       const { error } = await supabase.functions.invoke('dca-execute', {
         body: { coin, kind: 'market', amount_usd: amount, target_price: price },
@@ -213,27 +156,16 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
     } catch (e) {
-      resetCoinLock(coin);
       toast.error('Chyba: ' + (e as Error).message);
     } finally {
       setIsMarketActive(null);
     }
   };
 
-  const activateLimitDynamic = async (
-    coin: CoinKey,
-    amount: number,
-    price: number,
-    snapshots: {
-      market: { pct: number; usd: number; price: number; qty: number; distancePct: number };
-      dynamic: { pct: number; usd: number; price: number; qty: number; distancePct: number };
-    },
-    fromReservoir = 0,
-  ) => {
+  const activateLimitDynamic = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
     if (emergencyPaused) { toast.error('SYSTEM HALTED — Limit objednávky blokované'); return; }
-    if (isDynamicActive === coin || executionLocks[coin]?.isActivated) return;
+    if (isDynamicActive === coin) return;
     setIsDynamicActive(coin);
-    lockCoinOffer(coin, 'dynamic', snapshots.market, snapshots.dynamic);
     try {
       const { error } = await supabase.functions.invoke('dca-execute', {
         body: { coin, kind: 'limit', amount_usd: amount, target_price: price },
@@ -246,7 +178,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
     } catch (e) {
-      resetCoinLock(coin);
       toast.error('Chyba: ' + (e as Error).message);
     } finally {
       setIsDynamicActive(null);
@@ -259,7 +190,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     try {
       const { error } = await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', id);
       if (error) throw error;
-      resetCoinLock(coin.toLowerCase() as CoinKey);
       toast.success(`${coin} limit zrušený`);
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
     } catch (e) {
@@ -278,7 +208,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         .update({ status: 'EXPIRED', filled_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
-      resetCoinLock(coin.toLowerCase() as CoinKey);
       toast.success(`${coin} označený ako nenaplnený`);
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['limit-fill-rates'] });
@@ -289,27 +218,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     }
   };
 
-  const macroDerivedMetrics = useMemo(() => {
-    if (!macroData) return null;
-    return {
-      btc: {
-        volatility30d: macroData.coins.btc.atr7Pct,
-        momentum30d: macroData.coins.btc.distanceFromEma50Pct,
-      },
-      eth: {
-        volatility30d: macroData.coins.eth.atr7Pct,
-        momentum30d: macroData.coins.eth.distanceFromEma50Pct,
-      },
-      sol: {
-        volatility30d: macroData.coins.sol.atr7Pct,
-        momentum30d: macroData.coins.sol.distanceFromEma50Pct,
-      },
-    };
-  }, [macroData]);
-
   const result = useMemo(() => {
-    const runtimeMetrics = macroDerivedMetrics ?? metrics;
-    if (!runtimeMetrics) {
+    if (!metrics) {
       const fallback = {
         btc: fixedExecution('btc'),
         eth: fixedExecution('eth'),
@@ -324,8 +234,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         base: { marketPct: 60, limitPct: 40, distance: -4 },
       };
     }
-    return calcUnifiedExecution(score, runtimeMetrics, fillRates ?? { eth: 0.5, sol: 0.5 });
-  }, [macroDerivedMetrics, metrics, score, fillRates]);
+    return calcUnifiedExecution(score, metrics, fillRates ?? { eth: 0.5, sol: 0.5 });
+  }, [metrics, score, fillRates]);
 
   const { executions, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
@@ -371,71 +281,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     }
     return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}) a ${volTag} volatilita (${vol30d.toFixed(2)} %) v rovnováhe. ${wTag}.`;
   }
-
-  const computeDynamicDistance = useCallback((coin: CoinKey, baseBtcDistanceAbs: number) => {
-    const btcAtr = macroData?.coins.btc.atr7Pct ?? 2.0;
-    const coinAtr = coin === 'btc'
-      ? btcAtr
-      : coin === 'eth'
-      ? (macroData?.coins.eth.atr7Pct ?? 3.2)
-      : (macroData?.coins.sol.atr7Pct ?? 4.8);
-    const coinEmaDistance = coin === 'btc'
-      ? (macroData?.coins.btc.distanceFromEma50Pct ?? 0)
-      : coin === 'eth'
-      ? (macroData?.coins.eth.distanceFromEma50Pct ?? 0)
-      : (macroData?.coins.sol.distanceFromEma50Pct ?? 0);
-    return computeMacroAwareLimitDistance({
-      btcBaseDistancePct: -Math.abs(baseBtcDistanceAbs),
-      coin,
-      atr7Pct: coinAtr,
-      btcAtr7Pct: btcAtr,
-      distanceFromEma50Pct: coinEmaDistance,
-    });
-  }, [macroData]);
-
-  const lockCoinOffer = useCallback((
-    coin: CoinKey,
-    activatedMode: Mode,
-    marketSnapshot: { pct: number; usd: number; price: number; qty: number; distancePct: number },
-    dynamicSnapshot: { pct: number; usd: number; price: number; qty: number; distancePct: number },
-  ) => {
-    const now = Date.now();
-    setExecutionLocks((prev) => ({
-      ...prev,
-      [coin]: {
-        isActivated: true,
-        activatedMode,
-        timestamp: now,
-        market: {
-          isActivated: true,
-          lockedPrice: marketSnapshot.price,
-          lockedPercentage: marketSnapshot.pct,
-          lockedUsd: marketSnapshot.usd,
-          lockedQuantity: marketSnapshot.qty,
-          lockedDistancePct: marketSnapshot.distancePct,
-          timestamp: now,
-        },
-        dynamic: {
-          isActivated: true,
-          lockedPrice: dynamicSnapshot.price,
-          lockedPercentage: dynamicSnapshot.pct,
-          lockedUsd: dynamicSnapshot.usd,
-          lockedQuantity: dynamicSnapshot.qty,
-          lockedDistancePct: dynamicSnapshot.distancePct,
-          timestamp: now,
-        },
-      },
-    }));
-  }, []);
-
-  const resetCoinLock = useCallback((coin: CoinKey) => {
-    setExecutionLocks((prev) => {
-      const next = { ...prev };
-      delete next[coin];
-      return next;
-    });
-    toast.success(`${coin.toUpperCase()} lock reset`);
-  }, []);
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -490,10 +335,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
             {fgValue}/100 · {fgLabel}
           </span>
         </div>
-        <p className="text-[9px] text-muted-foreground">
-          Zdroj: alternative.me + Binance 1D klines (RSI14 / EMA50 / ATR7), cache 20 min.
-          {macroData?.degraded ? ' Fallback režim aktívny.' : ''}
-        </p>
         <div className="h-1.5 rounded-full bg-background/50 overflow-hidden">
           <div
             className={`h-full transition-all duration-500 ${
@@ -530,36 +371,29 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const lPending = st?.limit?.status === 'PENDING';
           const lockedLimitPrice = (lPending || lFilled) ? Number(st?.limit?.target_price ?? 0) : 0;
           const lockedLimitUsd = (lPending || lFilled) ? Number(st?.limit?.amount_usd ?? 0) : 0;
-          const coinLock = executionLocks[c];
-          const coinLocked = Boolean(coinLock?.isActivated);
           const MomIcon = e.momentum30d >= 0 ? TrendingUp : TrendingDown;
           const momColor = e.momentum30d >= 0 ? 'text-emerald-400' : 'text-rose-400';
 
           const coinUsd = investableUsd * tokenWeights[c];
           // PER-TOKEN dual-factor split (F&G + per-coin 14D volatility).
           const split = perTokenSplit(e.symbol, e.volatility30d);
-          const marketPct = coinLocked ? (coinLock?.market.lockedPercentage ?? split.marketPct) : split.marketPct;
-          const dynamicPct = coinLocked ? (coinLock?.dynamic.lockedPercentage ?? split.limitPct) : split.limitPct;
+          const marketPct = split.marketPct;
+          const dynamicPct = split.limitPct;
           const splitReason = perTokenReason(e.symbol, e.volatility30d, split);
-          const baseBtcDistanceAbs = Math.abs(executions.btc.limitDistancePct || 4);
-          const dynamicDistance = computeDynamicDistance(c, baseBtcDistanceAbs);
-          const dynamicDistancePct = coinLocked
-            ? (coinLock?.dynamic.lockedDistancePct ?? dynamicDistance.distancePct)
-            : dynamicDistance.distancePct;
-          let marketUsdRaw = coinLocked ? (coinLock?.market.lockedUsd ?? 0) : coinUsd * (marketPct / 100);
-          let dynUsdRaw = coinLocked ? (coinLock?.dynamic.lockedUsd ?? 0) : coinUsd * (dynamicPct / 100);
+          let marketUsdRaw = coinUsd * (marketPct / 100);
+          let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
           // $10 MIN VOLUME FILTER + merge rule
           const MIN_USD = 10;
           const totalInsufficient = coinUsd < MIN_USD;
           let dynMergedIntoMarket = false;
-          if (!coinLocked && !totalInsufficient && dynUsdRaw < MIN_USD) {
+          if (!totalInsufficient && dynUsdRaw < MIN_USD) {
             marketUsdRaw = marketUsdRaw + dynUsdRaw;
             dynUsdRaw = 0;
             dynMergedIntoMarket = true;
           }
           let marketMergedIntoDyn = false;
-          if (!coinLocked && !totalInsufficient && !dynMergedIntoMarket && marketUsdRaw < MIN_USD) {
+          if (!totalInsufficient && !dynMergedIntoMarket && marketUsdRaw < MIN_USD) {
             dynUsdRaw = dynUsdRaw + marketUsdRaw;
             marketUsdRaw = 0;
             marketMergedIntoDyn = true;
@@ -567,28 +401,24 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
           // Market price = spot; Limit dynamic = spot * (1 + distance%)
           const marketOracle = price;
-          const dynOracle = price > 0 ? price * (1 + dynamicDistancePct / 100) : 0;
+          const dynOracle = price > 0 ? price * (1 + e.limitDistancePct / 100) : 0;
           // STATE LOCK: once an order is PENDING/FILLED/EXECUTED, render the exact
           // target_price stored in DB at activation — stop listening to the live feed.
           const marketLockedPrice = mDone ? Number(st?.market?.target_price ?? 0) : 0;
           const marketLockedUsd = mDone ? Number(st?.market?.amount_usd ?? 0) : 0;
           const marketPriceEffective = (mDone && marketLockedPrice > 0)
             ? marketLockedPrice
-            : (coinLocked && (coinLock?.market.lockedPrice ?? 0) > 0)
-            ? coinLock!.market.lockedPrice
             : (editedPrices[c]?.market ?? marketOracle);
           const dynPriceEffective = ((lPending || lFilled) && lockedLimitPrice > 0)
             ? lockedLimitPrice
-            : (coinLocked && (coinLock?.dynamic.lockedPrice ?? 0) > 0)
-            ? coinLock!.dynamic.lockedPrice
             : (editedPrices[c]?.dynamic ?? dynOracle);
-          const marketDrift = !mDone && !coinLocked && marketOracle > 0 ? Math.abs(marketPriceEffective - marketOracle) / marketOracle * 100 : 0;
-          const dynDrift = !(lPending || lFilled) && !coinLocked && dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
+          const marketDrift = !mDone && marketOracle > 0 ? Math.abs(marketPriceEffective - marketOracle) / marketOracle * 100 : 0;
+          const dynDrift = !(lPending || lFilled) && dynOracle > 0 ? Math.abs(dynPriceEffective - dynOracle) / dynOracle * 100 : 0;
           const marketDriftAlert = marketDrift > 2;
           const dynDriftAlert = dynDrift > 2;
 
-          const dynUsd = lockedLimitPrice > 0 ? lockedLimitUsd : (coinLocked ? (coinLock?.dynamic.lockedUsd ?? dynUsdRaw) : dynUsdRaw);
-          const marketUsd = (mDone && marketLockedUsd > 0) ? marketLockedUsd : (coinLocked ? (coinLock?.market.lockedUsd ?? marketUsdRaw) : marketUsdRaw);
+          const dynUsd = lockedLimitPrice > 0 ? lockedLimitUsd : dynUsdRaw;
+          const marketUsd = (mDone && marketLockedUsd > 0) ? marketLockedUsd : marketUsdRaw;
 
           // BTC funding
           const isBtc = c === 'btc';
@@ -601,18 +431,9 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
           const cancelLBusy = cancelBusy === `${c}-limit`;
 
-          const manualHoldings = settings?.manual_holdings;
-          const heldQty = Number(
-            typeof manualHoldings === 'object' && manualHoldings !== null
-              ? ((manualHoldings as Record<string, unknown>)[c] ?? 0)
-              : 0,
-          );
-          const marketQty = coinLocked
-            ? (coinLock?.market.lockedQuantity ?? (marketPriceEffective > 0 ? marketUsd / marketPriceEffective : 0))
-            : (marketPriceEffective > 0 ? marketUsd / marketPriceEffective : 0);
-          const dynQty = coinLocked
-            ? (coinLock?.dynamic.lockedQuantity ?? (dynPriceEffective > 0 ? dynUsd / dynPriceEffective : 0))
-            : (dynPriceEffective > 0 ? dynUsd / dynPriceEffective : 0);
+          const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
+          const marketQty = marketPriceEffective > 0 ? marketUsd / marketPriceEffective : 0;
+          const dynQty = dynPriceEffective > 0 ? dynUsd / dynPriceEffective : 0;
           const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;
           const lAddedQty = lFilled ? Number(st?.limit?.quantity ?? 0) : 0;
           const qtyFmt = (n: number) => c === 'btc' ? n.toFixed(6) : n.toFixed(4);
@@ -768,7 +589,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     label: 'LIMIT DYNAMIC',
                     title: marketMergedIntoDyn
                       ? `LIMIT DYNAMIC · ${(marketPct + dynamicPct)}% (zlúčené)`
-                      : `LIMIT DYNAMIC · ${dynamicPct}% (${dynamicDistancePct.toFixed(1)}%)`,
+                      : `LIMIT DYNAMIC · ${dynamicPct}% (${e.limitDistancePct.toFixed(1)}%)`,
                     usd: dynUsd,
                     oracle: dynOracle,
                     effPrice: dynPriceEffective,
@@ -786,17 +607,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   const triggered = card.mode === 'dynamic'
                     ? (price > 0 && card.effPrice > 0 && price <= card.effPrice)
                     : false;
-                  const lockActiveOnCard = coinLocked && coinLock?.activatedMode === card.mode;
                   const isMerged = card.mergedAway;
-                  const cardDisabled = isMerged || card.usd < MIN_USD || coinLocked;
+                  const cardDisabled = isMerged || card.usd < MIN_USD;
                   // Per-card busy reads from its OWN independent state hook.
                   const cardBusy = card.mode === 'market'
                     ? isMarketActive === c
                     : isDynamicActive === c;
                   const cardBg = isMerged
                     ? 'bg-rose-500/5 ring-1 ring-rose-500/30 opacity-70'
-                    : lockActiveOnCard
-                    ? 'bg-emerald-500/20 ring-1 ring-emerald-400/60 shadow-[0_0_20px_rgba(16,185,129,0.4)]'
                     : card.isFilled
                     ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
                     : card.isPending
@@ -861,7 +679,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             <button
                               type="button"
                               onClick={() => {
-                                if (card.isFilled || card.isPending || (card.mode === 'market' && mDone) || coinLocked) {
+                                if (card.isFilled || card.isPending || (card.mode === 'market' && mDone)) {
                                   toast.info('Cena je uzamknutá (order aktívny)');
                                   return;
                                 }
@@ -878,10 +696,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                                   [c]: { ...prev[c], [card.mode]: v },
                                 }));
                               }}
-                              disabled={card.isFilled || card.isPending || (card.mode === 'market' && mDone) || coinLocked}
+                              disabled={card.isFilled || card.isPending || (card.mode === 'market' && mDone)}
                               className="p-1 rounded text-muted-foreground hover:text-foreground hover:bg-secondary/60 active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
                               aria-label="Upraviť cenu"
-                              title={card.isFilled || card.isPending || (card.mode === 'market' && mDone) || coinLocked ? 'Cena uzamknutá' : 'Upraviť cenu'}
+                              title={card.isFilled || card.isPending || (card.mode === 'market' && mDone) ? 'Cena uzamknutá' : 'Upraviť cenu'}
                             >
                               <Pencil className="w-3 h-3" />
                             </button>
@@ -897,32 +715,15 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             onClick={() => {
                               if (card.isFilled || card.isPending || cardBusy || cardDisabled) return;
                               const reservoirShare = isBtc ? card.usd * btcReservoirShare : 0;
-                              const snapshots = {
-                                market: {
-                                  pct: marketPct,
-                                  usd: marketUsd,
-                                  price: marketPriceEffective,
-                                  qty: marketQty,
-                                  distancePct: 0,
-                                },
-                                dynamic: {
-                                  pct: dynamicPct,
-                                  usd: dynUsd,
-                                  price: dynPriceEffective,
-                                  qty: dynQty,
-                                  distancePct: dynamicDistancePct,
-                                },
-                              };
                               if (card.mode === 'market') {
-                                activateMarket(c, card.usd, card.effPrice, snapshots, reservoirShare);
+                                activateMarket(c, card.usd, card.effPrice, reservoirShare);
                               } else {
-                                activateLimitDynamic(c, card.usd, card.effPrice, snapshots, reservoirShare);
+                                activateLimitDynamic(c, card.usd, card.effPrice, reservoirShare);
                               }
                             }}
                             disabled={emergencyPaused || card.isFilled || card.isPending || cardBusy || cardDisabled || card.effPrice <= 0}
                             className={`mt-1.5 w-full px-2 py-1 rounded text-[10px] font-bold flex items-center justify-center gap-1 active:scale-95 disabled:opacity-70 ${
                               card.isFilled ? 'bg-emerald-500 text-background'
-                              : lockActiveOnCard ? 'bg-emerald-500 text-background'
                               : card.isPending ? (triggered ? 'bg-emerald-500 text-background' : 'bg-amber-500 text-background')
                               : cardBusy ? (card.mode === 'market' ? 'bg-emerald-600 text-background' : 'bg-primary/80 text-background')
                               : (card.mode === 'market'
@@ -931,22 +732,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                             }`}
                           >
                             {card.isFilled ? <><Check className="w-3 h-3" /> {card.mode === 'market' ? 'Vykonané' : 'Naplnené'}</>
-                              : lockActiveOnCard ? 'AKTÍVNA – ČAKÁ NA KNÔT'
                               : card.isPending ? <><Clock className="w-3 h-3" /> {triggered ? 'Pripravené' : 'Aktívna 🟢'}</>
                               : cardBusy ? 'Aktivujem…'
                               : (card.mode === 'market'
                                 ? <><ShoppingCart className="w-3 h-3" /> Aktivovať Market</>
                                 : 'Aktivovať Limit Dynamic')}
                           </button>
-                          {coinLocked && lockActiveOnCard && (
-                            <button
-                              type="button"
-                              onClick={() => resetCoinLock(c)}
-                              className="mt-1 w-full px-2 py-1 rounded text-[10px] font-semibold bg-secondary/70 text-foreground hover:bg-secondary active:scale-95"
-                            >
-                              Zrušiť / Reset
-                            </button>
-                          )}
                           {card.mode === 'dynamic' && card.isPending && st?.limit?.id && (
                             <div className="mt-1 grid grid-cols-2 gap-1">
                               <button
@@ -996,7 +787,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
               <p className="text-[10px] text-muted-foreground leading-snug">
                 <span className="font-semibold text-foreground/80">Prečo? </span>
-                {splitReason} {dynamicDistance.reason} {e.rationale}
+                {splitReason} {e.rationale}
               </p>
             </div>
           );
