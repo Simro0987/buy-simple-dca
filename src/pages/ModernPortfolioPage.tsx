@@ -14,7 +14,6 @@ import { TOKENS, formatUsd, formatPrice } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
-import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { useDailyRiskReport } from '@/hooks/useDailyRiskReport';
 import { DailyRiskReportCard } from '@/components/portfolio/DailyRiskReportCard';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
@@ -45,6 +44,7 @@ const TOKEN_DECIMALS: Record<string, number> = { BTC: 6, ETH: 5, SOL: 3 };
 const GOAL_BTC = 1;
 const LAST_HALVING = new Date('2024-04-19');
 const NEXT_HALVING = new Date('2028-04-19');
+const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
 
 export function ModernPortfolioPage({ lang }: Props) {
   return (
@@ -61,9 +61,9 @@ function ModernPortfolioInner({ lang }: Props) {
   const { data: prices, isFetching } = usePrices();
   const { data: fg } = useFearGreed();
   const { data: settings } = useAppSettings();
-  const metrics = usePortfolioMetrics(prices);
   const reservoir = useProfitReservoir();
   const {
+    metrics,
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, breakdown,
   } = usePortfolio();
@@ -79,7 +79,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const fgValue = fg?.value ?? 50;
   const weeklyCapital = Number(settings?.default_amount ?? 0);
   const freeCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
-  const warnings = computeConcentrationWarnings(prices);
+  const warnings = useMemo(() => computeConcentrationWarnings(prices), [prices]);
 
   const { data: rsiData, isLoading: rsiLoading, refetch: rsiRefetch } = useQuery({
     queryKey: ['modern-dca-rsi'],
@@ -87,13 +87,16 @@ function ModernPortfolioInner({ lang }: Props) {
     staleTime: 10 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
   });
-  const rsi = rsiData ?? { BTC: 50, ETH: 50, SOL: 50 };
+  const rsi = useMemo<Record<DcaToken, number>>(
+    () => rsiData ?? DEFAULT_RSI,
+    [rsiData],
+  );
 
-  const livePrices: Record<DcaToken, number> = {
+  const livePrices = useMemo<Record<DcaToken, number>>(() => ({
     BTC: prices?.[DCA_CG_ID.BTC]?.usd ?? 0,
     ETH: prices?.[DCA_CG_ID.ETH]?.usd ?? 0,
     SOL: prices?.[DCA_CG_ID.SOL]?.usd ?? 0,
-  };
+  }), [prices]);
 
   const updateDcaPrice = useCallback((sym: DcaToken, v: number) => {
     setDcaPrices(prev => { const n = { ...prev, [sym]: v }; saveDcaPrices(n); return n; });
@@ -153,12 +156,20 @@ function ModernPortfolioInner({ lang }: Props) {
   }), [metrics.assets, reservoir.sells]);
 
   const copyText = async (text: string, id: string) => {
-    await navigator.clipboard.writeText(text);
-    setCopied(id);
-    setTimeout(() => setCopied(null), 1500);
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(id);
+      setTimeout(() => setCopied(null), 1500);
+    } catch {
+      toast.error(sk ? 'Kopírovanie zlyhalo' : 'Copy failed');
+    }
   };
 
   const isGain = metrics.totalPnl >= 0;
+  const eligibleTakeProfitRows = useMemo(
+    () => takeProfitRows.filter(r => r.eligible),
+    [takeProfitRows],
+  );
 
   const reportInput = useMemo(() => ({
     assets: metrics.assets,
@@ -628,11 +639,11 @@ function ModernPortfolioInner({ lang }: Props) {
           </div>
           <Chip color="green">Rezervoár {formatUsd(reservoir.stable)}</Chip>
         </div>
-        {takeProfitRows.filter(r => r.eligible).length === 0 ? (
+        {eligibleTakeProfitRows.length === 0 ? (
           <p className="text-sm text-white/35 text-center py-4">Všetky aktíva akumulujú.</p>
         ) : (
           <div className="space-y-3">
-            {takeProfitRows.filter(r => r.eligible).map(r => {
+            {eligibleTakeProfitRows.map(r => {
               const dec = TOKEN_DECIMALS[r.symbol] ?? 4;
               const tokensStr = r.sellTokens.toFixed(dec);
               return (
@@ -678,7 +689,7 @@ function ModernPortfolioInner({ lang }: Props) {
             <span className="text-sm font-bold text-white">Koncentračné riziko</span>
           </div>
           {warnings.map((w, i) => (
-            <div key={i} className="rounded-2xl border border-orange-500/20 bg-orange-500/[0.04] p-3">
+            <div key={`${w.title}-${i}`} className="rounded-2xl border border-orange-500/20 bg-orange-500/[0.04] p-3">
               <p className="text-sm font-bold text-white">{w.title}</p>
               <p className="text-xs text-white/50 mt-1">{w.message}</p>
               <p className="text-xs text-orange-300/80 mt-1">→ {w.recommendation}</p>

@@ -187,10 +187,10 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
             <h3 className="text-sm font-bold text-foreground">Smart predajné akcie</h3>
           </div>
 
-          {smartSells.map((action, i) => {
+          {smartSells.map((action) => {
             const adjusted = action.adjustedSellPct !== action.baseSellPct;
             return (
-              <div key={i} className={`rounded-lg p-3 border ${urgencyColors[action.urgency]}`}>
+              <div key={`${action.tokenId}-${action.baseSellPct}-${action.adjustedSellPct}-${action.urgency}`} className={`rounded-lg p-3 border ${urgencyColors[action.urgency]}`}>
                 <div className="flex items-center justify-between mb-1">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-bold text-foreground">{action.symbol}</span>

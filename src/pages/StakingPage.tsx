@@ -24,11 +24,16 @@ interface Props { lang: Lang; }
 
 function getLiveApy(pos: StakingPosition, apys?: DefiApyData | null): number | null {
   if (!apys) return pos.apy ?? null;
-  if (pos.protocol === 'Rocket Pool') return apys.rocketPool;
+  if (pos.protocol === 'Rocket Pool')        return apys.rocketPool;
+  if (pos.protocol === 'ether.fi')           return apys.etherFi;
+  if (pos.protocol === 'ether.fi → DeFi Saver') return apys.etherFi ?? pos.apy ?? null;
+  if (pos.protocol === 'Aave V3')            return apys.aaveEth;
+  if (pos.protocol === 'Marinade')           return apys.marinade;
+  if (pos.protocol === 'Sanctum')            return apys.sanctumInf;
+  if (pos.protocol === 'Kamino')             return apys.kaminoSol;
+  // kept for compat (StakingTimingCard etc.)
   if (pos.label.includes('wstETH') && pos.type !== 'lending') return apys.lido;
-  if (pos.protocol === 'Aave V3') return apys.aaveEth;
-  if (pos.protocol === 'Jito') return apys.jito;
-  if (pos.protocol === 'Kamino') return apys.kaminoSol;
+  if (pos.protocol === 'Jito' || pos.protocol?.includes('jito')) return apys.jito;
   return pos.apy ?? null;
 }
 
@@ -229,75 +234,99 @@ export function StakingPage({ lang }: Props) {
 
       <MasterProtocolCard lang={lang} />
 
-      {STAKING_CONFIG.map(asset => (
-        <div key={asset.symbol} className="glass-card p-4 space-y-3">
-          {/* Header */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div
-                className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold"
-                style={{ backgroundColor: asset.color + '20', color: asset.color }}
-              >
-                {asset.symbol.slice(0, 2)}
-              </div>
-              <div>
-                <p className="font-semibold text-foreground text-sm">{asset.symbol}</p>
-                <p className="text-[11px] text-muted-foreground">{asset.name}</p>
-              </div>
-            </div>
-            <span className="text-sm font-bold text-foreground">{asset.allocation}%</span>
-          </div>
+      {STAKING_CONFIG.map(asset => {
+        const isDynamicSplit = asset.symbol !== 'BTC';
+        const stakingPositions = asset.positions.filter(p => p.type !== 'hold');
+        return (
+          <div
+            key={asset.symbol}
+            style={{ background: '#0A0A0A', border: '1px solid rgba(255,255,255,0.10)', borderRadius: '1.5rem', overflow: 'hidden' }}
+          >
+            {/* Colored accent line */}
+            <div style={{ height: 2, background: `linear-gradient(90deg, ${asset.color}, transparent)` }} />
 
-          {/* Positions */}
-          <div className="space-y-2">
-            {asset.positions.map((pos, i) => {
-              const yield_ = yieldLabel(pos.yieldDirection, lang);
-              return (
-                <div key={i} className="flex items-start gap-2.5 bg-secondary/40 rounded-lg px-3 py-2">
-                  {typeIcon(pos.type)}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-medium text-foreground">{pos.label}</span>
-                      <span className="text-xs font-bold text-foreground">{pos.percentage}%</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-secondary text-secondary-foreground">
-                        {typeLabel(pos.type, lang)}
-                      </span>
-                      {pos.protocol && (
-                        <span className="text-[10px] text-muted-foreground">{pos.protocol}</span>
+            {/* Header */}
+            <div className="p-4 pb-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div
+                    className="w-8 h-8 rounded-2xl flex items-center justify-center text-[10px] font-bold"
+                    style={{ backgroundColor: asset.color + '18', color: asset.color, border: `1px solid ${asset.color}30` }}
+                  >
+                    {asset.symbol.slice(0, 2)}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="font-bold text-white text-sm tracking-tight">{asset.symbol}</p>
+                      {isDynamicSplit && (
+                        <span className="text-[8px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full"
+                          style={{ background: `${asset.color}18`, color: asset.color, border: `1px solid ${asset.color}30` }}>
+                          Dynamic Split
+                        </span>
                       )}
-                      {(() => {
-                        const liveApy = getLiveApy(pos, apys);
-                        return liveApy != null ? (
-                          <span className="text-[10px] text-gain font-medium">{liveApy.toFixed(1)}% APY</span>
-                        ) : null;
-                      })()}
                     </div>
-                    {yield_ && (
-                      <p className="text-[10px] text-accent mt-1">→ {yield_}</p>
-                    )}
+                    <p className="text-[10px]" style={{ color: 'rgba(255,255,255,0.40)' }}>{asset.name}</p>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+                <span className="text-sm font-bold text-white tabular-nums">{asset.allocation}%</span>
+              </div>
+            </div>
 
-          {/* Visual bar */}
-          <div className="flex h-2 rounded-full overflow-hidden bg-secondary">
-            {asset.positions.map((pos, i) => {
-              const colors = { hold: 'bg-muted-foreground/40', staking: 'bg-gain', lending: 'bg-accent' };
-              return (
-                <div
-                  key={i}
-                  className={`${colors[pos.type]} transition-all`}
-                  style={{ width: `${pos.percentage}%` }}
-                />
-              );
-            })}
+            {/* Positions */}
+            <div className="px-4 pb-4 space-y-2">
+              {asset.positions.map((pos, i) => {
+                const liveApy = getLiveApy(pos, apys);
+                const yield_ = yieldLabel(pos.yieldDirection, lang);
+                const isStaking = pos.type === 'staking';
+                const isLending = pos.type === 'lending';
+                return (
+                  <div
+                    key={i}
+                    className="flex items-start gap-2.5 rounded-2xl px-3 py-2.5"
+                    style={{
+                      background: isStaking ? `${asset.color}0A` : isLending ? 'rgba(14,165,233,0.06)' : 'rgba(255,255,255,0.03)',
+                      border: `1px solid ${isStaking ? asset.color + '25' : isLending ? 'rgba(14,165,233,0.15)' : 'rgba(255,255,255,0.06)'}`,
+                    }}
+                  >
+                    {typeIcon(pos.type)}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-white">{pos.label}</span>
+                        <span className="text-xs font-bold text-white tabular-nums">{pos.percentage}%</span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1 flex-wrap">
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full uppercase tracking-wide"
+                          style={{ background: 'rgba(255,255,255,0.06)', color: 'rgba(255,255,255,0.50)' }}>
+                          {typeLabel(pos.type, lang)}
+                        </span>
+                        {pos.protocol && (
+                          <span className="text-[9px]" style={{ color: 'rgba(255,255,255,0.35)' }}>{pos.protocol}</span>
+                        )}
+                        {liveApy != null && (
+                          <span className="text-[10px] font-bold tabular-nums" style={{ color: '#14F195' }}>
+                            {liveApy.toFixed(2)}% APY
+                          </span>
+                        )}
+                      </div>
+                      {yield_ && (
+                        <p className="text-[9px] mt-1" style={{ color: '#0ea5e9' }}>→ {yield_}</p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Allocation bar */}
+            <div className="mx-4 mb-4 flex h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.06)' }}>
+              {asset.positions.map((pos, i) => {
+                const c = { hold: 'rgba(255,255,255,0.20)', staking: asset.color + 'CC', lending: '#0ea5e9CC' };
+                return <div key={i} style={{ width: `${pos.percentage}%`, background: c[pos.type] }} />;
+              })}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {/* Yield flow summary — Master Protokol 2026 */}
       <div className="glass-card p-4 space-y-2">
@@ -306,13 +335,13 @@ export function StakingPage({ lang }: Props) {
         </p>
         <div className="space-y-1.5">
           <p className="text-xs text-muted-foreground">
-            • <span className="text-foreground">BTC:</span> Babylon (compound) + LBTC v Morpho Blue (Lombard Lux + Babylon + Morpho body) → {lang === 'sk' ? 'späť do BTC' : 'back to BTC'}
+            • <span className="text-foreground">BTC:</span> Babylon (compound) + LBTC v Morpho Blue → {lang === 'sk' ? 'späť do BTC' : 'back to BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
-            • <span className="text-foreground">ETH:</span> stETH (Lido) + weETH v Morpho Blue (ether.fi + EigenLayer + Morpho body) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
+            • <span className="text-foreground">ETH:</span> <span style={{ color: '#627EEA' }}>Dynamic Split</span> — Rocket Pool (rETH ~3.05%) + ether.fi (weETH ~4.38%) + weETH/DeFi Saver → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
-            • <span className="text-foreground">SOL:</span> Kamino Autopilot — 62 % jitoSOL + 32 % ezSOL (Jito + Renzo + Kamino body) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
+            • <span className="text-foreground">SOL:</span> <span style={{ color: '#9945FF' }}>Dynamic Split</span> — Marinade (mSOL ~7.37%) + Sanctum INF (~8.00%) → {lang === 'sk' ? 'výnos do BTC' : 'yield → BTC'}
           </p>
           <p className="text-xs text-muted-foreground">
             • {lang === 'sk' ? 'Cieľ: akumulovať 1 BTC cez všetky kanály.' : 'Goal: accumulate 1 BTC across all channels.'}

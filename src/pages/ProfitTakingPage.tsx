@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { PLHistoryChart, PLSnapshot, savePLSnapshot, getPLHistory } from '@/components/PLHistoryChart';
+import { type PLSnapshot, savePLSnapshot, getPLHistory } from '@/components/PLHistoryChart';
 import { Lang } from '@/lib/i18n';
 import { usePrices } from '@/hooks/usePrices';
 import { TOKENS, formatUsd, formatPrice, formatQuantity, PriceData, AthData } from '@/lib/crypto';
@@ -32,9 +32,13 @@ function getAlertedLevels(): Record<string, number> {
 }
 
 function markAlertSent(tokenId: string, profitPct: number) {
-  const alerted = getAlertedLevels();
-  alerted[`${tokenId}_${profitPct}`] = Date.now();
-  localStorage.setItem(PROFIT_ALERT_KEY, JSON.stringify(alerted));
+  try {
+    const alerted = getAlertedLevels();
+    alerted[`${tokenId}_${profitPct}`] = Date.now();
+    localStorage.setItem(PROFIT_ALERT_KEY, JSON.stringify(alerted));
+  } catch {
+    // Ignore storage quota errors; alert delivery already happened.
+  }
 }
 
 function wasAlertSent(tokenId: string, profitPct: number): boolean {
@@ -83,6 +87,25 @@ function loadHoldings(): Record<string, number> {
   } catch { return {}; }
 }
 
+function sameNumberMap(a: Record<string, number>, b: Record<string, number>): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if ((a[k] ?? 0) !== (b[k] ?? 0)) return false;
+  }
+  return true;
+}
+
+function sameSourceMap(
+  a: Record<string, 'auto' | 'manual'>,
+  b: Record<string, 'auto' | 'manual'>,
+): boolean {
+  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
+  for (const k of keys) {
+    if ((a[k] ?? 'manual') !== (b[k] ?? 'manual')) return false;
+  }
+  return true;
+}
+
 export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResult, advancedData }: Props) {
   const { data: hookPrices } = usePrices();
   const prices = propPrices || hookPrices;
@@ -91,7 +114,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const [editingToken, setEditingToken] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
   const [, forceUpdate] = useState(0);
-  const [showPL, setShowPL] = useState(true);
   const [showAddPurchase, setShowAddPurchase] = useState<string | null>(null);
   const [purchasePrice, setPurchasePrice] = useState('');
   const [purchaseQty, setPurchaseQty] = useState('');
@@ -116,9 +138,11 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     return map;
   }, [portfolio.assets]);
 
-  // Auto-import from execution history on first load
+  // Auto-import from execution history on first load.
+  const importAttemptedRef = useRef(false);
   useEffect(() => {
-    if (!prices) return;
+    if (!prices || importAttemptedRef.current) return;
+    importAttemptedRef.current = true;
     const imported = importFromExecutionHistory(prices);
     if (imported > 0) {
       toast.success(`Importovaných ${imported} nákupov z DCA histórie`);
@@ -152,9 +176,12 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
       }
     }
 
-    setAvgCostBasis(newBasis);
-    setAvgCosts(newBasis);
-    setCostSource(sources);
+    const storedBasis = getAvgCostBasis();
+    if (!sameNumberMap(storedBasis, newBasis)) {
+      setAvgCostBasis(newBasis);
+    }
+    setAvgCosts(prev => (sameNumberMap(prev, newBasis) ? prev : newBasis));
+    setCostSource(prev => (sameSourceMap(prev, sources) ? prev : sources));
   }, [prices, portfolioAvgCosts]);
 
   const saveAvgCost = (tokenId: string) => {
@@ -178,13 +205,17 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
       toast.error('Zadaj platnú cenu a množstvo');
       return;
     }
-    addDcaPurchase({ tokenId, quantity: qty, priceUsd: price, totalUsd: price * qty, type: purchaseType });
-    setAvgCosts(getAvgCostBasis());
-    setShowAddPurchase(null);
-    setPurchasePrice('');
-    setPurchaseQty('');
-    toast.success('Nákup zaznamenaný ✓');
-    forceUpdate(n => n + 1);
+    try {
+      addDcaPurchase({ tokenId, quantity: qty, priceUsd: price, totalUsd: price * qty, type: purchaseType });
+      setAvgCosts(getAvgCostBasis());
+      setShowAddPurchase(null);
+      setPurchasePrice('');
+      setPurchaseQty('');
+      toast.success('Nákup zaznamenaný ✓');
+      forceUpdate(n => n + 1);
+    } catch {
+      toast.error('Nákup sa nepodarilo uložiť');
+    }
   };
 
   const handleExecuteLevel = (tokenId: string, profitPct: number) => {
@@ -353,25 +384,37 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const totalPL = totalCurrent - totalInvested;
   const totalPLPct = totalInvested > 0 ? ((totalCurrent - totalInvested) / totalInvested) * 100 : 0;
 
+  const btcPL = plData.find(d => d.token.id === 'bitcoin')?.plUsd ?? 0;
+  const ethPL = plData.find(d => d.token.id === 'ethereum')?.plUsd ?? 0;
+  const solPL = plData.find(d => d.token.id === 'solana')?.plUsd ?? 0;
+
   // Save daily P/L snapshot
-  const [plHistory, setPlHistory] = useState<PLSnapshot[]>(getPLHistory);
-  useEffect(() => {
-    if (totalInvested <= 0) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const btcD = plData.find(d => d.token.id === 'bitcoin');
-    const ethD = plData.find(d => d.token.id === 'ethereum');
-    const solD = plData.find(d => d.token.id === 'solana');
-    const snapshot: PLSnapshot = {
-      date: today,
+  const dailySnapshot = useMemo<PLSnapshot | null>(() => {
+    if (totalInvested <= 0) return null;
+    return {
+      date: new Date().toISOString().slice(0, 10),
       totalPL,
       totalPLPct,
-      btcPL: btcD?.plUsd ?? 0,
-      ethPL: ethD?.plUsd ?? 0,
-      solPL: solD?.plUsd ?? 0,
+      btcPL,
+      ethPL,
+      solPL,
     };
-    savePLSnapshot(snapshot);
-    setPlHistory(getPLHistory());
-  }, [totalPL, totalPLPct, totalInvested, plData]);
+  }, [totalInvested, totalPL, totalPLPct, btcPL, ethPL, solPL]);
+
+  useEffect(() => {
+    if (!dailySnapshot) return;
+    const historyNow = getPLHistory();
+    const existing = historyNow.find(h => h.date === dailySnapshot.date);
+    const unchanged = !!existing
+      && existing.totalPL === dailySnapshot.totalPL
+      && existing.totalPLPct === dailySnapshot.totalPLPct
+      && existing.btcPL === dailySnapshot.btcPL
+      && existing.ethPL === dailySnapshot.ethPL
+      && existing.solPL === dailySnapshot.solPL;
+
+    if (unchanged) return;
+    savePLSnapshot(dailySnapshot);
+  }, [dailySnapshot]);
 
   return (
     <div className="space-y-4">
@@ -701,8 +744,8 @@ function TokenProfitCard({
                 <ChevronDown className="w-3 h-3 ml-auto" />
               </CollapsibleTrigger>
               <CollapsibleContent className="mt-2 space-y-1">
-                {purchases.slice(-10).reverse().map((p, i) => (
-                  <div key={i} className="flex items-center justify-between text-[10px] bg-secondary/30 rounded px-2 py-1.5">
+                {purchases.slice(-10).reverse().map((p) => (
+                  <div key={`${p.date}-${p.type}-${p.priceUsd}-${p.quantity}`} className="flex items-center justify-between text-[10px] bg-secondary/30 rounded px-2 py-1.5">
                     <span className="text-muted-foreground">
                       {new Date(p.date).toLocaleDateString('sk')} · {p.type === 'market' ? 'Market' : 'Limit'}
                     </span>
