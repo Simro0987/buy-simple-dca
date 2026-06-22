@@ -638,7 +638,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     label: 'LIMIT DYNAMIC',
                     title: marketMergedIntoDyn
                       ? `LIMIT DYNAMIC · ${(marketPct + dynamicPct)}% (zlúčené)`
-                      : `LIMIT DYNAMIC · ${dynamicPct}% (ATR7: –${atrDiscountPct.toFixed(1)}%)`,
+                      : `LIMIT DYNAMIC · ${dynamicPct}% · ${regimeLabel} −${atrDiscountPct.toFixed(1)}%`,
                     usd: dynUsd,
                     oracle: dynOracle,
                     effPrice: dynPriceEffective,
