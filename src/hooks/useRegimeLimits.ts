@@ -94,6 +94,8 @@ function buildFallback(coin: CoinKey, price: number): RegimeLimitInfo {
     regime: 'bull',
     price,
     ema50: 0,
+    sevenDayLow: 0,
+    atr7: 0,
     limitPrice: price > 0 ? price * (1 - drop / 100) : 0,
     discountPct: drop,
     reason: 'Dáta z Binance momentálne nedostupné. Používame konzervatívny fallback limit, aby cyklus akumulácie nestál.',
