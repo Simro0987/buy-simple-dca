@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins, Pencil, AlertTriangle, ShoppingCart, Gauge } from 'lucide-react';
 import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
@@ -19,6 +19,7 @@ import {
   type CoinKey,
 } from '@/lib/dynamicExecution';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
+import { useAutoLimitTracker, type LimitSymbol } from '@/hooks/useAutoLimitTracker';
 
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
@@ -217,6 +218,30 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       setCancelBusy(null);
     }
   };
+
+  // ── ATR-based dynamic discount indicators (merged from AutoLimitTracker) ──
+  const { indicators: atrIndicators, getDiscount: getAtrDiscount } = useAutoLimitTracker();
+
+  // Auto-write to portfolio holdings when a limit order becomes FILLED.
+  // Tracks written orders by ID to prevent duplicate writes.
+  useEffect(() => {
+    for (const [coinSym, status] of execStatus.entries()) {
+      const lim = (status as Record<string, { status?: string; quantity?: unknown; id?: string }>)?.limit;
+      if (!lim || lim.status !== 'FILLED') continue;
+      const qty = Number(lim.quantity ?? 0);
+      if (qty <= 0 || !lim.id) continue;
+      const writtenKey = `portfolio-limit-written-${lim.id}`;
+      if (localStorage.getItem(writtenKey)) continue;
+      try {
+        const h = JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}') as Record<string, number>;
+        const k = coinSym.toLowerCase();
+        h[k] = (h[k] ?? 0) + qty;
+        localStorage.setItem('smart-alloc-holdings', JSON.stringify(h));
+        localStorage.setItem(writtenKey, '1');
+        window.dispatchEvent(new Event('portfolio-updated'));
+      } catch { /* noop */ }
+    }
+  }, [execStatus]);
 
   const result = useMemo(() => {
     if (!metrics) {
@@ -458,6 +483,25 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   </span>
                 </div>
               </div>
+
+              {/* ATR(7d) Dynamic discount indicator — merged from AutoLimitTracker */}
+              {(() => {
+                const sym = e.symbol as LimitSymbol;
+                const atrDiscount = getAtrDiscount(sym, price);
+                const atrTarget   = price > 0 ? price * (1 - atrDiscount / 100) : 0;
+                const ind         = atrIndicators?.[sym];
+                return (
+                  <div className="flex items-center justify-between text-[9.5px] bg-primary/5 rounded px-2 py-1 ring-1 ring-primary/20">
+                    <span className="text-primary/80 font-semibold uppercase tracking-wide">
+                      ATR(7d) · Volatilita ×{sym === 'BTC' ? '1.0' : sym === 'ETH' ? '1.6' : '2.15'}
+                    </span>
+                    <span className="tabular-nums text-primary font-bold">
+                      –{atrDiscount}% → {atrTarget > 0 ? formatLimitPrice(atrTarget) : '…'}
+                      {ind?.atr7 ? ` (ATR $${ind.atr7.toFixed(0)})` : ''}
+                    </span>
+                  </div>
+                );
+              })()}
 
               {/* SATELLITE RSI ROW — ETH/SOL only, visible (never tooltip-hidden) */}
               {(c === 'eth' || c === 'sol') && (() => {
