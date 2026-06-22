@@ -412,13 +412,20 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const marketPct  = split.marketPct;
           const dynamicPct = split.limitPct;
 
-          // ── ATR7 INTEGRATION: dynamic limit depth driven by weekly volatility ──
-          // atrDiscountPct = how deep below market the limit should sit, calibrated
-          // per-asset (BTC ×1.0, ETH ×1.6, SOL ×2.15).  Rises with weekly ATR,
-          // falls when market is calm.  Only active when order is NOT locked —
-          // lock state (PENDING/FILLED) freezes dynPriceEffective via lockedLimitPrice.
-          const atrDiscountPct = getAtrDiscount(e.symbol as LimitSymbol, price);
-          const splitReason    = perTokenReason(e.symbol, e.volatility30d, split, atrDiscountPct);
+          // ── REGIME-BASED LIMIT (50D EMA + 7d support, failsafe 2.0–7.5 %) ──
+          // Bull (price > EMA50): pullback −2.5 % BTC / −4 % ETH/SOL.
+          // Bear (price < EMA50): BTC 7D low, ETH/SOL 7D low − 0.5×ATR7.
+          // Vždy oklieštené do [2.0 %, 7.5 %], aby objednávka nestratila zmysel
+          // ani neuviazla mimo 7-dňového cyklu akumulácie.
+          const regimeInfo = regimeMap?.[c];
+          const regimeFallbackDrop = c === 'btc' ? 3.0 : c === 'eth' ? 4.5 : 5.5;
+          const atrDiscountPct = regimeInfo?.discountPct ?? regimeFallbackDrop;
+          const regimeLabel = regimeInfo
+            ? (regimeInfo.regime === 'bull' ? 'BÝK · pullback' : 'MEDVEĎ · 7D support')
+            : 'fallback';
+          const regimeReason = regimeInfo?.reason
+            ?? 'Dáta z Binance momentálne nedostupné — používame bezpečný fallback limit.';
+          const splitReason  = perTokenReason(e.symbol, e.volatility30d, split, atrDiscountPct);
           let marketUsdRaw = coinUsd * (marketPct / 100);
           let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
@@ -439,10 +446,11 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           }
 
           // Market price = spot
-          // Limit Dynamic = spot × (1 − atrDiscountPct/100) — ATR7-driven depth
-          // Lock state: dynPriceEffective ignores dynOracle when PENDING/FILLED
+          // Limit Dynamic = regime engine output (clamped); freeze when order locked.
           const marketOracle = price;
-          const dynOracle    = price > 0 ? price * (1 - atrDiscountPct / 100) : 0;
+          const dynOracle    = regimeInfo?.limitPrice && regimeInfo.limitPrice > 0
+            ? regimeInfo.limitPrice
+            : (price > 0 ? price * (1 - atrDiscountPct / 100) : 0);
           // STATE LOCK: once an order is PENDING/FILLED/EXECUTED, render the exact
           // target_price stored in DB at activation — stop listening to the live feed.
           const marketLockedPrice = mDone ? Number(st?.market?.target_price ?? 0) : 0;
