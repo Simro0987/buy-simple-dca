@@ -1,3 +1,7 @@
+/**
+ * Daily portfolio risk report — server-side generation + Telegram (cron 19:00 SEČ).
+ * Spúšťa sa z pg_cron každú hodinu; odosiela len v 19:00 Europe/Bratislava.
+ */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const corsHeaders = {
@@ -6,317 +10,279 @@ const corsHeaders = {
 };
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
+const REPORT_TZ = 'Europe/Bratislava';
+const REPORT_HOUR = 19;
 
-type AssetSymbol = 'BTC' | 'ETH' | 'SOL';
+const TOKENS = [
+  { symbol: 'BTC', allocation: 0.64, coingeckoId: 'bitcoin', key: 'btc' },
+  { symbol: 'ETH', allocation: 0.25, coingeckoId: 'ethereum', key: 'eth' },
+  { symbol: 'SOL', allocation: 0.11, coingeckoId: 'solana', key: 'sol' },
+] as const;
 
-interface ReportAsset {
-  symbol: AssetSymbol;
-  allocationPct: number;
-  spotPrice: number;
-  holdings: number;
-  investedUsd: number;
+function zonedParts(d = new Date()) {
+  const parts = new Intl.DateTimeFormat('en-GB', {
+    timeZone: REPORT_TZ, hour: '2-digit', minute: '2-digit', hour12: false,
+  }).formatToParts(d);
+  return {
+    hour: Number(parts.find(p => p.type === 'hour')?.value ?? 0),
+    minute: Number(parts.find(p => p.type === 'minute')?.value ?? 0),
+    dateKey: new Intl.DateTimeFormat('en-CA', { timeZone: REPORT_TZ }).format(d),
+  };
 }
 
-interface DailyRiskReportInput {
-  totalPortfolioValueUsd: number;
-  cleanLiquidityUsd: number;
-  pnl24hUsd: number;
-  cumulativePnlUsd: number;
-  globalRiskScore: number;
-  assets: ReportAsset[];
+function fmtUsd(n: number): string {
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
 }
 
-interface AppSettingsRow {
-  manual_holdings?: { btc?: number; eth?: number; sol?: number } | null;
-  initial_cost_basis?: { btc?: number; eth?: number; sol?: number } | null;
-  total_capital?: number | null;
+function fmtPrice(n: number): string {
+  if (n >= 1000) return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(4)}`;
 }
 
-interface DcaPurchaseRow {
-  btc_amount: number;
-  eth_amount: number;
-  sol_amount: number;
-  btc_price: number;
-  eth_price: number;
-  sol_price: number;
-}
-
-const fmtUsd = (n: number) =>
-  `$${Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '0.00'}`;
-
-const fmtPrice = (n: number) =>
-  `$${Number.isFinite(n) ? n.toLocaleString('en-US', { maximumFractionDigits: n >= 1000 ? 2 : 4 }) : '0'}`;
-
-const fmtPct = (n: number) =>
-  `${Number.isFinite(n) ? n.toFixed(2) : '0.00'}%`;
-
-const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));
-
-function formatQty(symbol: AssetSymbol, qty: number): string {
-  const d = symbol === 'BTC' ? 6 : symbol === 'ETH' ? 5 : 3;
-  return Number.isFinite(qty) ? qty.toFixed(d) : '0';
-}
-
-function generateDailyRiskReport(input: DailyRiskReportInput): string {
-  const dateStamp = new Date().toLocaleString('sk-SK', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/Bratislava',
-  });
-
-  const allocationLines = input.assets.map((asset) =>
-    `- *${asset.symbol}* · ${fmtPct(asset.allocationPct)} · Spot ${fmtPrice(asset.spotPrice)} · Qty ${formatQty(asset.symbol, asset.holdings)}`,
-  );
-
-  const wacbLines = input.assets.map((asset) => {
-    const wacb = asset.holdings > 0 ? asset.investedUsd / asset.holdings : 0;
-    const diffPct = wacb > 0 ? ((asset.spotPrice - wacb) / wacb) * 100 : 0;
-    const diffTag = diffPct >= 0 ? `+${fmtPct(diffPct)}` : fmtPct(diffPct);
-    return `- *${asset.symbol}* · WACB ${fmtPrice(wacb)} vs Spot ${fmtPrice(asset.spotPrice)} (${diffTag})`;
-  });
-
-  const btcAllocation = input.assets.find((a) => a.symbol === 'BTC')?.allocationPct ?? 0;
-  const concentrationLine = btcAllocation > 50
-    ? `⚠️ *Koncentračné riziko:* BTC alokácia ${fmtPct(btcAllocation)} je nad 50%.`
-    : `✅ *Koncentračné riziko:* BTC alokácia ${fmtPct(btcAllocation)} je v tolerancii.`;
-
-  const conservativeSummary =
-    `🛡️ *Konzervatívne aktívum:* BTC funguje ako hlavný štít proti volatilite ` +
-    `vďaka ${fmtPct(btcAllocation)} podielu a najvyššej likvidite.`;
-
-  const pnl24h = input.pnl24hUsd >= 0 ? `+${fmtUsd(input.pnl24hUsd)}` : fmtUsd(input.pnl24hUsd);
-  const cumulative = input.cumulativePnlUsd >= 0 ? `+${fmtUsd(input.cumulativePnlUsd)}` : fmtUsd(input.cumulativePnlUsd);
-
-  return [
-    `*Daily Risk Report* · ${dateStamp}`,
-    '',
-    `- *Celková hodnota portfólia:* ${fmtUsd(input.totalPortfolioValueUsd)}`,
-    `- *Čistá likvidita:* ${fmtUsd(input.cleanLiquidityUsd)}`,
-    `- *24H PnL:* ${pnl24h}`,
-    `- *Kumulatívne PnL:* ${cumulative}`,
-    '',
-    '*Aktuálne alokácie & spot ceny*',
-    ...allocationLines,
-    '',
-    `- *Globálny index rizika (LiveRiskScore):* ${fmtPct(input.globalRiskScore)}`,
-    '',
-    '*WACB vs Spot*',
-    ...wacbLines,
-    '',
-    concentrationLine,
-    conservativeSummary,
-  ].join('\n');
-}
-
-async function safeJson<T>(url: string, fallback: T): Promise<T> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(url, { signal: ctrl.signal });
-    clearTimeout(t);
-    if (!res.ok) return fallback;
-    return await res.json() as T;
-  } catch {
-    return fallback;
-  }
-}
-
-function calcRsi(closes: number[]): number {
+function calcRSI(closes: number[]): number {
   const p = 14;
   if (closes.length < p + 1) return 50;
   const sl = closes.slice(-(p + 1));
-  let gains = 0;
-  let losses = 0;
-  for (let i = 1; i < sl.length; i++) {
-    const d = sl[i] - sl[i - 1];
-    if (d > 0) gains += d;
-    else losses -= d;
-  }
-  const ag = gains / p;
-  const al = losses / p;
+  let g = 0, l = 0;
+  for (let i = 1; i < sl.length; i++) { const d = sl[i] - sl[i - 1]; d > 0 ? g += d : l -= d; }
+  const ag = g / p, al = l / p;
   if (al === 0) return 99;
-  return Math.round(clamp(100 - 100 / (1 + ag / al), 0, 100));
+  return Math.round(Math.max(0, Math.min(100, 100 - 100 / (1 + ag / al))));
 }
 
-async function fetchRsi(symbol: string): Promise<number> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 8000);
-    const res = await fetch(`https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=1d&limit=30`, {
-      signal: ctrl.signal,
+function liveRiskScore(fg: number, rsi: number, pnlPct: number): number {
+  return (fg * 0.4) + (rsi * 0.4) + (pnlPct * 0.2);
+}
+
+async function sendTelegram(chatId: string, text: string): Promise<boolean> {
+  const botToken = Deno.env.get('TELEGRAM_BOT_TOKEN')?.trim();
+  if (botToken) {
+    const res = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true }),
     });
-    clearTimeout(t);
-    if (!res.ok) return 50;
-    const rows = await res.json() as [number, string, string, string, string, string, ...unknown[]][];
-    const closes = rows.map((r) => Number(r[4])).filter((n) => Number.isFinite(n));
-    return calcRsi(closes);
-  } catch {
-    return 50;
+    return res.ok;
   }
+  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+  const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
+  if (!LOVABLE_API_KEY || !TELEGRAM_API_KEY) return false;
+  const res = await fetch(`${GATEWAY_URL}/sendMessage`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${LOVABLE_API_KEY}`,
+      'X-Connection-Api-Key': TELEGRAM_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'Markdown', disable_web_page_preview: true }),
+  });
+  return res.ok;
+}
+
+function buildTelegramText(data: {
+  dateKey: string;
+  totalValue: number;
+  totalPnl: number;
+  totalPnlPct: number;
+  pnl24h: number;
+  fg: number;
+  liveScore: number;
+  assets: Array<{ sym: string; value: number; pct: number; target: number; wacb: number; spot: number; pnlPct: number }>;
+  alerts: string[];
+  conservative: string;
+  summary: string;
+}): string {
+  return [
+    `*📊 DENNÝ ANALYTICKÝ REPORT · PORTFÓLIO*`,
+    `_${data.dateKey} · server cron_`,
+    '',
+    `*▸ Executive Summary*`,
+    data.summary,
+    '',
+    `*▸ Prehľad*`,
+    `• Hodnota: *${fmtUsd(data.totalValue)}*`,
+    `• 24H PnL: ${data.pnl24h >= 0 ? '+' : ''}${fmtUsd(data.pnl24h)}`,
+    `• Kum. PnL: ${data.totalPnl >= 0 ? '+' : ''}${fmtUsd(data.totalPnl)} (${data.totalPnlPct >= 0 ? '+' : ''}${data.totalPnlPct.toFixed(2)} %)`,
+    '',
+    `*▸ Alokácia*`,
+    ...data.assets.map(a => `• *${a.sym}*: ${fmtUsd(a.value)} · ${a.pct.toFixed(1)} %`),
+    '',
+    `*▸ WACB vs Spot*`,
+    ...data.assets.map(a => `• *${a.sym}*: WACB ${fmtUsd(a.wacb)} · Spot ${fmtUsd(a.spot)} · PnL ${a.pnlPct >= 0 ? '+' : ''}${a.pnlPct.toFixed(1)} %`),
+    '',
+    `*▸ Riziko*`,
+    `• F&G: *${data.fg}* · LiveRiskScore: *${data.liveScore.toFixed(1)}*`,
+    '',
+    `*▸ Koncentrácia*`,
+    ...(data.alerts.length ? data.alerts.map(a => `⚠️ ${a}`) : ['✓ V limite']),
+    '',
+    `*▸ Konzervatívne aktívum*`,
+    data.conservative,
+    '',
+    `_Report · auto 19:00 SEČ_`,
+  ].join('\n');
 }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-    const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
-    const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    if (!LOVABLE_API_KEY || !TELEGRAM_API_KEY || !supabaseUrl || !serviceKey) {
-      return new Response(JSON.stringify({ success: false, error: 'Missing environment secrets' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
-
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, serviceKey);
-    let reportOverride: string | undefined;
-    let chatIdOverride: string | undefined;
+
+    let force = false;
+    let prebuiltText: string | undefined;
     try {
       const body = await req.json();
-      reportOverride = body?.report;
-      chatIdOverride = body?.chatId;
-    } catch {
-      // cron payload may be empty
+      force = Boolean(body?.force);
+      prebuiltText = body?.text;
+    } catch { /* cron */ }
+
+    const now = new Date();
+    const { hour, dateKey } = zonedParts(now);
+
+    const { data: cfg } = await supabase
+      .from('telegram_config')
+      .select('chat_id, daily_report_enabled, last_daily_report_date')
+      .eq('id', 1)
+      .single();
+
+    if (!cfg?.daily_report_enabled && !force) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'disabled' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    let chatId = chatIdOverride?.trim();
+    if (!force && hour !== REPORT_HOUR) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'not_report_hour', hour }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    if (!force && cfg?.last_daily_report_date === dateKey) {
+      return new Response(JSON.stringify({ skipped: true, reason: 'already_sent_today' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    let chatId = cfg?.chat_id?.trim() || Deno.env.get('TELEGRAM_CHAT_ID')?.trim() || '';
     if (!chatId) {
-      const { data: cfg } = await supabase
-        .from('telegram_config')
-        .select('chat_id')
-        .eq('id', 1)
-        .single();
-      chatId = cfg?.chat_id?.trim();
-    }
-    if (!chatId) {
-      return new Response(JSON.stringify({ success: false, error: 'No telegram chat id configured' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+      return new Response(JSON.stringify({ skipped: true, reason: 'no_chat_id' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    let report = reportOverride;
-    if (!report) {
-      const { data: settings } = await supabase
-        .from('app_settings')
-        .select('manual_holdings, initial_cost_basis, total_capital')
-        .limit(1)
-        .maybeSingle();
-      const { data: purchases } = await supabase
-        .from('dca_purchases')
-        .select('btc_amount, eth_amount, sol_amount, btc_price, eth_price, sol_price')
-        .order('created_at', { ascending: true });
+    let text = prebuiltText;
+    if (!text) {
+      const [{ data: purchases }, { data: settings }] = await Promise.all([
+        supabase.from('dca_purchases').select('*').order('created_at', { ascending: true }),
+        supabase.from('app_settings').select('manual_holdings, initial_cost_basis').limit(1).maybeSingle(),
+      ]);
 
-      const app = (settings ?? {}) as AppSettingsRow;
-      const rows = (purchases ?? []) as DcaPurchaseRow[];
+      const manual = (settings?.manual_holdings ?? {}) as Record<string, number>;
+      const initialCost = (settings?.initial_cost_basis ?? {}) as Record<string, number>;
+      const rows = purchases ?? [];
 
-      const aggHoldings = {
-        BTC: rows.reduce((s, r) => s + Number(r.btc_amount || 0), 0),
-        ETH: rows.reduce((s, r) => s + Number(r.eth_amount || 0), 0),
-        SOL: rows.reduce((s, r) => s + Number(r.sol_amount || 0), 0),
-      };
-      const aggInvested = {
-        BTC: rows.reduce((s, r) => s + Number(r.btc_amount || 0) * Number(r.btc_price || 0), 0),
-        ETH: rows.reduce((s, r) => s + Number(r.eth_amount || 0) * Number(r.eth_price || 0), 0),
-        SOL: rows.reduce((s, r) => s + Number(r.sol_amount || 0) * Number(r.sol_price || 0), 0),
-      };
-
-      const manual = app.manual_holdings ?? {};
-      const initialCost = app.initial_cost_basis ?? {};
-
-      const prices = await safeJson<Record<string, { usd: number; usd_24h_change: number }>>(
-        'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana&vs_currencies=usd&include_24hr_change=true',
-        {
-          bitcoin: { usd: 0, usd_24h_change: 0 },
-          ethereum: { usd: 0, usd_24h_change: 0 },
-          solana: { usd: 0, usd_24h_change: 0 },
-        },
-      );
-      const fgData = await safeJson<{ data: Array<{ value: string }> }>('https://api.alternative.me/fng/?limit=1', { data: [{ value: '50' }] });
-      const fgValue = Number.parseInt(fgData.data?.[0]?.value ?? '50', 10) || 50;
-      const [rsiBtc, rsiEth, rsiSol] = await Promise.all([fetchRsi('BTCUSDT'), fetchRsi('ETHUSDT'), fetchRsi('SOLUSDT')]);
-      const avgRsi = (rsiBtc + rsiEth + rsiSol) / 3;
-
-      const assets: ReportAsset[] = ([
-        { symbol: 'BTC', cg: 'bitcoin', m: 'btc' },
-        { symbol: 'ETH', cg: 'ethereum', m: 'eth' },
-        { symbol: 'SOL', cg: 'solana', m: 'sol' },
-      ] as const).map((entry) => {
-        const manualHold = Number((manual as Record<string, number | undefined>)[entry.m] ?? 0);
-        const holdings = manualHold > 0 ? manualHold : aggHoldings[entry.symbol];
-        const invested = aggInvested[entry.symbol] + Number((initialCost as Record<string, number | undefined>)[entry.m] ?? 0);
-        const spot = Number(prices[entry.cg]?.usd ?? 0);
-        return {
-          symbol: entry.symbol,
-          allocationPct: 0,
-          spotPrice: spot,
-          holdings,
-          investedUsd: invested,
-        };
-      });
-
-      const totalValue = assets.reduce((s, a) => s + a.holdings * a.spotPrice, 0);
-      const totalInvested = assets.reduce((s, a) => s + a.investedUsd, 0);
-      const cumulativePnl = totalValue - totalInvested;
-      const pnlPct = totalInvested > 0 ? (cumulativePnl / totalInvested) * 100 : 0;
-      const pnl24h = assets.reduce((sum, a) => {
-        const cg = a.symbol === 'BTC' ? 'bitcoin' : a.symbol === 'ETH' ? 'ethereum' : 'solana';
-        const ch = Number(prices[cg]?.usd_24h_change ?? 0);
-        const value = a.holdings * a.spotPrice;
-        return sum + (value * ch) / 100;
-      }, 0);
-      const cleanLiquidity = Math.max(0, Number(app.total_capital ?? 0) - totalInvested);
-      const globalRiskScore = clamp((fgValue * 0.4) + (avgRsi * 0.4) + (pnlPct * 0.2), 0, 100);
-
-      for (const a of assets) {
-        a.allocationPct = totalValue > 0 ? (a.holdings * a.spotPrice / totalValue) * 100 : 0;
+      const aggHoldings = { btc: 0, eth: 0, sol: 0 };
+      const aggInvested = { btc: 0, eth: 0, sol: 0 };
+      for (const r of rows) {
+        aggHoldings.btc += Number(r.btc_amount || 0);
+        aggHoldings.eth += Number(r.eth_amount || 0);
+        aggHoldings.sol += Number(r.sol_amount || 0);
+        aggInvested.btc += Number(r.btc_amount || 0) * Number(r.btc_price || 0);
+        aggInvested.eth += Number(r.eth_amount || 0) * Number(r.eth_price || 0);
+        aggInvested.sol += Number(r.sol_amount || 0) * Number(r.sol_price || 0);
       }
 
-      report = generateDailyRiskReport({
-        totalPortfolioValueUsd: totalValue,
-        cleanLiquidityUsd: cleanLiquidity,
-        pnl24hUsd: pnl24h,
-        cumulativePnlUsd: cumulativePnl,
-        globalRiskScore,
-        assets,
+      const ids = TOKENS.map(t => t.coingeckoId).join(',');
+      const priceRes = await fetch(
+        `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd&include_24hr_change=true`,
+      );
+      const prices = priceRes.ok ? await priceRes.json() : {};
+
+      const fgRes = await fetch('https://api.alternative.me/fng/?limit=1');
+      const fgData = fgRes.ok ? await fgRes.json() : { data: [{ value: '50' }] };
+      const fg = parseInt(fgData?.data?.[0]?.value ?? '50', 10);
+
+      const rsiEntries = await Promise.all(TOKENS.map(async t => {
+        try {
+          const r = await fetch(`https://api.binance.com/api/v3/klines?symbol=${t.symbol}USDT&interval=1d&limit=30`);
+          if (!r.ok) return [t.symbol, 50] as const;
+          const d = await r.json() as [number, string, string, string, string, string, ...unknown[]][];
+          return [t.symbol, calcRSI(d.map(k => parseFloat(k[4])))] as const;
+        } catch { return [t.symbol, 50] as const; }
+      }));
+      const rsiMap = Object.fromEntries(rsiEntries) as Record<string, number>;
+
+      const assetRows = TOKENS.map(t => {
+        const manualAmt = Number(manual[t.key] ?? 0);
+        const holdings = manualAmt > 0 ? manualAmt : aggHoldings[t.key];
+        const invested = aggInvested[t.key] + Number(initialCost[t.key] ?? 0);
+        const spot = prices[t.coingeckoId]?.usd ?? 0;
+        const ch24 = prices[t.coingeckoId]?.usd_24h_change ?? 0;
+        const value = holdings * spot;
+        const wacb = holdings > 0 ? invested / holdings : 0;
+        const pnlPct = invested > 0 ? ((value - invested) / invested) * 100 : 0;
+        return { sym: t.symbol, holdings, invested, spot, ch24, value, wacb, pnlPct, target: t.allocation };
+      });
+
+      const totalValue = assetRows.reduce((s, a) => s + a.value, 0);
+      const totalInvested = assetRows.reduce((s, a) => s + a.invested, 0);
+      const totalPnl = totalValue - totalInvested;
+      const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+      const pnl24h = assetRows.reduce((s, a) => s + a.value * a.ch24 / 100, 0);
+
+      const assets = assetRows.map(a => ({
+        sym: a.sym,
+        value: a.value,
+        pct: totalValue > 0 ? (a.value / totalValue) * 100 : 0,
+        target: a.target * 100,
+        wacb: a.wacb,
+        spot: a.spot,
+        pnlPct: a.pnlPct,
+      }));
+
+      const alerts: string[] = [];
+      for (const a of assets) {
+        if (a.pct > 50) alerts.push(`${a.sym} tvorí ${a.pct.toFixed(1)} % portfólia (>50 %).`);
+      }
+
+      const btcPct = assets.find(a => a.sym === 'BTC')?.pct ?? 0;
+      const scores = assetRows
+        .filter(a => a.holdings > 0 && a.invested > 0)
+        .map(a => liveRiskScore(fg, rsiMap[a.sym] ?? 50, Math.max(0, a.pnlPct)));
+      const liveScore = scores.length ? Math.max(...scores) : liveRiskScore(fg, 50, 0);
+
+      const summary = [
+        `Portfólio ${fmtUsd(totalValue)}.`,
+        `24H ${pnl24h >= 0 ? '+' : ''}${fmtUsd(pnl24h)}.`,
+        `LiveRiskScore ${liveScore.toFixed(0)}.`,
+      ].join(' ');
+
+      const conservative = btcPct >= 40
+        ? `BTC (${btcPct.toFixed(1)} %) — konzervatívna kotva portfólia.`
+        : `BTC ako strategický štít (64/25/11).`;
+
+      text = buildTelegramText({
+        dateKey, totalValue, totalPnl, totalPnlPct, pnl24h, fg, liveScore, assets, alerts, conservative, summary,
       });
     }
 
-    const tgRes = await fetch(`${GATEWAY_URL}/sendMessage`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        'X-Connection-Api-Key': TELEGRAM_API_KEY,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: report,
-        parse_mode: 'Markdown',
-        disable_web_page_preview: true,
-      }),
-    });
-
-    const tgData = await tgRes.json().catch(() => ({}));
-    if (!tgRes.ok) {
-      return new Response(JSON.stringify({ success: false, error: 'Telegram send failed', telegram: tgData }), {
-        status: 502,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+    const sent = await sendTelegram(chatId, text);
+    if (!sent) {
+      console.error('[telegram-daily-risk-report] send failed');
+      return new Response(JSON.stringify({ success: false, error: 'telegram_send_failed' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    return new Response(JSON.stringify({ success: true }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    await supabase.from('telegram_config').update({
+      last_daily_report_date: dateKey,
+      updated_at: new Date().toISOString(),
+    }).eq('id', 1);
+
+    return new Response(JSON.stringify({ success: true, date: dateKey }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (e) {
-    return new Response(JSON.stringify({ success: false, error: String(e) }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    console.error('[telegram-daily-risk-report] error:', e);
+    return new Response(JSON.stringify({ success: false, error: String(e) }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

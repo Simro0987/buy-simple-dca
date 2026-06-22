@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Zap, ChevronLeft, ChevronRight, Radio } from 'lucide-react';
 import type { OctToken } from '@/hooks/useConfluenceMetrics';
+import { useInstitutionalRadar } from '@/hooks/useInstitutionalRadar';
 
 // CoinGecko small logos — free public CDN, no API key
 const TOKEN_IMG: Record<OctToken, string> = {
@@ -121,7 +122,8 @@ const TOKEN_COLOR: Record<OctToken, string> = {
 interface Props { activeToken: OctToken }
 
 export function MacroNewsTicker({ activeToken }: Props) {
-  const items = NEWS_DB[activeToken];
+  const { messages: cached } = useInstitutionalRadar(activeToken);
+  const items = cached ?? NEWS_DB[activeToken];
 
   // Default to first alert-type item; fall back to index 0
   const defaultIdx = Math.max(0, items.findIndex(i => i.type === 'alert'));

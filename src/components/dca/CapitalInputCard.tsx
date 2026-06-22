@@ -2,10 +2,17 @@ import { useEffect, useState } from 'react';
 import { DollarSign } from 'lucide-react';
 import { formatUsd } from '@/lib/crypto';
 import { useExternalCapital } from '@/hooks/useExternalCapital';
+import { useDcaCycleCountdown } from '@/hooks/useDcaCycleCountdown';
 
 interface Props {
   capital: number;
   onCapitalChange: (n: number) => void;
+  investableUsd?: number;
+  reservedUsd?: number;
+  allocationPct?: number;
+  budgetWhy?: string;
+  tokenSplit?: { btc: number; eth: number; sol: number };
+  tokenWhy?: string;
 }
 
 const QUICK = [50, 100, 200, 500, 1000];
@@ -14,9 +21,13 @@ const QUICK = [50, 100, 200, 500, 1000];
  * Part 5/5a — Single weekly investment input.
  * Total capital + horizon are managed globally (Settings); user only picks how much to deploy this week.
  */
-export function CapitalInputCard({ capital, onCapitalChange }: Props) {
+export function CapitalInputCard({
+  capital, onCapitalChange, investableUsd, reservedUsd, allocationPct,
+  budgetWhy, tokenSplit, tokenWhy,
+}: Props) {
   const [weekly, setWeekly] = useState<number>(capital || 100);
   const { total: walletCapital } = useExternalCapital();
+  const { label: cycleLabel } = useDcaCycleCountdown();
 
   // Keep local state in sync if outer changes (e.g., reset)
   useEffect(() => {
@@ -53,6 +64,10 @@ export function CapitalInputCard({ capital, onCapitalChange }: Props) {
         />
       </label>
 
+      <p className="text-[11px] text-muted-foreground font-mono tabular-nums -mt-1">
+        Ďalší cyklus: <span className="text-foreground font-semibold">{cycleLabel}</span>
+      </p>
+
       {walletCapital > 0 && (
         <p className="text-[11px] text-muted-foreground leading-snug -mt-1">
           {(() => {
@@ -81,11 +96,40 @@ export function CapitalInputCard({ capital, onCapitalChange }: Props) {
       )}
 
       <div className="flex items-center justify-between text-[10px] tabular-nums">
-        <span className="text-muted-foreground uppercase tracking-wide">Anchor split</span>
+        <span className="text-muted-foreground uppercase tracking-wide">Token split</span>
         <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary font-bold border border-primary/30">
-          BTC 64% · ETH 25% · SOL 11%
+          {tokenSplit
+            ? `BTC ${tokenSplit.btc.toFixed(0)}% · ETH ${tokenSplit.eth.toFixed(0)}% · SOL ${tokenSplit.sol.toFixed(0)}%`
+            : 'BTC 64% · ETH 25% · SOL 11%'}
         </span>
       </div>
+
+      {(investableUsd != null && reservedUsd != null) && (
+        <div className="grid grid-cols-2 gap-2 text-[11px]">
+          <div className="bg-emerald-500/10 border border-emerald-500/20 rounded-lg p-2">
+            <p className="text-muted-foreground uppercase text-[9px]">Alokované</p>
+            <p className="font-bold text-emerald-300 tabular-nums">{formatUsd(investableUsd)}</p>
+            {allocationPct != null && (
+              <p className="text-[9px] text-muted-foreground">{allocationPct.toFixed(1)} % rozpočtu</p>
+            )}
+          </div>
+          <div className="bg-secondary/60 border border-border rounded-lg p-2">
+            <p className="text-muted-foreground uppercase text-[9px]">Cash Reserve</p>
+            <p className="font-bold text-foreground tabular-nums">{formatUsd(reservedUsd)}</p>
+          </div>
+        </div>
+      )}
+
+      {budgetWhy && (
+        <p className="text-[10px] text-muted-foreground leading-relaxed border-l-2 border-primary/30 pl-2">
+          {budgetWhy}
+        </p>
+      )}
+      {tokenWhy && (
+        <p className="text-[10px] text-muted-foreground leading-relaxed border-l-2 border-violet-500/30 pl-2">
+          {tokenWhy}
+        </p>
+      )}
 
       <div className="flex gap-1 flex-wrap">
         {QUICK.map(v => (

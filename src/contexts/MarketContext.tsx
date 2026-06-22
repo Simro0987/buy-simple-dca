@@ -3,6 +3,7 @@ import { useFearGreed, usePrices } from '@/hooks/usePrices';
 import { useMarketData } from '@/hooks/useMarketData';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { runCoreSatelliteEngine, type EngineResult } from '@/lib/coreSatelliteEngine';
+import { getLatestMarketScore } from '@/lib/dcaScoreBridge';
 
 interface MarketContextValue {
   engine: EngineResult;
@@ -48,6 +49,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       ethVol14d: metrics?.eth?.volatility30d ?? 2.8,
       solVol14d: metrics?.sol?.volatility30d ?? 4.0,
       solVol14dBaseline: SOL_VOL_BASELINE,
+      marketScore: getLatestMarketScore(),
     });
   }, [fg, market, prices, metrics]);
 

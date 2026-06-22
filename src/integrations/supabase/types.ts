@@ -470,8 +470,10 @@ export type Database = {
       telegram_config: {
         Row: {
           chat_id: string
+          daily_report_enabled: boolean
           dca_reminder_enabled: boolean
           id: number
+          last_daily_report_date: string
           limit_alert_enabled: boolean
           news_alert_enabled: boolean
           updated_at: string
@@ -479,8 +481,10 @@ export type Database = {
         }
         Insert: {
           chat_id?: string
+          daily_report_enabled?: boolean
           dca_reminder_enabled?: boolean
           id: number
+          last_daily_report_date?: string
           limit_alert_enabled?: boolean
           news_alert_enabled?: boolean
           updated_at?: string
@@ -488,8 +492,10 @@ export type Database = {
         }
         Update: {
           chat_id?: string
+          daily_report_enabled?: boolean
           dca_reminder_enabled?: boolean
           id?: number
+          last_daily_report_date?: string
           limit_alert_enabled?: boolean
           news_alert_enabled?: boolean
           updated_at?: string

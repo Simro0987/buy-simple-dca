@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { Zap, TrendingUp, TrendingDown, Activity, Copy, Info, Check, Clock, X, Wallet, Banknote, Coins, Pencil, AlertTriangle, ShoppingCart, Gauge } from 'lucide-react';
 import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
+import { markDcaCycleActivated } from '@/lib/dcaCycleTimer';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
@@ -153,6 +154,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         deductReservoir(fromReservoir, `BTC MARKET · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
       }
       toast.success(`${coin.toUpperCase()} Market vykonaný ✓`);
+      markDcaCycleActivated();
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
     } catch (e) {
@@ -175,6 +177,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         deductReservoir(fromReservoir, `BTC LIMIT DYNAMIC · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
       }
       toast.success(`${coin.toUpperCase()} Limit Dynamic zadaný ⏳`);
+      markDcaCycleActivated();
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
       qc.invalidateQueries({ queryKey: ['app_settings'] });
     } catch (e) {

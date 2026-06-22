@@ -31,6 +31,8 @@ import {
   type Regime,
 } from '@/lib/mondayController';
 import { loadTuning, type TuningParams } from '@/lib/moneyMode';
+import { setLatestMarketScore } from '@/lib/dcaScoreBridge';
+import { continuousTokenSplit } from '@/lib/dcaAllocationEngine';
 import { toast } from 'sonner';
 
 interface Props { lang: Lang; }
@@ -135,6 +137,12 @@ export function DCAPage({ lang: _lang }: Props) {
     () => buildPlan(inputs, prices, prevDeploymentPct, { ...tuning, maReclaimActive }),
     [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
+
+  useEffect(() => {
+    setLatestMarketScore(plan.factorScore);
+  }, [plan.factorScore]);
+
+  const tokenSplit = useMemo(() => continuousTokenSplit(plan.factorScore), [plan.factorScore]);
 
   // Engine is fully automatic — no manual factor/regime overrides.
   const effectiveScore = plan.factorScore;
@@ -263,16 +271,10 @@ export function DCAPage({ lang: _lang }: Props) {
           <div className="text-right">
             <p className="text-[10px] uppercase tracking-wider text-muted-foreground">Alokácia</p>
             <p className="text-4xl font-bold text-foreground tabular-nums">{plan.finalAllocationPct}%</p>
-            {plan.confidenceMultiplier < 1 && !plan.overrideTriggered && (
+            {plan.confidenceMultiplier < 1 && (
               <p className="text-[10px] text-muted-foreground mt-0.5 tabular-nums">
                 base {Math.round(plan.baseAllocationPct)}% × {plan.confidenceMultiplier.toFixed(2)}
               </p>
-            )}
-            {plan.overrideTriggered === 'panic_floor' && (
-              <p className="text-[10px] text-emerald-400 mt-0.5">⚡ Panic floor 85%</p>
-            )}
-            {plan.overrideTriggered === 'euphoria_ceiling' && (
-              <p className="text-[10px] text-amber-400 mt-0.5">🛑 Euphoria cap 20%</p>
             )}
             <p className="text-sm font-semibold text-foreground mt-1">{formatUsd(plan.investableUsd)}</p>
           </div>
@@ -353,7 +355,7 @@ export function DCAPage({ lang: _lang }: Props) {
           <div className="mt-2 space-y-2 bg-secondary/40 rounded-lg p-3">
             <p className="text-xs text-muted-foreground leading-relaxed">{plan.rationale}</p>
             <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Vzorec: Allocation % = 82 − (Score × 0.62), clamp [22 %, 80 %]. Override: Panic + score &lt; 15 → 85 %; Eufória + score &gt; 90 → 20 %. Confidence multiplier: High ×1.00 · Medium ×0.93 · Low ×0.85.
+              Plynulá krivka: Allocation % = 100 − (Skóre × 0,8). Pri skóre 0 deploy 100 %, pri skóre 100 deploy 20 %. Confidence multiplier: High ×1.00 · Medium ×0.93 · Low ×0.85.
             </p>
           </div>
         )}
@@ -367,7 +369,16 @@ export function DCAPage({ lang: _lang }: Props) {
       />
 
       {/* CAPITAL INPUT — set weekly DCA capital from total + horizon */}
-      <CapitalInputCard capital={inputs.capital} onCapitalChange={v => update('capital', v)} />
+      <CapitalInputCard
+        capital={inputs.capital}
+        onCapitalChange={v => update('capital', v)}
+        investableUsd={plan.investableUsd}
+        reservedUsd={plan.reservedUsd}
+        allocationPct={plan.finalAllocationPct}
+        budgetWhy={plan.rationale}
+        tokenSplit={tokenSplit}
+        tokenWhy={tokenSplit.why}
+      />
 
       {/* AUTONOMOUS CORE-SATELLITE ENGINE — 5 factors drive Core/Satellite weights live */}
       <CoreSatelliteEngineCard weeklyBudgetUsd={plan.investableUsd} />
