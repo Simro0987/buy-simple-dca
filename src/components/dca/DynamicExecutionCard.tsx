@@ -219,8 +219,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     }
   };
 
-  // ── ATR-based dynamic discount indicators (merged from AutoLimitTracker) ──
-  const { getDiscount: getAtrDiscount } = useAutoLimitTracker();
+  // ── Regime-based dynamic limit engine (50D EMA + 7d support, 2.0–7.5% failsafe) ──
+  const livePriceMap: Partial<Record<CoinKey, number>> = {
+    btc: prices?.bitcoin?.usd ?? 0,
+    eth: prices?.ethereum?.usd ?? 0,
+    sol: prices?.solana?.usd ?? 0,
+  };
+  const { data: regimeMap } = useRegimeLimits(livePriceMap);
 
   // Auto-write to portfolio holdings when a limit order becomes FILLED.
   // Tracks written orders by ID to prevent duplicate writes.
