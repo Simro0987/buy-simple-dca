@@ -188,26 +188,37 @@ Array must have exactly ${items.length} items in order.`;
 
 function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNewsItem[] {
   const items: RawNewsItem[] = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  // Support both RSS <item> and Atom <entry>
+  const blockRegex = /<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/g;
   let match;
   let count = 0;
-  while ((match = itemRegex.exec(xml)) !== null && count < maxItems) {
-    const block = match[1];
-    const title = block.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/)?.[1] || '';
-    const link = block.match(/<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/link>/)?.[1] ||
-                 block.match(/<guid[^>]*>(.*?)<\/guid>/)?.[1] || '';
-    const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '';
-    const desc = block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1] || '';
+  while ((match = blockRegex.exec(xml)) !== null && count < maxItems) {
+    const block = match[2];
+    const title = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)?.[1] || '';
+    // RSS <link>URL</link>, Atom <link href="URL" />
+    const link =
+      block.match(/<link[^>]*href=["']([^"']+)["']/)?.[1] ||
+      block.match(/<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/)?.[1] ||
+      block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/)?.[1] || '';
+    const pubDate =
+      block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] ||
+      block.match(/<published>([\s\S]*?)<\/published>/)?.[1] ||
+      block.match(/<updated>([\s\S]*?)<\/updated>/)?.[1] || '';
+    const desc =
+      block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1] ||
+      block.match(/<summary[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/summary>/)?.[1] ||
+      block.match(/<content[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/content>/)?.[1] || '';
     const categories: string[] = [];
     const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/category>/g;
     let catMatch;
     while ((catMatch = catRegex.exec(block)) !== null) categories.push(catMatch[1]);
     const fullText = [title, desc, ...categories].join(' ');
 
-    if (title) {
+    const cleanTitle = title.replace(/<[^>]*>/g, '').trim();
+    if (cleanTitle) {
       items.push({
         id: `${sourceName.toLowerCase().replace(/\s/g, '')}-${count}-${Date.now()}`,
-        title: title.trim(),
+        title: cleanTitle,
         url: link.trim(),
         source: sourceName,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
@@ -275,14 +286,39 @@ async function fetchRssFeed(feedUrl: string, sourceName: string, maxItems = 8): 
   }
 }
 
-// Premium "Big Five" feeds
+// Expanded premium feed set — broad coverage of top crypto outlets
 const PREMIUM_FEEDS: Array<{ url: string; name: string }> = [
   { url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', name: 'CoinDesk' },
   { url: 'https://cointelegraph.com/rss', name: 'CoinTelegraph' },
   { url: 'https://decrypt.co/feed', name: 'Decrypt' },
   { url: 'https://www.theblock.co/rss.xml', name: 'The Block' },
   { url: 'https://blockworks.co/feed', name: 'Blockworks' },
+  { url: 'https://bitcoinmagazine.com/.rss/full/', name: 'Bitcoin Magazine' },
+  { url: 'https://cryptoslate.com/feed/', name: 'CryptoSlate' },
+  { url: 'https://www.newsbtc.com/feed/', name: 'NewsBTC' },
+  { url: 'https://beincrypto.com/feed/', name: 'BeInCrypto' },
+  { url: 'https://ambcrypto.com/feed/', name: 'AMBCrypto' },
+  { url: 'https://u.today/rss', name: 'U.Today' },
+  { url: 'https://cryptobriefing.com/feed/', name: 'CryptoBriefing' },
+  { url: 'https://coingape.com/feed/', name: 'CoinGape' },
+  { url: 'https://protos.com/feed/', name: 'Protos' },
+  { url: 'https://www.dlnews.com/arc/outboundfeeds/rss/', name: 'DL News' },
+  { url: 'https://thedefiant.io/api/feed', name: 'The Defiant' },
+  { url: 'https://bankless.substack.com/feed', name: 'Bankless' },
+  { url: 'https://www.coingecko.com/news.atom', name: 'CoinGecko' },
 ];
+
+// Flash alert keywords — surface critical, time-sensitive events
+const FLASH_KEYWORDS = [
+  'hack', 'exploit', 'sec approval', 'sec approves', 'fed rate', 'breaking',
+  'black swan', 'liquidation', 'liquidations', 'rugpull', 'rug pull',
+  'emergency', 'depeg', 'de-peg', 'halt trading', 'bankrupt', 'insolvent',
+];
+
+function isFlashAlert(title: string): boolean {
+  const lower = (title || '').toLowerCase();
+  return FLASH_KEYWORDS.some(k => lower.includes(k));
+}
 
 // ── Main Handler ────────────────────────────────────────
 
@@ -356,22 +392,28 @@ Deno.serve(async (req) => {
     });
 
 
-    const finalResults = top.map((item, i) => ({
-      id: item.id,
-      title: finalTitles[i],
-      rawTitle: item.title,
-      rawDescription: item.description || '',
-      summary: finalSummaries[i],
-      url: item.url,
-      source: item.source,
-      publishedAt: item.publishedAt,
-      impact: classified[i].impact,
-      sentiment: classified[i].sentiment,
-      tokens: item.tokens.filter(t => allowed.has(t.toUpperCase())),
-    }));
+    const finalResults = top.map((item, i) => {
+      const flash = isFlashAlert(item.title) || isFlashAlert(finalTitles[i]);
+      return {
+        id: item.id,
+        title: finalTitles[i],
+        rawTitle: item.title,
+        rawDescription: item.description || '',
+        summary: finalSummaries[i],
+        url: item.url,
+        source: item.source,
+        publishedAt: item.publishedAt,
+        impact: flash ? 'high' : classified[i].impact,
+        sentiment: classified[i].sentiment,
+        tokens: item.tokens.filter(t => allowed.has(t.toUpperCase())),
+        flash,
+      };
+    });
 
     const impactOrder = { high: 0, medium: 1, low: 2 };
     finalResults.sort((a, b) => {
+      // Flash always first
+      if (a.flash !== b.flash) return a.flash ? -1 : 1;
       const imp = impactOrder[a.impact] - impactOrder[b.impact];
       if (imp !== 0) return imp;
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
@@ -379,7 +421,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, data: finalResults }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          // Encourage fresh fetches; keep edge-friendly s-maxage at 30 min
+          'Cache-Control': 'public, max-age=0, s-maxage=1800, stale-while-revalidate=300',
+        },
+      }
     );
   } catch (error) {
     console.error('Error fetching news:', error);

@@ -9,6 +9,7 @@ import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChar
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 import { MacroNewsTicker } from '@/components/MacroNewsTicker';
 import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
+import { FlashAlertBanner } from '@/components/FlashAlertBanner';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { Lang } from '@/lib/i18n';
@@ -44,8 +45,10 @@ export function HomePage({ onNavigate, lang }: Props) {
 
   return (
     <div className="space-y-2.5">
-      {/* Alert banner */}
+      {/* Alert banners — Flash Alert sits at the very top */}
+      <FlashAlertBanner lang={lang} />
       <LiquidationAlertBanner lang={lang} />
+
 
       {/* ── Asset price strip ───────────────────────────────────────────── */}
       <AssetCardsRow metrics={metrics} prices={prices} />
