@@ -392,22 +392,28 @@ Deno.serve(async (req) => {
     });
 
 
-    const finalResults = top.map((item, i) => ({
-      id: item.id,
-      title: finalTitles[i],
-      rawTitle: item.title,
-      rawDescription: item.description || '',
-      summary: finalSummaries[i],
-      url: item.url,
-      source: item.source,
-      publishedAt: item.publishedAt,
-      impact: classified[i].impact,
-      sentiment: classified[i].sentiment,
-      tokens: item.tokens.filter(t => allowed.has(t.toUpperCase())),
-    }));
+    const finalResults = top.map((item, i) => {
+      const flash = isFlashAlert(item.title) || isFlashAlert(finalTitles[i]);
+      return {
+        id: item.id,
+        title: finalTitles[i],
+        rawTitle: item.title,
+        rawDescription: item.description || '',
+        summary: finalSummaries[i],
+        url: item.url,
+        source: item.source,
+        publishedAt: item.publishedAt,
+        impact: flash ? 'high' : classified[i].impact,
+        sentiment: classified[i].sentiment,
+        tokens: item.tokens.filter(t => allowed.has(t.toUpperCase())),
+        flash,
+      };
+    });
 
     const impactOrder = { high: 0, medium: 1, low: 2 };
     finalResults.sort((a, b) => {
+      // Flash always first
+      if (a.flash !== b.flash) return a.flash ? -1 : 1;
       const imp = impactOrder[a.impact] - impactOrder[b.impact];
       if (imp !== 0) return imp;
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
@@ -415,7 +421,14 @@ Deno.serve(async (req) => {
 
     return new Response(
       JSON.stringify({ success: true, data: finalResults }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json',
+          // Encourage fresh fetches; keep edge-friendly s-maxage at 30 min
+          'Cache-Control': 'public, max-age=0, s-maxage=1800, stale-while-revalidate=300',
+        },
+      }
     );
   } catch (error) {
     console.error('Error fetching news:', error);
