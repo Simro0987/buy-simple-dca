@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import type { PortfolioData } from '@/lib/portfolioData';
+import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 import {
   computeUsdcLoan,
   resolveCyborgState,
@@ -19,7 +20,8 @@ interface Props {
   portfolioData: PortfolioData;
 }
 
-const API_OFFLINE = 'Error: API Offline';
+const NEUTRAL_FG = 50;
+const NEUTRAL_RSI = 50;
 
 function formatTime(d: Date): string {
   return d.toLocaleTimeString(undefined, {
@@ -30,9 +32,13 @@ function formatTime(d: Date): string {
   });
 }
 
+function apyLabel(value: number | null | undefined): string {
+  return value != null ? `${value.toFixed(2)}%` : DATA_UNAVAILABLE;
+}
+
 export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const sk = lang === 'sk';
-  const { market, loading: marketLoading, updating, refresh, netYield, error } = useCyborgMarketData();
+  const { market, marketLoading, updating, refresh, netYield, unavailable } = useCyborgMarketData();
 
   const [collateralPct, setCollateralPct] = useState(50);
   const [ltvPct, setLtvPct] = useState(25);
@@ -48,9 +54,14 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const coldUsd = portfolioData.totalColdUsd;
 
   const marketState = useMemo(() => {
-    if (!market || netYield === null || market.fearGreed === null || market.btcRsi === null) return null;
-    return resolveCyborgState(market.fearGreed, market.btcRsi, netYield, ltvPct);
+    if (!market?.ready) return null;
+    const fg = market.fearGreed ?? NEUTRAL_FG;
+    const rsi = market.btcRsi ?? NEUTRAL_RSI;
+    const yieldForState = netYield ?? 0;
+    return resolveCyborgState(fg, rsi, yieldForState, ltvPct);
   }, [market, netYield, ltvPct]);
+
+  const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
 
   useEffect(() => {
     if (!marketState || slidersTouched) return;
@@ -85,7 +96,9 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
 
   const banner = marketState
     ? (sk ? marketState.bannerSk : marketState.bannerEn)
-    : error ?? (marketLoading ? (sk ? 'Načítavam trhové dáta…' : 'Loading market data…') : (sk ? 'Čakám na trhové dáta…' : 'Waiting for market data…'));
+    : marketLoading
+      ? (sk ? 'Načítavam trhové signály na pozadí…' : 'Loading market signals in background…')
+      : (sk ? 'Portfólio pripravené · čakám na trhové signály' : 'Portfolio ready · awaiting market signals');
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-emerald-500/20 relative">
@@ -104,7 +117,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-foreground leading-tight">DeFi Cyborg Terminal</h2>
             <p className="text-[10px] text-muted-foreground truncate">
-              {sk ? 'Zostatky z Portfólia · live APY' : 'Balances from Portfolio · live APY'}
+              {sk ? 'Zostatky z Portfólia · DefiLlama APY' : 'Balances from Portfolio · DefiLlama APY'}
             </p>
           </div>
         </div>
@@ -128,27 +141,58 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             {market ? formatTime(market.fetchedAt) : '—:—:—'}
           </span>
         </span>
-        {market?.fearGreed != null && <span>F&G: <strong className="text-foreground">{market.fearGreed}</strong></span>}
-        {market?.btcRsi != null && <span>RSI(w): <strong className="text-foreground">{market.btcRsi}</strong></span>}
-        {netYield != null && <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>}
-        {error && (
-          <span className="inline-flex items-center gap-1 text-destructive">
-            <AlertTriangle className="w-3 h-3" />
-            {API_OFFLINE}
+        {market?.fearGreed != null ? (
+          <span>F&G: <strong className="text-foreground">{market.fearGreed}</strong></span>
+        ) : market?.ready && (
+          <span className="text-amber-400/90">F&G: {DATA_UNAVAILABLE}</span>
+        )}
+        {market?.btcRsi != null ? (
+          <span>RSI(w): <strong className="text-foreground">{market.btcRsi}</strong></span>
+        ) : market?.ready && (
+          <span className="text-amber-400/90">RSI(w): {DATA_UNAVAILABLE}</span>
+        )}
+        {netYield != null ? (
+          <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>
+        ) : market?.ready && (
+          <span className="text-amber-400/90">Net: {DATA_UNAVAILABLE}</span>
+        )}
+        {marketLoading && (
+          <span className="inline-flex items-center gap-1">
+            <Loader2 className="w-3 h-3 animate-spin" />
+            {sk ? 'Trh…' : 'Market…'}
           </span>
         )}
       </div>
 
+      {unavailable.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {unavailable.map(src => (
+            <span
+              key={src}
+              className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200"
+            >
+              <AlertTriangle className="w-3 h-3 shrink-0" />
+              {src}: {DATA_UNAVAILABLE}
+            </span>
+          ))}
+        </div>
+      )}
+
       <div className={`rounded-xl border p-3 text-[11px] leading-snug font-medium ${marketState?.bannerClass ?? 'border-border/40 bg-muted/20 text-muted-foreground'}`}>
         {banner}
+        {usingNeutralSignals && marketState && (
+          <p className="mt-1.5 text-[10px] font-normal text-muted-foreground">
+            {sk
+              ? 'F&G/RSI nedostupné — použité neutrálne hodnoty (50). LTV a zostatky z portfólia sú aktívne.'
+              : 'F&G/RSI unavailable — using neutral defaults (50). LTV and portfolio balances remain active.'}
+          </p>
+        )}
       </div>
 
       <section className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Shield className="w-3.5 h-3.5 text-sky-400" />
-          <h3 className="text-xs font-semibold text-foreground">
-            {sk ? 'Cold Reserve' : 'Cold Reserve'}
-          </h3>
+          <h3 className="text-xs font-semibold text-foreground">Cold Reserve</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <BalanceRow
@@ -177,15 +221,13 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
       <section className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Cog className="w-3.5 h-3.5 text-emerald-400" />
-          <h3 className="text-xs font-semibold text-foreground">
-            {sk ? 'Active Motor' : 'Active Motor'}
-          </h3>
+          <h3 className="text-xs font-semibold text-foreground">Active Motor</h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
-            sublabel={`Rocket Pool · ${market?.lbtcApy != null ? `${market.lbtcApy.toFixed(2)}% LBTC ref` : '—'}`}
+            sublabel={`Rocket Pool · ${apyLabel(market?.rocketPoolApy ?? market?.lbtcApy)}`}
             qty={rEth.qty}
             usd={rEth.usd}
             decimals={4}
@@ -193,7 +235,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
-            sublabel={`Marinade · Kamino ${market?.kaminoApy != null ? `${market.kaminoApy.toFixed(2)}%` : '—'}`}
+            sublabel={`Marinade · Kamino ${apyLabel(market?.kaminoApy)}`}
             qty={mSol.qty}
             usd={mSol.usd}
             decimals={2}
@@ -242,9 +284,15 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Morpho borrow: {market?.usdcBorrowApy != null ? `${market.usdcBorrowApy.toFixed(2)}%` : API_OFFLINE}
+            Morpho borrow: {apyLabel(market?.usdcBorrowApy)}
             {' · '}
-            LBTC yield: {market?.lbtcApy != null ? `${market.lbtcApy.toFixed(2)}%` : API_OFFLINE}
+            LBTC yield: {apyLabel(market?.lbtcApy)}
+            {netYield == null && market?.ready && (
+              <span className="text-amber-400/90">
+                {' · '}
+                {sk ? 'Net yield vyžaduje oba APY' : 'Net yield needs both APYs'}
+              </span>
+            )}
           </p>
         </div>
       </section>

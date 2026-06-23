@@ -7,10 +7,9 @@ import { Input } from '@/components/ui/input';
 import { usePrices } from '@/hooks/usePrices';
 import { formatUsd } from '@/lib/crypto';
 import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
+import { ProtocolBalanceFallback } from '@/components/wallet/ProtocolBalanceFallback';
 import { ExternalCapitalCard } from '@/components/wallet/ExternalCapitalCard';
 import { useRpcHealth, RpcHealthStatus } from '@/hooks/useRpcHealth';
-import { useWalletContext } from '@/contexts/WalletContext';
-import { AlertTriangle } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
@@ -30,7 +29,6 @@ function formatRelative(ts: number | undefined, lang: Lang, now: number): string
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);
-  const { hasAllAddresses } = useWalletContext();
   const [adding, setAdding] = useState(false);
   const [newChain, setNewChain] = useState<ChainId>('btc');
   const [newAddress, setNewAddress] = useState('');
@@ -138,21 +136,7 @@ export function WalletsPage({ lang }: Props) {
 
       <TrackedAddressInputs lang={lang} />
 
-      {!hasAllAddresses && (
-        <div className="glass-card p-4 border border-amber-500/40 bg-amber-500/10 flex gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
-          <div className="space-y-1">
-            <p className="text-sm font-semibold text-foreground">
-              {lang === 'sk' ? 'Chýbajú adresy pre Cyborg Terminal' : 'Missing addresses for Cyborg Terminal'}
-            </p>
-            <p className="text-[11px] text-muted-foreground leading-snug">
-              {lang === 'sk'
-                ? 'Vyplňte Solana aj EVM (Arbitrum) adresu vyššie. Bez nich DeFi Cyborg Terminal nemôže načítať live zostatky.'
-                : 'Fill in both Solana and EVM (Arbitrum) addresses above. The DeFi Cyborg Terminal cannot load live balances without them.'}
-            </p>
-          </div>
-        </div>
-      )}
+      <ProtocolBalanceFallback lang={lang} />
 
       <ExternalCapitalCard lang={lang} />
 
@@ -163,9 +147,13 @@ export function WalletsPage({ lang }: Props) {
       </div>
 
       {error && (
-        <div className="glass-card p-3 flex items-center gap-2 text-xs text-destructive">
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          <span>{lang === 'sk' ? 'Chyba pri načítaní balance. Skús znova.' : 'Error loading balances. Try again.'}</span>
+        <div className="glass-card p-3 flex items-center gap-2 text-xs text-amber-200 border border-amber-500/30 bg-amber-500/10">
+          <AlertCircle className="w-4 h-4 shrink-0 text-amber-400" />
+          <span>
+            {lang === 'sk'
+              ? 'On-chain dáta nedostupné. Použite manuálne protokolové zostatky nižšie.'
+              : 'On-chain data unavailable. Use manual protocol balances below.'}
+          </span>
         </div>
       )}
 
@@ -240,7 +228,9 @@ export function WalletsPage({ lang }: Props) {
                   <div className="min-w-0 flex-1">
                     <p className="text-xs font-mono text-muted-foreground truncate">{w.address}</p>
                     {result?.ok === false && (
-                      <p className="text-[10px] text-destructive mt-0.5">{result.error}</p>
+                      <p className="text-[10px] text-amber-400 mt-0.5">
+                        {lang === 'sk' ? 'Dáta nedostupné' : 'Data unavailable'}
+                      </p>
                     )}
                     {!result && isFetching && (
                       <p className="text-[10px] text-muted-foreground mt-0.5">{lang === 'sk' ? 'Načítavam…' : 'Loading…'}</p>

@@ -26,8 +26,8 @@ export function TrackedAddressInputs({ lang }: Props) {
       key: 'solana',
       label: lang === 'sk' ? 'Vaša Solana adresa (Verejný kľúč)' : 'Your Solana address (Public key)',
       hint: lang === 'sk'
-        ? 'Používa sa pre mSOL, INF a Kamino zostatky v Cyborg Termináli.'
-        : 'Used for mSOL, INF and Kamino balances in the Cyborg Terminal.',
+        ? 'Voliteľné sledovanie on-chain. Pri výpadku API použite manuálne protokolové zostatky nižšie.'
+        : 'Optional on-chain tracking. If APIs are down, use manual protocol balances below.',
       placeholder: 'Fg6PaFpoGXkY...',
       regex: SOL_REGEX,
     },
@@ -35,8 +35,8 @@ export function TrackedAddressInputs({ lang }: Props) {
       key: 'evmArbitrum',
       label: lang === 'sk' ? 'Vaša EVM adresa — Arbitrum' : 'Your EVM address — Arbitrum',
       hint: lang === 'sk'
-        ? 'Používa sa pre rETH, weETH a LBTC cez Alchemy RPC.'
-        : 'Used for rETH, weETH and LBTC via Alchemy RPC.',
+        ? 'Voliteľné sledovanie EVM (Arbitrum). Zostatky v Cyborg Termináli idú z Portfólia / manuálneho zápisu.'
+        : 'Optional EVM (Arbitrum) tracking. Cyborg Terminal balances come from Portfolio / manual ledger.',
       placeholder: '0x1234…abcd',
       regex: EVM_REGEX,
     },

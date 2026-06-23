@@ -1,7 +1,8 @@
 import { Connection, PublicKey } from '@solana/web3.js';
 import { fetchWithCache } from '@/lib/apiCache';
+import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 
-export const API_OFFLINE = 'Error: API Offline';
+export const API_OFFLINE = DATA_UNAVAILABLE;
 
 /** Rocket Pool rETH (Ethereum mainnet) — user-specified contract */
 export const RETH_CONTRACT = '0xec70dcb4a1efa46b8f2d07c312c7c413cde5d249';

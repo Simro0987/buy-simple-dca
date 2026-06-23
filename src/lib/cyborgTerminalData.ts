@@ -1,7 +1,13 @@
-import { cgFetch } from '@/lib/coingecko';
 import { calcRsi14 } from '@/lib/cyborgTerminalEngine';
-import { API_OFFLINE } from '@/lib/cyborgBlockchain';
-import { fetchWithCache } from '@/lib/apiCache';
+import { fetchWithCache, readStaleCache } from '@/lib/apiCache';
+import {
+  DATA_UNAVAILABLE,
+  extractProtocolYields,
+  fetchDefiLlamaPrices,
+  fetchLlamaPools,
+} from '@/lib/defiLlamaAggregator';
+
+export { DATA_UNAVAILABLE };
 
 export interface CyborgMarketSnapshot {
   fearGreed: number | null;
@@ -11,19 +17,14 @@ export interface CyborgMarketSnapshot {
   lbtcApy: number | null;
   usdcBorrowApy: number | null;
   kaminoApy: number | null;
+  rocketPoolApy: number | null;
+  marinadeApy: number | null;
   lbtcPriceUsd: number | null;
-  errors: string[];
+  /** Per-source availability — never blocks portfolio balances */
+  unavailable: string[];
   stale: boolean;
   fetchedAt: Date;
-}
-
-interface LlamaPool {
-  pool: string;
-  project: string;
-  symbol: string;
-  chain: string;
-  apy: number;
-  apyBaseBorrow?: number;
+  ready: boolean;
 }
 
 async function fetchFearGreedLive(): Promise<{ value: number; classification: string }> {
@@ -45,146 +46,106 @@ async function fetchWeeklyBtcRsiLive(): Promise<number> {
   return calcRsi14(rows.map(r => parseFloat(r[4])));
 }
 
-async function fetchPricesWithFailover(): Promise<{ btc: number; eth: number; sol: number; lbtcPriceUsd: number | null }> {
+async function fetchYieldsFromLlama() {
+  const pools = await fetchLlamaPools();
+  return extractProtocolYields(pools);
+}
+
+type CacheResult<T> = { data: T; fromCache: boolean; stale: boolean };
+
+async function safeCacheFetch<T>(
+  key: string,
+  fetcher: () => Promise<T>,
+  force?: boolean,
+): Promise<CacheResult<T> | null> {
   try {
-    const res = await cgFetch('/simple/price', {
-      ids: 'bitcoin,ethereum,solana,lombard-staked-btc',
-      vs_currencies: 'usd',
-    });
-    if (!res.ok) throw new Error('CG proxy failed');
-    const json = await res.json();
-    return {
-      btc: json.bitcoin?.usd ?? 0,
-      eth: json.ethereum?.usd ?? 0,
-      sol: json.solana?.usd ?? 0,
-      lbtcPriceUsd: json['lombard-staked-btc']?.usd ?? json.bitcoin?.usd ?? null,
-    };
+    return await fetchWithCache(key, fetcher, { force, allowStaleOnError: true });
   } catch {
-    const res = await fetch(
-      'https://coins.llama.fi/prices/current/coingecko:bitcoin,coingecko:ethereum,coingecko:solana',
-    );
-    if (!res.ok) throw new Error('DefiLlama prices failed');
-    const json = await res.json();
-    const coins = json.coins ?? {};
-    const prices = {
-      btc: coins['coingecko:bitcoin']?.price ?? 0,
-      eth: coins['coingecko:ethereum']?.price ?? 0,
-      sol: coins['coingecko:solana']?.price ?? 0,
-    };
-    return { ...prices, lbtcPriceUsd: prices.btc };
+    const stale = readStaleCache<T>(key);
+    if (stale !== null) return { data: stale, fromCache: true, stale: true };
+    return null;
   }
-}
-
-function pickBestPool(
-  pools: LlamaPool[],
-  filter: (p: LlamaPool) => boolean,
-  apyField: 'apy' | 'apyBaseBorrow' = 'apy',
-): number | null {
-  let best: number | null = null;
-  for (const p of pools) {
-    if (!filter(p)) continue;
-    const val = apyField === 'apyBaseBorrow' ? (p.apyBaseBorrow ?? p.apy) : p.apy;
-    if (Number.isFinite(val) && val > 0 && (best === null || val > best)) best = val;
-  }
-  return best;
-}
-
-async function fetchYieldsLive(): Promise<{
-  lbtcApy: number | null;
-  usdcBorrowApy: number | null;
-  kaminoApy: number | null;
-}> {
-  const res = await fetch('https://yields.llama.fi/pools');
-  if (!res.ok) throw new Error(`DefiLlama yields ${res.status}`);
-  const json = await res.json();
-  const pools = (json.data ?? []) as LlamaPool[];
-
-  return {
-    lbtcApy: pickBestPool(
-      pools,
-      p =>
-        p.chain === 'Arbitrum' &&
-        (p.symbol.toUpperCase().includes('LBTC') ||
-          p.project.toLowerCase().includes('lombard') ||
-          (p.project.toLowerCase().includes('morpho') && p.symbol.toUpperCase().includes('LBTC'))),
-    ),
-    usdcBorrowApy:
-      pickBestPool(
-        pools,
-        p =>
-          p.chain === 'Arbitrum' &&
-          p.project.toLowerCase().includes('morpho') &&
-          p.symbol.toUpperCase().includes('USDC'),
-        'apyBaseBorrow',
-      ) ??
-      pickBestPool(
-        pools,
-        p =>
-          p.chain === 'Arbitrum' &&
-          p.project.toLowerCase().includes('morpho') &&
-          p.symbol.toUpperCase().includes('USDC'),
-      ),
-    kaminoApy: pickBestPool(
-      pools,
-      p =>
-        p.chain === 'Solana' &&
-        p.project.toLowerCase().includes('kamino') &&
-        (p.symbol.toUpperCase().includes('SOL') || p.symbol.toUpperCase().includes('JITO')),
-    ),
-  };
 }
 
 export async function fetchCyborgMarketData(opts?: { force?: boolean }): Promise<CyborgMarketSnapshot> {
-  const errors: string[] = [];
+  const unavailable: string[] = [];
   let stale = false;
 
-  const fgResult = await fetchWithCache(
-    'cyborg-fng',
-    fetchFearGreedLive,
-    { force: opts?.force },
-  ).catch(() => ({ data: null, fromCache: false, stale: false }));
-  if (!fgResult.data) errors.push(API_OFFLINE);
-  if (fgResult.stale) stale = true;
+  const [fgSettled, rsiSettled, pricesSettled, yieldsSettled] = await Promise.allSettled([
+    safeCacheFetch('cyborg-fng', fetchFearGreedLive, opts?.force),
+    safeCacheFetch('cyborg-btc-rsi-w', fetchWeeklyBtcRsiLive, opts?.force),
+    safeCacheFetch('cyborg-prices', fetchDefiLlamaPrices, opts?.force),
+    safeCacheFetch('cyborg-yields', fetchYieldsFromLlama, opts?.force),
+  ]);
 
-  const rsiResult = await fetchWithCache(
-    'cyborg-btc-rsi-w',
-    fetchWeeklyBtcRsiLive,
-    { force: opts?.force },
-  ).catch(() => ({ data: null, fromCache: false, stale: false }));
-  if (rsiResult.data === null) errors.push(API_OFFLINE);
-  if (rsiResult.stale) stale = true;
+  let fearGreed: number | null = null;
+  let fearGreedClassification: string | null = null;
+  if (fgSettled.status === 'fulfilled' && fgSettled.value?.data) {
+    fearGreed = fgSettled.value.data.value;
+    fearGreedClassification = fgSettled.value.data.classification;
+    if (fgSettled.value.stale) stale = true;
+  } else {
+    unavailable.push('Fear & Greed');
+  }
 
-  const pricesResult = await fetchWithCache(
-    'cyborg-prices',
-    fetchPricesWithFailover,
-    { force: opts?.force },
-  ).catch(() => ({ data: null, fromCache: false, stale: false }));
-  if (!pricesResult.data) errors.push(API_OFFLINE);
-  if (pricesResult.stale) stale = true;
+  let btcRsi: number | null = null;
+  if (rsiSettled.status === 'fulfilled' && rsiSettled.value?.data != null) {
+    btcRsi = rsiSettled.value.data;
+    if (rsiSettled.value.stale) stale = true;
+  } else {
+    unavailable.push('BTC RSI');
+  }
 
-  const yieldsResult = await fetchWithCache(
-    'cyborg-yields',
-    fetchYieldsLive,
-    { force: opts?.force },
-  ).catch(() => ({ data: null, fromCache: false, stale: false }));
-  if (!yieldsResult.data) errors.push(API_OFFLINE);
-  if (yieldsResult.stale) stale = true;
+  let prices: { btc: number | null; eth: number | null; sol: number | null } = {
+    btc: null,
+    eth: null,
+    sol: null,
+  };
+  let lbtcPriceUsd: number | null = null;
+  if (pricesSettled.status === 'fulfilled' && pricesSettled.value?.data) {
+    const p = pricesSettled.value.data;
+    prices = { btc: p.btc, eth: p.eth, sol: p.sol };
+    lbtcPriceUsd = p.lbtcPriceUsd;
+    if (pricesSettled.value.stale) stale = true;
+  } else {
+    unavailable.push('Prices');
+  }
+
+  let lbtcApy: number | null = null;
+  let usdcBorrowApy: number | null = null;
+  let kaminoApy: number | null = null;
+  let rocketPoolApy: number | null = null;
+  let marinadeApy: number | null = null;
+
+  if (yieldsSettled.status === 'fulfilled' && yieldsSettled.value?.data) {
+    const y = yieldsSettled.value.data;
+    lbtcApy = y.lbtcApy;
+    usdcBorrowApy = y.usdcBorrowApy;
+    kaminoApy = y.kaminoApy;
+    rocketPoolApy = y.rocketPool;
+    marinadeApy = y.marinade;
+    for (const name of y.unavailable) {
+      if (!unavailable.includes(name)) unavailable.push(name);
+    }
+    if (yieldsSettled.value.stale) stale = true;
+  } else {
+    unavailable.push('DefiLlama Yields');
+  }
 
   return {
-    fearGreed: fgResult.data?.value ?? null,
-    fearGreedClassification: fgResult.data?.classification ?? null,
-    btcRsi: rsiResult.data ?? null,
-    prices: {
-      btc: pricesResult.data?.btc ?? null,
-      eth: pricesResult.data?.eth ?? null,
-      sol: pricesResult.data?.sol ?? null,
-    },
-    lbtcPriceUsd: pricesResult.data?.lbtcPriceUsd ?? null,
-    lbtcApy: yieldsResult.data?.lbtcApy ?? null,
-    usdcBorrowApy: yieldsResult.data?.usdcBorrowApy ?? null,
-    kaminoApy: yieldsResult.data?.kaminoApy ?? null,
-    errors: [...new Set(errors)],
+    fearGreed,
+    fearGreedClassification,
+    btcRsi,
+    prices,
+    lbtcApy,
+    usdcBorrowApy,
+    kaminoApy,
+    rocketPoolApy,
+    marinadeApy,
+    lbtcPriceUsd,
+    unavailable: [...new Set(unavailable)],
     stale,
     fetchedAt: new Date(),
+    ready: true,
   };
 }
