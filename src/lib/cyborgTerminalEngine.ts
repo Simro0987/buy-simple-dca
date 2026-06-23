@@ -110,6 +110,15 @@ export function resolveCyborgState(
   };
 }
 
+export function computeMotorUsd(
+  rEthQty: number,
+  mSolQty: number,
+  ethPrice: number,
+  solPrice: number,
+): number {
+  return rEthQty * ethPrice + mSolQty * solPrice;
+}
+
 export function computeUsdcLoan(
   rEthQty: number,
   mSolQty: number,

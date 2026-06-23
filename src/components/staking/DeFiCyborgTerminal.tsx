@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2,
+  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2, Wallet,
 } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
+import { navigateToTab } from '@/lib/pendingActions';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { usePortfolio } from '@/contexts/PortfolioContext';
+import { useWalletContext } from '@/contexts/WalletContext';
 import { useCyborgTerminalData } from '@/hooks/useCyborgTerminalData';
+import { API_OFFLINE } from '@/lib/cyborgBlockchain';
 import {
+  computeMotorUsd,
   computeUsdcLoan,
   resolveCyborgState,
 } from '@/lib/cyborgTerminalEngine';
@@ -27,26 +30,45 @@ function formatTime(d: Date): string {
   });
 }
 
+function fmtUsdOrError(usd: number, err?: string, sk?: boolean): ReactNode {
+  if (err) return <span className="text-destructive text-[10px]">{API_OFFLINE}</span>;
+  return formatUsd(usd);
+}
+
+function fmtQtyOrError(qty: number, decimals: number, label: string, err?: string): ReactNode {
+  if (err) return <span className="text-destructive text-sm">{API_OFFLINE}</span>;
+  return <span className="text-sm font-mono tabular-nums text-foreground">{qty.toFixed(decimals)} {label}</span>;
+}
+
 export function DeFiCyborgTerminal({ lang }: Props) {
   const sk = lang === 'sk';
-  const { portfolioData } = usePortfolio();
-  const { data, loading: marketLoading, refresh, netYield } = useCyborgTerminalData(lang);
+  const { hasAllAddresses } = useWalletContext();
+  const {
+    market, balances, loading, updating, refresh, netYield, error, hasAddresses,
+  } = useCyborgTerminalData(lang);
 
   const [collateralPct, setCollateralPct] = useState(50);
   const [ltvPct, setLtvPct] = useState(25);
   const [slidersTouched, setSlidersTouched] = useState(false);
 
-  const loading = portfolioData.loading || marketLoading;
+  const ethPrice = market?.prices.eth ?? 0;
+  const solPrice = market?.prices.sol ?? 0;
+  const lbtcPrice = market?.lbtcPriceUsd ?? market?.prices.btc ?? 0;
 
-  const { weEth, inf } = portfolioData.coldReserve;
-  const { rEth, mSol } = portfolioData.activeMotor;
-  const ethPrice = portfolioData.prices.eth;
-  const solPrice = portfolioData.prices.sol;
+  const rEthQty = balances?.rEth.qty ?? 0;
+  const mSolQty = balances?.mSol.qty ?? 0;
+  const weEthQty = balances?.weEth.qty ?? 0;
+  const infQty = balances?.inf.qty ?? 0;
+  const lbtcQty = balances?.lbtc.qty ?? 0;
+
+  const motorUsd = computeMotorUsd(rEthQty, mSolQty, ethPrice, solPrice);
+  const coldUsd = weEthQty * ethPrice + infQty * solPrice;
+  const lbtcUsd = lbtcQty * lbtcPrice;
 
   const marketState = useMemo(() => {
-    if (!data || loading) return null;
-    return resolveCyborgState(data.fearGreed, data.btcRsi, netYield, ltvPct);
-  }, [data, netYield, ltvPct, loading]);
+    if (!market || netYield === null || market.fearGreed === null || market.btcRsi === null) return null;
+    return resolveCyborgState(market.fearGreed, market.btcRsi, netYield, ltvPct);
+  }, [market, netYield, ltvPct]);
 
   useEffect(() => {
     if (!marketState || slidersTouched) return;
@@ -55,44 +77,46 @@ export function DeFiCyborgTerminal({ lang }: Props) {
   }, [marketState?.state, marketState?.sliders.collateralPct, marketState?.sliders.ltvPct, slidersTouched]);
 
   useEffect(() => {
-    if (!data) return;
+    if (!market) return;
     setSlidersTouched(false);
-  }, [data?.fetchedAt]);
+  }, [market?.fetchedAt]);
 
-  const usdcLoan = computeUsdcLoan(
-    rEth.qty,
-    mSol.qty,
-    ethPrice,
-    solPrice,
-    collateralPct,
-    ltvPct,
-  );
+  const usdcLoan = computeUsdcLoan(rEthQty, mSolQty, ethPrice, solPrice, collateralPct, ltvPct);
 
-  const motorUsd = portfolioData.totalMotorUsd;
-  const coldUsd = portfolioData.totalColdUsd;
-
-  const banner = loading
-    ? (sk ? 'Načítavam portfólio a trhové dáta…' : 'Loading portfolio and market data…')
-    : marketState
-      ? (sk ? marketState.bannerSk : marketState.bannerEn)
-      : (sk ? 'Čakám na trhové dáta…' : 'Waiting for market data…');
-
-  const handleSign = () => {
-    const action = marketState?.action ?? 'HOLD';
-    window.alert(
-      sk
-        ? `[Mock HW Wallet]\nAkcia: ${action}\nKolaterál: ${collateralPct}%\nLTV: ${ltvPct}%\nUSDC loan: ${formatUsd(usdcLoan)}\nrETH: ${rEth.qty.toFixed(4)} · mSOL: ${mSol.qty.toFixed(2)}`
-        : `[Mock HW Wallet]\nAction: ${action}\nCollateral: ${collateralPct}%\nLTV: ${ltvPct}%\nUSDC loan: ${formatUsd(usdcLoan)}\nrETH: ${rEth.qty.toFixed(4)} · mSOL: ${mSol.qty.toFixed(2)}`,
+  if (!hasAddresses) {
+    return (
+      <div className="glass-card p-4 space-y-3 border border-amber-500/30 bg-amber-500/5">
+        <div className="flex items-center gap-2">
+          <Wallet className="w-4 h-4 text-amber-400" />
+          <h2 className="text-sm font-bold text-foreground">
+            {sk ? 'Pripojte peňaženky pre Cyborg Terminal' : 'Connect wallets for Cyborg Terminal'}
+          </h2>
+        </div>
+        <p className="text-[11px] text-muted-foreground leading-snug">
+          {sk
+            ? 'Zadajte Solana a EVM (Arbitrum) adresu v záložke Peňaženky. Bez nich nie je možné načítať on-chain zostatky.'
+            : 'Enter your Solana and EVM (Arbitrum) address in the Wallets tab. On-chain balances require both addresses.'}
+        </p>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          onClick={() => navigateToTab('wallets')}
+          className="w-full h-11 touch-manipulation"
+        >
+          {sk ? 'Otvoriť Peňaženky' : 'Open Wallets'}
+        </Button>
+      </div>
     );
-  };
+  }
 
-  if (loading) {
+  if (loading && !market) {
     return (
       <div className="glass-card p-3 sm:p-4 space-y-3 border border-emerald-500/20">
         <div className="flex items-center gap-2">
           <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
           <span className="text-sm font-semibold text-foreground">
-            {sk ? 'Načítavam DeFi Cyborg Terminal…' : 'Loading DeFi Cyborg Terminal…'}
+            {sk ? 'Načítavam on-chain dáta…' : 'Loading on-chain data…'}
           </span>
         </div>
         <Skeleton className="h-16 w-full" />
@@ -100,25 +124,32 @@ export function DeFiCyborgTerminal({ lang }: Props) {
           <Skeleton className="h-20 w-full" />
           <Skeleton className="h-20 w-full" />
         </div>
-        <Skeleton className="h-32 w-full" />
       </div>
     );
   }
 
+  const banner = marketState
+    ? (sk ? marketState.bannerSk : marketState.bannerEn)
+    : error ?? (sk ? 'Čakám na trhové dáta…' : 'Waiting for market data…');
+
   return (
-    <div className="glass-card p-3 sm:p-4 space-y-3 border border-emerald-500/20">
-      {/* Header */}
+    <div className="glass-card p-3 sm:p-4 space-y-3 border border-emerald-500/20 relative">
+      {updating && (
+        <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-background/90 border border-border/60 px-2 py-1 text-[10px] text-muted-foreground">
+          <Loader2 className="w-3 h-3 animate-spin text-emerald-400" />
+          {sk ? 'Aktualizujem…' : 'Updating…'}
+        </div>
+      )}
+
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div className="w-8 h-8 rounded-xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
             <Bot className="w-4 h-4 text-emerald-400" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-sm font-bold text-foreground leading-tight">
-              DeFi Cyborg Terminal
-            </h2>
+            <h2 className="text-sm font-bold text-foreground leading-tight">DeFi Cyborg Terminal</h2>
             <p className="text-[10px] text-muted-foreground truncate">
-              {sk ? 'Dynamický LBTC / Morpho deployment widget' : 'Dynamic LBTC / Morpho deployment widget'}
+              {sk ? 'Live on-chain · Alchemy + Solana RPC' : 'Live on-chain · Alchemy + Solana RPC'}
             </p>
           </div>
         </div>
@@ -127,109 +158,104 @@ export function DeFiCyborgTerminal({ lang }: Props) {
           variant="outline"
           size="sm"
           onClick={() => void refresh()}
-          disabled={marketLoading}
+          disabled={updating}
           className="h-9 px-2.5 text-[11px] shrink-0 touch-manipulation"
         >
-          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${marketLoading ? 'animate-spin' : ''}`} />
-          {sk ? 'Obnoviť' : 'Refresh'}
+          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${updating ? 'animate-spin' : ''}`} />
+          {sk ? 'Force Refresh' : 'Force Refresh'}
         </Button>
       </div>
 
-      {/* Meta row */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-muted-foreground">
         <span>
           {sk ? 'Posledná aktualizácia' : 'Last updated'}:{' '}
           <span className="text-foreground font-mono tabular-nums">
-            {data ? formatTime(data.fetchedAt) : '—:—:—'}
+            {market ? formatTime(market.fetchedAt) : '—:—:—'}
           </span>
         </span>
-        {data && (
-          <>
-            <span>F&G: <strong className="text-foreground">{data.fearGreed}</strong></span>
-            <span>RSI(w): <strong className="text-foreground">{data.btcRsi}</strong></span>
-            <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>
-          </>
-        )}
-        {data?.usedFallback && (
+        {market?.fearGreed != null && <span>F&G: <strong className="text-foreground">{market.fearGreed}</strong></span>}
+        {market?.btcRsi != null && <span>RSI(w): <strong className="text-foreground">{market.btcRsi}</strong></span>}
+        {netYield != null && <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>}
+        {(market?.stale || market?.errors.length) ? (
           <span className="inline-flex items-center gap-1 text-amber-400">
             <AlertTriangle className="w-3 h-3" />
-            {sk ? 'Záložné dáta' : 'Fallback data'}
+            {sk ? 'Cache / API' : 'Cache / API'}
           </span>
-        )}
+        ) : null}
       </div>
 
-      {/* Advisor banner */}
       <div className={`rounded-xl border p-3 text-[11px] leading-snug font-medium ${marketState?.bannerClass ?? 'border-border/40 bg-muted/20 text-muted-foreground'}`}>
         {banner}
       </div>
 
-      {/* Section 1 — Cold Reserve */}
       <section className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Shield className="w-3.5 h-3.5 text-sky-400" />
           <h3 className="text-xs font-semibold text-foreground">
-            {sk ? 'Cold Reserve (HW peňaženka)' : 'Cold Reserve (HW wallet)'}
+            {sk ? 'Cold Reserve (on-chain)' : 'Cold Reserve (on-chain)'}
           </h3>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-sky-300" />}
             label="weETH"
-            sublabel={sk ? 'ETH cold reserve · ledger' : 'ETH cold reserve · ledger'}
-            qty={weEth.qty}
-            usd={weEth.usd}
-            decimals={4}
+            sublabel="Arbitrum · ether.fi"
+            qtyNode={fmtQtyOrError(weEthQty, 4, 'weETH', balances?.weEth.error)}
+            usdNode={fmtUsdOrError(weEthQty * ethPrice, balances?.weEth.error)}
           />
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-violet-300" />}
             label="INF"
-            sublabel={sk ? 'SOL cold reserve · ledger' : 'SOL cold reserve · ledger'}
-            qty={inf.qty}
-            usd={inf.usd}
-            decimals={2}
+            sublabel="Solana · Sanctum"
+            qtyNode={fmtQtyOrError(infQty, 2, 'INF', balances?.inf.error)}
+            usdNode={fmtUsdOrError(infQty * solPrice, balances?.inf.error)}
           />
         </div>
         <p className="text-[10px] text-muted-foreground">
           {sk ? 'Cold reserve celkom' : 'Cold reserve total'}:{' '}
-          <span className="text-foreground font-semibold tabular-nums">{formatUsd(coldUsd)}</span>
+          <span className="text-foreground font-semibold tabular-nums">
+            {balances?.weEth.error || balances?.inf.error ? API_OFFLINE : formatUsd(coldUsd)}
+          </span>
         </p>
       </section>
 
-      {/* Section 2 — Active Motor */}
       <section className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Cog className="w-3.5 h-3.5 text-emerald-400" />
           <h3 className="text-xs font-semibold text-foreground">
-            {sk ? 'Active Motor (Morpho / Kamino)' : 'Active Motor (Morpho / Kamino)'}
+            {sk ? 'Active Motor (on-chain)' : 'Active Motor (on-chain)'}
           </h3>
         </div>
-
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
-            sublabel={`Rocket Pool · ${data?.lbtcApy.toFixed(2) ?? '—'}% LBTC ref`}
-            qty={rEth.qty}
-            usd={rEth.usd}
-            decimals={4}
+            sublabel={`Rocket Pool · ${market?.lbtcApy != null ? `${market.lbtcApy.toFixed(2)}% LBTC ref` : API_OFFLINE}`}
+            qtyNode={fmtQtyOrError(rEthQty, 4, 'rETH', balances?.rEth.error)}
+            usdNode={fmtUsdOrError(rEthQty * ethPrice, balances?.rEth.error)}
           />
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
-            sublabel={`Marinade · Kamino ${data?.kaminoApy.toFixed(2) ?? '—'}% APY`}
-            qty={mSol.qty}
-            usd={mSol.usd}
-            decimals={2}
+            sublabel={`Marinade · Kamino ${market?.kaminoApy != null ? `${market.kaminoApy.toFixed(2)}%` : API_OFFLINE}`}
+            qtyNode={fmtQtyOrError(mSolQty, 2, 'mSOL', balances?.mSol.error)}
+            usdNode={fmtUsdOrError(mSolQty * solPrice, balances?.mSol.error)}
           />
+        </div>
+
+        <div className="rounded-lg border border-border/40 bg-background/30 px-3 py-2 flex justify-between text-[11px]">
+          <span className="text-muted-foreground">LBTC (Arbitrum)</span>
+          <span className="font-mono tabular-nums text-foreground">
+            {balances?.lbtc.error
+              ? API_OFFLINE
+              : `${lbtcQty.toFixed(6)} · ${formatUsd(lbtcUsd)}`}
+          </span>
         </div>
 
         <p className="text-[10px] text-muted-foreground">
           {sk ? 'Active motor celkom' : 'Active motor total'}:{' '}
-          <span className="text-foreground font-semibold tabular-nums">{formatUsd(motorUsd)}</span>
-          {' · '}
-          {sk ? 'Voľné na staking' : 'Available to stake'}:{' '}
           <span className="text-foreground font-semibold tabular-nums">
-            {formatUsd(portfolioData.assets.ETH.liquidUsd + portfolioData.assets.SOL.liquidUsd)}
+            {balances?.rEth.error || balances?.mSol.error ? API_OFFLINE : formatUsd(motorUsd)}
           </span>
         </p>
 
@@ -238,38 +264,47 @@ export function DeFiCyborgTerminal({ lang }: Props) {
             label={sk ? 'Nasadenie kolaterálu %' : 'Collateral Deployment %'}
             value={collateralPct}
             onChange={v => { setSlidersTouched(true); setCollateralPct(v); }}
-            hint={`${collateralPct}% · ${formatUsd(motorUsd * (collateralPct / 100))}`}
-            disabled={motorUsd <= 0}
+            hint={
+              balances?.rEth.error || balances?.mSol.error
+                ? API_OFFLINE
+                : `${collateralPct}% · ${formatUsd(motorUsd * (collateralPct / 100))}`
+            }
+            disabled={motorUsd <= 0 || !!balances?.rEth.error || !!balances?.mSol.error}
           />
           <SliderBlock
             label={sk ? 'Cieľové LTV %' : 'Target LTV %'}
             value={ltvPct}
             onChange={v => { setSlidersTouched(true); setLtvPct(v); }}
-            hint={ltvPct > 45 ? (sk ? '⚠ LTV nad 45 % — režim DANGER' : '⚠ LTV above 45% — DANGER mode') : `${ltvPct}%`}
+            hint={ltvPct > 45 ? (sk ? '⚠ LTV nad 45 %' : '⚠ LTV above 45%') : `${ltvPct}%`}
             danger={ltvPct > 45}
-            disabled={motorUsd <= 0}
+            disabled={motorUsd <= 0 || !!balances?.rEth.error || !!balances?.mSol.error}
           />
           <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3 py-2">
             <span className="text-[11px] text-muted-foreground">
               {sk ? 'Vypočítaný USDC loan' : 'Calculated USDC loan'}
             </span>
             <span className="text-sm font-bold text-emerald-300 tabular-nums">
-              {formatUsd(usdcLoan)}
+              {balances?.rEth.error || balances?.mSol.error ? API_OFFLINE : formatUsd(usdcLoan)}
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            {sk
-              ? `Borrow sadzba Morpho: ${data?.usdcBorrowApy.toFixed(2) ?? '—'}% · LBTC výnos: ${data?.lbtcApy.toFixed(2) ?? '—'}%`
-              : `Morpho borrow: ${data?.usdcBorrowApy.toFixed(2) ?? '—'}% · LBTC yield: ${data?.lbtcApy.toFixed(2) ?? '—'}%`}
+            Morpho borrow: {market?.usdcBorrowApy != null ? `${market.usdcBorrowApy.toFixed(2)}%` : API_OFFLINE}
+            {' · '}
+            LBTC yield: {market?.lbtcApy != null ? `${market.lbtcApy.toFixed(2)}%` : API_OFFLINE}
           </p>
         </div>
       </section>
 
-      {/* Section 3 — Action */}
       <Button
         type="button"
-        onClick={handleSign}
-        disabled={motorUsd <= 0}
+        onClick={() => {
+          window.alert(
+            sk
+              ? `[Mock HW]\nKolaterál: ${collateralPct}% · LTV: ${ltvPct}%\nLoan: ${formatUsd(usdcLoan)}`
+              : `[Mock HW]\nCollateral: ${collateralPct}% · LTV: ${ltvPct}%\nLoan: ${formatUsd(usdcLoan)}`,
+          );
+        }}
+        disabled={motorUsd <= 0 || !!balances?.rEth.error}
         className="w-full h-12 text-sm font-bold touch-manipulation bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
       >
         {sk ? 'Podpísať transakciu (Mock HW)' : 'Sign Transaction (Mock HW)'}
@@ -279,14 +314,13 @@ export function DeFiCyborgTerminal({ lang }: Props) {
 }
 
 function BalanceRow({
-  icon, label, sublabel, qty, usd, decimals,
+  icon, label, sublabel, qtyNode, usdNode,
 }: {
   icon: ReactNode;
   label: string;
   sublabel: string;
-  qty: number;
-  usd: number;
-  decimals: number;
+  qtyNode: ReactNode;
+  usdNode: ReactNode;
 }) {
   return (
     <div className="rounded-xl border border-border/50 bg-background/30 p-2.5 space-y-1.5">
@@ -296,13 +330,9 @@ function BalanceRow({
           <p className="text-xs font-bold text-foreground">{label}</p>
           <p className="text-[10px] text-muted-foreground truncate">{sublabel}</p>
         </div>
-        <span className="text-[10px] font-semibold text-emerald-400 tabular-nums shrink-0">
-          {formatUsd(usd)}
-        </span>
+        <span className="text-[10px] font-semibold text-emerald-400 tabular-nums shrink-0">{usdNode}</span>
       </div>
-      <p className="text-sm font-mono tabular-nums text-foreground">
-        {qty.toFixed(decimals)} {label}
-      </p>
+      {qtyNode}
     </div>
   );
 }

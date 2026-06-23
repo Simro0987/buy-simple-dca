@@ -21,7 +21,7 @@ import { Lang } from '@/lib/i18n';
 import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
 import { useCockpitMode } from '@/lib/cockpitMode';
 import { useStablesByNetwork, type StableChain } from '@/hooks/useStablesByNetwork';
-import { loadTrackedAddresses } from '@/components/wallet/TrackedAddressInputs';
+import { loadTrackedAddresses } from '@/contexts/WalletContext';
 import { Plane } from 'lucide-react';
 
 interface Props { lang: Lang; }

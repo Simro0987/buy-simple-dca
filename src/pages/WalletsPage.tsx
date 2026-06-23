@@ -9,6 +9,8 @@ import { formatUsd } from '@/lib/crypto';
 import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
 import { ExternalCapitalCard } from '@/components/wallet/ExternalCapitalCard';
 import { useRpcHealth, RpcHealthStatus } from '@/hooks/useRpcHealth';
+import { useWalletContext } from '@/contexts/WalletContext';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props { lang: Lang; }
 
@@ -28,6 +30,7 @@ function formatRelative(ts: number | undefined, lang: Lang, now: number): string
 
 export function WalletsPage({ lang }: Props) {
   const [wallets, setWallets] = useState<WalletEntry[]>(loadWallets);
+  const { hasAllAddresses } = useWalletContext();
   const [adding, setAdding] = useState(false);
   const [newChain, setNewChain] = useState<ChainId>('btc');
   const [newAddress, setNewAddress] = useState('');
@@ -134,6 +137,23 @@ export function WalletsPage({ lang }: Props) {
       </div>
 
       <TrackedAddressInputs lang={lang} />
+
+      {!hasAllAddresses && (
+        <div className="glass-card p-4 border border-amber-500/40 bg-amber-500/10 flex gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-foreground">
+              {lang === 'sk' ? 'Chýbajú adresy pre Cyborg Terminal' : 'Missing addresses for Cyborg Terminal'}
+            </p>
+            <p className="text-[11px] text-muted-foreground leading-snug">
+              {lang === 'sk'
+                ? 'Vyplňte Solana aj EVM (Arbitrum) adresu vyššie. Bez nich DeFi Cyborg Terminal nemôže načítať live zostatky.'
+                : 'Fill in both Solana and EVM (Arbitrum) addresses above. The DeFi Cyborg Terminal cannot load live balances without them.'}
+            </p>
+          </div>
+        </div>
+      )}
+
       <ExternalCapitalCard lang={lang} />
 
       <div className="glass-card p-3 text-[11px] text-muted-foreground leading-relaxed">

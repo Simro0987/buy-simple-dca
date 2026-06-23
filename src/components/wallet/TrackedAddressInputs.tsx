@@ -1,47 +1,14 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useCallback } from 'react';
 import { Check, ClipboardPaste, X } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Lang } from '@/lib/i18n';
-
-const STORAGE_KEY = 'tracked-public-addresses-v1';
-
-// Solana base58, 32–44 chars
-const SOL_REGEX = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/;
-// EVM hex address
-const EVM_REGEX = /^0x[a-fA-F0-9]{40}$/;
-
-export interface TrackedAddresses {
-  solana: string;
-  evm: string;
-}
-
-function loadTracked(): TrackedAddresses {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { solana: '', evm: '' };
-    const parsed = JSON.parse(raw);
-    return {
-      solana: typeof parsed.solana === 'string' ? parsed.solana : '',
-      evm: typeof parsed.evm === 'string' ? parsed.evm : '',
-    };
-  } catch {
-    return { solana: '', evm: '' };
-  }
-}
-
-function saveTracked(value: TrackedAddresses): void {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(value));
-    window.dispatchEvent(new CustomEvent('tracked-addresses-changed'));
-  } catch { /* ignore */ }
-}
+import { useWalletContext, SOL_REGEX, EVM_REGEX } from '@/contexts/WalletContext';
 
 interface Props {
   lang: Lang;
-  onChange?: (value: TrackedAddresses) => void;
 }
 
-type FieldKey = 'solana' | 'evm';
+type FieldKey = 'solana' | 'evmArbitrum';
 
 interface FieldConfig {
   key: FieldKey;
@@ -51,30 +18,25 @@ interface FieldConfig {
   regex: RegExp;
 }
 
-export function TrackedAddressInputs({ lang, onChange }: Props) {
-  const [values, setValues] = useState<TrackedAddresses>(() => loadTracked());
-
-  useEffect(() => {
-    saveTracked(values);
-    onChange?.(values);
-  }, [values, onChange]);
+export function TrackedAddressInputs({ lang }: Props) {
+  const { addresses, setAddresses } = useWalletContext();
 
   const fields: FieldConfig[] = [
     {
       key: 'solana',
       label: lang === 'sk' ? 'Vaša Solana adresa (Verejný kľúč)' : 'Your Solana address (Public key)',
       hint: lang === 'sk'
-        ? 'Sledovanie USDC zostatkov na Solana Mainnet.'
-        : 'Tracks USDC balances on Solana Mainnet.',
+        ? 'Používa sa pre mSOL, INF a Kamino zostatky v Cyborg Termináli.'
+        : 'Used for mSOL, INF and Kamino balances in the Cyborg Terminal.',
       placeholder: 'Fg6PaFpoGXkY...',
       regex: SOL_REGEX,
     },
     {
-      key: 'evm',
-      label: lang === 'sk' ? 'Vaša EVM adresa (Verejný kľúč)' : 'Your EVM address (Public key)',
+      key: 'evmArbitrum',
+      label: lang === 'sk' ? 'Vaša EVM adresa — Arbitrum' : 'Your EVM address — Arbitrum',
       hint: lang === 'sk'
-        ? 'Sledovanie USDC / USDT na Base aj Arbitrum cez verejné RPC.'
-        : 'Tracks USDC / USDT on Base and Arbitrum via public RPCs.',
+        ? 'Používa sa pre rETH, weETH a LBTC cez Alchemy RPC.'
+        : 'Used for rETH, weETH and LBTC via Alchemy RPC.',
       placeholder: '0x1234…abcd',
       regex: EVM_REGEX,
     },
@@ -83,24 +45,22 @@ export function TrackedAddressInputs({ lang, onChange }: Props) {
   const handlePaste = useCallback(async (key: FieldKey) => {
     try {
       const text = await navigator.clipboard.readText();
-      if (text) setValues(prev => ({ ...prev, [key]: text.trim() }));
-    } catch {
-      /* clipboard unavailable */
-    }
-  }, []);
+      if (text) setAddresses({ [key]: text.trim() });
+    } catch { /* clipboard unavailable */ }
+  }, [setAddresses]);
 
   const clear = useCallback((key: FieldKey) => {
-    setValues(prev => ({ ...prev, [key]: '' }));
-  }, []);
+    setAddresses({ [key]: '' });
+  }, [setAddresses]);
 
   return (
     <div className="glass-card p-4 space-y-4">
       <p className="text-[10px] uppercase tracking-wide text-muted-foreground">
-        {lang === 'sk' ? 'Sledované verejné adresy' : 'Tracked public addresses'}
+        {lang === 'sk' ? 'Cyborg Terminal — peňaženky' : 'Cyborg Terminal — wallets'}
       </p>
 
       {fields.map(f => {
-        const raw = values[f.key];
+        const raw = addresses[f.key];
         const trimmed = raw.trim();
         const isEmpty = trimmed.length === 0;
         const isValid = !isEmpty && f.regex.test(trimmed);
@@ -115,12 +75,12 @@ export function TrackedAddressInputs({ lang, onChange }: Props) {
               <div className="relative flex-1">
                 <Input
                   value={raw}
-                  onChange={e => setValues(prev => ({ ...prev, [f.key]: e.target.value }))}
+                  onChange={e => setAddresses({ [f.key]: e.target.value })}
                   placeholder={f.placeholder}
                   spellCheck={false}
                   autoCapitalize="off"
                   autoCorrect="off"
-                  className={`font-mono text-xs pr-9 ${
+                  className={`font-mono text-xs pr-9 touch-manipulation ${
                     isInvalid
                       ? 'border-destructive/70 focus-visible:ring-destructive/40 bg-destructive/5'
                       : isValid
@@ -148,8 +108,8 @@ export function TrackedAddressInputs({ lang, onChange }: Props) {
               </div>
               <button
                 type="button"
-                onClick={() => handlePaste(f.key)}
-                className="flex items-center gap-1 px-3 rounded-md bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 active:bg-primary active:text-primary-foreground transition-colors shrink-0"
+                onClick={() => void handlePaste(f.key)}
+                className="flex items-center gap-1 px-3 rounded-md bg-secondary text-secondary-foreground text-xs font-semibold hover:bg-secondary/80 active:bg-primary active:text-primary-foreground transition-colors shrink-0 touch-manipulation min-h-[40px]"
               >
                 <ClipboardPaste className="w-3.5 h-3.5" />
                 {lang === 'sk' ? 'Vložiť' : 'Paste'}
@@ -168,5 +128,3 @@ export function TrackedAddressInputs({ lang, onChange }: Props) {
     </div>
   );
 }
-
-export { loadTracked as loadTrackedAddresses, saveTracked as saveTrackedAddresses };

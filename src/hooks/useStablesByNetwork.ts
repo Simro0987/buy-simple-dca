@@ -4,7 +4,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useWalletBalances } from './useWalletBalances';
-import { loadTrackedAddresses } from '@/components/wallet/TrackedAddressInputs';
+import { loadTrackedAddresses } from '@/contexts/WalletContext';
 import type { WalletEntry } from '@/lib/wallets';
 
 const EXTERNAL_KEY = 'external-base-usdc-v1';

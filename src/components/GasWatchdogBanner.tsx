@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { useWalletBalances } from '@/hooks/useWalletBalances';
 import { usePrices } from '@/hooks/usePrices';
-import { loadTrackedAddresses } from '@/components/wallet/TrackedAddressInputs';
+import { loadTrackedAddresses } from '@/contexts/WalletContext';
 import type { WalletEntry } from '@/lib/wallets';
 
 const MIN_GAS_USD = 5;
