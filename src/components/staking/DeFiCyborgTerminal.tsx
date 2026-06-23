@@ -1,18 +1,22 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2,
+  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2, ClipboardCopy, CheckCircle2,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
+import { usePortfolio } from '@/contexts/PortfolioContext';
 import type { PortfolioData } from '@/lib/portfolioData';
-import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
+import { DATA_UNAVAILABLE, formatDisplayApy } from '@/lib/defiLlamaAggregator';
+import { buildCyborgExecutionUpdate } from '@/lib/cyborgPortfolio';
 import {
   computeUsdcLoan,
   resolveCyborgState,
+  type CyborgAction,
 } from '@/lib/cyborgTerminalEngine';
 
 interface Props {
@@ -23,6 +27,13 @@ interface Props {
 const NEUTRAL_FG = 50;
 const NEUTRAL_RSI = 50;
 
+const ACTION_LABEL: Record<CyborgAction, { sk: string; en: string }> = {
+  DEPOSIT_BORROW: { sk: 'Nasadiť kolaterál + požičať USDC', en: 'Deploy collateral + borrow USDC' },
+  HOLD: { sk: 'Držať', en: 'Hold' },
+  REPAY_DEBT: { sk: 'Splatiť dlh', en: 'Repay debt' },
+  WITHDRAW: { sk: 'Stiahnuť kolaterál', en: 'Withdraw collateral' },
+};
+
 function formatTime(d: Date): string {
   return d.toLocaleTimeString(undefined, {
     hour: '2-digit',
@@ -32,13 +43,24 @@ function formatTime(d: Date): string {
   });
 }
 
-function apyLabel(value: number | null | undefined): string {
-  return value != null ? `${value.toFixed(2)}%` : DATA_UNAVAILABLE;
+function marketStateLabel(
+  state: number | undefined,
+  fg: number | null,
+  sk: boolean,
+): string {
+  if (fg != null) {
+    if (fg < 40) return sk ? 'Strach (F&G < 40)' : 'Fear (F&G < 40)';
+    if (fg > 75) return sk ? 'Extrémna eufória (F&G > 75)' : 'Extreme euphoria (F&G > 75)';
+    return sk ? `Stabilný trh (F&G ${fg})` : `Stable market (F&G ${fg})`;
+  }
+  return sk ? `Stav ${state ?? '—'}` : `State ${state ?? '—'}`;
 }
 
 export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const sk = lang === 'sk';
-  const { market, marketLoading, updating, refresh, netYield, unavailable } = useCyborgMarketData();
+  const { updatePortfolioBalances } = usePortfolio();
+  const { market, marketLoading, updating, refresh, netYield, unavailable, displayApys } =
+    useCyborgMarketData();
 
   const [collateralPct, setCollateralPct] = useState(50);
   const [ltvPct, setLtvPct] = useState(25);
@@ -49,9 +71,13 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const { lbtc } = portfolioData;
   const ethPrice = portfolioData.prices.eth;
   const solPrice = portfolioData.prices.sol;
+  const btcPrice = portfolioData.prices.btc;
 
   const motorUsd = portfolioData.totalMotorUsd;
   const coldUsd = portfolioData.totalColdUsd;
+
+  const deployREth = rEth.qty * (collateralPct / 100);
+  const deployMSol = mSol.qty * (collateralPct / 100);
 
   const marketState = useMemo(() => {
     if (!market?.ready) return null;
@@ -75,6 +101,58 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   }, [market?.fetchedAt]);
 
   const usdcLoan = computeUsdcLoan(rEth.qty, mSol.qty, ethPrice, solPrice, collateralPct, ltvPct);
+
+  const copyPlan = useCallback(async () => {
+    const action = marketState?.action ?? 'HOLD';
+    const actionText = sk ? ACTION_LABEL[action].sk : ACTION_LABEL[action].en;
+    const stateText = marketStateLabel(marketState?.state, market?.fearGreed ?? null, sk);
+
+    const plan = [
+      '--- DEFI CYBORG PLAN ---',
+      `Market State: ${stateText}`,
+      `Action: ${actionText}`,
+      `Deploy: ${collateralPct}% of collateral`,
+      `Assets: ${deployREth.toFixed(4)} rETH / ${deployMSol.toFixed(2)} mSOL`,
+      `Target LTV: ${ltvPct}%`,
+      `Borrow: $${usdcLoan.toFixed(2)} USDC`,
+      'Buy: LBTC',
+    ].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(plan);
+      toast.success(sk ? 'Plán skopírovaný do schránky' : 'Plan copied to clipboard');
+    } catch {
+      toast.error(sk ? 'Kopírovanie zlyhalo' : 'Copy failed');
+    }
+  }, [sk, marketState, market?.fearGreed, collateralPct, deployREth, deployMSol, ltvPct, usdcLoan]);
+
+  const confirmExecution = useCallback(() => {
+    const update = buildCyborgExecutionUpdate({
+      rEthQty: rEth.qty,
+      mSolQty: mSol.qty,
+      collateralPct,
+      ltvPct,
+      ethPrice,
+      solPrice,
+      btcPrice,
+    });
+
+    if (
+      (update.rEthQty ?? 0) <= 0 &&
+      (update.mSolQty ?? 0) <= 0 &&
+      (update.lbtcQty ?? 0) <= 0 &&
+      (update.usdcBorrowed ?? 0) <= 0
+    ) {
+      toast.error(sk ? 'Žiadne množstvo na aktualizáciu' : 'Nothing to update');
+      return;
+    }
+
+    updatePortfolioBalances(update);
+    toast.success(sk ? 'Portfólio aktualizované!' : 'Portfolio updated!');
+  }, [
+    rEth.qty, mSol.qty, collateralPct, ltvPct, ethPrice, solPrice, btcPrice,
+    updatePortfolioBalances, sk,
+  ]);
 
   if (portfolioData.loading) {
     return (
@@ -152,7 +230,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <span className="text-amber-400/90">RSI(w): {DATA_UNAVAILABLE}</span>
         )}
         {netYield != null ? (
-          <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>
+          <span>Net: <strong className="text-emerald-400">{Math.min(netYield, 50).toFixed(2)}%</strong></span>
         ) : market?.ready && (
           <span className="text-amber-400/90">Net: {DATA_UNAVAILABLE}</span>
         )}
@@ -219,15 +297,28 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
       </section>
 
       <section className="space-y-2">
-        <div className="flex items-center gap-1.5">
-          <Cog className="w-3.5 h-3.5 text-emerald-400" />
-          <h3 className="text-xs font-semibold text-foreground">Active Motor</h3>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1.5">
+            <Cog className="w-3.5 h-3.5 text-emerald-400" />
+            <h3 className="text-xs font-semibold text-foreground">Active Motor</h3>
+          </div>
+          <Button
+            type="button"
+            variant="secondary"
+            size="sm"
+            onClick={() => void copyPlan()}
+            disabled={motorUsd <= 0}
+            className="h-9 px-3 text-[11px] font-bold touch-manipulation border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
+          >
+            <ClipboardCopy className="w-3.5 h-3.5 mr-1.5" />
+            {sk ? '📋 Kopírovať Plán (Copy Plan)' : '📋 Copy Plan'}
+          </Button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
-            sublabel={`Rocket Pool · ${apyLabel(market?.rocketPoolApy ?? market?.lbtcApy)}`}
+            sublabel={`Rocket Pool · ${formatDisplayApy(displayApys.rocketPool)}`}
             qty={rEth.qty}
             usd={rEth.usd}
             decimals={4}
@@ -235,7 +326,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
-            sublabel={`Marinade · Kamino ${apyLabel(market?.kaminoApy)}`}
+            sublabel={`Marinade · Kamino ${formatDisplayApy(displayApys.kamino)}`}
             qty={mSol.qty}
             usd={mSol.usd}
             decimals={2}
@@ -284,9 +375,9 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Morpho borrow: {apyLabel(market?.usdcBorrowApy)}
+            Morpho borrow: {formatDisplayApy(displayApys.usdcBorrow)}
             {' · '}
-            LBTC yield: {apyLabel(market?.lbtcApy)}
+            LBTC yield: {formatDisplayApy(displayApys.lbtc)}
             {netYield == null && market?.ready && (
               <span className="text-amber-400/90">
                 {' · '}
@@ -299,17 +390,12 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
 
       <Button
         type="button"
-        onClick={() => {
-          window.alert(
-            sk
-              ? `[Mock HW]\nKolaterál: ${collateralPct}% · LTV: ${ltvPct}%\nLoan: ${formatUsd(usdcLoan)}`
-              : `[Mock HW]\nCollateral: ${collateralPct}% · LTV: ${ltvPct}%\nLoan: ${formatUsd(usdcLoan)}`,
-          );
-        }}
+        onClick={confirmExecution}
         disabled={motorUsd <= 0}
         className="w-full h-12 text-sm font-bold touch-manipulation bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
       >
-        {sk ? 'Podpísať transakciu (Mock HW)' : 'Sign Transaction (Mock HW)'}
+        <CheckCircle2 className="w-4 h-4 mr-2" />
+        {sk ? '✅ Potvrdiť realizáciu (Update Portfolio)' : '✅ Confirm Execution (Update Portfolio)'}
       </Button>
     </div>
   );

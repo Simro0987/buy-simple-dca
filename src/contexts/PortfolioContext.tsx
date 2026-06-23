@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, ReactNode } from 'react';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics, type PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { STAKING_CONFIG } from '@/lib/wallets';
@@ -7,8 +7,15 @@ import { useStakingLedger } from '@/hooks/useStakingLedger';
 import type { StakedEntry } from '@/lib/stakingLedger';
 import type { PriceData } from '@/lib/crypto';
 import { buildPortfolioData, type PortfolioData } from '@/lib/portfolioData';
+import {
+  applyPortfolioBalanceUpdate,
+  loadCyborgUsdcDebt,
+  CYBORG_DEBT_EVENT,
+  type PortfolioBalanceUpdate,
+} from '@/lib/cyborgPortfolio';
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
+export type { PortfolioBalanceUpdate };
 
 interface AssetBreakdown {
   symbol: string;
@@ -18,23 +25,25 @@ interface AssetBreakdown {
   stakedQty: number;
   liquidQty: number;
   stakedEntries: StakedEntry[];
-  projectedYieldUsd: number;   // annualised
+  projectedYieldUsd: number;
 }
 
 interface PortfolioCtx {
   prices: PriceData | undefined;
   metrics: PortfolioMetrics;
   portfolioData: PortfolioData;
-  totalValue: number;          // includes staked positions (same as metrics.totalValue but explicit)
+  totalValue: number;
   totalStakedValue: number;
-  blendedApy: number;          // weighted across staking positions
+  blendedApy: number;
   breakdown: AssetBreakdown[];
-  realizedProfit: number;      // sum of executed profit levels in USD
-  realizedBySymbol: Record<string, number>; // per-asset realized USD
+  realizedProfit: number;
+  realizedBySymbol: Record<string, number>;
   movedProfit: number;
-  profitAvailable: number;     // realized − moved
-  profitBySymbol: Record<string, number>; // per-asset available USD
+  profitAvailable: number;
+  profitBySymbol: Record<string, number>;
+  cyborgUsdcDebt: number;
   markProfitMoved: (usd: number) => void;
+  updatePortfolioBalances: (update: PortfolioBalanceUpdate) => void;
   selected: AssetFilter;
   setSelected: (s: AssetFilter) => void;
   toggleSelected: (s: Exclude<AssetFilter, null>) => void;
@@ -53,10 +62,24 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const ledger = useStakingLedger();
   const [selected, setSelected] = useState<AssetFilter>(null);
   const [movedProfit, setMovedProfit] = useState<number>(loadMoved());
+  const [cyborgUsdcDebt, setCyborgUsdcDebt] = useState<number>(() => loadCyborgUsdcDebt());
+
+  useEffect(() => {
+    const syncDebt = () => setCyborgUsdcDebt(loadCyborgUsdcDebt());
+    window.addEventListener(CYBORG_DEBT_EVENT, syncDebt);
+    window.addEventListener('storage', syncDebt);
+    return () => {
+      window.removeEventListener(CYBORG_DEBT_EVENT, syncDebt);
+      window.removeEventListener('storage', syncDebt);
+    };
+  }, []);
+
+  const updatePortfolioBalances = useCallback((update: PortfolioBalanceUpdate) => {
+    applyPortfolioBalanceUpdate(update);
+    setCyborgUsdcDebt(loadCyborgUsdcDebt());
+  }, []);
 
   const value = useMemo<PortfolioCtx>(() => {
-    // Per-asset breakdown: liquid vs staked driven by the MANUAL LEDGER (source of truth).
-    // CRITICAL: staked qty is NEVER subtracted from total holdings/net worth — it stays part of the asset.
     const breakdown: AssetBreakdown[] = metrics.assets.map(a => {
       const cfg = STAKING_CONFIG.find(c => c.symbol === a.symbol);
       let yieldPct = 0;
@@ -86,7 +109,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     const totalProjected = breakdown.reduce((s, b) => s + b.projectedYieldUsd, 0);
     const blendedApy = metrics.totalValue > 0 ? (totalProjected / metrics.totalValue) * 100 : 0;
 
-    // Realized profit estimate: per-asset invested × sellPct% × profitPct%
     const executed = getExecutedLevels();
     let realizedProfit = 0;
     const realizedBySymbol: Record<string, number> = {};
@@ -106,7 +128,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       }
     }
     const profitAvailable = Math.max(0, realizedProfit - movedProfit);
-    // proportionally distribute moved across assets
     const profitBySymbol: Record<string, number> = {};
     if (realizedProfit > 0) {
       const ratio = profitAvailable / realizedProfit;
@@ -146,12 +167,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       movedProfit,
       profitAvailable,
       profitBySymbol,
+      cyborgUsdcDebt,
       markProfitMoved,
+      updatePortfolioBalances,
       selected,
       setSelected,
       toggleSelected,
     };
-  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, updatePortfolioBalances]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

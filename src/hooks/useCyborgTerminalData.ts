@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchCyborgMarketData, type CyborgMarketSnapshot } from '@/lib/cyborgTerminalData';
 import { computeNetYield } from '@/lib/cyborgTerminalEngine';
+import { capDisplayApy } from '@/lib/defiLlamaAggregator';
 import { clearApiCache } from '@/lib/apiCache';
 
 export function useCyborgMarketData() {
@@ -44,9 +45,15 @@ export function useCyborgMarketData() {
     void refresh(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const displayLbtcApy = capDisplayApy(market?.lbtcApy);
+  const displayUsdcBorrowApy = capDisplayApy(market?.usdcBorrowApy);
+  const displayKaminoApy = capDisplayApy(market?.kaminoApy);
+  const displayRocketPoolApy = capDisplayApy(market?.rocketPoolApy);
+  const displayMarinadeApy = capDisplayApy(market?.marinadeApy);
+
   const netYield =
-    market?.lbtcApy != null && market?.usdcBorrowApy != null
-      ? computeNetYield(market.lbtcApy, market.usdcBorrowApy)
+    displayLbtcApy != null && displayUsdcBorrowApy != null
+      ? computeNetYield(displayLbtcApy, displayUsdcBorrowApy)
       : null;
 
   return {
@@ -56,5 +63,12 @@ export function useCyborgMarketData() {
     refresh: () => refresh(true),
     netYield,
     unavailable: market?.unavailable ?? [],
+    displayApys: {
+      lbtc: displayLbtcApy,
+      usdcBorrow: displayUsdcBorrowApy,
+      kamino: displayKaminoApy,
+      rocketPool: displayRocketPoolApy,
+      marinade: displayMarinadeApy,
+    },
   };
 }

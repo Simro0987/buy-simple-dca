@@ -2,9 +2,14 @@
  * Consolidated DefiLlama data layer.
  * All protocol APY/yield lookups go through a single yields pool fetch.
  * Prices use coins.llama.fi (one request).
+ *
+ * APY convention: DefiLlama yields.llama.fi returns ready-to-use percent (7.5 = 7.5%).
+ * Never multiply by 100 in fetch/display paths.
  */
 
 export const DATA_UNAVAILABLE = 'Data unavailable';
+export const LBTC_APY_FALLBACK = 7.5;
+export const MAX_DISPLAY_APY = 50;
 
 export interface LlamaPool {
   pool: string;
@@ -33,6 +38,27 @@ export interface DefiLlamaPrices {
   lbtcPriceUsd: number | null;
 }
 
+/** DefiLlama APY is percent (7.5 = 7.5%). Normalize decimal outliers only. */
+export function normalizeApyPercent(raw: number | null | undefined): number | null {
+  if (raw == null || !Number.isFinite(raw) || raw <= 0) return null;
+  let apy = raw;
+  if (apy > 0 && apy < 1) apy *= 100;
+  if (apy > 500) apy /= 100;
+  if (apy > 500) return null;
+  return apy;
+}
+
+export function capDisplayApy(apy: number | null | undefined): number | null {
+  const n = normalizeApyPercent(apy);
+  if (n == null) return null;
+  return Math.min(n, MAX_DISPLAY_APY);
+}
+
+export function formatDisplayApy(apy: number | null | undefined): string {
+  const capped = capDisplayApy(apy);
+  return capped != null ? `${capped.toFixed(2)}%` : DATA_UNAVAILABLE;
+}
+
 function pickBestPool(
   pools: LlamaPool[],
   filter: (p: LlamaPool) => boolean,
@@ -41,8 +67,10 @@ function pickBestPool(
   let best: number | null = null;
   for (const p of pools) {
     if (!filter(p)) continue;
-    const val = apyField === 'apyBaseBorrow' ? (p.apyBaseBorrow ?? p.apy) : p.apy;
-    if (Number.isFinite(val) && val > 0 && (best === null || val > best)) best = val;
+    const raw = apyField === 'apyBaseBorrow' ? (p.apyBaseBorrow ?? p.apy) : p.apy;
+    const val = normalizeApyPercent(raw);
+    if (val == null || val > MAX_DISPLAY_APY) continue;
+    if (best === null || val > best) best = val;
   }
   return best;
 }
@@ -92,28 +120,33 @@ export function extractProtocolYields(pools: LlamaPool[]): DefiLlamaYields {
 
   const kaminoApy = pickBestPool(
     pools,
-    p =>
-      p.chain === 'Solana' &&
-      p.project.toLowerCase().includes('kamino') &&
-      (p.symbol.toUpperCase().includes('SOL') || p.symbol.toUpperCase().includes('JITO')),
+    p => {
+      if (p.chain !== 'Solana') return false;
+      const project = p.project.toLowerCase();
+      if (!project.includes('kamino')) return false;
+      const sym = p.symbol.toUpperCase();
+      return sym === 'SOL' || sym === 'JITOSOL' || sym === 'MSOL';
+    },
   );
   if (kaminoApy === null) unavailable.push('Kamino');
 
-  const lbtcApy = pickBestPool(
-    pools,
-    p =>
-      p.chain === 'Arbitrum' &&
-      (p.symbol.toUpperCase().includes('LBTC') ||
-        p.project.toLowerCase().includes('lombard') ||
-        (p.project.toLowerCase().includes('morpho') && p.symbol.toUpperCase().includes('LBTC'))),
-  );
-  if (lbtcApy === null) unavailable.push('LBTC');
+  let lbtcApy =
+    pickBestPool(pools, p => p.project.toLowerCase().includes('lombard')) ??
+    pickBestPool(pools, p => p.symbol.toUpperCase().includes('LBTC')) ??
+    pickBestPool(
+      pools,
+      p =>
+        p.project.toLowerCase().includes('morpho') && p.symbol.toUpperCase().includes('LBTC'),
+    );
+
+  if (lbtcApy === null) {
+    lbtcApy = LBTC_APY_FALLBACK;
+  }
 
   const usdcBorrowApy =
     pickBestPool(
       pools,
       p =>
-        p.chain === 'Arbitrum' &&
         p.project.toLowerCase().includes('morpho') &&
         p.symbol.toUpperCase().includes('USDC'),
       'apyBaseBorrow',
@@ -121,7 +154,6 @@ export function extractProtocolYields(pools: LlamaPool[]): DefiLlamaYields {
     pickBestPool(
       pools,
       p =>
-        p.chain === 'Arbitrum' &&
         p.project.toLowerCase().includes('morpho') &&
         p.symbol.toUpperCase().includes('USDC'),
     );
