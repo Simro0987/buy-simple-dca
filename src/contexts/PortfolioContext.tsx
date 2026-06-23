@@ -6,6 +6,7 @@ import { PROFIT_CONFIGS, getExecutedLevels } from '@/lib/profitTaking';
 import { useStakingLedger } from '@/hooks/useStakingLedger';
 import type { StakedEntry } from '@/lib/stakingLedger';
 import type { PriceData } from '@/lib/crypto';
+import { buildPortfolioData, type PortfolioData } from '@/lib/portfolioData';
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
 
@@ -23,6 +24,7 @@ interface AssetBreakdown {
 interface PortfolioCtx {
   prices: PriceData | undefined;
   metrics: PortfolioMetrics;
+  portfolioData: PortfolioData;
   totalValue: number;          // includes staked positions (same as metrics.totalValue but explicit)
   totalStakedValue: number;
   blendedApy: number;          // weighted across staking positions
@@ -46,7 +48,7 @@ function loadMoved(): number {
 }
 
 export function PortfolioProvider({ children }: { children: ReactNode }) {
-  const { data: prices } = usePrices();
+  const { data: prices, isLoading: pricesLoading } = usePrices();
   const metrics = usePortfolioMetrics(prices);
   const ledger = useStakingLedger();
   const [selected, setSelected] = useState<AssetFilter>(null);
@@ -124,9 +126,17 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     const toggleSelected = (s: Exclude<AssetFilter, null>) =>
       setSelected(prev => (prev === s ? null : s));
 
+    const portfolioData = buildPortfolioData({
+      metrics,
+      prices,
+      pricesLoading,
+      breakdown,
+    });
+
     return {
       prices,
       metrics,
+      portfolioData,
       totalValue: metrics.totalValue,
       totalStakedValue,
       blendedApy,
@@ -141,7 +151,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setSelected,
       toggleSelected,
     };
-  }, [prices, metrics, selected, movedProfit, ledger]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
