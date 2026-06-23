@@ -65,7 +65,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const {
     metrics,
     selected, toggleSelected, setSelected,
-    totalStakedValue, blendedApy, profitAvailable, breakdown,
+    totalStakedValue, blendedApy, profitAvailable, portfolioData,
   } = usePortfolio();
 
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
@@ -614,12 +614,20 @@ function ModernPortfolioInner({ lang }: Props) {
       {/* ═══ POZÍCIE ═══════════════════════════════════════════════════════ */}
       <div className="space-y-3">
         <Label>{sk ? 'Pozície' : 'Positions'}</Label>
+        {portfolioData.loading ? (
+          <Bento className="p-5 space-y-3">
+            <p className="text-sm text-white/40 flex items-center gap-2">
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              {sk ? 'Načítavam portfólio…' : 'Loading portfolio…'}
+            </p>
+          </Bento>
+        ) : (
         <div className="grid gap-3">
           {metrics.assets.map((a, i) => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
             const avgCost = a.holdings > 0 ? a.invested / a.holdings : 0;
-            const b = breakdown.find(x => x.symbol === a.symbol);
+            const slice = portfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
             const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
             return (
               <Bento key={a.symbol} delay={0.36 + i * 0.05} className={`p-5 ${dim ? 'opacity-35' : ''}`}>
@@ -651,9 +659,19 @@ function ModernPortfolioInner({ lang }: Props) {
                     <p className="text-[10px] text-white/30 font-mono mt-1">avg {formatUsd(avgCost)}</p>
                   </div>
                 </div>
-                {b && b.stakedQty > 0 && (
+                {slice && (slice.liquidQty > 0 || slice.stakedQty > 0) && (
                   <p className="text-[10px] text-white/30 font-mono mt-3 pt-3 border-t border-white/[0.06]">
-                    {b.liquidQty.toFixed(6)} liquid · {b.stakedQty.toFixed(6)} staked
+                    {slice.liquidQty.toFixed(6)} {sk ? 'voľné' : 'liquid'} · {slice.stakedQty.toFixed(6)} {sk ? 'staknuté' : 'staked'}
+                  </p>
+                )}
+                {a.symbol === 'ETH' && (portfolioData.coldReserve.weEth.qty > 0 || portfolioData.activeMotor.rEth.qty > 0) && (
+                  <p className="text-[10px] text-white/25 font-mono mt-1">
+                    weETH {portfolioData.coldReserve.weEth.qty.toFixed(4)} · rETH {portfolioData.activeMotor.rEth.qty.toFixed(4)}
+                  </p>
+                )}
+                {a.symbol === 'SOL' && (portfolioData.coldReserve.inf.qty > 0 || portfolioData.activeMotor.mSol.qty > 0) && (
+                  <p className="text-[10px] text-white/25 font-mono mt-1">
+                    INF {portfolioData.coldReserve.inf.qty.toFixed(2)} · mSOL {portfolioData.activeMotor.mSol.qty.toFixed(2)}
                   </p>
                 )}
                 <p className={`text-xs font-mono mt-2 ${change24h >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>
@@ -663,6 +681,7 @@ function ModernPortfolioInner({ lang }: Props) {
             );
           })}
         </div>
+        )}
       </div>
 
       {/* ═══ TAKE PROFIT + REZERVOÁR ═══════════════════════════════════════ */}

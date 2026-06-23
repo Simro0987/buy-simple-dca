@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Zap, Info, Lock, Unlock, ArrowRightLeft, Landmark } from 'lucide-react';
+import { Zap, Info, Lock, Unlock, ArrowRightLeft, Landmark, Loader2 } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useStakingLedger } from '@/hooks/useStakingLedger';
 import { nativeTicker } from '@/lib/tickerLabels';
@@ -25,6 +25,7 @@ import {
   type UnstakeAdvice,
   type DynamicStakeTarget,
 } from '@/lib/stakeAdvisor';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface Props {
   lang: Lang;
@@ -33,7 +34,7 @@ interface Props {
 
 export function IdleStakeShortcuts({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
-  const { breakdown } = usePortfolio();
+  const { portfolioData } = usePortfolio();
   const { entries } = useStakingLedger();
   const [bypass, setBypass] = useState<boolean>(() => isEmergencyBypassActive());
   useEffect(() => {
@@ -45,6 +46,21 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
   // Recompute window when bypass changes
   const win = getTimingWindow(marketScore);
   void bypass; // ensures re-render when bypass toggles
+
+  if (portfolioData.loading) {
+    return (
+      <div className="glass-card p-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-3.5 h-3.5 text-violet-300 animate-spin" />
+          <span className="text-xs font-semibold text-foreground">
+            {sk ? 'Načítavam voľné zostatky…' : 'Loading idle balances…'}
+          </span>
+        </div>
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-14 w-full" />
+      </div>
+    );
+  }
 
   if (!win.visible) return null;
 
@@ -80,15 +96,13 @@ export function IdleStakeShortcuts({ lang, marketScore }: Props) {
   }
 
   // ===== STAKING (open / preview / value) =====
-  const advised: AdvisorResult[] = breakdown
-    .filter(b => b.symbol === 'BTC' || b.symbol === 'ETH' || b.symbol === 'SOL')
-    .map(b => {
-      const totalQty = b.liquidQty + b.stakedQty;
-      const pricePerUnit = totalQty > 0 ? b.value / totalQty : 0;
+  const advised: AdvisorResult[] = (['BTC', 'ETH', 'SOL'] as AdvisorSymbol[])
+    .map(sym => {
+      const slice = portfolioData.assets[sym];
       return computeAdvice({
-        symbol: b.symbol as AdvisorSymbol,
-        liquidQty: b.liquidQty,
-        pricePerUnit,
+        symbol: sym,
+        liquidQty: slice.liquidQty,
+        pricePerUnit: slice.currentPrice,
         marketScore,
         ledgerEntries: entries,
       });
