@@ -2,7 +2,7 @@ import type { PriceData } from '@/lib/crypto';
 import type { PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import type { StakedEntry, LedgerSymbol } from '@/lib/stakingLedger';
 
-export type ProtocolToken = 'weETH' | 'INF' | 'rETH' | 'mSOL';
+export type ProtocolToken = 'weETH' | 'INF' | 'rETH' | 'mSOL' | 'LBTC';
 
 export interface ProtocolBalance {
   symbol: ProtocolToken;
@@ -29,6 +29,7 @@ export interface PortfolioData {
   assets: Record<LedgerSymbol, AssetSlice>;
   coldReserve: { weEth: ProtocolBalance; inf: ProtocolBalance };
   activeMotor: { rEth: ProtocolBalance; mSol: ProtocolBalance };
+  lbtc: ProtocolBalance;
   totalColdUsd: number;
   totalMotorUsd: number;
 }
@@ -105,11 +106,13 @@ export function buildPortfolioData(input: {
 
   const ethEntries = assets.ETH.stakedEntries;
   const solEntries = assets.SOL.stakedEntries;
+  const btcEntries = assets.BTC.stakedEntries;
 
   const weEthQty = sumByProtocol(ethEntries, [/ether\.fi/i, /weeth/i]);
   const rEthQty = sumByProtocol(ethEntries, [/rocket\s*pool/i, /reth/i]);
   const infQty = sumByProtocol(solEntries, [/sanctum/i, /\binf\b/i]);
   const mSolQty = sumByProtocol(solEntries, [/marinade/i, /msol/i]);
+  const lbtcQty = sumByProtocol(btcEntries, [/lombard/i, /lbtc/i]);
 
   const coldReserve = {
     weEth: protocolBalance('weETH', weEthQty, ethPrice, 'cold'),
@@ -121,6 +124,8 @@ export function buildPortfolioData(input: {
     mSol: protocolBalance('mSOL', mSolQty, solPrice, 'motor'),
   };
 
+  const lbtc = protocolBalance('LBTC', lbtcQty, btcPrice, 'cold');
+
   const totalColdUsd = coldReserve.weEth.usd + coldReserve.inf.usd;
   const totalMotorUsd = activeMotor.rEth.usd + activeMotor.mSol.usd;
 
@@ -130,6 +135,7 @@ export function buildPortfolioData(input: {
     assets,
     coldReserve,
     activeMotor,
+    lbtc,
     totalColdUsd,
     totalMotorUsd,
   };
