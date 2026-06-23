@@ -2,7 +2,7 @@ import { calcRsi14 } from '@/lib/cyborgTerminalEngine';
 import { fetchWithCache, readStaleCache } from '@/lib/apiCache';
 import {
   DATA_UNAVAILABLE,
-  extractProtocolYields,
+  extractTerminalExclusiveYields,
   fetchDefiLlamaPrices,
   fetchLlamaPools,
 } from '@/lib/defiLlamaAggregator';
@@ -16,9 +16,6 @@ export interface CyborgMarketSnapshot {
   prices: { btc: number | null; eth: number | null; sol: number | null };
   lbtcApy: number | null;
   usdcBorrowApy: number | null;
-  kaminoApy: number | null;
-  rocketPoolApy: number | null;
-  marinadeApy: number | null;
   lbtcPriceUsd: number | null;
   /** Per-source availability — never blocks portfolio balances */
   unavailable: string[];
@@ -46,9 +43,9 @@ async function fetchWeeklyBtcRsiLive(): Promise<number> {
   return calcRsi14(rows.map(r => parseFloat(r[4])));
 }
 
-async function fetchYieldsFromLlama() {
+async function fetchTerminalYieldsFromLlama() {
   const pools = await fetchLlamaPools();
-  return extractProtocolYields(pools);
+  return extractTerminalExclusiveYields(pools);
 }
 
 type CacheResult<T> = { data: T; fromCache: boolean; stale: boolean };
@@ -75,7 +72,7 @@ export async function fetchCyborgMarketData(opts?: { force?: boolean }): Promise
     safeCacheFetch('cyborg-fng', fetchFearGreedLive, opts?.force),
     safeCacheFetch('cyborg-btc-rsi-w', fetchWeeklyBtcRsiLive, opts?.force),
     safeCacheFetch('cyborg-prices', fetchDefiLlamaPrices, opts?.force),
-    safeCacheFetch('cyborg-yields', fetchYieldsFromLlama, opts?.force),
+    safeCacheFetch('cyborg-terminal-yields', fetchTerminalYieldsFromLlama, opts?.force),
   ]);
 
   let fearGreed: number | null = null;
@@ -113,17 +110,11 @@ export async function fetchCyborgMarketData(opts?: { force?: boolean }): Promise
 
   let lbtcApy: number | null = null;
   let usdcBorrowApy: number | null = null;
-  let kaminoApy: number | null = null;
-  let rocketPoolApy: number | null = null;
-  let marinadeApy: number | null = null;
 
   if (yieldsSettled.status === 'fulfilled' && yieldsSettled.value?.data) {
     const y = yieldsSettled.value.data;
     lbtcApy = y.lbtcApy;
     usdcBorrowApy = y.usdcBorrowApy;
-    kaminoApy = y.kaminoApy;
-    rocketPoolApy = y.rocketPool;
-    marinadeApy = y.marinade;
     for (const name of y.unavailable) {
       if (!unavailable.includes(name)) unavailable.push(name);
     }
@@ -139,9 +130,6 @@ export async function fetchCyborgMarketData(opts?: { force?: boolean }): Promise
     prices,
     lbtcApy,
     usdcBorrowApy,
-    kaminoApy,
-    rocketPoolApy,
-    marinadeApy,
     lbtcPriceUsd,
     unavailable: [...new Set(unavailable)],
     stale,

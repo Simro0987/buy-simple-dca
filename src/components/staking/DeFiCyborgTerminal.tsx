@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { usePortfolio } from '@/contexts/PortfolioContext';
+import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import type { PortfolioData } from '@/lib/portfolioData';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
@@ -73,7 +74,8 @@ function marketStateLabel(state: number | undefined, fg: number | null, sk: bool
 export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, isExecutionConfirmed } = usePortfolio();
-  const { market, marketLoading, updating, refresh, unavailable, displayApys } =
+  const stakingApys = useStakingSplitApys();
+  const { market, marketLoading, updating, refresh, unavailable, terminalApys } =
     useCyborgMarketData();
 
   const [collateralPct, setCollateralPct] = useState(50);
@@ -96,8 +98,8 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const projectedLbtcUsd = projectedLbtcQty * btcPrice;
 
   const isLbtcSupplied = isExecutionConfirmed(EXEC_KEYS.lbtcSupply);
-  const totalLbtcApy = computeTotalLbtcApy(isLbtcSupplied, displayApys.lbtcSupply);
-  const netYield = computeNetYield(totalLbtcApy, displayApys.usdcBorrow);
+  const totalLbtcApy = computeTotalLbtcApy(isLbtcSupplied, terminalApys.lbtcSupply);
+  const netYield = computeNetYield(totalLbtcApy, terminalApys.usdcBorrow);
   const netYieldNegative = netYield < 0;
 
   const marketState = useMemo(() => {
@@ -108,7 +110,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   }, [market, netYield, ltvPct]);
 
   const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
-  const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, displayApys.lbtcSupply, sk);
+  const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, terminalApys.lbtcSupply, sk);
 
   useEffect(() => {
     if (!marketState || slidersTouched) return;
@@ -279,7 +281,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-sky-300" />}
             label="weETH"
-            sublabel={sk ? 'Z portfólia · ether.fi' : 'From portfolio · ether.fi'}
+            sublabel={`ether.fi (weETH) · ${apyLabel(stakingApys.weEth)}`}
             qty={weEth.qty}
             usd={weEth.usd}
             decimals={4}
@@ -290,7 +292,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-violet-300" />}
             label="INF"
-            sublabel={sk ? 'Z portfólia · Sanctum' : 'From portfolio · Sanctum'}
+            sublabel={`Sanctum INF · ${apyLabel(stakingApys.inf)}`}
             qty={inf.qty}
             usd={inf.usd}
             decimals={2}
@@ -327,7 +329,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
-            sublabel={`Rocket Pool · ${apyLabel(displayApys.rocketPool)}`}
+            sublabel={`Rocket Pool (rETH) · ${apyLabel(stakingApys.rEth)}`}
             qty={deployREth}
             usd={deployREth * ethPrice}
             decimals={4}
@@ -338,7 +340,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
-            sublabel={`Marinade · Kamino ${apyLabel(displayApys.kamino)}`}
+            sublabel={`Marinade Native · ${apyLabel(stakingApys.mSol)}`}
             qty={deployMSol}
             usd={deployMSol * solPrice}
             decimals={2}
@@ -436,7 +438,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             </div>
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug" title={lbtcYieldText}>
-            Morpho borrow: {apyLabel(displayApys.usdcBorrow)}
+            Morpho borrow: {apyLabel(terminalApys.usdcBorrow)}
             {' · '}
             {lbtcYieldText}
           </p>

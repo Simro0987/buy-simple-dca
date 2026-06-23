@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchCyborgMarketData, type CyborgMarketSnapshot } from '@/lib/cyborgTerminalData';
-import { sanitizeCyborgApys, sanitizeLbtcSupplyApy } from '@/lib/cyborgTerminalEngine';
+import { sanitizeLbtcSupplyApy, sanitizeMorphoBorrowApy } from '@/lib/cyborgTerminalEngine';
 import { clearApiCache } from '@/lib/apiCache';
 
+/** Terminal-exclusive market data: F&G, RSI, Morpho borrow, LBTC supply APY. */
 export function useCyborgMarketData() {
   const [market, setMarket] = useState<CyborgMarketSnapshot | null>(null);
   const [marketLoading, setMarketLoading] = useState(true);
@@ -25,9 +26,6 @@ export function useCyborgMarketData() {
         prices: { btc: null, eth: null, sol: null },
         lbtcApy: null,
         usdcBorrowApy: null,
-        kaminoApy: null,
-        rocketPoolApy: null,
-        marinadeApy: null,
         lbtcPriceUsd: null,
         unavailable: ['Market data'],
         stale: false,
@@ -44,20 +42,14 @@ export function useCyborgMarketData() {
     void refresh(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const sanitized = useMemo(
-    () => sanitizeCyborgApys({
-      rocketPool: market?.rocketPoolApy,
-      usdcBorrow: market?.usdcBorrowApy,
-      lbtc: market?.lbtcApy,
-      kamino: market?.kaminoApy,
-      marinade: market?.marinadeApy,
-    }),
-    [market],
+  const usdcBorrow = useMemo(
+    () => sanitizeMorphoBorrowApy(market?.usdcBorrowApy),
+    [market?.usdcBorrowApy],
   );
 
-  const lbtcSupplyApy = useMemo(
-    () => sanitizeLbtcSupplyApy(market?.lbtcApy ?? sanitized.lbtc),
-    [market?.lbtcApy, sanitized.lbtc],
+  const lbtcSupply = useMemo(
+    () => sanitizeLbtcSupplyApy(market?.lbtcApy),
+    [market?.lbtcApy],
   );
 
   return {
@@ -66,12 +58,9 @@ export function useCyborgMarketData() {
     updating,
     refresh: () => refresh(true),
     unavailable: market?.unavailable ?? [],
-    displayApys: {
-      usdcBorrow: sanitized.morphoBorrow,
-      kamino: sanitized.kamino,
-      rocketPool: sanitized.rEth,
-      marinade: sanitized.marinade,
-      lbtcSupply: lbtcSupplyApy,
+    terminalApys: {
+      usdcBorrow,
+      lbtcSupply,
     },
   };
 }

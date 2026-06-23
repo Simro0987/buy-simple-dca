@@ -84,6 +84,53 @@ export async function fetchLlamaPools(): Promise<LlamaPool[]> {
   return (json.data ?? []) as LlamaPool[];
 }
 
+export interface TerminalExclusiveYields {
+  lbtcApy: number | null;
+  usdcBorrowApy: number | null;
+  unavailable: string[];
+}
+
+/** Cyborg-only yields — Morpho USDC borrow + LBTC market supply. No base staking APYs. */
+export function extractTerminalExclusiveYields(pools: LlamaPool[]): TerminalExclusiveYields {
+  const unavailable: string[] = [];
+
+  let lbtcApy =
+    pickBestPool(pools, p => p.project.toLowerCase().includes('lombard'), 'apy', 15) ??
+    pickBestPool(pools, p => p.symbol.toUpperCase().includes('LBTC'), 'apy', 15) ??
+    pickBestPool(
+      pools,
+      p =>
+        p.project.toLowerCase().includes('morpho') && p.symbol.toUpperCase().includes('LBTC'),
+      'apy',
+      15,
+    );
+
+  if (lbtcApy === null) {
+    lbtcApy = LBTC_APY_FALLBACK;
+  }
+
+  const usdcBorrowApy =
+    pickBestPool(
+      pools,
+      p =>
+        p.project.toLowerCase().includes('morpho') &&
+        p.symbol.toUpperCase().includes('USDC'),
+      'apyBaseBorrow',
+      10,
+    ) ??
+    pickBestPool(
+      pools,
+      p =>
+        p.project.toLowerCase().includes('morpho') &&
+        p.symbol.toUpperCase().includes('USDC'),
+      'apy',
+      10,
+    );
+  if (usdcBorrowApy === null) unavailable.push('Morpho');
+
+  return { lbtcApy, usdcBorrowApy, unavailable };
+}
+
 export function extractProtocolYields(pools: LlamaPool[]): DefiLlamaYields {
   const unavailable: string[] = [];
 

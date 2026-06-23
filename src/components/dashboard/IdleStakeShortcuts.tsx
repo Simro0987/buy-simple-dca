@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Zap, Info, Lock, Unlock, ArrowRightLeft, Landmark, Loader2 } from 'lucide-react';
-import { usePortfolio } from '@/contexts/PortfolioContext';
+import { usePortfolio, type PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 import { useStakingLedger } from '@/hooks/useStakingLedger';
 import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
-import type { PortfolioBalanceUpdate } from '@/lib/cyborgPortfolio';
+import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { nativeTicker } from '@/lib/tickerLabels';
 import {
   setPendingStake, setPendingSwap, setPendingLending, navigateToTab,
@@ -411,11 +411,7 @@ function DynamicSplitPanel({
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, isExecutionConfirmed } = usePortfolio();
-  const [tick, setTick] = useState(0);
-  useEffect(() => {
-    const id = setInterval(() => setTick(t => t + 1), 18000);
-    return () => clearInterval(id);
-  }, []);
+  const { tick } = useStakingSplitApys();
   const targets: DynamicStakeTarget[] = computeDynamicStakeSplit(symbol, marketScore, tick);
   const decimals = symbol === 'SOL' ? 2 : 3;
   const nativeSym = symbol;
