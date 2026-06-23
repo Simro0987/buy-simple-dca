@@ -228,10 +228,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: regimeMap } = useRegimeLimits(livePriceMap);
 
   // Auto-write to portfolio holdings when a limit order becomes FILLED.
-  // Tracks written orders by ID to prevent duplicate writes.
+  // Tracks written orders by ID to prevent duplicate writes + auto-confirms with toast.
   useEffect(() => {
     for (const [coinSym, status] of execStatus.entries()) {
-      const lim = (status as Record<string, { status?: string; quantity?: unknown; id?: string }>)?.limit;
+      const lim = (status as Record<string, { status?: string; quantity?: unknown; id?: string; executed_price?: unknown; amount_usd?: unknown }>)?.limit;
       if (!lim || lim.status !== 'FILLED') continue;
       const qty = Number(lim.quantity ?? 0);
       if (qty <= 0 || !lim.id) continue;
@@ -244,9 +244,18 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         localStorage.setItem('smart-alloc-holdings', JSON.stringify(h));
         localStorage.setItem(writtenKey, '1');
         window.dispatchEvent(new Event('portfolio-updated'));
+        const px = Number(lim.executed_price ?? 0);
+        const usd = Number(lim.amount_usd ?? 0);
+        toast.success(`✅ ${coinSym} LIMIT automaticky naplnený`, {
+          description: `${qty.toFixed(6)} ${coinSym}${px > 0 ? ` @ $${px.toFixed(px >= 1 ? 2 : 4)}` : ''}${usd > 0 ? ` · ${formatUsd(usd)}` : ''} · zapísané do portfólia.`,
+          duration: 8000,
+        });
+        qc.invalidateQueries({ queryKey: ['dca_executions', week] });
+        qc.invalidateQueries({ queryKey: ['app_settings'] });
+        qc.invalidateQueries({ queryKey: ['limit-fill-rates'] });
       } catch { /* noop */ }
     }
-  }, [execStatus]);
+  }, [execStatus, qc, week]);
 
   const result = useMemo(() => {
     if (!metrics) {
