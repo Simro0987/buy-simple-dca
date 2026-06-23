@@ -188,26 +188,37 @@ Array must have exactly ${items.length} items in order.`;
 
 function parseRssItems(xml: string, sourceName: string, maxItems: number): RawNewsItem[] {
   const items: RawNewsItem[] = [];
-  const itemRegex = /<item>([\s\S]*?)<\/item>/g;
+  // Support both RSS <item> and Atom <entry>
+  const blockRegex = /<(item|entry)\b[^>]*>([\s\S]*?)<\/\1>/g;
   let match;
   let count = 0;
-  while ((match = itemRegex.exec(xml)) !== null && count < maxItems) {
-    const block = match[1];
-    const title = block.match(/<title>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/title>/)?.[1] || '';
-    const link = block.match(/<link>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/link>/)?.[1] ||
-                 block.match(/<guid[^>]*>(.*?)<\/guid>/)?.[1] || '';
-    const pubDate = block.match(/<pubDate>(.*?)<\/pubDate>/)?.[1] || '';
-    const desc = block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1] || '';
+  while ((match = blockRegex.exec(xml)) !== null && count < maxItems) {
+    const block = match[2];
+    const title = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/)?.[1] || '';
+    // RSS <link>URL</link>, Atom <link href="URL" />
+    const link =
+      block.match(/<link[^>]*href=["']([^"']+)["']/)?.[1] ||
+      block.match(/<link>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/)?.[1] ||
+      block.match(/<guid[^>]*>([\s\S]*?)<\/guid>/)?.[1] || '';
+    const pubDate =
+      block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] ||
+      block.match(/<published>([\s\S]*?)<\/published>/)?.[1] ||
+      block.match(/<updated>([\s\S]*?)<\/updated>/)?.[1] || '';
+    const desc =
+      block.match(/<description>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/description>/)?.[1] ||
+      block.match(/<summary[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/summary>/)?.[1] ||
+      block.match(/<content[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/content>/)?.[1] || '';
     const categories: string[] = [];
     const catRegex = /<category[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?<\/category>/g;
     let catMatch;
     while ((catMatch = catRegex.exec(block)) !== null) categories.push(catMatch[1]);
     const fullText = [title, desc, ...categories].join(' ');
 
-    if (title) {
+    const cleanTitle = title.replace(/<[^>]*>/g, '').trim();
+    if (cleanTitle) {
       items.push({
         id: `${sourceName.toLowerCase().replace(/\s/g, '')}-${count}-${Date.now()}`,
-        title: title.trim(),
+        title: cleanTitle,
         url: link.trim(),
         source: sourceName,
         publishedAt: pubDate ? new Date(pubDate).toISOString() : new Date().toISOString(),
