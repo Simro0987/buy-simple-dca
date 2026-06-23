@@ -9,6 +9,7 @@ import { PerformanceLineChart } from '@/components/dashboard/PerformanceLineChar
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 import { MacroNewsTicker } from '@/components/MacroNewsTicker';
 import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
+import { FlashAlertBanner } from '@/components/FlashAlertBanner';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { Lang } from '@/lib/i18n';
