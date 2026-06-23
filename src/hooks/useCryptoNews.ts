@@ -80,8 +80,9 @@ export function useCryptoNews(currencies?: string, lang = 'sk') {
   const query = useQuery({
     queryKey: ['crypto-news', currencies, lang],
     queryFn: () => fetchNews(currencies, lang),
-    staleTime: 2 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000,
+    staleTime: 30 * 60 * 1000,
+    refetchInterval: 30 * 60 * 1000,
+    refetchOnWindowFocus: true,
   });
 
   useEffect(() => {
