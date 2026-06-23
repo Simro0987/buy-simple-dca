@@ -14,11 +14,13 @@ export interface NewsItem {
   impact: 'high' | 'medium' | 'low';
   sentiment: 'bullish' | 'bearish' | 'neutral';
   tokens: string[];
+  flash?: boolean;
 }
 
 async function fetchNews(currencies = 'BTC,ETH,SOL', lang = 'sk'): Promise<NewsItem[]> {
+  // Cache-bust parameter to avoid stale browser/preview cache
   const { data, error } = await supabase.functions.invoke('crypto-news', {
-    body: { currencies, kind: 'news', lang },
+    body: { currencies, kind: 'news', lang, t: Date.now() },
   });
 
   if (error) throw new Error(error.message);
