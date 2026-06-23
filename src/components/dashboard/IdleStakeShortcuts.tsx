@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Zap, Info, Lock, Unlock, ArrowRightLeft, Landmark, Loader2 } from 'lucide-react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useStakingLedger } from '@/hooks/useStakingLedger';
+import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
+import type { PortfolioBalanceUpdate } from '@/lib/cyborgPortfolio';
 import { nativeTicker } from '@/lib/tickerLabels';
 import {
   setPendingStake, setPendingSwap, setPendingLending, navigateToTab,
@@ -408,6 +410,7 @@ function DynamicSplitPanel({
   lang: Lang;
 }) {
   const sk = lang === 'sk';
+  const { confirmExecutionStep, isExecutionConfirmed } = usePortfolio();
   const [tick, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 18000);
@@ -416,6 +419,27 @@ function DynamicSplitPanel({
   const targets: DynamicStakeTarget[] = computeDynamicStakeSplit(symbol, marketScore, tick);
   const decimals = symbol === 'SOL' ? 2 : 3;
   const nativeSym = symbol;
+
+  const ledgerProtocol = (t: DynamicStakeTarget): string => {
+    if (t.key === 'rocket_pool') return 'Rocket Pool (rETH)';
+    if (t.key === 'etherfi') return 'ether.fi (weETH)';
+    if (t.key === 'marinade_native') return 'Marinade Native (mSOL)';
+    if (t.key === 'sanctum_inf') return 'Sanctum INF (INF)';
+    return t.protocol;
+  };
+
+  const buildUpdate = (t: DynamicStakeTarget, qty: number): PortfolioBalanceUpdate => {
+    const proto = ledgerProtocol(t);
+    if (symbol === 'ETH') {
+      if (/rocket/i.test(proto)) return { rEthQty: qty };
+      if (/ether|weeth/i.test(proto)) return { weEthQty: qty };
+    }
+    if (symbol === 'SOL') {
+      if (/marinade|msol/i.test(proto)) return { mSolQty: qty };
+      if (/sanctum|inf/i.test(proto)) return { infQty: qty };
+    }
+    return symbol === 'ETH' ? { rEthQty: qty } : { mSolQty: qty };
+  };
 
   return (
     <div
@@ -426,7 +450,7 @@ function DynamicSplitPanel({
     >
       <div className="flex items-center justify-between gap-2">
         <p className="text-[10px] font-semibold uppercase tracking-wide text-violet-300/90">
-          {sk ? 'Dynamický split (Self-Learning)' : 'Dynamic split (Self-Learning)'}
+          {sk ? 'Staking Splits (Dynamický split)' : 'Staking Splits (Dynamic split)'}
         </p>
         <p className="text-[9px] text-muted-foreground tabular-nums">
           {sk ? 'trh' : 'score'} {Math.round(marketScore)}
@@ -436,24 +460,46 @@ function DynamicSplitPanel({
         {targets.map(t => {
           const subQty = totalQty * (t.pct / 100);
           const subUsd = totalUsd * (t.pct / 100);
+          const stepKey = `split-${symbol}-${t.key}`;
+          const confirmed = isExecutionConfirmed(stepKey);
           return (
-            <div key={t.key} className="flex items-center justify-between gap-2 text-[10.5px]">
+            <div
+              key={t.key}
+              className={`flex items-center justify-between gap-2 text-[10.5px] rounded-md px-1 py-1 ${
+                confirmed ? 'opacity-60 bg-muted/20' : ''
+              }`}
+            >
               <div className="min-w-0 flex-1">
                 <p className="font-semibold text-foreground truncate">{t.protocol}</p>
                 <p className="text-[9.5px] text-muted-foreground truncate">
                   {sk ? 'výstup' : 'output'}: {t.outputToken} · {t.apy.toFixed(2)}% APY · {t.officialUrl}
                 </p>
               </div>
-              <div className="text-right shrink-0 tabular-nums">
-                <p className={`font-bold ${locked ? 'text-muted-foreground' : 'text-violet-200'}`}>
-                  {t.pct.toFixed(1)}%
-                </p>
-                <p className="text-[9.5px] text-foreground/90">
-                  {subQty.toFixed(decimals)} {nativeSym}
-                </p>
-                <p className="text-[9px] text-muted-foreground">
-                  ${subUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                </p>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="text-right tabular-nums">
+                  <p className={`font-bold ${locked ? 'text-muted-foreground' : 'text-violet-200'}`}>
+                    {t.pct.toFixed(1)}%
+                  </p>
+                  <div className="flex items-center gap-2 justify-end">
+                    <p className="text-[9.5px] text-foreground/90">
+                      {subQty.toFixed(decimals)} {nativeSym}
+                    </p>
+                    <GranularExecutionButtons
+                      lang={lang}
+                      value={subQty}
+                      decimals={decimals}
+                      confirmed={confirmed}
+                      disabled={locked || subQty <= 0}
+                      onConfirm={() => {
+                        confirmExecutionStep(stepKey, buildUpdate(t, subQty));
+                        toast.success(sk ? 'Portfólio aktualizované!' : 'Portfolio updated!');
+                      }}
+                    />
+                  </div>
+                  <p className="text-[9px] text-muted-foreground">
+                    ${subUsd.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </p>
+                </div>
               </div>
             </div>
           );

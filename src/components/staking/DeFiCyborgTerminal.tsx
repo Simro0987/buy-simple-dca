@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2, ClipboardCopy, CheckCircle2,
+  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2, ClipboardCopy,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
@@ -12,9 +12,13 @@ import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import type { PortfolioData } from '@/lib/portfolioData';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
-import { buildCyborgExecutionUpdate } from '@/lib/cyborgPortfolio';
+import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
 import {
+  computeNetYield,
+  computeProjectedLbtcQty,
+  computeTotalLbtcApy,
   computeUsdcLoan,
+  formatLbtcYieldLabel,
   resolveCyborgState,
   type CyborgAction,
 } from '@/lib/cyborgTerminalEngine';
@@ -32,6 +36,15 @@ interface Props {
 const NEUTRAL_FG = 50;
 const NEUTRAL_RSI = 50;
 
+const EXEC_KEYS = {
+  rEth: 'motor-reth',
+  mSol: 'motor-msol',
+  weEth: 'cold-weeth',
+  inf: 'cold-inf',
+  lbtcSupply: 'lbtc-supply',
+  usdcBorrow: 'usdc-borrow',
+} as const;
+
 const ACTION_LABEL: Record<CyborgAction, { sk: string; en: string }> = {
   DEPOSIT_BORROW: { sk: 'Nasadiť kolaterál + požičať USDC', en: 'Deploy collateral + borrow USDC' },
   HOLD: { sk: 'Držať', en: 'Hold' },
@@ -48,11 +61,7 @@ function formatTime(d: Date): string {
   });
 }
 
-function marketStateLabel(
-  state: number | undefined,
-  fg: number | null,
-  sk: boolean,
-): string {
+function marketStateLabel(state: number | undefined, fg: number | null, sk: boolean): string {
   if (fg != null) {
     if (fg < 40) return sk ? 'Strach (F&G < 40)' : 'Fear (F&G < 40)';
     if (fg > 75) return sk ? 'Extrémna eufória (F&G > 75)' : 'Extreme euphoria (F&G > 75)';
@@ -63,8 +72,8 @@ function marketStateLabel(
 
 export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const sk = lang === 'sk';
-  const { updatePortfolioBalances } = usePortfolio();
-  const { market, marketLoading, updating, refresh, netYield, unavailable, displayApys } =
+  const { confirmExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { market, marketLoading, updating, refresh, unavailable, displayApys } =
     useCyborgMarketData();
 
   const [collateralPct, setCollateralPct] = useState(50);
@@ -73,7 +82,6 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
 
   const { weEth, inf } = portfolioData.coldReserve;
   const { rEth, mSol } = portfolioData.activeMotor;
-  const { lbtc } = portfolioData;
   const ethPrice = portfolioData.prices.eth;
   const solPrice = portfolioData.prices.sol;
   const btcPrice = portfolioData.prices.btc;
@@ -83,16 +91,24 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
 
   const deployREth = rEth.qty * (collateralPct / 100);
   const deployMSol = mSol.qty * (collateralPct / 100);
+  const usdcLoan = computeUsdcLoan(rEth.qty, mSol.qty, ethPrice, solPrice, collateralPct, ltvPct);
+  const projectedLbtcQty = computeProjectedLbtcQty(usdcLoan, btcPrice);
+  const projectedLbtcUsd = projectedLbtcQty * btcPrice;
+
+  const isLbtcSupplied = isExecutionConfirmed(EXEC_KEYS.lbtcSupply);
+  const totalLbtcApy = computeTotalLbtcApy(isLbtcSupplied, displayApys.lbtcSupply);
+  const netYield = computeNetYield(totalLbtcApy, displayApys.usdcBorrow);
+  const netYieldNegative = netYield < 0;
 
   const marketState = useMemo(() => {
     if (!market?.ready) return null;
     const fg = market.fearGreed ?? NEUTRAL_FG;
     const rsi = market.btcRsi ?? NEUTRAL_RSI;
-    const yieldForState = netYield;
-    return resolveCyborgState(fg, rsi, yieldForState, ltvPct);
+    return resolveCyborgState(fg, rsi, netYield, ltvPct);
   }, [market, netYield, ltvPct]);
 
   const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
+  const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, displayApys.lbtcSupply, sk);
 
   useEffect(() => {
     if (!marketState || slidersTouched) return;
@@ -104,8 +120,6 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
     if (!market) return;
     setSlidersTouched(false);
   }, [market?.fetchedAt]);
-
-  const usdcLoan = computeUsdcLoan(rEth.qty, mSol.qty, ethPrice, solPrice, collateralPct, ltvPct);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -120,7 +134,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
       `Assets: ${deployREth.toFixed(4)} rETH / ${deployMSol.toFixed(2)} mSOL`,
       `Target LTV: ${ltvPct}%`,
       `Borrow: $${usdcLoan.toFixed(2)} USDC`,
-      'Buy: LBTC',
+      `Buy: ${projectedLbtcQty.toFixed(6)} LBTC (projected)`,
     ].join('\n');
 
     try {
@@ -129,35 +143,16 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
     } catch {
       toast.error(sk ? 'Kopírovanie zlyhalo' : 'Copy failed');
     }
-  }, [sk, marketState, market?.fearGreed, collateralPct, deployREth, deployMSol, ltvPct, usdcLoan]);
+  }, [sk, marketState, market?.fearGreed, collateralPct, deployREth, deployMSol, ltvPct, usdcLoan, projectedLbtcQty]);
 
-  const confirmExecution = useCallback(() => {
-    const update = buildCyborgExecutionUpdate({
-      rEthQty: rEth.qty,
-      mSolQty: mSol.qty,
-      collateralPct,
-      ltvPct,
-      ethPrice,
-      solPrice,
-      btcPrice,
-    });
-
-    if (
-      (update.rEthQty ?? 0) <= 0 &&
-      (update.mSolQty ?? 0) <= 0 &&
-      (update.lbtcQty ?? 0) <= 0 &&
-      (update.usdcBorrowed ?? 0) <= 0
-    ) {
-      toast.error(sk ? 'Žiadne množstvo na aktualizáciu' : 'Nothing to update');
-      return;
-    }
-
-    updatePortfolioBalances(update);
-    toast.success(sk ? 'Portfólio aktualizované!' : 'Portfolio updated!');
-  }, [
-    rEth.qty, mSol.qty, collateralPct, ltvPct, ethPrice, solPrice, btcPrice,
-    updatePortfolioBalances, sk,
-  ]);
+  const confirmRow = useCallback((
+    key: string,
+    update: Parameters<typeof confirmExecutionStep>[1],
+    successMsg?: string,
+  ) => {
+    confirmExecutionStep(key, update);
+    toast.success(successMsg ?? (sk ? 'Portfólio aktualizované!' : 'Portfolio updated!'));
+  }, [confirmExecutionStep, sk]);
 
   if (portfolioData.loading) {
     return (
@@ -200,7 +195,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <div className="min-w-0">
             <h2 className="text-sm font-bold text-foreground leading-tight">DeFi Cyborg Terminal</h2>
             <p className="text-[10px] text-muted-foreground truncate">
-              {sk ? 'Zostatky z Portfólia · DefiLlama APY' : 'Balances from Portfolio · DefiLlama APY'}
+              {sk ? 'Granulárna HW peňaženka · dual-yield LBTC' : 'Granular HW wallet · dual-yield LBTC'}
             </p>
           </div>
         </div>
@@ -235,7 +230,12 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <span className="text-amber-400/90">RSI(w): {DATA_UNAVAILABLE}</span>
         )}
         {market?.ready && (
-          <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>
+          <span>
+            Net:{' '}
+            <strong className={netYieldNegative ? 'text-red-400' : 'text-emerald-400'}>
+              {netYield.toFixed(2)}%
+            </strong>
+          </span>
         )}
         {marketLoading && (
           <span className="inline-flex items-center gap-1">
@@ -283,6 +283,9 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             qty={weEth.qty}
             usd={weEth.usd}
             decimals={4}
+            lang={lang}
+            confirmed={isExecutionConfirmed(EXEC_KEYS.weEth)}
+            onConfirm={() => confirmRow(EXEC_KEYS.weEth, { weEthQty: weEth.qty })}
           />
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-violet-300" />}
@@ -291,6 +294,9 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             qty={inf.qty}
             usd={inf.usd}
             decimals={2}
+            lang={lang}
+            confirmed={isExecutionConfirmed(EXEC_KEYS.inf)}
+            onConfirm={() => confirmRow(EXEC_KEYS.inf, { infQty: inf.qty })}
           />
         </div>
         <p className="text-[10px] text-muted-foreground">
@@ -314,7 +320,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             className="h-9 px-3 text-[11px] font-bold touch-manipulation border border-emerald-500/40 bg-emerald-500/15 text-emerald-200 hover:bg-emerald-500/25"
           >
             <ClipboardCopy className="w-3.5 h-3.5 mr-1.5" />
-            {sk ? '📋 Kopírovať Plán (Copy Plan)' : '📋 Copy Plan'}
+            {sk ? '📋 Kopírovať Plán' : '📋 Copy Plan'}
           </Button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -322,25 +328,61 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
             sublabel={`Rocket Pool · ${apyLabel(displayApys.rocketPool)}`}
-            qty={rEth.qty}
-            usd={rEth.usd}
+            qty={deployREth}
+            usd={deployREth * ethPrice}
             decimals={4}
+            lang={lang}
+            confirmed={isExecutionConfirmed(EXEC_KEYS.rEth)}
+            onConfirm={() => confirmRow(EXEC_KEYS.rEth, { rEthQty: deployREth })}
           />
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
             sublabel={`Marinade · Kamino ${apyLabel(displayApys.kamino)}`}
-            qty={mSol.qty}
-            usd={mSol.usd}
+            qty={deployMSol}
+            usd={deployMSol * solPrice}
             decimals={2}
+            lang={lang}
+            confirmed={isExecutionConfirmed(EXEC_KEYS.mSol)}
+            onConfirm={() => confirmRow(EXEC_KEYS.mSol, { mSolQty: deployMSol })}
           />
         </div>
 
-        <div className="rounded-lg border border-border/40 bg-background/30 px-3 py-2 flex justify-between text-[11px]">
-          <span className="text-muted-foreground">LBTC</span>
-          <span className="font-mono tabular-nums text-foreground">
-            {lbtc.qty.toFixed(6)} · {formatUsd(lbtc.usd)}
-          </span>
+        <div
+          className={`rounded-lg border px-3 py-2 space-y-1.5 ${
+            isLbtcSupplied
+              ? 'border-emerald-500/40 bg-emerald-500/5 opacity-80'
+              : 'border-border/40 bg-background/30'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-[11px] font-semibold text-foreground">
+                LBTC Projected Buy (Supply Only)
+              </p>
+              <p className="text-[9px] text-muted-foreground">
+                {sk ? 'USDC loan ÷ BTC cena · bez existujúceho BTC' : 'USDC loan ÷ BTC price · no existing BTC'}
+              </p>
+            </div>
+            <GranularExecutionButtons
+              lang={lang}
+              value={projectedLbtcQty}
+              decimals={6}
+              confirmed={isLbtcSupplied}
+              disabled={projectedLbtcQty <= 0}
+              onConfirm={() => confirmRow(
+                EXEC_KEYS.lbtcSupply,
+                { lbtcQty: projectedLbtcQty },
+                sk ? 'LBTC supply potvrdené — dual yield aktívny' : 'LBTC supply confirmed — dual yield active',
+              )}
+            />
+          </div>
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-mono tabular-nums text-foreground">
+              {projectedLbtcQty.toFixed(6)} LBTC
+            </span>
+            <span className="text-muted-foreground tabular-nums">{formatUsd(projectedLbtcUsd)}</span>
+          </div>
         </div>
 
         <p className="text-[10px] text-muted-foreground">
@@ -369,37 +411,43 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             danger={ltvPct > 45}
             disabled={motorUsd <= 0}
           />
-          <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3 py-2">
+          <div
+            className={`flex items-center justify-between rounded-lg border px-3 py-2 ${
+              isExecutionConfirmed(EXEC_KEYS.usdcBorrow)
+                ? 'bg-muted/30 border-border/40 opacity-70'
+                : 'bg-emerald-500/10 border-emerald-500/25'
+            }`}
+          >
             <span className="text-[11px] text-muted-foreground">
               {sk ? 'Vypočítaný USDC loan' : 'Calculated USDC loan'}
             </span>
-            <span className="text-sm font-bold text-emerald-300 tabular-nums">
-              {formatUsd(usdcLoan)}
-            </span>
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-bold text-emerald-300 tabular-nums">
+                {formatUsd(usdcLoan)}
+              </span>
+              <GranularExecutionButtons
+                lang={lang}
+                value={usdcLoan}
+                decimals={2}
+                confirmed={isExecutionConfirmed(EXEC_KEYS.usdcBorrow)}
+                disabled={usdcLoan <= 0}
+                onConfirm={() => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usdcLoan })}
+              />
+            </div>
           </div>
-          <p className="text-[10px] text-muted-foreground leading-snug">
+          <p className="text-[10px] text-muted-foreground leading-snug" title={lbtcYieldText}>
             Morpho borrow: {apyLabel(displayApys.usdcBorrow)}
             {' · '}
-            LBTC yield: {apyLabel(displayApys.lbtc)}
+            {lbtcYieldText}
           </p>
         </div>
       </section>
-
-      <Button
-        type="button"
-        onClick={confirmExecution}
-        disabled={motorUsd <= 0}
-        className="w-full h-12 text-sm font-bold touch-manipulation bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
-      >
-        <CheckCircle2 className="w-4 h-4 mr-2" />
-        {sk ? '✅ Potvrdiť realizáciu (Update Portfolio)' : '✅ Confirm Execution (Update Portfolio)'}
-      </Button>
     </div>
   );
 }
 
 function BalanceRow({
-  icon, label, sublabel, qty, usd, decimals,
+  icon, label, sublabel, qty, usd, decimals, lang, confirmed, onConfirm,
 }: {
   icon: ReactNode;
   label: string;
@@ -407,9 +455,18 @@ function BalanceRow({
   qty: number;
   usd: number;
   decimals: number;
+  lang: Lang;
+  confirmed: boolean;
+  onConfirm: () => void;
 }) {
   return (
-    <div className="rounded-xl border border-border/50 bg-background/30 p-2.5 space-y-1.5">
+    <div
+      className={`rounded-xl border p-2.5 space-y-1.5 ${
+        confirmed
+          ? 'border-border/30 bg-muted/20 opacity-70'
+          : 'border-border/50 bg-background/30'
+      }`}
+    >
       <div className="flex items-center gap-2">
         {icon}
         <div className="min-w-0 flex-1">
@@ -420,9 +477,19 @@ function BalanceRow({
           {formatUsd(usd)}
         </span>
       </div>
-      <p className="text-sm font-mono tabular-nums text-foreground">
-        {qty.toFixed(decimals)} {label}
-      </p>
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-mono tabular-nums text-foreground flex-1">
+          {qty.toFixed(decimals)} {label}
+        </p>
+        <GranularExecutionButtons
+          lang={lang}
+          value={qty}
+          decimals={decimals}
+          confirmed={confirmed}
+          disabled={qty <= 0}
+          onConfirm={onConfirm}
+        />
+      </div>
     </div>
   );
 }

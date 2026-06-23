@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchCyborgMarketData, type CyborgMarketSnapshot } from '@/lib/cyborgTerminalData';
-import { computeNetYield, sanitizeCyborgApys } from '@/lib/cyborgTerminalEngine';
+import { sanitizeCyborgApys, sanitizeLbtcSupplyApy } from '@/lib/cyborgTerminalEngine';
 import { clearApiCache } from '@/lib/apiCache';
 
 export function useCyborgMarketData() {
@@ -55,21 +55,23 @@ export function useCyborgMarketData() {
     [market],
   );
 
-  const netYield = computeNetYield(sanitized.lbtc, sanitized.morphoBorrow);
+  const lbtcSupplyApy = useMemo(
+    () => sanitizeLbtcSupplyApy(market?.lbtcApy ?? sanitized.lbtc),
+    [market?.lbtcApy, sanitized.lbtc],
+  );
 
   return {
     market,
     marketLoading,
     updating,
     refresh: () => refresh(true),
-    netYield,
     unavailable: market?.unavailable ?? [],
     displayApys: {
-      lbtc: sanitized.lbtc,
       usdcBorrow: sanitized.morphoBorrow,
       kamino: sanitized.kamino,
       rocketPool: sanitized.rEth,
       marinade: sanitized.marinade,
+      lbtcSupply: lbtcSupplyApy,
     },
   };
 }

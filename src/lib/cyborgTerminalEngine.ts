@@ -21,6 +21,43 @@ export function computeNetYield(lbtcApy: number, usdcBorrowApy: number): number 
   return Math.round((lbtcApy - usdcBorrowApy) * 100) / 100;
 }
 
+/** Lombard native staking base yield (always accrues on LBTC). */
+export const LBTC_NATIVE_BASE_APY = 3.5;
+
+/** Morpho/Aave market supply APY cap when API returns outliers. */
+export const LBTC_SUPPLY_APY_TRIGGER = 7;
+export const LBTC_SUPPLY_APY_CAP = 4.5;
+export const LBTC_SUPPLY_APY_DEFAULT = 3.0;
+
+export function sanitizeLbtcSupplyApy(raw: number | null | undefined): number {
+  if (raw == null || !Number.isFinite(raw) || raw <= 0) return LBTC_SUPPLY_APY_DEFAULT;
+  if (raw > LBTC_SUPPLY_APY_TRIGGER) return LBTC_SUPPLY_APY_CAP;
+  return Math.min(raw, LBTC_SUPPLY_APY_CAP);
+}
+
+export function computeTotalLbtcApy(isSupplied: boolean, marketSupplyApy: number): number {
+  const base = LBTC_NATIVE_BASE_APY;
+  if (!isSupplied) return base;
+  return Math.round((base + marketSupplyApy) * 100) / 100;
+}
+
+export function formatLbtcYieldLabel(isSupplied: boolean, marketSupplyApy: number, sk: boolean): string {
+  const total = computeTotalLbtcApy(isSupplied, marketSupplyApy);
+  if (!isSupplied) {
+    return sk
+      ? `LBTC Yield: ${LBTC_NATIVE_BASE_APY.toFixed(2)}% (Base Only - Awaiting Supply)`
+      : `LBTC Yield: ${LBTC_NATIVE_BASE_APY.toFixed(2)}% (Base Only - Awaiting Supply)`;
+  }
+  return sk
+    ? `LBTC Yield: ${total.toFixed(2)}% (${LBTC_NATIVE_BASE_APY.toFixed(2)}% Base + ${marketSupplyApy.toFixed(2)}% Supply)`
+    : `LBTC Yield: ${total.toFixed(2)}% (${LBTC_NATIVE_BASE_APY.toFixed(2)}% Base + ${marketSupplyApy.toFixed(2)}% Supply)`;
+}
+
+export function computeProjectedLbtcQty(usdcLoan: number, btcPrice: number): number {
+  if (btcPrice <= 0 || usdcLoan <= 0) return 0;
+  return usdcLoan / btcPrice;
+}
+
 /** Realistic APY fallbacks when DefiLlama returns wrong pools. */
 export const CYBORG_APY_FALLBACKS = {
   rEth: 3.1,

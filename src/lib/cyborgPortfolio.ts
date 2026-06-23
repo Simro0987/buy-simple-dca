@@ -2,17 +2,46 @@ import { addStake } from '@/lib/stakingLedger';
 
 const DEBT_KEY = 'cyborg-usdc-debt-v1';
 const DEBT_EVT = 'cyborg-usdc-debt-changed';
+const CONFIRMED_KEY = 'cyborg-confirmed-steps-v1';
+const CONFIRMED_EVT = 'cyborg-confirmed-steps-changed';
 
 export interface PortfolioBalanceUpdate {
-  /** Additional rETH motor collateral recorded in ledger */
   rEthQty?: number;
-  /** Additional mSOL motor collateral recorded in ledger */
   mSolQty?: number;
-  /** LBTC purchased with borrowed USDC */
+  weEthQty?: number;
+  infQty?: number;
   lbtcQty?: number;
-  /** USDC borrowed via Morpho */
   usdcBorrowed?: number;
 }
+
+export function loadConfirmedSteps(): Record<string, boolean> {
+  try {
+    const raw = localStorage.getItem(CONFIRMED_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return typeof parsed === 'object' && parsed ? parsed as Record<string, boolean> : {};
+  } catch {
+    return {};
+  }
+}
+
+function persistConfirmedSteps(steps: Record<string, boolean>): void {
+  try {
+    localStorage.setItem(CONFIRMED_KEY, JSON.stringify(steps));
+    window.dispatchEvent(new CustomEvent(CONFIRMED_EVT));
+  } catch { /* ignore */ }
+}
+
+export function markStepConfirmed(key: string): void {
+  const next = { ...loadConfirmedSteps(), [key]: true };
+  persistConfirmedSteps(next);
+}
+
+export function isStepConfirmed(key: string): boolean {
+  return !!loadConfirmedSteps()[key];
+}
+
+export const CYBORG_CONFIRMED_EVENT = CONFIRMED_EVT;
 
 export function loadCyborgUsdcDebt(): number {
   try {
@@ -44,6 +73,12 @@ export function applyPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): voi
   }
   if (update.mSolQty && update.mSolQty > 0) {
     addStake('SOL', 'Marinade Native (mSOL)', update.mSolQty);
+  }
+  if (update.weEthQty && update.weEthQty > 0) {
+    addStake('ETH', 'ether.fi (weETH)', update.weEthQty);
+  }
+  if (update.infQty && update.infQty > 0) {
+    addStake('SOL', 'Sanctum INF (INF)', update.infQty);
   }
   if (update.lbtcQty && update.lbtcQty > 0) {
     addStake('BTC', 'Lombard LBTC', update.lbtcQty);

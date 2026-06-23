@@ -10,7 +10,10 @@ import { buildPortfolioData, type PortfolioData } from '@/lib/portfolioData';
 import {
   applyPortfolioBalanceUpdate,
   loadCyborgUsdcDebt,
+  loadConfirmedSteps,
+  markStepConfirmed,
   CYBORG_DEBT_EVENT,
+  CYBORG_CONFIRMED_EVENT,
   type PortfolioBalanceUpdate,
 } from '@/lib/cyborgPortfolio';
 
@@ -43,7 +46,8 @@ interface PortfolioCtx {
   profitBySymbol: Record<string, number>;
   cyborgUsdcDebt: number;
   markProfitMoved: (usd: number) => void;
-  updatePortfolioBalances: (update: PortfolioBalanceUpdate) => void;
+  confirmExecutionStep: (key: string, update: PortfolioBalanceUpdate) => void;
+  isExecutionConfirmed: (key: string) => boolean;
   selected: AssetFilter;
   setSelected: (s: AssetFilter) => void;
   toggleSelected: (s: Exclude<AssetFilter, null>) => void;
@@ -63,14 +67,20 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [selected, setSelected] = useState<AssetFilter>(null);
   const [movedProfit, setMovedProfit] = useState<number>(loadMoved());
   const [cyborgUsdcDebt, setCyborgUsdcDebt] = useState<number>(() => loadCyborgUsdcDebt());
+  const [confirmedSteps, setConfirmedSteps] = useState<Record<string, boolean>>(() => loadConfirmedSteps());
 
   useEffect(() => {
     const syncDebt = () => setCyborgUsdcDebt(loadCyborgUsdcDebt());
+    const syncConfirmed = () => setConfirmedSteps(loadConfirmedSteps());
     window.addEventListener(CYBORG_DEBT_EVENT, syncDebt);
+    window.addEventListener(CYBORG_CONFIRMED_EVENT, syncConfirmed);
     window.addEventListener('storage', syncDebt);
+    window.addEventListener('storage', syncConfirmed);
     return () => {
       window.removeEventListener(CYBORG_DEBT_EVENT, syncDebt);
+      window.removeEventListener(CYBORG_CONFIRMED_EVENT, syncConfirmed);
       window.removeEventListener('storage', syncDebt);
+      window.removeEventListener('storage', syncConfirmed);
     };
   }, []);
 
@@ -78,6 +88,18 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     applyPortfolioBalanceUpdate(update);
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
   }, []);
+
+  const confirmExecutionStep = useCallback((key: string, update: PortfolioBalanceUpdate) => {
+    applyPortfolioBalanceUpdate(update);
+    markStepConfirmed(key);
+    setConfirmedSteps(loadConfirmedSteps());
+    setCyborgUsdcDebt(loadCyborgUsdcDebt());
+  }, []);
+
+  const isExecutionConfirmed = useCallback(
+    (key: string) => !!confirmedSteps[key],
+    [confirmedSteps],
+  );
 
   const value = useMemo<PortfolioCtx>(() => {
     const breakdown: AssetBreakdown[] = metrics.assets.map(a => {
@@ -170,11 +192,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       cyborgUsdcDebt,
       markProfitMoved,
       updatePortfolioBalances,
+      confirmExecutionStep,
+      isExecutionConfirmed,
       selected,
       setSelected,
       toggleSelected,
     };
-  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, updatePortfolioBalances]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, isExecutionConfirmed]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
