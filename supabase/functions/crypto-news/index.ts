@@ -275,14 +275,39 @@ async function fetchRssFeed(feedUrl: string, sourceName: string, maxItems = 8): 
   }
 }
 
-// Premium "Big Five" feeds
+// Expanded premium feed set — broad coverage of top crypto outlets
 const PREMIUM_FEEDS: Array<{ url: string; name: string }> = [
   { url: 'https://www.coindesk.com/arc/outboundfeeds/rss/', name: 'CoinDesk' },
   { url: 'https://cointelegraph.com/rss', name: 'CoinTelegraph' },
   { url: 'https://decrypt.co/feed', name: 'Decrypt' },
   { url: 'https://www.theblock.co/rss.xml', name: 'The Block' },
   { url: 'https://blockworks.co/feed', name: 'Blockworks' },
+  { url: 'https://bitcoinmagazine.com/.rss/full/', name: 'Bitcoin Magazine' },
+  { url: 'https://cryptoslate.com/feed/', name: 'CryptoSlate' },
+  { url: 'https://www.newsbtc.com/feed/', name: 'NewsBTC' },
+  { url: 'https://beincrypto.com/feed/', name: 'BeInCrypto' },
+  { url: 'https://ambcrypto.com/feed/', name: 'AMBCrypto' },
+  { url: 'https://u.today/rss', name: 'U.Today' },
+  { url: 'https://cryptobriefing.com/feed/', name: 'CryptoBriefing' },
+  { url: 'https://coingape.com/feed/', name: 'CoinGape' },
+  { url: 'https://protos.com/feed/', name: 'Protos' },
+  { url: 'https://www.dlnews.com/arc/outboundfeeds/rss/', name: 'DL News' },
+  { url: 'https://thedefiant.io/api/feed', name: 'The Defiant' },
+  { url: 'https://bankless.substack.com/feed', name: 'Bankless' },
+  { url: 'https://www.coingecko.com/news.atom', name: 'CoinGecko' },
 ];
+
+// Flash alert keywords — surface critical, time-sensitive events
+const FLASH_KEYWORDS = [
+  'hack', 'exploit', 'sec approval', 'sec approves', 'fed rate', 'breaking',
+  'black swan', 'liquidation', 'liquidations', 'rugpull', 'rug pull',
+  'emergency', 'depeg', 'de-peg', 'halt trading', 'bankrupt', 'insolvent',
+];
+
+function isFlashAlert(title: string): boolean {
+  const lower = (title || '').toLowerCase();
+  return FLASH_KEYWORDS.some(k => lower.includes(k));
+}
 
 // ── Main Handler ────────────────────────────────────────
 
