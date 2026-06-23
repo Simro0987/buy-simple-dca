@@ -114,12 +114,12 @@ export function buildPortfolioData(input: {
   const infLedger = sumByProtocol(solEntries, [/sanctum/i, /\binf\b/i]);
   const lbtcLedger = sumByProtocol(btcEntries, [/lombard/i, /lbtc/i]);
 
-  // Cyborg motor: ledger protocol qty, else same liquid balances as IdleStakeShortcuts.
-  const rEthQty = rEthLedger > 0 ? rEthLedger : assets.ETH.liquidQty;
-  const mSolQty = mSolLedger > 0 ? mSolLedger : assets.SOL.liquidQty;
+  // Staked/collateral derivatives populate only after granular ✅ confirmations.
+  const rEthQty = rEthLedger;
+  const mSolQty = mSolLedger;
   const weEthQty = weEthLedger;
   const infQty = infLedger;
-  const lbtcQty = lbtcLedger > 0 ? lbtcLedger : assets.BTC.liquidQty;
+  const lbtcQty = lbtcLedger;
 
   const coldReserve = {
     weEth: protocolBalance('weETH', weEthQty, ethPrice, 'cold'),

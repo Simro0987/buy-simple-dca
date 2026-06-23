@@ -73,7 +73,7 @@ function marketStateLabel(state: number | undefined, fg: number | null, sk: bool
 
 export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const sk = lang === 'sk';
-  const { confirmExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const stakingApys = useStakingSplitApys();
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } =
     useCyborgMarketData();
@@ -155,6 +155,11 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
     confirmExecutionStep(key, update);
     toast.success(successMsg ?? (sk ? 'Portfólio aktualizované!' : 'Portfolio updated!'));
   }, [confirmExecutionStep, sk]);
+
+  const revertRow = useCallback((key: string) => {
+    revertExecutionStep(key);
+    toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
+  }, [revertExecutionStep, sk]);
 
   if (portfolioData.loading) {
     return (
@@ -288,6 +293,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             lang={lang}
             confirmed={isExecutionConfirmed(EXEC_KEYS.weEth)}
             onConfirm={() => confirmRow(EXEC_KEYS.weEth, { weEthQty: weEth.qty })}
+            onRevert={() => revertRow(EXEC_KEYS.weEth)}
           />
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-violet-300" />}
@@ -299,6 +305,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             lang={lang}
             confirmed={isExecutionConfirmed(EXEC_KEYS.inf)}
             onConfirm={() => confirmRow(EXEC_KEYS.inf, { infQty: inf.qty })}
+            onRevert={() => revertRow(EXEC_KEYS.inf)}
           />
         </div>
         <p className="text-[10px] text-muted-foreground">
@@ -336,6 +343,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             lang={lang}
             confirmed={isExecutionConfirmed(EXEC_KEYS.rEth)}
             onConfirm={() => confirmRow(EXEC_KEYS.rEth, { rEthQty: deployREth })}
+            onRevert={() => revertRow(EXEC_KEYS.rEth)}
           />
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
@@ -347,6 +355,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             lang={lang}
             confirmed={isExecutionConfirmed(EXEC_KEYS.mSol)}
             onConfirm={() => confirmRow(EXEC_KEYS.mSol, { mSolQty: deployMSol })}
+            onRevert={() => revertRow(EXEC_KEYS.mSol)}
           />
         </div>
 
@@ -377,6 +386,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
                 { lbtcQty: projectedLbtcQty },
                 sk ? 'LBTC supply potvrdené — dual yield aktívny' : 'LBTC supply confirmed — dual yield active',
               )}
+              onRevert={() => revertRow(EXEC_KEYS.lbtcSupply)}
             />
           </div>
           <div className="flex items-center justify-between text-[11px]">
@@ -434,6 +444,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
                 confirmed={isExecutionConfirmed(EXEC_KEYS.usdcBorrow)}
                 disabled={usdcLoan <= 0}
                 onConfirm={() => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usdcLoan })}
+                onRevert={() => revertRow(EXEC_KEYS.usdcBorrow)}
               />
             </div>
           </div>
@@ -449,7 +460,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
 }
 
 function BalanceRow({
-  icon, label, sublabel, qty, usd, decimals, lang, confirmed, onConfirm,
+  icon, label, sublabel, qty, usd, decimals, lang, confirmed, onConfirm, onRevert,
 }: {
   icon: ReactNode;
   label: string;
@@ -460,6 +471,7 @@ function BalanceRow({
   lang: Lang;
   confirmed: boolean;
   onConfirm: () => void;
+  onRevert: () => void;
 }) {
   return (
     <div
@@ -490,6 +502,7 @@ function BalanceRow({
           confirmed={confirmed}
           disabled={qty <= 0}
           onConfirm={onConfirm}
+          onRevert={onRevert}
         />
       </div>
     </div>

@@ -12,6 +12,9 @@ import {
   loadCyborgUsdcDebt,
   loadConfirmedSteps,
   markStepConfirmed,
+  revertPortfolioBalanceUpdate,
+  unmarkStepConfirmed,
+  type ConfirmedStepData,
   CYBORG_DEBT_EVENT,
   CYBORG_CONFIRMED_EVENT,
   type PortfolioBalanceUpdate,
@@ -47,6 +50,7 @@ interface PortfolioCtx {
   cyborgUsdcDebt: number;
   markProfitMoved: (usd: number) => void;
   confirmExecutionStep: (key: string, update: PortfolioBalanceUpdate) => void;
+  revertExecutionStep: (key: string) => void;
   isExecutionConfirmed: (key: string) => boolean;
   selected: AssetFilter;
   setSelected: (s: AssetFilter) => void;
@@ -67,7 +71,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [selected, setSelected] = useState<AssetFilter>(null);
   const [movedProfit, setMovedProfit] = useState<number>(loadMoved());
   const [cyborgUsdcDebt, setCyborgUsdcDebt] = useState<number>(() => loadCyborgUsdcDebt());
-  const [confirmedSteps, setConfirmedSteps] = useState<Record<string, boolean>>(() => loadConfirmedSteps());
+  const [confirmedSteps, setConfirmedSteps] = useState<Record<string, ConfirmedStepData>>(() => loadConfirmedSteps());
 
   useEffect(() => {
     const syncDebt = () => setCyborgUsdcDebt(loadCyborgUsdcDebt());
@@ -91,13 +95,22 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
 
   const confirmExecutionStep = useCallback((key: string, update: PortfolioBalanceUpdate) => {
     applyPortfolioBalanceUpdate(update);
-    markStepConfirmed(key);
+    markStepConfirmed(key, update);
+    setConfirmedSteps(loadConfirmedSteps());
+    setCyborgUsdcDebt(loadCyborgUsdcDebt());
+  }, []);
+
+  const revertExecutionStep = useCallback((key: string) => {
+    const update = unmarkStepConfirmed(key);
+    if (update) {
+      revertPortfolioBalanceUpdate(update);
+    }
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
   }, []);
 
   const isExecutionConfirmed = useCallback(
-    (key: string) => !!confirmedSteps[key],
+    (key: string) => key in confirmedSteps,
     [confirmedSteps],
   );
 
@@ -193,12 +206,13 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       markProfitMoved,
       updatePortfolioBalances,
       confirmExecutionStep,
+      revertExecutionStep,
       isExecutionConfirmed,
       selected,
       setSelected,
       toggleSelected,
     };
-  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, isExecutionConfirmed]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

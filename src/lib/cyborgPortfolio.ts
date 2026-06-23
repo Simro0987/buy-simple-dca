@@ -1,4 +1,4 @@
-import { addStake } from '@/lib/stakingLedger';
+import { addStake, removeStake } from '@/lib/stakingLedger';
 
 const DEBT_KEY = 'cyborg-usdc-debt-v1';
 const DEBT_EVT = 'cyborg-usdc-debt-changed';
@@ -14,31 +14,54 @@ export interface PortfolioBalanceUpdate {
   usdcBorrowed?: number;
 }
 
-export function loadConfirmedSteps(): Record<string, boolean> {
+export interface ConfirmedStepData {
+  update: PortfolioBalanceUpdate;
+}
+
+export function loadConfirmedSteps(): Record<string, ConfirmedStepData> {
   try {
     const raw = localStorage.getItem(CONFIRMED_KEY);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return typeof parsed === 'object' && parsed ? parsed as Record<string, boolean> : {};
+    if (typeof parsed !== 'object' || !parsed) return {};
+    const out: Record<string, ConfirmedStepData> = {};
+    for (const [key, val] of Object.entries(parsed)) {
+      if (val === true) {
+        out[key] = { update: {} };
+      } else if (val && typeof val === 'object' && 'update' in val) {
+        out[key] = val as ConfirmedStepData;
+      }
+    }
+    return out;
   } catch {
     return {};
   }
 }
 
-function persistConfirmedSteps(steps: Record<string, boolean>): void {
+function persistConfirmedSteps(steps: Record<string, ConfirmedStepData>): void {
   try {
     localStorage.setItem(CONFIRMED_KEY, JSON.stringify(steps));
     window.dispatchEvent(new CustomEvent(CONFIRMED_EVT));
   } catch { /* ignore */ }
 }
 
-export function markStepConfirmed(key: string): void {
-  const next = { ...loadConfirmedSteps(), [key]: true };
+export function markStepConfirmed(key: string, update: PortfolioBalanceUpdate): void {
+  const next = { ...loadConfirmedSteps(), [key]: { update } };
   persistConfirmedSteps(next);
 }
 
+export function unmarkStepConfirmed(key: string): PortfolioBalanceUpdate | null {
+  const steps = loadConfirmedSteps();
+  const record = steps[key];
+  if (!record) return null;
+  const next = { ...steps };
+  delete next[key];
+  persistConfirmedSteps(next);
+  return record.update;
+}
+
 export function isStepConfirmed(key: string): boolean {
-  return !!loadConfirmedSteps()[key];
+  return key in loadConfirmedSteps();
 }
 
 export const CYBORG_CONFIRMED_EVENT = CONFIRMED_EVT;
@@ -65,6 +88,12 @@ export function addCyborgUsdcDebt(delta: number): number {
   return next;
 }
 
+export function subtractCyborgUsdcDebt(delta: number): number {
+  const next = Math.max(0, loadCyborgUsdcDebt() - Math.max(0, delta));
+  persistCyborgUsdcDebt(next);
+  return next;
+}
+
 export const CYBORG_DEBT_EVENT = DEBT_EVT;
 
 export function applyPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): void {
@@ -85,6 +114,27 @@ export function applyPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): voi
   }
   if (update.usdcBorrowed && update.usdcBorrowed > 0) {
     addCyborgUsdcDebt(update.usdcBorrowed);
+  }
+}
+
+export function revertPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): void {
+  if (update.rEthQty && update.rEthQty > 0) {
+    removeStake('ETH', 'Rocket Pool (rETH)', update.rEthQty);
+  }
+  if (update.mSolQty && update.mSolQty > 0) {
+    removeStake('SOL', 'Marinade Native (mSOL)', update.mSolQty);
+  }
+  if (update.weEthQty && update.weEthQty > 0) {
+    removeStake('ETH', 'ether.fi (weETH)', update.weEthQty);
+  }
+  if (update.infQty && update.infQty > 0) {
+    removeStake('SOL', 'Sanctum INF (INF)', update.infQty);
+  }
+  if (update.lbtcQty && update.lbtcQty > 0) {
+    removeStake('BTC', 'Lombard LBTC', update.lbtcQty);
+  }
+  if (update.usdcBorrowed && update.usdcBorrowed > 0) {
+    subtractCyborgUsdcDebt(update.usdcBorrowed);
   }
 }
 

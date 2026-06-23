@@ -410,7 +410,7 @@ function DynamicSplitPanel({
   lang: Lang;
 }) {
   const sk = lang === 'sk';
-  const { confirmExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const { tick } = useStakingSplitApys();
   const targets: DynamicStakeTarget[] = computeDynamicStakeSplit(symbol, marketScore, tick);
   const decimals = symbol === 'SOL' ? 2 : 3;
@@ -489,6 +489,10 @@ function DynamicSplitPanel({
                       onConfirm={() => {
                         confirmExecutionStep(stepKey, buildUpdate(t, subQty));
                         toast.success(sk ? 'Portfólio aktualizované!' : 'Portfolio updated!');
+                      }}
+                      onRevert={() => {
+                        revertExecutionStep(stepKey);
+                        toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
                       }}
                     />
                   </div>
