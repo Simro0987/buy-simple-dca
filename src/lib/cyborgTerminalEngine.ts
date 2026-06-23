@@ -21,6 +21,65 @@ export function computeNetYield(lbtcApy: number, usdcBorrowApy: number): number 
   return Math.round((lbtcApy - usdcBorrowApy) * 100) / 100;
 }
 
+/** Realistic APY fallbacks when DefiLlama returns wrong pools. */
+export const CYBORG_APY_FALLBACKS = {
+  rEth: 3.1,
+  morphoBorrow: 3.5,
+  lbtc: 7.5,
+} as const;
+
+export const CYBORG_APY_MAX = {
+  rEth: 10,
+  morphoBorrow: 10,
+  lbtc: 15,
+} as const;
+
+export interface SanitizedCyborgApys {
+  rEth: number;
+  morphoBorrow: number;
+  lbtc: number;
+  kamino: number | null;
+  marinade: number | null;
+}
+
+function sanitizeApyField(
+  value: number | null | undefined,
+  maxRealistic: number,
+  fallback: number,
+): number {
+  if (value == null || !Number.isFinite(value) || value <= 0 || value > maxRealistic) {
+    return fallback;
+  }
+  return value;
+}
+
+/** Apply strict sanity caps before display and net-yield math. */
+export function sanitizeCyborgApys(raw: {
+  rocketPool?: number | null;
+  usdcBorrow?: number | null;
+  lbtc?: number | null;
+  kamino?: number | null;
+  marinade?: number | null;
+}): SanitizedCyborgApys {
+  return {
+    rEth: sanitizeApyField(raw.rocketPool, CYBORG_APY_MAX.rEth, CYBORG_APY_FALLBACKS.rEth),
+    morphoBorrow: sanitizeApyField(
+      raw.usdcBorrow,
+      CYBORG_APY_MAX.morphoBorrow,
+      CYBORG_APY_FALLBACKS.morphoBorrow,
+    ),
+    lbtc: sanitizeApyField(raw.lbtc, CYBORG_APY_MAX.lbtc, CYBORG_APY_FALLBACKS.lbtc),
+    kamino:
+      raw.kamino != null && Number.isFinite(raw.kamino) && raw.kamino > 0 && raw.kamino <= 50
+        ? raw.kamino
+        : null,
+    marinade:
+      raw.marinade != null && Number.isFinite(raw.marinade) && raw.marinade > 0 && raw.marinade <= 50
+        ? raw.marinade
+        : null,
+  };
+}
+
 /** 14-period RSI from close prices (weekly or daily). */
 export function calcRsi14(closes: number[]): number {
   const period = 14;

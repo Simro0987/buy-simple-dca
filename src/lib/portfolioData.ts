@@ -108,11 +108,18 @@ export function buildPortfolioData(input: {
   const solEntries = assets.SOL.stakedEntries;
   const btcEntries = assets.BTC.stakedEntries;
 
-  const weEthQty = sumByProtocol(ethEntries, [/ether\.fi/i, /weeth/i]);
-  const rEthQty = sumByProtocol(ethEntries, [/rocket\s*pool/i, /reth/i]);
-  const infQty = sumByProtocol(solEntries, [/sanctum/i, /\binf\b/i]);
-  const mSolQty = sumByProtocol(solEntries, [/marinade/i, /msol/i]);
-  const lbtcQty = sumByProtocol(btcEntries, [/lombard/i, /lbtc/i]);
+  const rEthLedger = sumByProtocol(ethEntries, [/rocket\s*pool/i, /reth/i]);
+  const mSolLedger = sumByProtocol(solEntries, [/marinade/i, /msol/i]);
+  const weEthLedger = sumByProtocol(ethEntries, [/ether\.fi/i, /weeth/i]);
+  const infLedger = sumByProtocol(solEntries, [/sanctum/i, /\binf\b/i]);
+  const lbtcLedger = sumByProtocol(btcEntries, [/lombard/i, /lbtc/i]);
+
+  // Cyborg motor: ledger protocol qty, else same liquid balances as IdleStakeShortcuts.
+  const rEthQty = rEthLedger > 0 ? rEthLedger : assets.ETH.liquidQty;
+  const mSolQty = mSolLedger > 0 ? mSolLedger : assets.SOL.liquidQty;
+  const weEthQty = weEthLedger;
+  const infQty = infLedger;
+  const lbtcQty = lbtcLedger > 0 ? lbtcLedger : assets.BTC.liquidQty;
 
   const coldReserve = {
     weEth: protocolBalance('weETH', weEthQty, ethPrice, 'cold'),

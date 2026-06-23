@@ -63,13 +63,14 @@ function pickBestPool(
   pools: LlamaPool[],
   filter: (p: LlamaPool) => boolean,
   apyField: 'apy' | 'apyBaseBorrow' = 'apy',
+  maxApy = MAX_DISPLAY_APY,
 ): number | null {
   let best: number | null = null;
   for (const p of pools) {
     if (!filter(p)) continue;
     const raw = apyField === 'apyBaseBorrow' ? (p.apyBaseBorrow ?? p.apy) : p.apy;
     const val = normalizeApyPercent(raw);
-    if (val == null || val > MAX_DISPLAY_APY) continue;
+    if (val == null || val > maxApy) continue;
     if (best === null || val > best) best = val;
   }
   return best;
@@ -90,7 +91,18 @@ export function extractProtocolYields(pools: LlamaPool[]): DefiLlamaYields {
     pools,
     p =>
       p.chain === 'Ethereum' &&
-      (p.project.toLowerCase().includes('rocket') || p.symbol.toUpperCase().includes('RETH')),
+      p.project.toLowerCase() === 'rocket-pool' &&
+      p.symbol.toUpperCase().includes('RETH'),
+    'apy',
+    10,
+  ) ?? pickBestPool(
+    pools,
+    p =>
+      p.chain === 'Ethereum' &&
+      p.project.toLowerCase().includes('rocket') &&
+      p.symbol.toUpperCase().includes('RETH'),
+    'apy',
+    10,
   );
   if (rocketPool === null) unavailable.push('Rocket Pool');
 
@@ -131,12 +143,14 @@ export function extractProtocolYields(pools: LlamaPool[]): DefiLlamaYields {
   if (kaminoApy === null) unavailable.push('Kamino');
 
   let lbtcApy =
-    pickBestPool(pools, p => p.project.toLowerCase().includes('lombard')) ??
-    pickBestPool(pools, p => p.symbol.toUpperCase().includes('LBTC')) ??
+    pickBestPool(pools, p => p.project.toLowerCase().includes('lombard'), 'apy', 15) ??
+    pickBestPool(pools, p => p.symbol.toUpperCase().includes('LBTC'), 'apy', 15) ??
     pickBestPool(
       pools,
       p =>
         p.project.toLowerCase().includes('morpho') && p.symbol.toUpperCase().includes('LBTC'),
+      'apy',
+      15,
     );
 
   if (lbtcApy === null) {
@@ -150,12 +164,15 @@ export function extractProtocolYields(pools: LlamaPool[]): DefiLlamaYields {
         p.project.toLowerCase().includes('morpho') &&
         p.symbol.toUpperCase().includes('USDC'),
       'apyBaseBorrow',
+      10,
     ) ??
     pickBestPool(
       pools,
       p =>
         p.project.toLowerCase().includes('morpho') &&
         p.symbol.toUpperCase().includes('USDC'),
+      'apy',
+      10,
     );
   if (usdcBorrowApy === null) unavailable.push('Morpho');
 

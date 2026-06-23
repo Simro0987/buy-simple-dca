@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { fetchCyborgMarketData, type CyborgMarketSnapshot } from '@/lib/cyborgTerminalData';
-import { computeNetYield } from '@/lib/cyborgTerminalEngine';
-import { capDisplayApy } from '@/lib/defiLlamaAggregator';
+import { computeNetYield, sanitizeCyborgApys } from '@/lib/cyborgTerminalEngine';
 import { clearApiCache } from '@/lib/apiCache';
 
 export function useCyborgMarketData() {
@@ -45,16 +44,18 @@ export function useCyborgMarketData() {
     void refresh(false);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const displayLbtcApy = capDisplayApy(market?.lbtcApy);
-  const displayUsdcBorrowApy = capDisplayApy(market?.usdcBorrowApy);
-  const displayKaminoApy = capDisplayApy(market?.kaminoApy);
-  const displayRocketPoolApy = capDisplayApy(market?.rocketPoolApy);
-  const displayMarinadeApy = capDisplayApy(market?.marinadeApy);
+  const sanitized = useMemo(
+    () => sanitizeCyborgApys({
+      rocketPool: market?.rocketPoolApy,
+      usdcBorrow: market?.usdcBorrowApy,
+      lbtc: market?.lbtcApy,
+      kamino: market?.kaminoApy,
+      marinade: market?.marinadeApy,
+    }),
+    [market],
+  );
 
-  const netYield =
-    displayLbtcApy != null && displayUsdcBorrowApy != null
-      ? computeNetYield(displayLbtcApy, displayUsdcBorrowApy)
-      : null;
+  const netYield = computeNetYield(sanitized.lbtc, sanitized.morphoBorrow);
 
   return {
     market,
@@ -64,11 +65,11 @@ export function useCyborgMarketData() {
     netYield,
     unavailable: market?.unavailable ?? [],
     displayApys: {
-      lbtc: displayLbtcApy,
-      usdcBorrow: displayUsdcBorrowApy,
-      kamino: displayKaminoApy,
-      rocketPool: displayRocketPoolApy,
-      marinade: displayMarinadeApy,
+      lbtc: sanitized.lbtc,
+      usdcBorrow: sanitized.morphoBorrow,
+      kamino: sanitized.kamino,
+      rocketPool: sanitized.rEth,
+      marinade: sanitized.marinade,
     },
   };
 }

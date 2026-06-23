@@ -11,13 +11,18 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import type { PortfolioData } from '@/lib/portfolioData';
-import { DATA_UNAVAILABLE, formatDisplayApy } from '@/lib/defiLlamaAggregator';
+import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 import { buildCyborgExecutionUpdate } from '@/lib/cyborgPortfolio';
 import {
   computeUsdcLoan,
   resolveCyborgState,
   type CyborgAction,
 } from '@/lib/cyborgTerminalEngine';
+
+function apyLabel(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return DATA_UNAVAILABLE;
+  return `${value.toFixed(2)}%`;
+}
 
 interface Props {
   lang: Lang;
@@ -83,7 +88,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
     if (!market?.ready) return null;
     const fg = market.fearGreed ?? NEUTRAL_FG;
     const rsi = market.btcRsi ?? NEUTRAL_RSI;
-    const yieldForState = netYield ?? 0;
+    const yieldForState = netYield;
     return resolveCyborgState(fg, rsi, yieldForState, ltvPct);
   }, [market, netYield, ltvPct]);
 
@@ -229,10 +234,8 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
         ) : market?.ready && (
           <span className="text-amber-400/90">RSI(w): {DATA_UNAVAILABLE}</span>
         )}
-        {netYield != null ? (
-          <span>Net: <strong className="text-emerald-400">{Math.min(netYield, 50).toFixed(2)}%</strong></span>
-        ) : market?.ready && (
-          <span className="text-amber-400/90">Net: {DATA_UNAVAILABLE}</span>
+        {market?.ready && (
+          <span>Net: <strong className="text-emerald-400">{netYield.toFixed(2)}%</strong></span>
         )}
         {marketLoading && (
           <span className="inline-flex items-center gap-1">
@@ -318,7 +321,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
-            sublabel={`Rocket Pool · ${formatDisplayApy(displayApys.rocketPool)}`}
+            sublabel={`Rocket Pool · ${apyLabel(displayApys.rocketPool)}`}
             qty={rEth.qty}
             usd={rEth.usd}
             decimals={4}
@@ -326,7 +329,7 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
-            sublabel={`Marinade · Kamino ${formatDisplayApy(displayApys.kamino)}`}
+            sublabel={`Marinade · Kamino ${apyLabel(displayApys.kamino)}`}
             qty={mSol.qty}
             usd={mSol.usd}
             decimals={2}
@@ -375,15 +378,9 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
             </span>
           </div>
           <p className="text-[10px] text-muted-foreground leading-snug">
-            Morpho borrow: {formatDisplayApy(displayApys.usdcBorrow)}
+            Morpho borrow: {apyLabel(displayApys.usdcBorrow)}
             {' · '}
-            LBTC yield: {formatDisplayApy(displayApys.lbtc)}
-            {netYield == null && market?.ready && (
-              <span className="text-amber-400/90">
-                {' · '}
-                {sk ? 'Net yield vyžaduje oba APY' : 'Net yield needs both APYs'}
-              </span>
-            )}
+            LBTC yield: {apyLabel(displayApys.lbtc)}
           </p>
         </div>
       </section>
