@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle,
+  Bot, Lock, Cog, RefreshCw, Shield, AlertTriangle, Loader2,
 } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { Slider } from '@/components/ui/slider';
-import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
+import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useCyborgTerminalData } from '@/hooks/useCyborgTerminalData';
 import {
   computeUsdcLoan,
@@ -16,13 +17,6 @@ import {
 interface Props {
   lang: Lang;
 }
-
-const DEFAULT_BALANCES = {
-  weEth: 0.42,
-  inf: 12.5,
-  rEth: 0.85,
-  mSol: 6.2,
-};
 
 function formatTime(d: Date): string {
   return d.toLocaleTimeString(undefined, {
@@ -35,21 +29,24 @@ function formatTime(d: Date): string {
 
 export function DeFiCyborgTerminal({ lang }: Props) {
   const sk = lang === 'sk';
-  const { data, loading, refresh, netYield } = useCyborgTerminalData(lang);
-
-  const [weEth, setWeEth] = useState(DEFAULT_BALANCES.weEth);
-  const [inf, setInf] = useState(DEFAULT_BALANCES.inf);
-  const [rEth, setREth] = useState(DEFAULT_BALANCES.rEth);
-  const [mSol, setMSol] = useState(DEFAULT_BALANCES.mSol);
+  const { portfolioData } = usePortfolio();
+  const { data, loading: marketLoading, refresh, netYield } = useCyborgTerminalData(lang);
 
   const [collateralPct, setCollateralPct] = useState(50);
   const [ltvPct, setLtvPct] = useState(25);
   const [slidersTouched, setSlidersTouched] = useState(false);
 
+  const loading = portfolioData.loading || marketLoading;
+
+  const { weEth, inf } = portfolioData.coldReserve;
+  const { rEth, mSol } = portfolioData.activeMotor;
+  const ethPrice = portfolioData.prices.eth;
+  const solPrice = portfolioData.prices.sol;
+
   const marketState = useMemo(() => {
-    if (!data) return null;
+    if (!data || loading) return null;
     return resolveCyborgState(data.fearGreed, data.btcRsi, netYield, ltvPct);
-  }, [data, netYield, ltvPct]);
+  }, [data, netYield, ltvPct, loading]);
 
   useEffect(() => {
     if (!marketState || slidersTouched) return;
@@ -62,26 +59,51 @@ export function DeFiCyborgTerminal({ lang }: Props) {
     setSlidersTouched(false);
   }, [data?.fetchedAt]);
 
-  const ethPrice = data?.prices.eth ?? 0;
-  const solPrice = data?.prices.sol ?? 0;
+  const usdcLoan = computeUsdcLoan(
+    rEth.qty,
+    mSol.qty,
+    ethPrice,
+    solPrice,
+    collateralPct,
+    ltvPct,
+  );
 
-  const usdcLoan = computeUsdcLoan(rEth, mSol, ethPrice, solPrice, collateralPct, ltvPct);
+  const motorUsd = portfolioData.totalMotorUsd;
+  const coldUsd = portfolioData.totalColdUsd;
 
-  const coldUsd = weEth * ethPrice + inf * solPrice;
-  const motorUsd = rEth * ethPrice + mSol * solPrice;
-
-  const banner = marketState
-    ? (sk ? marketState.bannerSk : marketState.bannerEn)
-    : (sk ? 'Načítavam DeFi Cyborg Terminal…' : 'Loading DeFi Cyborg Terminal…');
+  const banner = loading
+    ? (sk ? 'Načítavam portfólio a trhové dáta…' : 'Loading portfolio and market data…')
+    : marketState
+      ? (sk ? marketState.bannerSk : marketState.bannerEn)
+      : (sk ? 'Čakám na trhové dáta…' : 'Waiting for market data…');
 
   const handleSign = () => {
     const action = marketState?.action ?? 'HOLD';
     window.alert(
       sk
-        ? `[Mock HW Wallet]\nAkcia: ${action}\nKolaterál: ${collateralPct}%\nLTV: ${ltvPct}%\nUSDC loan: ${formatUsd(usdcLoan)}`
-        : `[Mock HW Wallet]\nAction: ${action}\nCollateral: ${collateralPct}%\nLTV: ${ltvPct}%\nUSDC loan: ${formatUsd(usdcLoan)}`,
+        ? `[Mock HW Wallet]\nAkcia: ${action}\nKolaterál: ${collateralPct}%\nLTV: ${ltvPct}%\nUSDC loan: ${formatUsd(usdcLoan)}\nrETH: ${rEth.qty.toFixed(4)} · mSOL: ${mSol.qty.toFixed(2)}`
+        : `[Mock HW Wallet]\nAction: ${action}\nCollateral: ${collateralPct}%\nLTV: ${ltvPct}%\nUSDC loan: ${formatUsd(usdcLoan)}\nrETH: ${rEth.qty.toFixed(4)} · mSOL: ${mSol.qty.toFixed(2)}`,
     );
   };
+
+  if (loading) {
+    return (
+      <div className="glass-card p-3 sm:p-4 space-y-3 border border-emerald-500/20">
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-4 h-4 text-emerald-400 animate-spin" />
+          <span className="text-sm font-semibold text-foreground">
+            {sk ? 'Načítavam DeFi Cyborg Terminal…' : 'Loading DeFi Cyborg Terminal…'}
+          </span>
+        </div>
+        <Skeleton className="h-16 w-full" />
+        <div className="grid grid-cols-2 gap-2">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+        <Skeleton className="h-32 w-full" />
+      </div>
+    );
+  }
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-emerald-500/20">
@@ -105,10 +127,10 @@ export function DeFiCyborgTerminal({ lang }: Props) {
           variant="outline"
           size="sm"
           onClick={() => void refresh()}
-          disabled={loading}
+          disabled={marketLoading}
           className="h-9 px-2.5 text-[11px] shrink-0 touch-manipulation"
         >
-          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`w-3.5 h-3.5 mr-1 ${marketLoading ? 'animate-spin' : ''}`} />
           {sk ? 'Obnoviť' : 'Refresh'}
         </Button>
       </div>
@@ -153,20 +175,18 @@ export function DeFiCyborgTerminal({ lang }: Props) {
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-sky-300" />}
             label="weETH"
-            sublabel={sk ? 'ETH cold reserve' : 'ETH cold reserve'}
-            qty={weEth}
-            usd={weEth * ethPrice}
-            onChange={setWeEth}
-            step="0.001"
+            sublabel={sk ? 'ETH cold reserve · ledger' : 'ETH cold reserve · ledger'}
+            qty={weEth.qty}
+            usd={weEth.usd}
+            decimals={4}
           />
           <BalanceRow
             icon={<Lock className="w-3.5 h-3.5 text-violet-300" />}
             label="INF"
-            sublabel={sk ? 'SOL cold reserve' : 'SOL cold reserve'}
-            qty={inf}
-            usd={inf * solPrice}
-            onChange={setInf}
-            step="0.1"
+            sublabel={sk ? 'SOL cold reserve · ledger' : 'SOL cold reserve · ledger'}
+            qty={inf.qty}
+            usd={inf.usd}
+            decimals={2}
           />
         </div>
         <p className="text-[10px] text-muted-foreground">
@@ -189,25 +209,28 @@ export function DeFiCyborgTerminal({ lang }: Props) {
             icon={<Cog className="w-3.5 h-3.5 text-[#627EEA]" />}
             label="rETH"
             sublabel={`Rocket Pool · ${data?.lbtcApy.toFixed(2) ?? '—'}% LBTC ref`}
-            qty={rEth}
-            usd={rEth * ethPrice}
-            onChange={setREth}
-            step="0.001"
+            qty={rEth.qty}
+            usd={rEth.usd}
+            decimals={4}
           />
           <BalanceRow
             icon={<Cog className="w-3.5 h-3.5 text-[#9945FF]" />}
             label="mSOL"
             sublabel={`Marinade · Kamino ${data?.kaminoApy.toFixed(2) ?? '—'}% APY`}
-            qty={mSol}
-            usd={mSol * solPrice}
-            onChange={setMSol}
-            step="0.01"
+            qty={mSol.qty}
+            usd={mSol.usd}
+            decimals={2}
           />
         </div>
 
         <p className="text-[10px] text-muted-foreground">
           {sk ? 'Active motor celkom' : 'Active motor total'}:{' '}
           <span className="text-foreground font-semibold tabular-nums">{formatUsd(motorUsd)}</span>
+          {' · '}
+          {sk ? 'Voľné na staking' : 'Available to stake'}:{' '}
+          <span className="text-foreground font-semibold tabular-nums">
+            {formatUsd(portfolioData.assets.ETH.liquidUsd + portfolioData.assets.SOL.liquidUsd)}
+          </span>
         </p>
 
         <div className="rounded-xl border border-border/50 bg-background/40 p-3 space-y-4">
@@ -216,6 +239,7 @@ export function DeFiCyborgTerminal({ lang }: Props) {
             value={collateralPct}
             onChange={v => { setSlidersTouched(true); setCollateralPct(v); }}
             hint={`${collateralPct}% · ${formatUsd(motorUsd * (collateralPct / 100))}`}
+            disabled={motorUsd <= 0}
           />
           <SliderBlock
             label={sk ? 'Cieľové LTV %' : 'Target LTV %'}
@@ -223,6 +247,7 @@ export function DeFiCyborgTerminal({ lang }: Props) {
             onChange={v => { setSlidersTouched(true); setLtvPct(v); }}
             hint={ltvPct > 45 ? (sk ? '⚠ LTV nad 45 % — režim DANGER' : '⚠ LTV above 45% — DANGER mode') : `${ltvPct}%`}
             danger={ltvPct > 45}
+            disabled={motorUsd <= 0}
           />
           <div className="flex items-center justify-between rounded-lg bg-emerald-500/10 border border-emerald-500/25 px-3 py-2">
             <span className="text-[11px] text-muted-foreground">
@@ -244,7 +269,8 @@ export function DeFiCyborgTerminal({ lang }: Props) {
       <Button
         type="button"
         onClick={handleSign}
-        className="w-full h-12 text-sm font-bold touch-manipulation bg-emerald-600 hover:bg-emerald-500 text-white"
+        disabled={motorUsd <= 0}
+        className="w-full h-12 text-sm font-bold touch-manipulation bg-emerald-600 hover:bg-emerald-500 text-white disabled:opacity-50"
       >
         {sk ? 'Podpísať transakciu (Mock HW)' : 'Sign Transaction (Mock HW)'}
       </Button>
@@ -253,15 +279,14 @@ export function DeFiCyborgTerminal({ lang }: Props) {
 }
 
 function BalanceRow({
-  icon, label, sublabel, qty, usd, onChange, step,
+  icon, label, sublabel, qty, usd, decimals,
 }: {
   icon: ReactNode;
   label: string;
   sublabel: string;
   qty: number;
   usd: number;
-  onChange: (v: number) => void;
-  step: string;
+  decimals: number;
 }) {
   return (
     <div className="rounded-xl border border-border/50 bg-background/30 p-2.5 space-y-1.5">
@@ -275,27 +300,22 @@ function BalanceRow({
           {formatUsd(usd)}
         </span>
       </div>
-      <Input
-        type="number"
-        inputMode="decimal"
-        step={step}
-        min={0}
-        value={qty}
-        onChange={e => onChange(Math.max(0, parseFloat(e.target.value) || 0))}
-        className="h-10 text-sm font-mono tabular-nums touch-manipulation"
-      />
+      <p className="text-sm font-mono tabular-nums text-foreground">
+        {qty.toFixed(decimals)} {label}
+      </p>
     </div>
   );
 }
 
 function SliderBlock({
-  label, value, onChange, hint, danger,
+  label, value, onChange, hint, danger, disabled,
 }: {
   label: string;
   value: number;
   onChange: (v: number) => void;
   hint: string;
   danger?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-2">
@@ -310,6 +330,7 @@ function SliderBlock({
         min={0}
         max={100}
         step={1}
+        disabled={disabled}
         onValueChange={([v]) => onChange(v)}
         className="py-2 touch-manipulation [&_[role=slider]]:h-6 [&_[role=slider]]:w-6"
       />
