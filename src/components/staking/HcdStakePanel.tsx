@@ -27,10 +27,19 @@ interface Props {
 }
 
 function layerApy(layer: HcdLayerTarget, apys: { rEth: number; mSol: number }): string | null {
-  if (layer.id.includes('core') && layer.asset === 'rETH') return `${apys.rEth.toFixed(2)}%`;
-  if (layer.id.includes('core') && layer.asset === 'mSOL') return `${apys.mSol.toFixed(2)}%`;
+  const rEthApy = apys.rEth ?? 0;
+  const mSolApy = apys.mSol ?? 0;
+  if (layer.id.includes('core') && layer.asset === 'rETH') return `${rEthApy.toFixed(2)}%`;
+  if (layer.id.includes('core') && layer.asset === 'mSOL') return `${mSolApy.toFixed(2)}%`;
   return null;
 }
+
+function fmtNum(value: number | null | undefined, digits = 1): string {
+  const n = value ?? 0;
+  return Number.isFinite(n) ? n.toFixed(digits) : '0';
+}
+
+const EMPTY_SLICE = { liquidQty: 0, currentPrice: 0 };
 
 function buildLayerUpdate(layer: HcdLayerTarget, qty: number): PortfolioBalanceUpdate {
   if (layer.ledgerProtocol?.includes('Rocket')) return { rEthQty: qty };
@@ -78,7 +87,7 @@ function AssetHcdCard({
       </div>
 
       <div className="space-y-2">
-        {layers.map(layer => {
+        {(layers ?? []).map(layer => {
           const qty = deployQty * (layer.pctTarget / 100);
           const usd = qty * price;
           const stepKey = `hcd-${layer.id}`;
@@ -166,49 +175,42 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const win = getTimingWindow(marketScore);
   const rebalanceLocked = !rebalance.unlocked || win.locked;
 
+  const ethSlice = portfolioData.assets?.ETH ?? EMPTY_SLICE;
+  const solSlice = portfolioData.assets?.SOL ?? EMPTY_SLICE;
+
   const ethLayers = useMemo(
-    () => computeHcdLayerTargets('ETH', indicators),
+    () => computeHcdLayerTargets('ETH', indicators) ?? [],
     [indicators],
   );
   const solLayers = useMemo(
-    () => computeHcdLayerTargets('SOL', indicators),
+    () => computeHcdLayerTargets('SOL', indicators) ?? [],
     [indicators],
   );
 
   const ethAdvice = useMemo(() => {
-    const slice = portfolioData.assets.ETH;
     return computeAdvice({
       symbol: 'ETH',
-      liquidQty: slice.liquidQty,
-      pricePerUnit: slice.currentPrice,
+      liquidQty: ethSlice.liquidQty ?? 0,
+      pricePerUnit: ethSlice.currentPrice ?? 0,
       marketScore,
-      ledgerEntries: entries,
+      ledgerEntries: entries ?? [],
     });
-  }, [portfolioData.assets.ETH, marketScore, entries]);
+  }, [ethSlice, marketScore, entries]);
 
   const solAdvice = useMemo(() => {
-    const slice = portfolioData.assets.SOL;
     return computeAdvice({
       symbol: 'SOL',
-      liquidQty: slice.liquidQty,
-      pricePerUnit: slice.currentPrice,
+      liquidQty: solSlice.liquidQty ?? 0,
+      pricePerUnit: solSlice.currentPrice ?? 0,
       marketScore,
-      ledgerEntries: entries,
+      ledgerEntries: entries ?? [],
     });
-  }, [portfolioData.assets.SOL, marketScore, entries]);
+  }, [solSlice, marketScore, entries]);
 
   if (portfolioData.loading) {
     return (
       <div className="glass-card p-3 text-sm text-muted-foreground">
         {sk ? 'Načítavam HCD staking…' : 'Loading HCD staking…'}
-      </div>
-    );
-  }
-
-  if (win.phase === 'overheated') {
-    return (
-      <div className="glass-card p-3 border border-loss/40 bg-loss/5">
-        <p className="text-[11px] text-loss font-semibold">{overheatedWarning(lang)}</p>
       </div>
     );
   }
@@ -222,15 +224,21 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </h2>
       </div>
 
+      {win.phase === 'overheated' && (
+        <div className="rounded-xl border border-loss/40 bg-loss/5 p-3">
+          <p className="text-[11px] text-loss font-semibold">{overheatedWarning(lang)}</p>
+        </div>
+      )}
+
       <div
         className={`rounded-xl border px-3 py-2.5 flex items-start gap-2 text-[11px] leading-snug ${
           rebalanceLocked
-            ? 'border-amber-500/40 bg-amber-500/10 text-amber-200'
+            ? 'border-red-500/50 bg-red-500/10 text-red-200'
             : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
         }`}
       >
         {rebalanceLocked ? (
-          <Lock className="w-4 h-4 shrink-0 mt-0.5" />
+          <Lock className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
         ) : (
           <Zap className="w-4 h-4 shrink-0 mt-0.5" />
         )}
@@ -239,10 +247,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
         {[
-          { l: sk ? 'Volatilita' : 'Volatility', v: `${indicators.volatilityPct.toFixed(1)}%`, sub: indicators.volatilityRegime },
-          { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct}%`, sub: 'ltv' },
-          { l: 'USDC Borrow', v: `${indicators.borrowApyPct.toFixed(2)}%`, sub: indicators.borrowWarning ? 'warn' : 'ok' },
-          { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${indicators.gasLayerPct.toFixed(1)}%`, sub: indicators.gasStress },
+          { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime },
+          { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: 'ltv' },
+          { l: 'USDC Borrow', v: `${fmtNum(indicators.borrowApyPct, 2)}%`, sub: indicators.borrowWarning ? 'warn' : 'ok' },
+          { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress },
         ].map(item => (
           <div key={item.l} className="rounded-lg border border-border/50 bg-background/40 p-2 min-w-0">
             <p className="text-[9px] text-muted-foreground uppercase tracking-wide truncate">{item.l}</p>
@@ -268,29 +276,25 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
-      {(ethAdvice.eligible || portfolioData.assets.ETH.liquidQty > 0) && (
-        <AssetHcdCard
-          symbol="ETH"
-          lang={lang}
-          liquidQty={portfolioData.assets.ETH.liquidQty}
-          price={portfolioData.assets.ETH.currentPrice}
-          layers={ethLayers}
-          rebalanceLocked={rebalanceLocked}
-          advised={ethAdvice.eligible ? ethAdvice : null}
-        />
-      )}
+      <AssetHcdCard
+        symbol="ETH"
+        lang={lang}
+        liquidQty={ethSlice.liquidQty ?? 0}
+        price={ethSlice.currentPrice ?? 0}
+        layers={ethLayers}
+        rebalanceLocked={rebalanceLocked}
+        advised={ethAdvice.eligible ? ethAdvice : null}
+      />
 
-      {(solAdvice.eligible || portfolioData.assets.SOL.liquidQty > 0) && (
-        <AssetHcdCard
-          symbol="SOL"
-          lang={lang}
-          liquidQty={portfolioData.assets.SOL.liquidQty}
-          price={portfolioData.assets.SOL.currentPrice}
-          layers={solLayers}
-          rebalanceLocked={rebalanceLocked}
-          advised={solAdvice.eligible ? solAdvice : null}
-        />
-      )}
+      <AssetHcdCard
+        symbol="SOL"
+        lang={lang}
+        liquidQty={solSlice.liquidQty ?? 0}
+        price={solSlice.currentPrice ?? 0}
+        layers={solLayers}
+        rebalanceLocked={rebalanceLocked}
+        advised={solAdvice.eligible ? solAdvice : null}
+      />
 
       <p className="text-[10px] text-muted-foreground leading-snug">
         {sk
