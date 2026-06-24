@@ -268,6 +268,17 @@ export function computeHcdLayerTargets(
   return normalizeLayers(raw);
 }
 
+export const HCD_LTV_MAX_NORMAL = 40;
+export const HCD_LTV_MAX_RESTRICTED = 20;
+
+/** Max LTV % allowed by HCD brain — 20% under stress, 40% otherwise. */
+export function getHcdLtvMax(indicators: HcdIndicators): number {
+  if (indicators.volatilityRegime === 'high' || indicators.borrowWarning) {
+    return HCD_LTV_MAX_RESTRICTED;
+  }
+  return HCD_LTV_MAX_NORMAL;
+}
+
 export function rebalanceLockMessage(lang: Lang, status: QuarterlyRebalanceStatus): string {
   if (status.unlocked) {
     return lang === 'sk'
