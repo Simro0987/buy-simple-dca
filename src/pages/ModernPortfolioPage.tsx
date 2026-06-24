@@ -37,6 +37,7 @@ import {
   computeTokenRadar,
   radarGlowClass,
 } from '@/lib/portfolio/dcaOutEngine';
+import { OrderHistoryBook } from '@/components/portfolio/OrderHistoryBook';
 
 interface Props { lang: Lang; }
 
@@ -234,7 +235,7 @@ function ModernPortfolioInner({ lang }: Props) {
   }, [buildDailyReport, sk]);
 
   return (
-    <div className="relative space-y-5 pb-8 -mx-1">
+    <div className="relative space-y-4 sm:space-y-5 pb-8 min-w-0 overflow-x-hidden">
 
       {/* ═══ HERO ═══════════════════════════════════════════════════════════ */}
       <motion.section
@@ -244,9 +245,9 @@ function ModernPortfolioInner({ lang }: Props) {
         className="pt-2 pb-1"
       >
         <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
-        <div className="mt-2 flex items-end justify-between gap-4">
-          <Money size="hero">{formatUsd(metrics.totalValue)}</Money>
-          <div className="text-right pb-1 shrink-0">
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
+          <Money size="hero" className="!text-4xl sm:!text-6xl break-words">{formatUsd(metrics.totalValue)}</Money>
+          <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
             <div className="flex items-center gap-1.5 justify-end">
               {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
               <Money size="md" positive={isGain} negative={!isGain}>
@@ -259,7 +260,7 @@ function ModernPortfolioInner({ lang }: Props) {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
           <Chip color="green">
             <Sparkles className="w-3 h-3 inline mr-1" />
             Profit {formatUsd(profitAvailable)}
@@ -285,16 +286,16 @@ function ModernPortfolioInner({ lang }: Props) {
       </motion.section>
 
       {/* ═══ STAT BENTO ═════════════════════════════════════════════════════ */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
         {[
           { l: sk ? 'Investované' : 'Invested', v: formatUsd(metrics.totalInvested), d: 0.04 },
           { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(metrics.totalPnl)}`, d: 0.08, pos: isGain },
           { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: formatUsd(weeklyCapital), d: 0.12 },
           { l: sk ? 'Voľný cash' : 'Free cash', v: formatUsd(freeCash + reservoir.stable), d: 0.16 },
         ].map(s => (
-          <Bento key={s.l} delay={s.d} className="p-4">
-            <Label>{s.l}</Label>
-            <Money size="md" className="mt-2 block" positive={s.pos} negative={s.pos === false}>
+          <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
+            <Label className="truncate">{s.l}</Label>
+            <Money size="md" className="mt-2 block truncate !text-lg sm:!text-2xl" positive={s.pos} negative={s.pos === false}>
               {s.v}
             </Money>
           </Bento>
@@ -302,16 +303,16 @@ function ModernPortfolioInner({ lang }: Props) {
       </div>
 
       {/* ═══ DAILY RISK REPORT ═══════════════════════════════════════════════ */}
-      <Bento delay={0.18} className="bg-[#0A0A0A] border border-white/10 p-5">
-        <div className="flex items-center justify-between gap-3">
-          <div>
+      <Bento delay={0.18} className="bg-[#0A0A0A] border border-white/10 p-4 sm:p-5 min-w-0">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
+          <div className="min-w-0">
             <Label>Daily Risk Report</Label>
-            <p className="text-[11px] text-white/35 font-mono mt-1">Portfolio + WACB + LiveRiskScore + concentration risk</p>
+            <p className="text-[11px] text-white/35 font-mono mt-1 break-words">Portfolio + WACB + LiveRiskScore + concentration risk</p>
           </div>
           <button
             onClick={() => void handleManualReport()}
             disabled={reportSending}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60"
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60 shrink-0 w-full sm:w-auto"
           >
             <Send className="w-3.5 h-3.5" />
             {reportSending ? 'Sending…' : 'Generate & Send'}
@@ -326,7 +327,7 @@ function ModernPortfolioInner({ lang }: Props) {
       <Bento
         delay={0.2}
         glow={maxRisk >= 70 ? 'red' : maxRisk >= 50 ? 'orange' : sellSignals > 0 ? 'purple' : 'purple'}
-        className="relative border-white/[0.14] rounded-[2rem]"
+        className="relative border-white/[0.14] rounded-2xl sm:rounded-[2rem] min-w-0"
       >
         {/* Ambient radar rings */}
         <div className="absolute inset-0 pointer-events-none overflow-hidden rounded-[2rem]" aria-hidden>
@@ -344,20 +345,20 @@ function ModernPortfolioInner({ lang }: Props) {
           />
         </div>
 
-        <div className="relative p-5 md:p-7 space-y-6">
+        <div className="relative p-4 sm:p-5 md:p-7 space-y-5 sm:space-y-6 min-w-0">
           {/* Header */}
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <div className="flex items-center gap-2 mb-2">
-                <Target className="w-5 h-5 text-[#9945FF]" />
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between min-w-0">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                <Target className="w-5 h-5 text-[#9945FF] shrink-0" />
                 <span className="text-sm font-bold text-white uppercase tracking-widest">DCA-Out Radar</span>
                 <Chip color={isFetching ? 'amber' : 'green'}>{isFetching ? 'SYNC' : 'LIVE'}</Chip>
               </div>
-              <p className="text-xs text-white/40 max-w-md leading-relaxed">
+              <p className="text-xs text-white/40 max-w-md leading-relaxed break-words">
                 LiveRiskScore = F&G×0.4 + RSI×0.4 + PnL%×0.2 → výber do crvUSD Profit Reservoir
               </p>
             </div>
-            <div className="text-right shrink-0">
+            <div className="text-left sm:text-right shrink-0 flex sm:block items-center justify-between gap-3">
               <Label>F&G Index</Label>
               <Money size="lg" className="mt-1 block" positive={fgValue < 35} negative={fgValue > 70}>
                 {fgValue}
@@ -403,19 +404,19 @@ function ModernPortfolioInner({ lang }: Props) {
           </div>
 
           {/* Token tabs */}
-          <div className="flex gap-2">
+          <div className="grid grid-cols-3 gap-2 min-w-0">
             {radarTokens.map(t => (
               <button
                 key={t.sym}
                 onClick={() => setExpandedRadar(t.sym)}
-                className={`flex-1 py-3 px-3 rounded-2xl border transition-all ${
+                className={`min-w-0 py-2.5 sm:py-3 px-2 sm:px-3 rounded-xl sm:rounded-2xl border transition-all ${
                   expandedRadar === t.sym
                     ? 'bg-white/[0.08] border-white/20'
                     : 'border-white/[0.06] text-white/40'
                 } ${radarGlowClass(t.score, t.status, t.sellPct)}`}
               >
-                <span className="text-xs font-bold" style={{ color: DCA_TOKEN_COLORS[t.sym] }}>{t.sym}</span>
-                <p className="font-mono text-lg font-bold text-white mt-0.5">{t.score.toFixed(0)}</p>
+                <span className="text-[10px] sm:text-xs font-bold block truncate" style={{ color: DCA_TOKEN_COLORS[t.sym] }}>{t.sym}</span>
+                <p className="font-mono text-base sm:text-lg font-bold text-white mt-0.5">{t.score.toFixed(0)}</p>
                 <Chip color={t.status === 'SELL' ? 'red' : t.status === 'HOLD' ? 'purple' : 'green'}>
                   {t.status}
                 </Chip>
@@ -435,23 +436,23 @@ function ModernPortfolioInner({ lang }: Props) {
                   initial={{ opacity: 0, height: 0 }}
                   animate={{ opacity: 1, height: 'auto' }}
                   exit={{ opacity: 0, height: 0 }}
-                  className={`rounded-3xl border p-5 space-y-4 ${radarGlowClass(t.score, t.status, t.sellPct)}`}
+                  className={`rounded-2xl sm:rounded-3xl border p-4 sm:p-5 space-y-4 min-w-0 ${radarGlowClass(t.score, t.status, t.sellPct)}`}
                   style={{ borderColor: `${DCA_TOKEN_COLORS[t.sym]}40` }}
                 >
-                  <div className="grid grid-cols-3 gap-3">
+                  <div className="grid grid-cols-3 gap-2 sm:gap-3 min-w-0">
                     {[
                       { l: 'RSI(14d)', v: String(rsi[t.sym]) },
                       { l: 'F&G', v: String(fgValue) },
                       { l: 'PnL', v: `${t.pnlPct >= 0 ? '+' : ''}${t.pnlPct.toFixed(1)}%` },
                     ].map(m => (
-                      <div key={m.l} className="bg-black/40 rounded-2xl p-3 border border-white/[0.06]">
-                        <Label>{m.l}</Label>
-                        <p className="font-mono text-xl font-bold text-white mt-1">{m.v}</p>
+                      <div key={m.l} className="bg-black/40 rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/[0.06] min-w-0">
+                        <Label className="truncate">{m.l}</Label>
+                        <p className="font-mono text-base sm:text-xl font-bold text-white mt-1 truncate">{m.v}</p>
                       </div>
                     ))}
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3 min-w-0">
                     <Label className="shrink-0">Priem. DCA $</Label>
                     <input
                       type="number"
@@ -460,7 +461,7 @@ function ModernPortfolioInner({ lang }: Props) {
                       value={dca || ''}
                       placeholder="0.00"
                       onChange={e => updateDcaPrice(t.sym, parseFloat(e.target.value) || 0)}
-                      className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 font-mono text-white text-sm outline-none focus:border-white/25"
+                      className="w-full sm:flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-2.5 font-mono text-white text-sm outline-none focus:border-white/25 min-w-0"
                     />
                   </div>
 
@@ -502,15 +503,15 @@ function ModernPortfolioInner({ lang }: Props) {
                         <span className="text-red-400 font-bold">Dôvod: </span>
                         {t.reason}
                       </p>
-                      <div className="flex items-center justify-between bg-black/30 rounded-xl px-4 py-3">
-                        <div>
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between bg-black/30 rounded-xl px-4 py-3 min-w-0">
+                        <div className="min-w-0">
                           <Label>Predaj</Label>
-                          <p className="font-mono text-lg font-bold text-white">{t.sellQty.toFixed(4)} {t.sym}</p>
+                          <p className="font-mono text-base sm:text-lg font-bold text-white break-all">{t.sellQty.toFixed(4)} {t.sym}</p>
                           <p className="font-mono text-xs text-white/40">≈ {formatUsd(t.sellQty * price)}</p>
                         </div>
                         <button
                           onClick={() => copyText(t.sellQty.toFixed(4), t.sym)}
-                          className="flex items-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-white/50 hover:text-white text-xs"
+                          className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-white/10 text-white/50 hover:text-white text-xs shrink-0 w-full sm:w-auto"
                         >
                           {copied === t.sym ? <Check className="w-3.5 h-3.5 text-[#14F195]" /> : <Copy className="w-3.5 h-3.5" />}
                           {copied === t.sym ? 'OK' : 'Kopírovať'}
@@ -554,17 +555,17 @@ function ModernPortfolioInner({ lang }: Props) {
       </Bento>
 
       {/* ═══ ALOKÁCIA + ZDRAVIE ═══════════════════════════════════════════ */}
-      <div className="grid md:grid-cols-2 gap-3">
-        <Bento delay={0.28} className="p-5 space-y-4">
+      <div className="grid md:grid-cols-2 gap-2 sm:gap-3 min-w-0">
+        <Bento delay={0.28} className="p-4 sm:p-5 space-y-4 min-w-0">
           <Label>{sk ? 'Alokácia · USD' : 'Allocation · USD'}</Label>
           {metrics.assets.map(a => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
             return (
               <div key={a.symbol} className={dim ? 'opacity-30' : ''}>
-                <div className="flex justify-between items-baseline mb-1.5">
-                  <span className="text-sm font-bold" style={{ color: token.color }}>{a.symbol}</span>
-                  <Money size="md" className="!text-2xl">{formatUsd(a.value)}</Money>
+                <div className="flex justify-between items-baseline gap-2 mb-1.5 min-w-0">
+                  <span className="text-sm font-bold shrink-0" style={{ color: token.color }}>{a.symbol}</span>
+                  <Money size="md" className="!text-lg sm:!text-2xl truncate">{formatUsd(a.value)}</Money>
                 </div>
                 <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
                   <div
@@ -584,7 +585,7 @@ function ModernPortfolioInner({ lang }: Props) {
           })}
         </Bento>
 
-        <Bento delay={0.32} className="p-5 flex flex-col justify-between">
+        <Bento delay={0.32} className="p-4 sm:p-5 flex flex-col justify-between min-w-0">
           <div>
             <Label>{sk ? 'Zdravie portfólia' : 'Portfolio health'}</Label>
             <Money size="xl" className="mt-3 block">{healthScore ?? '—'}</Money>
@@ -612,7 +613,7 @@ function ModernPortfolioInner({ lang }: Props) {
       </div>
 
       {/* ═══ POZÍCIE ═══════════════════════════════════════════════════════ */}
-      <div className="space-y-3">
+      <div className="space-y-3 min-w-0">
         <Label>{sk ? 'Pozície' : 'Positions'}</Label>
         {portfolioData.loading ? (
           <Bento className="p-5 space-y-3">
@@ -630,18 +631,18 @@ function ModernPortfolioInner({ lang }: Props) {
             const slice = portfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
             const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
             return (
-              <Bento key={a.symbol} delay={0.36 + i * 0.05} className={`p-5 ${dim ? 'opacity-35' : ''}`}>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-center gap-3">
+              <Bento key={a.symbol} delay={0.36 + i * 0.05} className={`p-4 sm:p-5 min-w-0 ${dim ? 'opacity-35' : ''}`}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between min-w-0">
+                  <div className="flex items-center gap-3 min-w-0">
                     <div
-                      className="w-12 h-12 rounded-2xl flex items-center justify-center text-xs font-black"
+                      className="w-10 h-10 sm:w-12 sm:h-12 rounded-2xl flex items-center justify-center text-xs font-black shrink-0"
                       style={{ background: `${token.color}18`, color: token.color, border: `1px solid ${token.color}35` }}
                     >
                       {a.symbol}
                     </div>
-                    <div>
-                      <Money size="lg" className="!text-3xl">{formatUsd(a.value)}</Money>
-                      <p className="font-mono text-xs text-white/35 mt-1">
+                    <div className="min-w-0">
+                      <Money size="lg" className="!text-2xl sm:!text-3xl truncate">{formatUsd(a.value)}</Money>
+                      <p className="font-mono text-xs text-white/35 mt-1 break-words">
                         {a.holdings > 0
                           ? `${a.symbol === 'BTC' ? a.holdings.toFixed(6) : a.holdings.toFixed(4)} ${a.symbol}`
                           : '—'}
@@ -649,8 +650,8 @@ function ModernPortfolioInner({ lang }: Props) {
                       </p>
                     </div>
                   </div>
-                  <div className="text-right">
-                    <Money size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-2xl">
+                  <div className="text-left sm:text-right shrink-0">
+                    <Money size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-xl sm:!text-2xl">
                       {a.pnl >= 0 ? '+' : ''}{formatUsd(a.pnl)}
                     </Money>
                     <p className={`font-mono text-sm ${a.pnlPct >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>
@@ -684,9 +685,12 @@ function ModernPortfolioInner({ lang }: Props) {
         )}
       </div>
 
+      {/* ═══ HISTÓRIA OBJEDNÁVOK ═══════════════════════════════════════════ */}
+      <OrderHistoryBook lang={lang} />
+
       {/* ═══ TAKE PROFIT + REZERVOÁR ═══════════════════════════════════════ */}
-      <Bento delay={0.5} className="p-5 space-y-4">
-        <div className="flex items-center justify-between">
+      <Bento delay={0.5} className="p-4 sm:p-5 space-y-4 min-w-0">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between min-w-0">
           <div className="flex items-center gap-2">
             <Target className="w-4 h-4 text-orange-400" />
             <span className="text-sm font-bold text-white">Dynamic Take Profit</span>
@@ -701,8 +705,8 @@ function ModernPortfolioInner({ lang }: Props) {
               const dec = TOKEN_DECIMALS[r.symbol] ?? 4;
               const tokensStr = r.sellTokens.toFixed(dec);
               return (
-                <div key={r.symbol} className="rounded-2xl border border-white/[0.08] bg-black/30 p-4 space-y-3">
-                  <div className="flex justify-between items-center">
+                <div key={r.symbol} className="rounded-2xl border border-white/[0.08] bg-black/30 p-3 sm:p-4 space-y-3 min-w-0">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center min-w-0">
                     <span className="font-bold text-white">{r.symbol}</span>
                     <Money size="md" positive className="!text-xl">+{formatUsd(r.pnl)}</Money>
                   </div>
@@ -737,7 +741,7 @@ function ModernPortfolioInner({ lang }: Props) {
 
       {/* ═══ KONCENTRÁCIA ═══════════════════════════════════════════════════ */}
       {warnings.length > 0 && (
-        <Bento delay={0.55} className="p-5 space-y-3">
+        <Bento delay={0.55} className="p-4 sm:p-5 space-y-3 min-w-0">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-4 h-4 text-orange-400" />
             <span className="text-sm font-bold text-white">Koncentračné riziko</span>
