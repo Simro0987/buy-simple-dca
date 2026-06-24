@@ -60,8 +60,8 @@ const DECIMALS: Record<AdvisorSymbol, number> = { BTC: 4, ETH: 3, SOL: 2 };
 
 // Default + diversification protocols (match stakingLedger PROTOCOL_PRESETS).
 const PROTOCOL_DEFAULTS: Record<AdvisorSymbol, { primary: string; fallback: string; alternates: string[] }> = {
-  ETH: { primary: 'Rocket Pool (rETH)',     fallback: 'ether.fi (weETH)',    alternates: ['Kiln (Solo Manage)', 'Aave V3 Lending'] },
-  SOL: { primary: 'Marinade Native (mSOL)', fallback: 'Sanctum INF (INF)',   alternates: ['Kamino Autopilot'] },
+  ETH: { primary: 'Rocket Pool (rETH)',     fallback: 'Alchemix Vault (ETH)', alternates: ['Aave V3 Lending', 'Kiln (Solo Manage)'] },
+  SOL: { primary: 'Marinade Native (mSOL)', fallback: 'Kamino Autopilot',     alternates: [] },
   BTC: { primary: 'Babylon Staking',        fallback: 'Babylon Staking',     alternates: ['Lombard LBTC', 'Morpho Blue LBTC'] },
 };
 
@@ -473,16 +473,25 @@ export function computeDynamicStakeSplit(
 ): DynamicStakeTarget[] {
   const apys = getLiveApyMap(tick);
   if (symbol === 'SOL') {
-    return dynamicSplit(
-      { key: 'marinade_native', protocol: 'Marinade Native', outputToken: 'mSOL', officialUrl: 'marinade.finance', apy: apys.solMarinadeNative },
-      { key: 'sanctum_inf',     protocol: 'Sanctum INF',     outputToken: 'INF',  officialUrl: 'sanctum.so',       apy: apys.solSanctumInf },
-      marketScore,
-    );
+    return [
+      {
+        key: 'marinade_native',
+        protocol: 'Marinade Native',
+        outputToken: 'mSOL',
+        officialUrl: 'marinade.finance',
+        apy: apys.solMarinadeNative,
+        pct: 100,
+      },
+    ];
   }
-  // ETH — Arbitrum rails
-  return dynamicSplit(
-    { key: 'rocket_pool', protocol: 'Rocket Pool (rETH)', outputToken: 'rETH',  officialUrl: 'rocketpool.net', apy: apys.ethRocketPool },
-    { key: 'etherfi',     protocol: 'ether.fi (weETH)',   outputToken: 'weETH', officialUrl: 'ether.fi',       apy: apys.ethEtherfi },
-    marketScore,
-  );
+  return [
+    {
+      key: 'rocket_pool',
+      protocol: 'Rocket Pool (rETH)',
+      outputToken: 'rETH',
+      officialUrl: 'rocketpool.net',
+      apy: apys.ethRocketPool,
+      pct: 100,
+    },
+  ];
 }

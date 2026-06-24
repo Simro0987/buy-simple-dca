@@ -2,13 +2,13 @@ import type { PriceData } from '@/lib/crypto';
 import type { PortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import type { StakedEntry, LedgerSymbol } from '@/lib/stakingLedger';
 
-export type ProtocolToken = 'weETH' | 'INF' | 'rETH' | 'mSOL' | 'LBTC';
+export type ProtocolToken = 'rETH' | 'mSOL' | 'LBTC' | 'Alchemix ETH';
 
 export interface ProtocolBalance {
   symbol: ProtocolToken;
   qty: number;
   usd: number;
-  role: 'cold' | 'motor';
+  role: 'alchemix' | 'motor';
 }
 
 export interface AssetSlice {
@@ -27,10 +27,10 @@ export interface PortfolioData {
   loading: boolean;
   prices: { btc: number; eth: number; sol: number };
   assets: Record<LedgerSymbol, AssetSlice>;
-  coldReserve: { weEth: ProtocolBalance; inf: ProtocolBalance };
+  alchemixReserve: { eth: ProtocolBalance };
   activeMotor: { rEth: ProtocolBalance; mSol: ProtocolBalance };
   lbtc: ProtocolBalance;
-  totalColdUsd: number;
+  totalAlchemixUsd: number;
   totalMotorUsd: number;
 }
 
@@ -110,20 +110,16 @@ export function buildPortfolioData(input: {
 
   const rEthLedger = sumByProtocol(ethEntries, [/rocket\s*pool/i, /reth/i]);
   const mSolLedger = sumByProtocol(solEntries, [/marinade/i, /msol/i]);
-  const weEthLedger = sumByProtocol(ethEntries, [/ether\.fi/i, /weeth/i]);
-  const infLedger = sumByProtocol(solEntries, [/sanctum/i, /\binf\b/i]);
+  const alchemixLedger = sumByProtocol(ethEntries, [/alchemix/i]);
   const lbtcLedger = sumByProtocol(btcEntries, [/lombard/i, /lbtc/i]);
 
-  // Staked/collateral derivatives populate only after granular ✅ confirmations.
   const rEthQty = rEthLedger;
   const mSolQty = mSolLedger;
-  const weEthQty = weEthLedger;
-  const infQty = infLedger;
+  const alchemixEthQty = alchemixLedger;
   const lbtcQty = lbtcLedger;
 
-  const coldReserve = {
-    weEth: protocolBalance('weETH', weEthQty, ethPrice, 'cold'),
-    inf: protocolBalance('INF', infQty, solPrice, 'cold'),
+  const alchemixReserve = {
+    eth: protocolBalance('Alchemix ETH', alchemixEthQty, ethPrice, 'alchemix'),
   };
 
   const activeMotor = {
@@ -131,19 +127,19 @@ export function buildPortfolioData(input: {
     mSol: protocolBalance('mSOL', mSolQty, solPrice, 'motor'),
   };
 
-  const lbtc = protocolBalance('LBTC', lbtcQty, btcPrice, 'cold');
+  const lbtc = protocolBalance('LBTC', lbtcQty, btcPrice, 'motor');
 
-  const totalColdUsd = coldReserve.weEth.usd + coldReserve.inf.usd;
+  const totalAlchemixUsd = alchemixReserve.eth.usd;
   const totalMotorUsd = activeMotor.rEth.usd + activeMotor.mSol.usd;
 
   return {
     loading: input.metrics.loading || input.pricesLoading,
     prices: { btc: btcPrice, eth: ethPrice, sol: solPrice },
     assets,
-    coldReserve,
+    alchemixReserve,
     activeMotor,
     lbtc,
-    totalColdUsd,
+    totalAlchemixUsd,
     totalMotorUsd,
   };
 }

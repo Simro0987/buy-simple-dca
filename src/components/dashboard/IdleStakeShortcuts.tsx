@@ -418,23 +418,13 @@ function DynamicSplitPanel({
 
   const ledgerProtocol = (t: DynamicStakeTarget): string => {
     if (t.key === 'rocket_pool') return 'Rocket Pool (rETH)';
-    if (t.key === 'etherfi') return 'ether.fi (weETH)';
     if (t.key === 'marinade_native') return 'Marinade Native (mSOL)';
-    if (t.key === 'sanctum_inf') return 'Sanctum INF (INF)';
     return t.protocol;
   };
 
   const buildUpdate = (t: DynamicStakeTarget, qty: number): PortfolioBalanceUpdate => {
-    const proto = ledgerProtocol(t);
-    if (symbol === 'ETH') {
-      if (/rocket/i.test(proto)) return { rEthQty: qty };
-      if (/ether|weeth/i.test(proto)) return { weEthQty: qty };
-    }
-    if (symbol === 'SOL') {
-      if (/marinade|msol/i.test(proto)) return { mSolQty: qty };
-      if (/sanctum|inf/i.test(proto)) return { infQty: qty };
-    }
-    return symbol === 'ETH' ? { rEthQty: qty } : { mSolQty: qty };
+    if (symbol === 'ETH') return { rEthQty: qty };
+    return { mSolQty: qty };
   };
 
   return (

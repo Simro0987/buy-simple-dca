@@ -3,12 +3,10 @@ import {
 } from 'react';
 import { getLiveApyMap } from '@/lib/stakeRoutingService';
 
-/** APYs shared by Staking Splits (top) and Cyborg Terminal (bottom). */
+/** APYs shared by HCD Staking and Cyborg Terminal. */
 export interface StakingSplitApys {
   rEth: number;
-  weEth: number;
   mSol: number;
-  inf: number;
   tick: number;
 }
 
@@ -28,9 +26,7 @@ export function StakingApyProvider({ children }: { children: ReactNode }) {
     const map = getLiveApyMap(tick);
     return {
       rEth: map.ethRocketPool,
-      weEth: map.ethEtherfi,
       mSol: map.solMarinadeNative,
-      inf: map.solSanctumInf,
       tick,
     };
   }, [tick]);

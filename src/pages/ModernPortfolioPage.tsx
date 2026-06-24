@@ -666,14 +666,14 @@ function ModernPortfolioInner({ lang }: Props) {
                     {slice.liquidQty.toFixed(6)} {sk ? 'voľné' : 'liquid'} · {slice.stakedQty.toFixed(6)} {sk ? 'staknuté' : 'staked'}
                   </p>
                 )}
-                {a.symbol === 'ETH' && (portfolioData.coldReserve.weEth.qty > 0 || portfolioData.activeMotor.rEth.qty > 0) && (
+                {a.symbol === 'ETH' && (portfolioData.alchemixReserve.eth.qty > 0 || portfolioData.activeMotor.rEth.qty > 0) && (
                   <p className="text-[10px] text-white/25 font-mono mt-1">
-                    weETH {portfolioData.coldReserve.weEth.qty.toFixed(4)} · rETH {portfolioData.activeMotor.rEth.qty.toFixed(4)}
+                    Alchemix {portfolioData.alchemixReserve.eth.qty.toFixed(4)} · rETH {portfolioData.activeMotor.rEth.qty.toFixed(4)}
                   </p>
                 )}
-                {a.symbol === 'SOL' && (portfolioData.coldReserve.inf.qty > 0 || portfolioData.activeMotor.mSol.qty > 0) && (
+                {a.symbol === 'SOL' && portfolioData.activeMotor.mSol.qty > 0 && (
                   <p className="text-[10px] text-white/25 font-mono mt-1">
-                    INF {portfolioData.coldReserve.inf.qty.toFixed(2)} · mSOL {portfolioData.activeMotor.mSol.qty.toFixed(2)}
+                    mSOL {portfolioData.activeMotor.mSol.qty.toFixed(2)}
                   </p>
                 )}
                 <p className={`text-xs font-mono mt-2 ${change24h >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>

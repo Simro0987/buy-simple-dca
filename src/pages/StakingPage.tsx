@@ -1,5 +1,5 @@
 import { Lang } from '@/lib/i18n';
-import { IdleStakeShortcuts } from '@/components/dashboard/IdleStakeShortcuts';
+import { HcdStakePanel } from '@/components/staking/HcdStakePanel';
 import { DeFiCyborgTerminal } from '@/components/staking/DeFiCyborgTerminal';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { StakingApyProvider } from '@/contexts/StakingApyContext';
@@ -13,7 +13,7 @@ function StakingPageContent({ lang, marketScore }: { lang: Lang; marketScore: nu
 
   return (
     <div className="space-y-4 pb-4">
-      <IdleStakeShortcuts lang={lang} marketScore={marketScore} />
+      <HcdStakePanel lang={lang} marketScore={marketScore} />
       <DeFiCyborgTerminal lang={lang} portfolioData={portfolioData} />
     </div>
   );

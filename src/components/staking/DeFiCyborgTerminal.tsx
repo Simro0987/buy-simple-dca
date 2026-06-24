@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useStakingSplitApys } from '@/contexts/StakingApyContext';
+import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import type { PortfolioData } from '@/lib/portfolioData';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
@@ -40,8 +41,7 @@ const NEUTRAL_RSI = 50;
 const EXEC_KEYS = {
   rEth: 'motor-reth',
   mSol: 'motor-msol',
-  weEth: 'cold-weeth',
-  inf: 'cold-inf',
+  alchemixEth: 'hcd-alchemix-eth',
   lbtcSupply: 'lbtc-supply',
   usdcBorrow: 'usdc-borrow',
 } as const;
@@ -75,21 +75,22 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const stakingApys = useStakingSplitApys();
+  const { indicators: hcdIndicators } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } =
     useCyborgMarketData();
 
   const [collateralPct, setCollateralPct] = useState(50);
-  const [ltvPct, setLtvPct] = useState(25);
+  const [ltvPct, setLtvPct] = useState(hcdIndicators.targetLtvPct);
   const [slidersTouched, setSlidersTouched] = useState(false);
 
-  const { weEth, inf } = portfolioData.coldReserve;
+  const { alchemixReserve } = portfolioData;
   const { rEth, mSol } = portfolioData.activeMotor;
   const ethPrice = portfolioData.prices.eth;
   const solPrice = portfolioData.prices.sol;
   const btcPrice = portfolioData.prices.btc;
 
   const motorUsd = portfolioData.totalMotorUsd;
-  const coldUsd = portfolioData.totalColdUsd;
+  const alchemixUsd = portfolioData.totalAlchemixUsd;
 
   const deployREth = rEth.qty * (collateralPct / 100);
   const deployMSol = mSol.qty * (collateralPct / 100);
@@ -117,6 +118,11 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
     setCollateralPct(marketState.sliders.collateralPct);
     setLtvPct(marketState.sliders.ltvPct);
   }, [marketState?.state, marketState?.sliders.collateralPct, marketState?.sliders.ltvPct, slidersTouched]);
+
+  useEffect(() => {
+    if (slidersTouched) return;
+    setLtvPct(hcdIndicators.targetLtvPct);
+  }, [hcdIndicators.targetLtvPct, slidersTouched]);
 
   useEffect(() => {
     if (!market) return;
@@ -280,37 +286,25 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
       <section className="space-y-2">
         <div className="flex items-center gap-1.5">
           <Shield className="w-3.5 h-3.5 text-sky-400" />
-          <h3 className="text-xs font-semibold text-foreground">Cold Reserve</h3>
+          <h3 className="text-xs font-semibold text-foreground">
+            {sk ? 'HCD Vrstva 4 · Alchemix' : 'HCD Layer 4 · Alchemix'}
+          </h3>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          <BalanceRow
-            icon={<Lock className="w-3.5 h-3.5 text-sky-300" />}
-            label="weETH"
-            sublabel={`ether.fi (weETH) · ${apyLabel(stakingApys.weEth)}`}
-            qty={weEth.qty}
-            usd={weEth.usd}
-            decimals={4}
-            lang={lang}
-            confirmed={isExecutionConfirmed(EXEC_KEYS.weEth)}
-            onConfirm={() => confirmRow(EXEC_KEYS.weEth, { weEthQty: weEth.qty })}
-            onRevert={() => revertRow(EXEC_KEYS.weEth)}
-          />
-          <BalanceRow
-            icon={<Lock className="w-3.5 h-3.5 text-violet-300" />}
-            label="INF"
-            sublabel={`Sanctum INF · ${apyLabel(stakingApys.inf)}`}
-            qty={inf.qty}
-            usd={inf.usd}
-            decimals={2}
-            lang={lang}
-            confirmed={isExecutionConfirmed(EXEC_KEYS.inf)}
-            onConfirm={() => confirmRow(EXEC_KEYS.inf, { infQty: inf.qty })}
-            onRevert={() => revertRow(EXEC_KEYS.inf)}
-          />
-        </div>
+        <BalanceRow
+          icon={<Lock className="w-3.5 h-3.5 text-sky-300" />}
+          label="ETH"
+          sublabel={sk ? 'Alchemix Vault · Bez likvidácie' : 'Alchemix Vault · No liquidation'}
+          qty={alchemixReserve.eth.qty}
+          usd={alchemixReserve.eth.usd}
+          decimals={4}
+          lang={lang}
+          confirmed={isExecutionConfirmed(EXEC_KEYS.alchemixEth)}
+          onConfirm={() => confirmRow(EXEC_KEYS.alchemixEth, { alchemixEthQty: alchemixReserve.eth.qty })}
+          onRevert={() => revertRow(EXEC_KEYS.alchemixEth)}
+        />
         <p className="text-[10px] text-muted-foreground">
-          {sk ? 'Cold reserve celkom' : 'Cold reserve total'}:{' '}
-          <span className="text-foreground font-semibold tabular-nums">{formatUsd(coldUsd)}</span>
+          {sk ? 'Alchemix celkom' : 'Alchemix total'}:{' '}
+          <span className="text-foreground font-semibold tabular-nums">{formatUsd(alchemixUsd)}</span>
         </p>
       </section>
 
@@ -451,8 +445,15 @@ export function DeFiCyborgTerminal({ lang, portfolioData }: Props) {
           <p className="text-[10px] text-muted-foreground leading-snug" title={lbtcYieldText}>
             Morpho borrow: {apyLabel(terminalApys.usdcBorrow)}
             {' · '}
+            HCD LTV: {hcdIndicators.targetLtvPct}%
+            {' · '}
             {lbtcYieldText}
           </p>
+          {hcdIndicators.borrowWarning && (
+            <p className="text-[10px] text-orange-400 font-semibold">
+              {sk ? '⚠ Borrow > 8% — zníž taktický kolaterál' : '⚠ Borrow > 8% — reduce tactical collateral'}
+            </p>
+          )}
         </div>
       </section>
     </div>

@@ -8,8 +8,7 @@ const CONFIRMED_EVT = 'cyborg-confirmed-steps-changed';
 export interface PortfolioBalanceUpdate {
   rEthQty?: number;
   mSolQty?: number;
-  weEthQty?: number;
-  infQty?: number;
+  alchemixEthQty?: number;
   lbtcQty?: number;
   usdcBorrowed?: number;
 }
@@ -103,11 +102,8 @@ export function applyPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): voi
   if (update.mSolQty && update.mSolQty > 0) {
     addStake('SOL', 'Marinade Native (mSOL)', update.mSolQty);
   }
-  if (update.weEthQty && update.weEthQty > 0) {
-    addStake('ETH', 'ether.fi (weETH)', update.weEthQty);
-  }
-  if (update.infQty && update.infQty > 0) {
-    addStake('SOL', 'Sanctum INF (INF)', update.infQty);
+  if (update.alchemixEthQty && update.alchemixEthQty > 0) {
+    addStake('ETH', 'Alchemix Vault (ETH)', update.alchemixEthQty);
   }
   if (update.lbtcQty && update.lbtcQty > 0) {
     addStake('BTC', 'Lombard LBTC', update.lbtcQty);
@@ -124,11 +120,8 @@ export function revertPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): vo
   if (update.mSolQty && update.mSolQty > 0) {
     removeStake('SOL', 'Marinade Native (mSOL)', update.mSolQty);
   }
-  if (update.weEthQty && update.weEthQty > 0) {
-    removeStake('ETH', 'ether.fi (weETH)', update.weEthQty);
-  }
-  if (update.infQty && update.infQty > 0) {
-    removeStake('SOL', 'Sanctum INF (INF)', update.infQty);
+  if (update.alchemixEthQty && update.alchemixEthQty > 0) {
+    removeStake('ETH', 'Alchemix Vault (ETH)', update.alchemixEthQty);
   }
   if (update.lbtcQty && update.lbtcQty > 0) {
     removeStake('BTC', 'Lombard LBTC', update.lbtcQty);
