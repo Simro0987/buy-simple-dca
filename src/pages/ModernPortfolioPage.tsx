@@ -38,6 +38,7 @@ import {
   radarGlowClass,
 } from '@/lib/portfolio/dcaOutEngine';
 import { OrderHistoryBook } from '@/components/portfolio/OrderHistoryBook';
+import { ManualTokenAdjustCard } from '@/components/portfolio/ManualTokenAdjustCard';
 
 interface Props { lang: Lang; }
 
@@ -684,6 +685,9 @@ function ModernPortfolioInner({ lang }: Props) {
         </div>
         )}
       </div>
+
+      {/* ═══ ÚPRAVA DRŽIEB (PRIDAŤ / ODOBRAŤ) ═══════════════════════════════ */}
+      <ManualTokenAdjustCard lang={lang} />
 
       {/* ═══ HISTÓRIA OBJEDNÁVOK ═══════════════════════════════════════════ */}
       <OrderHistoryBook lang={lang} />

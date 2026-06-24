@@ -1,14 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Wallet, Lock, Plus } from 'lucide-react';
+import { Wallet, Lock, Plus, Minus } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAppSettings, useUpdateAppSettings } from '@/hooks/useAppSettings';
 import { usePrices } from '@/hooks/usePrices';
+import {
+  computeAddHoldingsUpdate,
+  computeRemoveHoldingsUpdate,
+  TOKEN_PRICE_ID,
+  type CoinKey,
+} from '@/lib/manualHoldingsAccumulator';
 
 // Immutable baseline (Master Top — držby pred spustením appky).
 const BASELINE = { btc: 0.01746423, eth: 0.23278498, sol: 2.60983568 } as const;
-const TOKEN_PRICE_ID = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana' } as const;
 
-type CoinKey = 'btc' | 'eth' | 'sol';
 const COINS: { key: CoinKey; label: string }[] = [
   { key: 'btc', label: 'BTC' },
   { key: 'eth', label: 'ETH' },
@@ -91,55 +95,71 @@ export function InitialHoldingsCard() {
   };
 
   // MANUAL ONLY — never call from effect. Spúšťa sa iba z tlačidla "Pridať".
-  // Uses the user-supplied custom execution price (falls back to live spot if empty).
   const addAccumulation = async (key: CoinKey) => {
     if (!settings?.id) return;
     const raw = Number(accInput[key]);
-    if (!raw || raw <= 0) { toast.error('Zadaj kladnú hodnotu'); return; }
     const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
-    const priceStr = accPrice[key];
-    const customPrice = Number(priceStr);
+    const customPrice = Number(accPrice[key]);
     const execPrice = customPrice > 0 ? customPrice : spot;
-    if (execPrice <= 0) {
-      toast.error('Zadaj nákupnú cenu (USD) – cena ešte neprišla');
+
+    const result = computeAddHoldingsUpdate(key, raw, accMode[key], execPrice, {
+      manual_holdings: settings.manual_holdings as Record<CoinKey, number> | undefined,
+      initial_cost_basis: settings.initial_cost_basis as Record<CoinKey, number> | undefined,
+    });
+
+    if ('error' in result) {
+      toast.error(result.error);
       return;
     }
-
-    const mode = accMode[key];
-    // Toggle logic:
-    //  - "Množstvo": user typed qty, USD volume = qty * execPrice
-    //  - "USD suma": user typed USD, qty = usd / execPrice
-    const newQty = mode === 'asset' ? raw : raw / execPrice;
-    const newUsd = mode === 'asset' ? raw * execPrice : raw;
-
-    const oldQty = Number(settings.manual_holdings?.[key] ?? 0);
-    const oldUsd = Number(settings.initial_cost_basis?.[key] ?? 0);
-    // Weighted-average cost basis:
-    //   New Total Qty = oldQty + newQty
-    //   New Cost Basis (USD) = oldUsd + newUsd
-    //   New Avg = New Cost Basis / New Total Qty
-    const totalQty = oldQty + newQty;
-    const totalUsd = oldUsd + newUsd;
-
-    const nextHoldings = { ...(settings.manual_holdings ?? {}), [key]: totalQty };
-    const nextBasis = { ...(settings.initial_cost_basis ?? {}), [key]: totalUsd };
 
     try {
       await update.mutateAsync({
         id: settings.id,
-        manual_holdings: nextHoldings,
-        initial_cost_basis: nextBasis,
+        manual_holdings: result.manual_holdings,
+        initial_cost_basis: result.initial_cost_basis,
       });
       setAccInput(s => ({ ...s, [key]: '' }));
-      // Reset price back to live spot for the next entry.
       setPriceTouched(s => ({ ...s, [key]: false }));
       setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
-      const avg = totalUsd / totalQty;
       toast.success(
-        `+${newQty.toFixed(8)} ${key.toUpperCase()} @ $${execPrice.toFixed(2)} pridané. Nový priemer: $${avg.toFixed(2)}`,
+        `+${result.deltaQty.toFixed(8)} ${key.toUpperCase()} @ $${result.execPrice.toFixed(2)} pridané. Nový priemer: $${result.newAvg.toFixed(2)}`,
       );
     } catch {
       toast.error('Pridanie zlyhalo');
+    }
+  };
+
+  const removeAccumulation = async (key: CoinKey) => {
+    if (!settings?.id) return;
+    const raw = Number(accInput[key]);
+    const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
+    const customPrice = Number(accPrice[key]);
+    const execPrice = customPrice > 0 ? customPrice : spot;
+
+    const result = computeRemoveHoldingsUpdate(key, raw, accMode[key], execPrice, {
+      manual_holdings: settings.manual_holdings as Record<CoinKey, number> | undefined,
+      initial_cost_basis: settings.initial_cost_basis as Record<CoinKey, number> | undefined,
+    });
+
+    if ('error' in result) {
+      toast.error(result.error);
+      return;
+    }
+
+    try {
+      await update.mutateAsync({
+        id: settings.id,
+        manual_holdings: result.manual_holdings,
+        initial_cost_basis: result.initial_cost_basis,
+      });
+      setAccInput(s => ({ ...s, [key]: '' }));
+      setPriceTouched(s => ({ ...s, [key]: false }));
+      setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
+      toast.success(
+        `−${result.deltaQty.toFixed(8)} ${key.toUpperCase()} @ $${result.execPrice.toFixed(2)} odobraté. Zostatok: ${result.manual_holdings[key].toFixed(8)}`,
+      );
+    } catch {
+      toast.error('Odobratie zlyhalo');
     }
   };
 
@@ -289,6 +309,14 @@ export function InitialHoldingsCard() {
                   disabled={update.isPending}
                   className="px-3 py-1.5 rounded-md bg-emerald-500 text-background text-xs font-bold disabled:opacity-50"
                 >Pridať</button>
+                <button
+                  onClick={() => removeAccumulation(key)}
+                  disabled={update.isPending}
+                  className="px-3 py-1.5 rounded-md bg-orange-500 text-background text-xs font-bold disabled:opacity-50 flex items-center gap-1"
+                >
+                  <Minus className="w-3 h-3" />
+                  Odobrať
+                </button>
               </div>
               {preview && (
                 <p className="text-[10px] text-muted-foreground">
