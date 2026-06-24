@@ -5,6 +5,7 @@ import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import {
   computeHcdIndicators,
+  DEFAULT_HCD_INDICATORS,
   getQuarterlyRebalanceStatus,
   type HcdIndicators,
   type QuarterlyRebalanceStatus,
@@ -18,18 +19,22 @@ export function useHcdIndicators(lang: Lang) {
   const { data: perCoin } = usePerCoinMetrics();
 
   const indicators = useMemo<HcdIndicators>(() => {
-    const ethMetric = perCoin?.find(c => c.coin === 'eth');
-    const solMetric = perCoin?.find(c => c.coin === 'sol');
-    return computeHcdIndicators({
-      ethAtr14d: market?.eth?.atr14d,
-      solAtr14d: market?.sol?.atr14d,
-      ethVol30d: ethMetric?.volatility30d,
-      solVol30d: solMetric?.volatility30d,
-      borrowApyPct: terminalApys.usdcBorrow,
-      ethGasUsd: gas?.fees.ethSwap,
-      solGasUsd: gas?.fees.solSwap,
-    });
-  }, [market, gas, terminalApys.usdcBorrow, perCoin]);
+    try {
+      const ethMetric = perCoin?.eth;
+      const solMetric = perCoin?.sol;
+      return computeHcdIndicators({
+        ethAtr14d: market?.eth?.atr14d ?? null,
+        solAtr14d: market?.sol?.atr14d ?? null,
+        ethVol30d: ethMetric?.volatility30d ?? null,
+        solVol30d: solMetric?.volatility30d ?? null,
+        borrowApyPct: terminalApys?.usdcBorrow ?? 0,
+        ethGasUsd: gas?.fees?.ethSwap ?? null,
+        solGasUsd: gas?.fees?.solSwap ?? null,
+      });
+    } catch {
+      return DEFAULT_HCD_INDICATORS;
+    }
+  }, [market, gas, terminalApys?.usdcBorrow, perCoin]);
 
   const rebalance = useMemo<QuarterlyRebalanceStatus>(
     () => getQuarterlyRebalanceStatus(new Date(), lang),

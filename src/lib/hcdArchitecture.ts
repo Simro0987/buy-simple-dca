@@ -38,6 +38,16 @@ export interface HcdIndicators {
   gasLayerPct: number;
 }
 
+export const DEFAULT_HCD_INDICATORS: HcdIndicators = {
+  volatilityPct: 3,
+  volatilityRegime: 'normal',
+  borrowApyPct: 0,
+  borrowWarning: false,
+  targetLtvPct: 30,
+  gasStress: 'normal',
+  gasLayerPct: 5.5,
+};
+
 export interface QuarterlyRebalanceStatus {
   unlocked: boolean;
   inQuarterlyMonth: boolean;
