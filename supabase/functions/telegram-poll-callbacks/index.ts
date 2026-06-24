@@ -176,7 +176,6 @@ Deno.serve(async () => {
           action_type: actionType,
           token: token || null,
           profit_pct: profitPct ?? null,
-          chat_id: chatId,
           message_id: messageId,
           status: actionType.includes('postpone') ? 'postponed' :
             actionType.includes('ignore') ? 'ignored' : 'executed',
