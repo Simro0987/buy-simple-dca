@@ -280,25 +280,30 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     }
   }, [prices, avgCosts, holdings]);
 
-  // Realtime: listen for callback responses from Telegram inline buttons
+  // Poll for callback responses from Telegram inline buttons
+  // (realtime publication is disabled on telegram_callback_log for security)
   useEffect(() => {
-    const channel = supabase
-      .channel('profit-callbacks')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'telegram_callback_log',
-          filter: 'action_type=in.(profit_sell,profit_postpone,profit_ignore)',
-        },
-        (payload: { new: { action_type: string; token: string; profit_pct: number } }) => {
-          const { action_type, token, profit_pct } = payload.new;
-          const tokenConfig = PROFIT_CONFIGS.find(c => c.symbol === token);
-          if (!tokenConfig) return;
+    let lastSeenAt = new Date().toISOString();
+    const seenIds = new Set<string>();
 
+    const poll = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('telegram_callback_log')
+          .select('id, action_type, token, profit_pct, created_at')
+          .in('action_type', ['profit_sell', 'profit_postpone', 'profit_ignore'])
+          .gt('created_at', lastSeenAt)
+          .order('created_at', { ascending: true })
+          .limit(20);
+        if (error || !data) return;
+        for (const row of data) {
+          if (seenIds.has(row.id)) continue;
+          seenIds.add(row.id);
+          lastSeenAt = row.created_at;
+          const { action_type, token, profit_pct } = row;
+          const tokenConfig = PROFIT_CONFIGS.find(c => c.symbol === token);
+          if (!tokenConfig) continue;
           if (action_type === 'profit_sell') {
-            // Auto-mark level as executed
             const level = tokenConfig.levels.find(l => Math.abs(l.profitPct - profit_pct) < 0.5);
             if (level && !isLevelExecuted(tokenConfig.id, level.profitPct)) {
               markLevelExecuted(tokenConfig.id, level.profitPct);
@@ -311,11 +316,15 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
             toast.info(`❌ ${token} +${profit_pct}% ignorovaný cez Telegram`);
           }
         }
-      )
-      .subscribe();
+      } catch {
+        // silent
+      }
+    };
 
-    return () => { supabase.removeChannel(channel); };
+    const interval = setInterval(poll, 30_000);
+    return () => clearInterval(interval);
   }, []);
+
 
   // Manual send handler
   const handleManualAlert = useCallback(async (config: TokenProfitConfig, level: ProfitLevel, currentPrice: number, avgCost: number) => {

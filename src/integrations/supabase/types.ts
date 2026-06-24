@@ -17,7 +17,6 @@ export type Database = {
       app_settings: {
         Row: {
           arb_addresses: Json
-          arbiscan_api_key: string | null
           btc_address: string | null
           created_at: string
           dca_day: string
@@ -27,8 +26,6 @@ export type Database = {
           dynamic_execution_enabled: boolean
           eth_address: string | null
           eth_arb_address: string | null
-          etherscan_api_key: string | null
-          helius_api_key: string | null
           holdings_strategy: Json
           id: string
           initial_cost_basis: Json
@@ -41,8 +38,6 @@ export type Database = {
           sol_address: string | null
           sol_arb_address: string | null
           staking_config: Json
-          telegram_chat_id: string | null
-          telegram_token: string | null
           theme: string
           total_capital: number
           updated_at: string
@@ -51,7 +46,6 @@ export type Database = {
         }
         Insert: {
           arb_addresses?: Json
-          arbiscan_api_key?: string | null
           btc_address?: string | null
           created_at?: string
           dca_day?: string
@@ -61,8 +55,6 @@ export type Database = {
           dynamic_execution_enabled?: boolean
           eth_address?: string | null
           eth_arb_address?: string | null
-          etherscan_api_key?: string | null
-          helius_api_key?: string | null
           holdings_strategy?: Json
           id?: string
           initial_cost_basis?: Json
@@ -75,8 +67,6 @@ export type Database = {
           sol_address?: string | null
           sol_arb_address?: string | null
           staking_config?: Json
-          telegram_chat_id?: string | null
-          telegram_token?: string | null
           theme?: string
           total_capital?: number
           updated_at?: string
@@ -85,7 +75,6 @@ export type Database = {
         }
         Update: {
           arb_addresses?: Json
-          arbiscan_api_key?: string | null
           btc_address?: string | null
           created_at?: string
           dca_day?: string
@@ -95,8 +84,6 @@ export type Database = {
           dynamic_execution_enabled?: boolean
           eth_address?: string | null
           eth_arb_address?: string | null
-          etherscan_api_key?: string | null
-          helius_api_key?: string | null
           holdings_strategy?: Json
           id?: string
           initial_cost_basis?: Json
@@ -109,8 +96,6 @@ export type Database = {
           sol_address?: string | null
           sol_arb_address?: string | null
           staking_config?: Json
-          telegram_chat_id?: string | null
-          telegram_token?: string | null
           theme?: string
           total_capital?: number
           updated_at?: string
@@ -435,7 +420,6 @@ export type Database = {
         Row: {
           action_type: string
           callback_data: string
-          chat_id: number
           created_at: string
           id: string
           message_id: number | null
@@ -446,7 +430,6 @@ export type Database = {
         Insert: {
           action_type: string
           callback_data: string
-          chat_id: number
           created_at?: string
           id?: string
           message_id?: number | null
@@ -457,7 +440,6 @@ export type Database = {
         Update: {
           action_type?: string
           callback_data?: string
-          chat_id?: number
           created_at?: string
           id?: string
           message_id?: number | null

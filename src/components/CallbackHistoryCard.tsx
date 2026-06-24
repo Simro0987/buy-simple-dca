@@ -106,15 +106,9 @@ export function CallbackHistoryCard({ lang }: Props) {
 
   useEffect(() => {
     load();
-    const channel = supabase
-      .channel('callback-log-changes')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'telegram_callback_log' },
-        () => { load(); }
-      )
-      .subscribe();
-    return () => { supabase.removeChannel(channel); };
+    // Polling fallback (realtime publication on this table is disabled for security)
+    const interval = setInterval(load, 15_000);
+    return () => clearInterval(interval);
   }, [load]);
 
   const filtered = useMemo(() => {
