@@ -7,6 +7,7 @@ export interface DefiApyData {
   marinade:   number;   // mSOL – Marinade Native (Solana)
   sanctumInf: number;   // INF – Sanctum Infinity (Solana)
   kaminoSol:  number;   // Kamino SOL lending (Solana)
+  alchemixVault: number; // Alchemix ETH vault (Ethereum)
   // kept for backward compat (used in StakingTimingCard etc.)
   lido: number;
   jito: number;
@@ -19,6 +20,7 @@ const FALLBACK: DefiApyData = {
   marinade:   7.37,
   sanctumInf: 8.00,
   kaminoSol:  4.20,
+  alchemixVault: 2.20,
   lido:       3.40,
   jito:       7.50,
 };
@@ -43,6 +45,7 @@ const PROJECT_LOOKUP: Array<{
   { key: 'etherFi',    projects: ['ether.fi', 'etherfi'],          symbol: 'weETH', chain: 'Ethereum' },
   { key: 'marinade',   projects: ['marinade-finance', 'marinade'], symbol: 'mSOL',  chain: 'Solana'   },
   { key: 'sanctumInf', projects: ['sanctum'],                      symbol: 'INF',   chain: 'Solana'   },
+  { key: 'alchemixVault', projects: ['alchemix'],                  symbol: 'ETH',   chain: 'Ethereum' },
 ];
 
 // ─── fetch ────────────────────────────────────────────────────────────────────
@@ -95,6 +98,7 @@ async function fetchDefiApys(): Promise<DefiApyData> {
     etherFi:    FALLBACK.etherFi,
     marinade:   FALLBACK.marinade,
     sanctumInf: FALLBACK.sanctumInf,
+    alchemixVault: FALLBACK.alchemixVault,
   };
 
   // Apply project+symbol lookups for newer protocols

@@ -18,7 +18,18 @@ import {
   rebalanceLockMessage,
   type HcdLayerTarget,
   type HcdSymbol,
+  type HcdIndicators,
 } from '@/lib/hcdArchitecture';
+import type { StakedEntry } from '@/lib/stakingLedger';
+import {
+  computeAlchemixRebalanceAlert,
+  computeCoreOpportunityAlert,
+  computeTacticalWithdrawAlert,
+  sumCoreDeployedQty,
+  sumTacticalDeployedQty,
+  type ExitStrategyAlert,
+} from '@/lib/hcdExitStrategy';
+import { useDefiApys } from '@/hooks/useDefiApys';
 import {
   computeAdvice,
   getTimingWindow,
@@ -152,6 +163,31 @@ function CyborgCommandLine({
   );
 }
 
+function ExitStrategyBanner({ alert, sk }: { alert: ExitStrategyAlert; sk: boolean }) {
+  const variantClass = {
+    urgent: 'border-orange-500/60 bg-orange-500/15 text-orange-100',
+    warning: 'border-amber-500/50 bg-amber-500/10 text-amber-100',
+    opportunity: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100',
+  }[alert.variant];
+
+  return (
+    <div className={`rounded-lg border px-3 py-2.5 space-y-1.5 ${variantClass}`}>
+      <p className="text-[11px] font-bold leading-snug">{sk ? alert.commandSk : alert.commandEn}</p>
+      <p className="text-[10px] opacity-90 leading-snug">{sk ? alert.reasonSk : alert.reasonEn}</p>
+      {alert.withdrawQty != null && alert.withdrawQty > 0 && (
+        <p className="text-[10px] font-mono font-semibold tabular-nums">
+          {sk ? 'Odobrať kolaterál' : 'Withdraw collateral'}: {alert.withdrawQty.toFixed(4)}
+        </p>
+      )}
+      {alert.repayUsdc != null && alert.repayUsdc > 0 && (
+        <p className="text-[10px] font-mono font-semibold tabular-nums">
+          {sk ? 'Splaťte USDC' : 'Repay USDC'}: {alert.repayUsdc.toFixed(2)}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function CyborgRoutingMeta({
   token,
   network,
@@ -207,6 +243,7 @@ function CyborgActionPlan({
   onRevertLbtc,
   collateralDecimals,
   routing,
+  exitAlert,
 }: {
   sk: boolean;
   layerPct: number;
@@ -235,6 +272,7 @@ function CyborgActionPlan({
   onRevertLbtc: () => void;
   collateralDecimals: number;
   routing: { token: string; network: string; protocol: string; instruction: string };
+  exitAlert?: ExitStrategyAlert | null;
 }) {
   const execDisabled = rebalanceLocked;
 
@@ -250,6 +288,8 @@ function CyborgActionPlan({
         protocol={routing.protocol}
         instruction={routing.instruction}
       />
+
+      {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
         <p>
@@ -339,6 +379,9 @@ function TacticalLayerExecution({
   onRevertLbtc,
   usdcConfirmed,
   lbtcConfirmed,
+  usdcDebt,
+  indicators,
+  stakedEntries,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -363,14 +406,27 @@ function TacticalLayerExecution({
   onRevertLbtc: () => void;
   usdcConfirmed: boolean;
   lbtcConfirmed: boolean;
+  usdcDebt: number;
+  indicators: HcdIndicators;
+  stakedEntries: StakedEntry[];
 }) {
   const sk = lang === 'sk';
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
   const layerPct = layer.pctTarget;
   const collateralQty = totalQty * (layerPct / 100);
+  const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries, symbol);
   const collateralUsd = collateralQty * assetPrice;
   const safeBorrowUsdc = collateralUsd * (ltvMax / 100);
+  const exitAlert = computeTacticalWithdrawAlert({
+    indicators,
+    collateralQty,
+    deployedCollateralQty,
+    collateralPrice: assetPrice,
+    usdcDebt,
+    tokenLabel: motorLabel,
+    decimals: collateralDecimals,
+  });
   const routing = symbol === 'ETH'
     ? {
       token: 'rETH',
@@ -426,6 +482,7 @@ function TacticalLayerExecution({
           onRevertLbtc={onRevertLbtc}
           collateralDecimals={collateralDecimals}
           routing={routing}
+          exitAlert={exitAlert}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -441,6 +498,7 @@ function AlchemixLayerExecution({
   confirmed,
   onConfirm,
   onRevert,
+  alchemixApyPct,
 }: {
   lang: Lang;
   layer: HcdLayerTarget;
@@ -450,11 +508,13 @@ function AlchemixLayerExecution({
   confirmed: boolean;
   onConfirm: () => void;
   onRevert: () => void;
+  alchemixApyPct: number;
 }) {
   const sk = lang === 'sk';
   const layerPct = layer.pctTarget;
   const targetQty = totalEthQty * (layerPct / 100);
   const targetUsd = targetQty * ethPrice;
+  const exitAlert = computeAlchemixRebalanceAlert(alchemixApyPct);
 
   return (
     <Collapsible defaultOpen className="rounded-xl border border-sky-500/30 bg-sky-500/5">
@@ -478,6 +538,8 @@ function AlchemixLayerExecution({
               ? 'Vložiť priamo na ETH Mainnete (Self-repaying vault).'
               : 'Deposit directly on ETH Mainnet (Self-repaying vault).'}
           />
+
+          {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
           <p className="text-[10px] text-muted-foreground">
             {sk ? 'Cieľová alokácia' : 'Target allocation'}:{' '}
@@ -534,6 +596,12 @@ function AssetHcdCard({
   onConfirmAlchemix,
   onRevertAlchemix,
   alchemixConfirmed,
+  usdcDebt,
+  indicators,
+  stakedEntries,
+  rebalanceUnlocked,
+  alchemixApyPct,
+  tacticalLayer,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -562,6 +630,12 @@ function AssetHcdCard({
   onConfirmAlchemix?: (qty: number) => void;
   onRevertAlchemix?: () => void;
   alchemixConfirmed?: boolean;
+  usdcDebt: number;
+  indicators: HcdIndicators;
+  stakedEntries: StakedEntry[];
+  rebalanceUnlocked: boolean;
+  alchemixApyPct: number;
+  tacticalLayer?: HcdLayerTarget;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -602,8 +676,24 @@ function AssetHcdCard({
           const apy = layerApy(layer, apys);
           const isTactical = layer.id.includes('tactical');
           const isAlchemix = layer.id.includes('alchemix');
+          const isCore = layer.id.includes('core');
           const isInfoOnly = !isTactical && !isAlchemix;
           const canExecute = !rebalanceLocked && !!layer.ledgerProtocol && qty > 0 && isInfoOnly;
+
+          const coreTokenLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
+          const coreDecimals = symbol === 'SOL' ? 2 : 4;
+          const coreExitAlert = isCore && tacticalLayer
+            ? computeCoreOpportunityAlert({
+              rebalanceUnlocked,
+              volatilityRegime: indicators.volatilityRegime,
+              netBorrowCostPct: indicators.borrowApyPct,
+              coreDeployedQty: sumCoreDeployedQty(stakedEntries, symbol),
+              tacticalTargetQty: totalPortfolioQty * (tacticalLayer.pctTarget / 100),
+              tacticalDeployedQty: sumTacticalDeployedQty(stakedEntries, symbol),
+              tokenLabel: coreTokenLabel,
+              decimals: coreDecimals,
+            })
+            : null;
 
           return (
             <div
@@ -670,6 +760,9 @@ function AssetHcdCard({
                   onRevertLbtc={onRevertLbtc}
                   usdcConfirmed={usdcConfirmed}
                   lbtcConfirmed={lbtcConfirmed}
+                  usdcDebt={usdcDebt}
+                  indicators={indicators}
+                  stakedEntries={stakedEntries}
                 />
               )}
 
@@ -683,7 +776,12 @@ function AssetHcdCard({
                   confirmed={alchemixConfirmed ?? false}
                   onConfirm={() => onConfirmAlchemix(totalPortfolioQty * (layer.pctTarget / 100))}
                   onRevert={onRevertAlchemix}
+                  alchemixApyPct={alchemixApyPct}
                 />
+              )}
+
+              {isInfoOnly && coreExitAlert?.active && (
+                <ExitStrategyBanner alert={coreExitAlert} sk={sk} />
               )}
 
               {isInfoOnly && layer.ledgerProtocol && (
@@ -724,7 +822,8 @@ function AssetHcdCard({
 
 export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
-  const { portfolioData, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { portfolioData, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const { data: defiApys } = useDefiApys();
   const { entries } = useStakingLedger();
   const { indicators, rebalance, borrowLoading, borrowRates } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
@@ -749,6 +848,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
   const ethTacticalLayer = ethLayers.find(layer => layer.id.includes('tactical'));
   const solTacticalLayer = solLayers.find(layer => layer.id.includes('tactical'));
+  const alchemixApyPct = defiApys?.alchemixVault ?? 2.2;
+  const ethStakedEntries = portfolioData.assets?.ETH?.stakedEntries ?? [];
+  const solStakedEntries = portfolioData.assets?.SOL?.stakedEntries ?? [];
 
   const deployREth = tacticalCollateralQty(ethTotalQty, ethTacticalLayer);
   const deployMSol = tacticalCollateralQty(solTotalQty, solTacticalLayer);
@@ -1069,6 +1171,12 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         onConfirmAlchemix={qty => confirmRow(EXEC_KEYS.alchemixEth, { alchemixEthQty: qty })}
         onRevertAlchemix={() => revertRow(EXEC_KEYS.alchemixEth)}
         alchemixConfirmed={isExecutionConfirmed(EXEC_KEYS.alchemixEth)}
+        usdcDebt={cyborgUsdcDebt}
+        indicators={indicators}
+        stakedEntries={ethStakedEntries}
+        rebalanceUnlocked={rebalance.unlocked}
+        alchemixApyPct={alchemixApyPct}
+        tacticalLayer={ethTacticalLayer}
       />
 
       <AssetHcdCard
@@ -1096,6 +1204,12 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         onRevertLbtc={() => {}}
         usdcConfirmed={isExecutionConfirmed(EXEC_KEYS.usdcBorrow)}
         lbtcConfirmed={isLbtcSupplied}
+        usdcDebt={cyborgUsdcDebt}
+        indicators={indicators}
+        stakedEntries={solStakedEntries}
+        rebalanceUnlocked={rebalance.unlocked}
+        alchemixApyPct={alchemixApyPct}
+        tacticalLayer={solTacticalLayer}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">
