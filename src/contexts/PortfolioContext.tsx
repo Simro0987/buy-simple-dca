@@ -19,9 +19,18 @@ import {
   CYBORG_CONFIRMED_EVENT,
   type PortfolioBalanceUpdate,
 } from '@/lib/cyborgPortfolio';
+import {
+  appendDecisionLogEntry,
+  removeDecisionLogEntry,
+  type MarketConditionsSnapshot,
+} from '@/lib/hcdDecisionLog';
+
+export interface DecisionConfirmMeta {
+  marketConditions: MarketConditionsSnapshot;
+}
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
-export type { PortfolioBalanceUpdate };
+export type { PortfolioBalanceUpdate, DecisionConfirmMeta };
 
 interface AssetBreakdown {
   symbol: string;
@@ -49,7 +58,7 @@ interface PortfolioCtx {
   profitBySymbol: Record<string, number>;
   cyborgUsdcDebt: number;
   markProfitMoved: (usd: number) => void;
-  confirmExecutionStep: (key: string, update: PortfolioBalanceUpdate) => void;
+  confirmExecutionStep: (key: string, update: PortfolioBalanceUpdate, meta?: DecisionConfirmMeta) => void;
   revertExecutionStep: (key: string) => void;
   isExecutionConfirmed: (key: string) => boolean;
   selected: AssetFilter;
@@ -93,18 +102,26 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
   }, []);
 
-  const confirmExecutionStep = useCallback((key: string, update: PortfolioBalanceUpdate) => {
+  const confirmExecutionStep = useCallback((key: string, update: PortfolioBalanceUpdate, meta?: DecisionConfirmMeta) => {
     applyPortfolioBalanceUpdate(update);
     markStepConfirmed(key, update);
+    if (meta?.marketConditions) {
+      appendDecisionLogEntry({
+        stepKey: key,
+        portfolioUsdAtConfirm: meta.marketConditions.portfolioUsd ?? metrics.totalValue,
+        marketConditions: meta.marketConditions,
+      });
+    }
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
-  }, []);
+  }, [metrics.totalValue]);
 
   const revertExecutionStep = useCallback((key: string) => {
     const update = unmarkStepConfirmed(key);
     if (update) {
       revertPortfolioBalanceUpdate(update);
     }
+    removeDecisionLogEntry(key);
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
   }, []);

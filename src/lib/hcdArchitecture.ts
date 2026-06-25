@@ -180,6 +180,7 @@ export function computeHcdIndicators(input: {
   borrowApyPct?: number | null;
   ethGasUsd?: number | null;
   solGasUsd?: number | null;
+  temperamentPct?: number;
 }): HcdIndicators {
   const ethVol = input.ethAtr14d ?? input.ethVol30d ?? 3;
   const solVol = input.solAtr14d ?? input.solVol30d ?? 4;
@@ -192,10 +193,10 @@ export function computeHcdIndicators(input: {
   const borrowApyPct = input.borrowApyPct ?? 0;
   const borrowWarning = borrowApyPct > 8;
 
-  let targetLtvPct = 30;
-  if (volatilityRegime === 'high') targetLtvPct = 20;
-  else if (volatilityRegime === 'low') targetLtvPct = 40;
-  if (borrowWarning) targetLtvPct = Math.min(targetLtvPct, 20);
+  let baseTargetLtvPct = 30;
+  if (volatilityRegime === 'high') baseTargetLtvPct = 20;
+  else if (volatilityRegime === 'low') baseTargetLtvPct = 40;
+  if (borrowWarning) baseTargetLtvPct = Math.min(baseTargetLtvPct, 20);
 
   const ethGas = input.ethGasUsd ?? 4;
   const solGas = input.solGasUsd ?? 0.01;
@@ -205,6 +206,15 @@ export function computeHcdIndicators(input: {
   else if (gasComposite < 3) gasStress = 'low';
 
   const gasLayerPct = gasStress === 'high' ? 8 : gasStress === 'low' ? 3 : 5.5;
+
+  const temperament = clamp(input.temperamentPct ?? 50, 0, 100) / 100;
+  const stress = volatilityRegime === 'high' || borrowWarning;
+  const minLtv = 20;
+  const maxLtv = stress ? 20 : 40;
+  const temperedTargetLtv = Math.round(lerp(minLtv, maxLtv, temperament));
+  const targetLtvPct = stress
+    ? Math.min(temperedTargetLtv, 20)
+    : Math.round(lerp(baseTargetLtvPct, temperedTargetLtv, 0.55));
 
   return {
     volatilityPct,
@@ -221,26 +231,37 @@ function resolveLayerPct(
   layer: HcdLayerDef,
   indicators: HcdIndicators,
   role: 'gas' | 'core' | 'tactical' | 'alchemix',
+  temperamentPct = 50,
 ): number {
   const { volatilityRegime, gasLayerPct } = indicators;
+  const t = clamp(temperamentPct, 0, 100) / 100;
 
   if (role === 'gas') {
     return clamp(gasLayerPct, layer.pctMin, layer.pctMax);
   }
   if (role === 'core') {
-    if (volatilityRegime === 'high') return layer.pctMax;
-    if (volatilityRegime === 'low') return lerp(layer.pctMin, layer.pctMax, 0.45);
-    return lerp(layer.pctMin, layer.pctMax, 0.65);
+    let base: number;
+    if (volatilityRegime === 'high') base = layer.pctMax;
+    else if (volatilityRegime === 'low') base = lerp(layer.pctMin, layer.pctMax, 0.45);
+    else base = lerp(layer.pctMin, layer.pctMax, 0.65);
+    const bias = lerp(1.06, 0.92, t);
+    return clamp(base * bias, layer.pctMin, layer.pctMax);
   }
   if (role === 'tactical') {
-    if (volatilityRegime === 'high') return layer.pctMin;
-    if (volatilityRegime === 'low') return layer.pctMax;
-    return lerp(layer.pctMin, layer.pctMax, 0.5);
+    let base: number;
+    if (volatilityRegime === 'high') base = layer.pctMin;
+    else if (volatilityRegime === 'low') base = layer.pctMax;
+    else base = lerp(layer.pctMin, layer.pctMax, 0.5);
+    const bias = lerp(0.88, 1.14, t);
+    return clamp(base * bias, layer.pctMin, layer.pctMax);
   }
   // alchemix
-  if (volatilityRegime === 'high') return layer.pctMin;
-  if (volatilityRegime === 'low') return layer.pctMax;
-  return lerp(layer.pctMin, layer.pctMax, 0.4);
+  let base: number;
+  if (volatilityRegime === 'high') base = layer.pctMin;
+  else if (volatilityRegime === 'low') base = layer.pctMax;
+  else base = lerp(layer.pctMin, layer.pctMax, 0.4);
+  const bias = lerp(0.9, 1.1, t);
+  return clamp(base * bias, layer.pctMin, layer.pctMax);
 }
 
 function normalizeLayers(layers: HcdLayerTarget[]): HcdLayerTarget[] {
@@ -255,6 +276,7 @@ function normalizeLayers(layers: HcdLayerTarget[]): HcdLayerTarget[] {
 export function computeHcdLayerTargets(
   symbol: HcdSymbol,
   indicators: HcdIndicators,
+  temperamentPct = 50,
 ): HcdLayerTarget[] {
   const defs = symbol === 'ETH' ? ETH_LAYERS : SOL_LAYERS;
   const roles: Array<'gas' | 'core' | 'tactical' | 'alchemix'> =
@@ -262,7 +284,7 @@ export function computeHcdLayerTargets(
 
   const raw = defs.map((def, i) => ({
     ...def,
-    pctTarget: resolveLayerPct(def, indicators, roles[i]),
+    pctTarget: resolveLayerPct(def, indicators, roles[i], temperamentPct),
   }));
 
   return normalizeLayers(raw);
@@ -271,12 +293,13 @@ export function computeHcdLayerTargets(
 export const HCD_LTV_MAX_NORMAL = 40;
 export const HCD_LTV_MAX_RESTRICTED = 20;
 
-/** Max LTV % allowed by HCD brain — 20% under stress, 40% otherwise. */
-export function getHcdLtvMax(indicators: HcdIndicators): number {
+/** Max LTV % allowed by HCD brain — temperament shifts between conservative and aggressive caps. */
+export function getHcdLtvMax(indicators: HcdIndicators, temperamentPct = 50): number {
+  const t = clamp(temperamentPct, 0, 100) / 100;
   if (indicators.volatilityRegime === 'high' || indicators.borrowWarning) {
-    return HCD_LTV_MAX_RESTRICTED;
+    return Math.round(lerp(HCD_LTV_MAX_RESTRICTED, 25, t));
   }
-  return HCD_LTV_MAX_NORMAL;
+  return Math.round(lerp(25, HCD_LTV_MAX_NORMAL, t));
 }
 
 export function rebalanceLockMessage(lang: Lang, status: QuarterlyRebalanceStatus): string {

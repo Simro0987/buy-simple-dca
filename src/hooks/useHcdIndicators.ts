@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useMarketData } from '@/hooks/useMarketData';
 import { useGasPrices } from '@/hooks/useGasPrices';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
+import { useHcdTemperament } from '@/hooks/useHcdTemperament';
 import { fetchHcdIndicators } from '@/lib/fetchHcdIndicators';
 import {
   computeHcdIndicators,
@@ -16,6 +17,7 @@ import type { Lang } from '@/lib/i18n';
 const BORROW_STALE_MS = 5 * 60 * 1000;
 
 export function useHcdIndicators(lang: Lang) {
+  const { temperamentPct } = useHcdTemperament();
   const { data: market } = useMarketData();
   const { data: gas } = useGasPrices();
   const { data: perCoin } = usePerCoinMetrics();
@@ -48,11 +50,12 @@ export function useHcdIndicators(lang: Lang) {
         borrowApyPct: liveBorrowApy,
         ethGasUsd: gas?.fees?.ethSwap ?? null,
         solGasUsd: gas?.fees?.solSwap ?? null,
+        temperamentPct,
       });
     } catch {
       return DEFAULT_HCD_INDICATORS;
     }
-  }, [market, gas, liveBorrowApy, perCoin]);
+  }, [market, gas, liveBorrowApy, perCoin, temperamentPct]);
 
   const rebalance = useMemo<QuarterlyRebalanceStatus>(
     () => getQuarterlyRebalanceStatus(new Date(), lang),
@@ -62,6 +65,7 @@ export function useHcdIndicators(lang: Lang) {
   return {
     indicators,
     rebalance,
+    temperamentPct,
     borrowLoading: borrowLoading || borrowFetching,
     borrowError,
     borrowRates,

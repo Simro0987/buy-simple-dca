@@ -7,6 +7,7 @@ import { CronJobsCard } from '@/components/CronJobsCard';
 import { CallbackHistoryCard } from '@/components/CallbackHistoryCard';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 import { BackupRestoreCard } from '@/components/settings/BackupRestoreCard';
+import { CyborgTuningCard } from '@/components/settings/CyborgTuningCard';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
 import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
@@ -247,6 +248,8 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
           </div>
         </div>
       </div>
+
+      <CyborgTuningCard lang={lang} />
 
       {/* Telegram Chat ID */}
       <div className="glass-card p-4 space-y-3">
