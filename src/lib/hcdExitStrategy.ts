@@ -13,6 +13,8 @@ export interface ExitStrategyAlert {
   reasonEn: string;
   withdrawQty?: number;
   repayUsdc?: number;
+  tokenLabel?: string;
+  decimals?: number;
 }
 
 export const EXIT_BORROW_URGENT_PCT = 8;
@@ -34,7 +36,7 @@ export function sumCoreDeployedQty(entries: StakedEntry[], symbol: 'ETH' | 'SOL'
     .reduce((s, e) => s + e.amount, 0);
 }
 
-/** How much collateral to withdraw / USDC to repay to reach target LTV. */
+/** Withdraw qty to return to target LTV: (collateralUsd - debt/targetLtv) / price */
 export function computeWithdrawToTargetLtv(
   collateralUsd: number,
   price: number,
@@ -48,8 +50,8 @@ export function computeWithdrawToTargetLtv(
   const targetLtv = targetLtvPct / 100;
   const currentLtvPct = usdcDebt > 0 ? (usdcDebt / collateralUsd) * 100 : 0;
 
-  const requiredCollateralUsd = usdcDebt > 0 ? usdcDebt / targetLtv : collateralUsd;
-  const withdrawUsd = Math.max(0, collateralUsd - requiredCollateralUsd);
+  const minCollateralUsdAtTargetLtv = usdcDebt > 0 ? usdcDebt / targetLtv : collateralUsd;
+  const withdrawUsd = Math.max(0, collateralUsd - minCollateralUsdAtTargetLtv);
   const withdrawQty = withdrawUsd / price;
 
   const targetDebtUsd = collateralUsd * targetLtv;
@@ -86,10 +88,12 @@ export function computeTacticalWithdrawAlert(input: {
     variant: 'urgent',
     commandSk: `🚨 URGENTNÝ PRÍKAZ NA ÚSTUP: Znížte kolaterál o ${qtyStr} ${input.tokenLabel} a splaťte časť USDC dlhu!`,
     commandEn: `🚨 URGENT EXIT ORDER: Reduce collateral by ${qtyStr} ${input.tokenLabel} and repay part of your USDC debt!`,
-    reasonSk: 'Dôvod: Úrokové sadzby na trhu/Volatilita prekročili bezpečné HCD limity. Likvidačné riziko stúplo. Stiahnutím kapitálu stabilizujete pozíciu.',
-    reasonEn: 'Reason: Market borrow rates/volatility exceeded safe HCD limits. Liquidation risk increased. Withdrawing capital stabilizes your position.',
+    reasonSk: 'Dôvod: Úrokové sadzby/Volatilita prekročili bezpečné HCD limity. Likvidačné riziko stúplo. Stiahnutím kapitálu stabilizujete pozíciu.',
+    reasonEn: 'Reason: Borrow rates/volatility exceeded safe HCD limits. Liquidation risk increased. Withdrawing capital stabilizes your position.',
     withdrawQty,
     repayUsdc,
+    tokenLabel: input.tokenLabel,
+    decimals: input.decimals,
   };
 }
 
@@ -101,8 +105,8 @@ export function computeAlchemixRebalanceAlert(alchemixApyPct: number): ExitStrat
     variant: 'warning',
     commandSk: '⚠️ ODPORÚČANIE NA REBALANS: Zvážte výber ETH z Alchemix Vaultu.',
     commandEn: '⚠️ REBALANCE RECOMMENDATION: Consider withdrawing ETH from the Alchemix Vault.',
-    reasonSk: 'Dôvod: Výnosy generované vaultom sú príliš nízke. Strategicky výhodnejšie je preliať tento kapitál do Core Stakingu (rETH), kde je vyšší čistý výnos bez smart contract toxicity.',
-    reasonEn: 'Reason: Vault yields are too low. Strategically better to rotate this capital into Core Staking (rETH) for higher net yield without smart-contract toxicity.',
+    reasonSk: 'Dôvod: Výnosy generované vaultom sú príliš nízke. Strategicky výhodnejšie je preliať tento kapitál do Core Stakingu (rETH) pre vyšší čistý výnos.',
+    reasonEn: 'Reason: Vault yields are too low. Strategically better to rotate this capital into Core Staking (rETH) for higher net yield.',
   };
 }
 

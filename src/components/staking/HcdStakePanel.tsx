@@ -170,13 +170,18 @@ function ExitStrategyBanner({ alert, sk }: { alert: ExitStrategyAlert; sk: boole
     opportunity: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100',
   }[alert.variant];
 
+  const withdrawDecimals = alert.decimals ?? 4;
+  const withdrawLabel = alert.tokenLabel ?? '';
+
   return (
     <div className={`rounded-lg border px-3 py-2.5 space-y-1.5 ${variantClass}`}>
       <p className="text-[11px] font-bold leading-snug">{sk ? alert.commandSk : alert.commandEn}</p>
       <p className="text-[10px] opacity-90 leading-snug">{sk ? alert.reasonSk : alert.reasonEn}</p>
       {alert.withdrawQty != null && alert.withdrawQty > 0 && (
         <p className="text-[10px] font-mono font-semibold tabular-nums">
-          {sk ? 'Odobrať kolaterál' : 'Withdraw collateral'}: {alert.withdrawQty.toFixed(4)}
+          {sk
+            ? `Odporúčaný výber: ${alert.withdrawQty.toFixed(withdrawDecimals)} ${withdrawLabel}`.trim()
+            : `Recommended withdrawal: ${alert.withdrawQty.toFixed(withdrawDecimals)} ${withdrawLabel}`.trim()}
         </p>
       )}
       {alert.repayUsdc != null && alert.repayUsdc > 0 && (
@@ -531,8 +536,8 @@ function AlchemixLayerExecution({
           </p>
 
           <CyborgRoutingMeta
-            token="ETH / WETH"
-            network="Ethereum (L1)"
+            token="ETH"
+            network="Ethereum L1"
             protocol="Alchemix"
             instruction={sk
               ? 'Vložiť priamo na ETH Mainnete (Self-repaying vault).'
