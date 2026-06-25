@@ -1,6 +1,5 @@
 import { Lang } from '@/lib/i18n';
 import { HcdStakePanel } from '@/components/staking/HcdStakePanel';
-// import { HcdEngineBackground } from '@/components/staking/HcdEngineBackground';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 import { PortfolioProvider } from '@/contexts/PortfolioContext';
 import { StakingApyProvider } from '@/contexts/StakingApyContext';
@@ -13,21 +12,17 @@ function StakingPageContent({ lang, marketScore }: { lang: Lang; marketScore: nu
   const sk = lang === 'sk';
 
   return (
-    <>
-      {/* HARD DISABLE: HcdEngineBackground / silent tracker — fatal crash under investigation */}
-      {/* <HcdEngineBackground /> */}
-      <StakeErrorBoundary
-        fallback={(
-          <div className="glass-card p-4 border border-amber-500/40 bg-amber-500/5 text-sm text-amber-100">
-            {sk ? 'UI vrstvy dočasne nedostupné' : 'Layer UI temporarily unavailable'}
-          </div>
-        )}
-      >
-        <div className="pb-4">
-          <HcdStakePanel lang={lang} marketScore={marketScore} />
+    <StakeErrorBoundary
+      fallback={(
+        <div className="glass-card p-4 border border-amber-500/40 bg-amber-500/5 text-sm text-amber-100">
+          {sk ? 'UI vrstvy dočasne nedostupné' : 'Layer UI temporarily unavailable'}
         </div>
-      </StakeErrorBoundary>
-    </>
+      )}
+    >
+      <div className="pb-4">
+        <HcdStakePanel lang={lang} marketScore={marketScore} />
+      </div>
+    </StakeErrorBoundary>
   );
 }
 

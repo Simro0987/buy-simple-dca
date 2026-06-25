@@ -106,7 +106,9 @@ export function computeAlchemixRebalanceAlert(alchemixApyPct: number): ExitStrat
   return {
     active: true,
     variant: 'warning',
-    commandSk: '⚠️ ODPORÚČANIE NA REBALANS: Výnosy sú nízke, zvážte presun do Core Stakingu.',
-    commandEn: '⚠️ REBALANCE RECOMMENDATION: Yields are low, consider moving to Core Staking.',
+    commandSk: '⚠️ AK TRHOVÝ ÚROK KLESNE POD 2,5 %: Zvážte manuálny presun z Alchemix do Core Stakingu (Vrstva 2).',
+    commandEn: '⚠️ IF MARKET YIELD DROPS BELOW 2.5%: Consider manual move from Alchemix to Core Staking (Layer 2).',
+    reasonSk: 'Výnosy sú pod cieľovým prahom — HCD zobrazuje len odporúčanie, exekúcia zostáva manuálna.',
+    reasonEn: 'Yields are below target threshold — HCD shows recommendation only; execution stays manual.',
   };
 }
