@@ -294,15 +294,19 @@ export const HCD_LTV_MAX_NORMAL = 40;
 export const HCD_LTV_MAX_RESTRICTED = 20;
 
 /** Max LTV % allowed by HCD brain — temperament shifts between conservative and aggressive caps. */
-export function getHcdLtvMax(indicators: HcdIndicators, temperamentPct = 50): number {
+export function getHcdLtvMax(indicators?: HcdIndicators | null, temperamentPct = 50): number {
+  const ind = indicators ?? DEFAULT_HCD_INDICATORS;
   const t = clamp(temperamentPct, 0, 100) / 100;
-  if (indicators.volatilityRegime === 'high' || indicators.borrowWarning) {
+  if (ind.volatilityRegime === 'high' || ind.borrowWarning) {
     return Math.round(lerp(HCD_LTV_MAX_RESTRICTED, 25, t));
   }
   return Math.round(lerp(25, HCD_LTV_MAX_NORMAL, t));
 }
 
-export function rebalanceLockMessage(lang: Lang, status: QuarterlyRebalanceStatus): string {
+export function rebalanceLockMessage(lang: Lang, status?: QuarterlyRebalanceStatus | null): string {
+  if (!status) {
+    return lang === 'sk' ? 'Stav rebalansu nedostupný' : 'Rebalance status unavailable';
+  }
   if (status.unlocked) {
     return lang === 'sk'
       ? `Kvartálne rebalančné okno aktívne (${status.currentMonthLabel}).`

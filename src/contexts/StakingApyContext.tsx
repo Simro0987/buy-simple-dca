@@ -36,6 +36,5 @@ export function StakingApyProvider({ children }: { children: ReactNode }) {
 
 export function useStakingSplitApys(): StakingSplitApys {
   const v = useContext(Ctx);
-  if (!v) throw new Error('useStakingSplitApys must be used inside StakingApyProvider');
-  return v;
+  return v ?? { rEth: 0, mSol: 0, tick: 0 };
 }

@@ -14,11 +14,13 @@ import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   computeHcdLayerTargets,
+  DEFAULT_HCD_INDICATORS,
   getHcdLtvMax,
   rebalanceLockMessage,
   type HcdLayerTarget,
   type HcdSymbol,
   type HcdIndicators,
+  type QuarterlyRebalanceStatus,
 } from '@/lib/hcdArchitecture';
 import type { StakedEntry } from '@/lib/stakingLedger';
 import {
@@ -62,6 +64,14 @@ interface Props {
 const NEUTRAL_FG = 50;
 const NEUTRAL_RSI = 50;
 
+const EMPTY_REBALANCE: QuarterlyRebalanceStatus = {
+  unlocked: false,
+  inQuarterlyMonth: false,
+  currentMonthLabel: '—',
+  nextOpeningLabel: '—',
+  nextOpeningMonthIndex: 2,
+};
+
 const ACTION_LABEL: Record<CyborgAction, { sk: string; en: string }> = {
   DEPOSIT_BORROW: { sk: 'Nasadiť kolaterál + požičať USDC', en: 'Deploy collateral + borrow USDC' },
   HOLD: { sk: 'Držať', en: 'Hold' },
@@ -79,11 +89,12 @@ function apyLabel(value: number | null | undefined): string {
   return `${value.toFixed(2)}%`;
 }
 
-function layerApy(layer: HcdLayerTarget, apys: { rEth: number; mSol: number }): string | null {
-  const rEthApy = apys.rEth ?? 0;
-  const mSolApy = apys.mSol ?? 0;
-  if (layer.id.includes('core') && layer.asset === 'rETH') return `${rEthApy.toFixed(2)}%`;
-  if (layer.id.includes('core') && layer.asset === 'mSOL') return `${mSolApy.toFixed(2)}%`;
+function layerApy(layer: HcdLayerTarget, apys?: { rEth?: number; mSol?: number } | null): string | null {
+  const rEthApy = apys?.rEth ?? 0;
+  const mSolApy = apys?.mSol ?? 0;
+  const layerId = layer?.id ?? '';
+  if (layerId.includes('core') && layer?.asset === 'rETH') return `${rEthApy.toFixed(2)}%`;
+  if (layerId.includes('core') && layer?.asset === 'mSOL') return `${mSolApy.toFixed(2)}%`;
   return null;
 }
 
@@ -130,6 +141,7 @@ function CyborgCommandLine({
   muted?: boolean;
   usdMode?: boolean;
 }) {
+  const safeAmount = Number.isFinite(amount) ? amount : 0;
   return (
     <div
       className={`rounded-lg border px-3 py-2.5 ${
@@ -140,14 +152,14 @@ function CyborgCommandLine({
         <span>{prefix}</span>
         {usdMode ? (
           <>
-            <span>{formatUsd(amount)}</span>
-            <CopyAmountButton lang={lang} value={amount} decimals={2} />
+            <span>{formatUsd(safeAmount)}</span>
+            <CopyAmountButton lang={lang} value={safeAmount} decimals={2} />
             <span>USD</span>
           </>
         ) : (
           <>
-            <span>{amount.toFixed(decimals)}</span>
-            <CopyAmountButton lang={lang} value={amount} decimals={decimals} />
+            <span>{safeAmount.toFixed(decimals)}</span>
+            <CopyAmountButton lang={lang} value={safeAmount} decimals={decimals} />
             {suffix && <span>{suffix}</span>}
           </>
         )}
@@ -376,14 +388,14 @@ function CyborgActionPlan({
           <p className="text-[10px] font-bold text-amber-200">
             {sk ? 'Presun kapitálu (HCD Mozog)' : 'Capital routing (HCD brain)'}
           </p>
-          {redistributionLines.map(line => (
+          {(redistributionLines ?? []).map(line => (
             <CyborgCommandLine
               key={line.label}
               prefix={line.label}
-              amount={line.qty}
-              suffix={line.suffix}
+              amount={line.qty ?? 0}
+              suffix={line.suffix ?? ''}
               lang={lang}
-              decimals={line.decimals}
+              decimals={line.decimals ?? 2}
               muted={lineMuted}
             />
           ))}
@@ -583,12 +595,12 @@ function CoreLayerExecution({
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
-  const layerPct = layer.pctTarget;
+  const layerPct = layer?.pctTarget ?? 0;
   const stakeDecimals = symbol === 'SOL' ? 2 : 4;
   const stakeLabel = symbol === 'ETH' ? 'ETH' : 'SOL';
-  const stakeQty = totalQty * (layerPct / 100);
-  const stakeUsd = stakeQty * assetPrice;
-  const planKey = planKeyForLayer(layer.id);
+  const stakeQty = (totalQty ?? 0) * (layerPct / 100);
+  const stakeUsd = stakeQty * (assetPrice ?? 0);
+  const planKey = planKeyForLayer(layer?.id ?? 'core');
   const planConfirmed = isExecutionConfirmed(planKey);
   const routing = symbol === 'ETH'
     ? { token: 'rETH', network: 'Ethereum L1', protocol: 'Rocket Pool' }
@@ -685,23 +697,37 @@ function TacticalLayerExecution({
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
-  const layerPct = layer.pctTarget;
-  const collateralQty = totalQty * (layerPct / 100);
-  const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries, symbol);
-  const collateralUsd = collateralQty * assetPrice;
-  const safeBorrowUsdc = collateralUsd * (ltvMax / 100);
-  const planKey = planKeyForLayer(layer.id);
-  const planConfirmed = isExecutionConfirmed(planKey);
+  const layerPct = layer?.pctTarget ?? 0;
+  const collateralQty = (totalQty ?? 0) * (layerPct / 100);
+  const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries ?? [], symbol);
+  const collateralUsd = collateralQty * (assetPrice ?? 0);
+  const safeBorrowUsdc = collateralUsd * ((ltvMax ?? 0) / 100);
+  const planKey = planKeyForLayer(layer?.id ?? 'tactical');
 
-  const exitAlert = computeTacticalWithdrawAlert({
+  const exitAlert = useMemo(() => {
+    try {
+      return computeTacticalWithdrawAlert({
+        indicators: indicators ?? DEFAULT_HCD_INDICATORS,
+        collateralQty,
+        deployedCollateralQty,
+        collateralPrice: assetPrice ?? 0,
+        usdcDebt: usdcDebt ?? 0,
+        tokenLabel: motorLabel,
+        decimals: collateralDecimals,
+      });
+    } catch {
+      return null;
+    }
+  }, [
     indicators,
     collateralQty,
     deployedCollateralQty,
-    collateralPrice: assetPrice,
+    assetPrice,
     usdcDebt,
-    tokenLabel: motorLabel,
-    decimals: collateralDecimals,
-  });
+    motorLabel,
+    collateralDecimals,
+  ]);
+  const planConfirmed = isExecutionConfirmed(planKey);
   const routing = symbol === 'ETH'
     ? { token: 'rETH', network: 'Arbitrum', protocol: 'Morpho' }
     : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
@@ -800,39 +826,53 @@ function AlchemixLayerExecution({
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed, executeAlchemixAutonomousRebalance } = usePortfolio();
-  const layerPct = autonomyLocked ? 0 : layer.pctTarget;
-  const targetQty = totalEthQty * (layer.pctTarget / 100);
-  const targetUsd = targetQty * ethPrice;
-  const planKey = planKeyForLayer(layer.id);
+  const layerPct = autonomyLocked ? 0 : (layer?.pctTarget ?? 0);
+  const targetQty = (totalEthQty ?? 0) * ((layer?.pctTarget ?? 0) / 100);
+  const targetUsd = targetQty * (ethPrice ?? 0);
+  const planKey = planKeyForLayer(layer?.id ?? 'alchemix');
   const planConfirmed = isExecutionConfirmed(planKey) || autonomyLocked;
-  const exitAlert = computeAlchemixRebalanceAlert(alchemixApyPct);
-  const showAutonomous = isAlchemixApyBelowFloor(alchemixApyPct) && !autonomyLocked;
+  const exitAlert = useMemo(() => {
+    try {
+      return computeAlchemixRebalanceAlert(alchemixApyPct ?? 0);
+    } catch {
+      return null;
+    }
+  }, [alchemixApyPct]);
+  const showAutonomous = isAlchemixApyBelowFloor(alchemixApyPct ?? 0) && !autonomyLocked;
 
-  const alchemixDeployedQty = stakedEntries
-    .filter(e => /alchemix/i.test(e.protocol))
-    .reduce((s, e) => s + e.amount, 0);
+  const alchemixDeployedQty = (stakedEntries ?? [])
+    .filter(e => /alchemix/i.test(e?.protocol ?? ''))
+    .reduce((s, e) => s + (e?.amount ?? 0), 0);
   const freedEthQty = Math.max(targetQty, alchemixDeployedQty);
 
   const previewRedistribution = useMemo(
-    () => (freedEthQty > 0 ? computeAlchemixRedistribution(freedEthQty, indicators) : null),
+    () => {
+      try {
+        return freedEthQty > 0
+          ? computeAlchemixRedistribution(freedEthQty, indicators ?? DEFAULT_HCD_INDICATORS)
+          : null;
+      } catch {
+        return null;
+      }
+    },
     [freedEthQty, indicators],
   );
 
   const redistributionLines = useMemo(() => {
     const dist = autonomyRedistribution ?? previewRedistribution;
     if (!dist) return [];
-    const tacticalUsd = dist.tacticalEthQty * ethPrice;
-    const usdcBorrow = tacticalUsd * (ltvMax / 100);
+    const tacticalUsd = (dist.tacticalEthQty ?? 0) * (ethPrice ?? 0);
+    const usdcBorrow = tacticalUsd * ((ltvMax ?? 0) / 100);
     return [
       {
         label: sk ? '→ Vrstva 2 (Core):' : '→ Layer 2 (Core):',
-        qty: dist.coreEthQty,
+        qty: dist.coreEthQty ?? 0,
         decimals: 4,
         suffix: 'ETH',
       },
       {
         label: sk ? '→ Vrstva 3 (Taktická):' : '→ Layer 3 (Tactical):',
-        qty: dist.tacticalEthQty,
+        qty: dist.tacticalEthQty ?? 0,
         decimals: 4,
         suffix: 'ETH',
       },
@@ -897,9 +937,9 @@ function AlchemixLayerExecution({
         </p>
         {redistributionLines.length > 0 && (
           <div className="space-y-1.5 pt-1">
-            {redistributionLines.map(line => (
+            {(redistributionLines ?? []).map(line => (
               <p key={line.label} className="text-[10px] font-mono text-foreground/80 tabular-nums">
-                {line.label} {line.qty.toFixed(line.decimals)} {line.suffix}
+                {line.label} {(line.qty ?? 0).toFixed(line.decimals ?? 4)} {line.suffix ?? ''}
               </p>
             ))}
           </div>
@@ -1007,7 +1047,7 @@ function AssetHcdCard({
   const { isExecutionConfirmed } = usePortfolio();
   const apys = useStakingSplitApys();
   const decimals = symbol === 'SOL' ? 2 : 3;
-  const totalUsd = totalPortfolioQty * price;
+  const totalUsd = (totalPortfolioQty ?? 0) * (price ?? 0);
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/25 min-w-0">
@@ -1034,19 +1074,20 @@ function AssetHcdCard({
 
       <div className="space-y-2">
         {(layers ?? []).map(layer => {
+          const layerId = layer?.id ?? '';
           const apy = layerApy(layer, apys);
-          const isTactical = layer.id.includes('tactical');
-          const isAlchemix = layer.id.includes('alchemix');
-          const isCore = layer.id.includes('core');
+          const isTactical = layerId.includes('tactical');
+          const isAlchemix = layerId.includes('alchemix');
+          const isCore = layerId.includes('core');
           const isInfoOnly = !isTactical && !isAlchemix && !isCore;
-          const planKey = planKeyForLayer(layer.id);
+          const planKey = planKeyForLayer(layerId);
           const corePlanConfirmed = isCore && isExecutionConfirmed(planKey);
           const isAlchemixLocked = isAlchemix && alchemixAutonomyLocked;
-          const displayPct = isAlchemixLocked ? 0 : layer.pctTarget;
+          const displayPct = isAlchemixLocked ? 0 : (layer?.pctTarget ?? 0);
 
           return (
             <div
-              key={layer.id}
+              key={layerId || `layer-${layer?.layer ?? 0}`}
               className={`rounded-xl border p-2.5 sm:p-3 space-y-2 min-w-0 ${
                 isAlchemixLocked
                   ? 'border-border/40 bg-muted/30 opacity-75'
@@ -1059,10 +1100,10 @@ function AssetHcdCard({
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300/90">
-                      Vrstva {layer.layer}
+                      Vrstva {layer?.layer ?? '—'}
                     </span>
                     <span className={`text-xs font-semibold ${isAlchemixLocked ? 'text-muted-foreground' : 'text-foreground'}`}>
-                      {sk ? layer.nameSk : layer.nameEn}
+                      {sk ? (layer?.nameSk ?? '') : (layer?.nameEn ?? '')}
                     </span>
                     {isAlchemixLocked && (
                       <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-muted-foreground bg-muted/50 border border-border/50 px-1.5 py-0.5 rounded">
@@ -1072,13 +1113,13 @@ function AssetHcdCard({
                     )}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1 break-words">
-                    {layer.asset} · {layer.protocol}
-                    {layer.borrow && ` → Borrow: ${layer.borrow}`}
+                    {layer?.asset ?? ''} · {layer?.protocol ?? ''}
+                    {layer?.borrow && ` → Borrow: ${layer.borrow}`}
                     {apy && ` · APY ${apy}`}
                   </p>
-                  {(layer.noteSk || layer.noteEn) && (
+                  {(layer?.noteSk || layer?.noteEn) && (
                     <p className="text-[9px] text-emerald-400/80 mt-0.5">
-                      {sk ? layer.noteSk : layer.noteEn}
+                      {sk ? (layer?.noteSk ?? '') : (layer?.noteEn ?? '')}
                     </p>
                   )}
                 </div>
@@ -1089,7 +1130,7 @@ function AssetHcdCard({
                     {displayPct.toFixed(1)}%
                   </p>
                   <p className="text-[9px] text-muted-foreground tabular-nums">
-                    {layer.pctMin}–{layer.pctMax}%
+                    {layer?.pctMin ?? 0}–{layer?.pctMax ?? 0}%
                   </p>
                 </div>
               </div>
@@ -1147,7 +1188,7 @@ function AssetHcdCard({
                 />
               )}
 
-              {isInfoOnly && !layer.ledgerProtocol && (
+              {isInfoOnly && !layer?.ledgerProtocol && (
                 <p className="text-[9px] text-muted-foreground italic">
                   {sk ? 'Likvidná rezerva — bez on-chain stake' : 'Liquid reserve — no on-chain stake'}
                 </p>
@@ -1165,14 +1206,30 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const { portfolioData: rawPortfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
   const portfolioData = ensurePortfolioData(rawPortfolioData);
   const { data: defiApys } = useDefiApys();
-  const { indicators, rebalance, borrowLoading, borrowRates, temperamentPct } = useHcdIndicators(lang);
-  const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
+  const {
+    indicators: rawIndicators,
+    rebalance: rawRebalance,
+    borrowLoading,
+    borrowRates,
+    temperamentPct: rawTemperamentPct,
+  } = useHcdIndicators(lang);
+  const safeIndicators = rawIndicators ?? DEFAULT_HCD_INDICATORS;
+  const safeRebalance = rawRebalance ?? EMPTY_REBALANCE;
+  const temperamentPct = rawTemperamentPct ?? 50;
+  const { market, marketLoading, updating, refresh, unavailable: rawUnavailable, terminalApys } = useCyborgMarketData();
+  const unavailable = rawUnavailable ?? [];
   const { locked: alchemixAutonomyLocked, redistribution: alchemixRedistribution } = useAlchemixAutonomy();
-  const win = getTimingWindow(marketScore);
+  const win = getTimingWindow(marketScore ?? 50);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
-  const rebalanceLocked = (!(rebalance?.unlocked ?? false) || win.locked) && !isEmergencyUnlocked;
-  const ltvMax = getHcdLtvMax(indicators, temperamentPct);
-  const ltvRestricted = indicators?.volatilityRegime === 'high' || Boolean(indicators?.borrowWarning);
+  const rebalanceLocked = (!(safeRebalance?.unlocked ?? false) || (win?.locked ?? false)) && !isEmergencyUnlocked;
+  const ltvMax = useMemo(() => {
+    try {
+      return getHcdLtvMax(safeIndicators, temperamentPct);
+    } catch {
+      return 30;
+    }
+  }, [safeIndicators, temperamentPct]);
+  const ltvRestricted = safeIndicators?.volatilityRegime === 'high' || Boolean(safeIndicators?.borrowWarning);
 
   const aggregated = useMemo(
     () => getAggregatedPortfolioTotals(portfolioData),
@@ -1189,26 +1246,26 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const ethLayers = useMemo(
     () => {
       try {
-        return computeHcdLayerTargets('ETH', indicators, temperamentPct) ?? [];
+        return computeHcdLayerTargets('ETH', safeIndicators, temperamentPct) ?? [];
       } catch {
         return [];
       }
     },
-    [indicators, temperamentPct],
+    [safeIndicators, temperamentPct],
   );
   const solLayers = useMemo(
     () => {
       try {
-        return computeHcdLayerTargets('SOL', indicators, temperamentPct) ?? [];
+        return computeHcdLayerTargets('SOL', safeIndicators, temperamentPct) ?? [];
       } catch {
         return [];
       }
     },
-    [indicators, temperamentPct],
+    [safeIndicators, temperamentPct],
   );
 
-  const ethTacticalLayer = ethLayers.find(layer => layer.id.includes('tactical'));
-  const solTacticalLayer = solLayers.find(layer => layer.id.includes('tactical'));
+  const ethTacticalLayer = (ethLayers ?? []).find(layer => layer?.id?.includes('tactical'));
+  const solTacticalLayer = (solLayers ?? []).find(layer => layer?.id?.includes('tactical'));
   const alchemixApyPct = defiApys?.alchemixVault ?? 2.2;
   const ethStakedEntries = portfolioData.assets?.ETH?.stakedEntries ?? [];
   const solStakedEntries = portfolioData.assets?.SOL?.stakedEntries ?? [];
@@ -1227,13 +1284,17 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     : false;
   const totalLbtcApy = computeTotalLbtcApy(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0);
   const netYield = computeNetYield(totalLbtcApy, terminalApys?.usdcBorrow ?? 0);
-  const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0, sk);
+  const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0, sk) || '';
 
   const marketState = useMemo(() => {
-    if (!market?.ready) return null;
-    const fg = market.fearGreed ?? NEUTRAL_FG;
-    const rsi = market.btcRsi ?? NEUTRAL_RSI;
-    return resolveCyborgState(fg, rsi, netYield, ltvMax);
+    try {
+      if (!market?.ready) return null;
+      const fg = market.fearGreed ?? NEUTRAL_FG;
+      const rsi = market.btcRsi ?? NEUTRAL_RSI;
+      return resolveCyborgState(fg, rsi, netYield ?? 0, ltvMax);
+    } catch {
+      return null;
+    }
   }, [market, netYield, ltvMax]);
 
   const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
@@ -1249,16 +1310,16 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       marketConditions: {
         fearGreed: market?.fearGreed ?? null,
         btcRsi: market?.btcRsi ?? null,
-        volatilityRegime: indicators.volatilityRegime,
-        borrowApyPct: indicators.borrowApyPct,
-        targetLtvPct: indicators.targetLtvPct,
+        volatilityRegime: safeIndicators.volatilityRegime,
+        borrowApyPct: safeIndicators.borrowApyPct ?? 0,
+        targetLtvPct: safeIndicators.targetLtvPct ?? 30,
         temperamentPct,
         portfolioUsd,
-        netYieldPct: netYield,
+        netYieldPct: netYield ?? 0,
       },
       balanceSnapshot,
     };
-  }, [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield, portfolioData, cyborgUsdcDebt]);
+  }, [market?.fearGreed, market?.btcRsi, safeIndicators, temperamentPct, portfolioUsd, netYield, portfolioData, cyborgUsdcDebt]);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -1361,9 +1422,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         )}
       </div>
 
-      {unavailable.length > 0 && (
+      {(unavailable ?? []).length > 0 && (
         <div className="flex flex-wrap gap-1.5">
-          {unavailable.map(src => (
+          {(unavailable ?? []).map(src => (
             <span key={src} className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2 py-0.5 text-[10px] text-amber-200">
               <AlertTriangle className="w-3 h-3 shrink-0" />
               {src}: {DATA_UNAVAILABLE}
@@ -1372,7 +1433,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
-      {win.phase === 'overheated' && (
+      {win?.phase === 'overheated' && (
         <div className="rounded-xl border border-loss/40 bg-loss/5 p-3">
           <p className="text-[11px] text-loss font-semibold">{overheatedWarning(lang)}</p>
         </div>
@@ -1400,7 +1461,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
               ? (sk
                 ? '🔓 Núdzové odomknutie aktívne — exekúcia povolená mimo kvartálneho okna.'
                 : '🔓 Emergency override active — execution allowed outside quarterly window.')
-              : rebalanceLockMessage(lang, rebalance)}
+              : rebalanceLockMessage(lang, safeRebalance)}
           </p>
         </div>
         <Button
@@ -1424,10 +1485,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 min-w-0">
         {[
-          { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime, loading: false },
-          { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%`, loading: false },
-          { l: 'USDC Borrow', v: borrowLoading ? '…' : ((borrowRates?.unavailable?.length ?? 0) === 2 ? '0%' : `${fmtNum(indicators?.borrowApyPct, 2)}%`), sub: borrowLoading ? (sk ? 'načítavam' : 'loading') : (indicators?.borrowWarning ? 'warn' : ((borrowRates?.unavailable?.length ?? 0) > 0 ? 'partial' : 'live')), loading: borrowLoading },
-          { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress, loading: false },
+          { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(safeIndicators.volatilityPct)}%`, sub: safeIndicators.volatilityRegime ?? 'normal', loading: false },
+          { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${safeIndicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%`, loading: false },
+          { l: 'USDC Borrow', v: borrowLoading ? '…' : ((borrowRates?.unavailable?.length ?? 0) === 2 ? '0%' : `${fmtNum(safeIndicators.borrowApyPct, 2)}%`), sub: borrowLoading ? (sk ? 'načítavam' : 'loading') : (safeIndicators.borrowWarning ? 'warn' : ((borrowRates?.unavailable?.length ?? 0) > 0 ? 'partial' : 'live')), loading: borrowLoading },
+          { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(safeIndicators.gasLayerPct)}%`, sub: safeIndicators.gasStress ?? 'normal', loading: false },
           { l: sk ? 'Temperament' : 'Temperament', v: `${temperamentPct}%`, sub: temperamentLabel(temperamentPct, sk), loading: false },
         ].map(item => (
           <div key={item.l} className="rounded-lg border border-border/50 bg-background/40 p-2 min-w-0">
@@ -1450,7 +1511,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </p>
       )}
 
-      {indicators.borrowWarning && (
+      {safeIndicators.borrowWarning && (
         <div className="rounded-xl border border-red-500/50 bg-red-500/10 p-3 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
           <div className="text-[11px] text-red-200 leading-snug">
@@ -1464,7 +1525,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
-      {ltvRestricted && !indicators.borrowWarning && (
+      {ltvRestricted && !safeIndicators.borrowWarning && (
         <div className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-3 flex items-start gap-2">
           <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-[11px] text-amber-200">
@@ -1492,7 +1553,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         lang={lang}
         totalPortfolioQty={ethTotalQty}
         price={ethPrice}
-        layers={ethLayers}
+        layers={ethLayers ?? []}
         rebalanceLocked={rebalanceLocked}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
@@ -1503,8 +1564,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         terminalApys={terminalApysSafe}
         lbtcYieldText={lbtcYieldText}
         usdcDebt={cyborgUsdcDebt ?? 0}
-        indicators={indicators}
-        stakedEntries={ethStakedEntries}
+        indicators={safeIndicators}
+        stakedEntries={ethStakedEntries ?? []}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
         alchemixAutonomyLocked={alchemixAutonomyLocked}
@@ -1516,7 +1577,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         lang={lang}
         totalPortfolioQty={solTotalQty}
         price={solPrice}
-        layers={solLayers}
+        layers={solLayers ?? []}
         rebalanceLocked={rebalanceLocked}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
@@ -1527,8 +1588,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         terminalApys={terminalApysSafe}
         lbtcYieldText={lbtcYieldText}
         usdcDebt={cyborgUsdcDebt ?? 0}
-        indicators={indicators}
-        stakedEntries={solStakedEntries}
+        indicators={safeIndicators}
+        stakedEntries={solStakedEntries ?? []}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
         alchemixAutonomyLocked={false}

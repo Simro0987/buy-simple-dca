@@ -23,11 +23,11 @@ export const EXIT_BORROW_URGENT_PCT = 8;
 export const EXIT_ALCHEMIX_APY_FLOOR = 2.5;
 export const EXIT_TARGET_LTV_PCT = HCD_LTV_MAX_RESTRICTED;
 
-export function sumTacticalDeployedQty(entries: StakedEntry[], symbol: 'ETH' | 'SOL'): number {
+export function sumTacticalDeployedQty(entries: StakedEntry[] | null | undefined, symbol: 'ETH' | 'SOL'): number {
   const patterns = symbol === 'ETH' ? [/aave/i, /morpho/i] : [/kamino/i];
-  return entries
-    .filter(e => patterns.some(p => p.test(e.protocol)))
-    .reduce((s, e) => s + e.amount, 0);
+  return (entries ?? [])
+    .filter(e => patterns.some(p => p.test(e?.protocol ?? '')))
+    .reduce((s, e) => s + (e?.amount ?? 0), 0);
 }
 
 /** Withdraw qty to return to target LTV: (collateralUsd - debt/targetLtv) / price */
@@ -63,7 +63,8 @@ export function computeTacticalWithdrawAlert(input: {
   tokenLabel: string;
   decimals: number;
 }): ExitStrategyAlert | null {
-  const urgent = input.indicators.borrowApyPct > EXIT_BORROW_URGENT_PCT
+  if (!input.indicators) return null;
+  const urgent = (input.indicators.borrowApyPct ?? 0) > EXIT_BORROW_URGENT_PCT
     || input.indicators.volatilityRegime === 'high';
   if (!urgent) return null;
 
