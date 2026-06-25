@@ -678,7 +678,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
   const { portfolioData, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const { entries } = useStakingLedger();
-  const { indicators, rebalance, borrowLoading } = useHcdIndicators(lang);
+  const { indicators, rebalance, borrowLoading, borrowRates } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
   const win = getTimingWindow(marketScore);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
@@ -806,11 +806,11 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     setLtvPct(Math.min(v, ltvMax));
   }, [ltvMax]);
 
-  if (portfolioData.loading) {
+  if (portfolioData.loading || borrowLoading) {
     return (
       <div className="glass-card p-3 text-sm text-muted-foreground flex items-center gap-2">
         <Loader2 className="w-4 h-4 animate-spin" />
-        {sk ? 'Načítavam HCD Cyborg Matrix…' : 'Loading HCD Cyborg Matrix…'}
+        {sk ? 'Načítavam dáta…' : 'Loading data…'}
       </div>
     );
   }
@@ -953,7 +953,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         {[
           { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime, loading: false },
           { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%`, loading: false },
-          { l: 'USDC Borrow', v: `${fmtNum(indicators.borrowApyPct, 2)}%`, sub: indicators.borrowWarning ? 'warn' : 'live', loading: borrowLoading },
+          { l: 'USDC Borrow', v: borrowRates?.unavailable.length === 2 ? '0%' : `${fmtNum(indicators.borrowApyPct, 2)}%`, sub: indicators.borrowWarning ? 'warn' : (borrowRates?.unavailable.length ? 'partial' : 'live'), loading: false },
           { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress, loading: false },
         ].map(item => (
           <div key={item.l} className="rounded-lg border border-border/50 bg-background/40 p-2 min-w-0">
@@ -967,6 +967,14 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
           </div>
         ))}
       </div>
+
+      {(borrowRates?.unavailable.length ?? 0) > 0 && (
+        <p className="text-[10px] text-amber-400/90">
+          {sk
+            ? `Borrow zdroje nedostupné (${borrowRates?.unavailable.join(', ')}). Zobrazené 0 % do načítania live dát.`
+            : `Borrow sources unavailable (${borrowRates?.unavailable.join(', ')}). Showing 0% until live data loads.`}
+        </p>
+      )}
 
       {indicators.borrowWarning && (
         <div className="rounded-xl border border-red-500/50 bg-red-500/10 p-3 flex items-start gap-2">

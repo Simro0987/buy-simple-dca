@@ -85,7 +85,8 @@ export function buildPortfolioData(input: {
   for (const sym of ['BTC', 'ETH', 'SOL'] as LedgerSymbol[]) {
     const metric = input.metrics.assets.find(a => a.symbol === sym);
     const row = input.breakdown.find(b => b.symbol === sym);
-    const currentPrice = metric?.currentPrice ?? (sym === 'BTC' ? btcPrice : sym === 'ETH' ? ethPrice : solPrice);
+    const priceFromFeed = sym === 'BTC' ? btcPrice : sym === 'ETH' ? ethPrice : solPrice;
+    const currentPrice = priceFromFeed > 0 ? priceFromFeed : (metric?.currentPrice ?? 0);
     const holdings = metric?.holdings ?? 0;
     const liquidQty = row?.liquidQty ?? holdings;
     const stakedQty = row?.stakedQty ?? 0;

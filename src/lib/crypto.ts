@@ -27,6 +27,7 @@ export interface PriceData {
 
 import { cgFetch } from './coingecko';
 import { getEffectiveLimitDiscount } from './dynamicLimits';
+import { fetchBinanceCorePrices } from './binancePrices';
 
 // Auxiliary CoinGecko ids fetched alongside the core BTC/ETH/SOL set so the Swap
 // Aggregator oracle has live spot prices for every supported network token.
@@ -38,13 +39,36 @@ const AUX_PRICE_IDS = [
   'arbitrum', 'optimism', 'binancecoin', 'sui',
 ];
 
-export async function fetchPrices(): Promise<PriceData> {
+async function fetchCoinGeckoPrices(): Promise<PriceData> {
   const ids = [...TOKENS.map(t => t.coingeckoId), ...AUX_PRICE_IDS].join(',');
   const res = await cgFetch('/simple/price', {
     ids, vs_currencies: 'usd', include_24hr_change: true, include_24hr_vol: true,
   });
   if (!res.ok) throw new Error('Failed to fetch prices');
   return res.json();
+}
+
+export async function fetchPrices(): Promise<PriceData> {
+  const [binanceSettled, cgSettled] = await Promise.allSettled([
+    fetchBinanceCorePrices(),
+    fetchCoinGeckoPrices(),
+  ]);
+
+  const cg: PriceData = cgSettled.status === 'fulfilled' ? cgSettled.value : {};
+  const binance = binanceSettled.status === 'fulfilled' ? binanceSettled.value : null;
+
+  const merge = (id: string, liveUsd: number | undefined): { usd: number; usd_24h_change?: number } => {
+    const cgRow = cg[id];
+    const usd = liveUsd ?? cgRow?.usd ?? 0;
+    return { usd, usd_24h_change: cgRow?.usd_24h_change };
+  };
+
+  return {
+    ...cg,
+    bitcoin: merge('bitcoin', binance?.btc),
+    ethereum: merge('ethereum', binance?.eth),
+    solana: merge('solana', binance?.sol),
+  };
 }
 
 export interface AthData {

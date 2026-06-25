@@ -2,9 +2,8 @@ import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useMarketData } from '@/hooks/useMarketData';
 import { useGasPrices } from '@/hooks/useGasPrices';
-import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
-import { fetchHcdBorrowRates } from '@/lib/fetchHcdIndicators';
+import { fetchHcdIndicators } from '@/lib/fetchHcdIndicators';
 import {
   computeHcdIndicators,
   DEFAULT_HCD_INDICATORS,
@@ -19,28 +18,23 @@ const BORROW_STALE_MS = 5 * 60 * 1000;
 export function useHcdIndicators(lang: Lang) {
   const { data: market } = useMarketData();
   const { data: gas } = useGasPrices();
-  const { terminalApys } = useCyborgMarketData();
   const { data: perCoin } = usePerCoinMetrics();
 
   const {
     data: borrowRates,
     isLoading: borrowLoading,
     isFetching: borrowFetching,
+    isError: borrowError,
   } = useQuery({
-    queryKey: ['hcd-borrow-rates'],
-    queryFn: fetchHcdBorrowRates,
+    queryKey: ['hcd-live-indicators'],
+    queryFn: fetchHcdIndicators,
     staleTime: BORROW_STALE_MS,
     gcTime: BORROW_STALE_MS * 2,
     refetchOnWindowFocus: false,
     retry: 1,
   });
 
-  const liveBorrowApy =
-    borrowRates?.avgBorrowPct ??
-    borrowRates?.aaveV3UsdcBorrowPct ??
-    borrowRates?.kaminoUsdcBorrowPct ??
-    terminalApys?.usdcBorrow ??
-    0;
+  const liveBorrowApy = borrowRates?.avgBorrowPct ?? 0;
 
   const indicators = useMemo<HcdIndicators>(() => {
     try {
@@ -69,6 +63,7 @@ export function useHcdIndicators(lang: Lang) {
     indicators,
     rebalance,
     borrowLoading: borrowLoading || borrowFetching,
+    borrowError,
     borrowRates,
   };
 }
