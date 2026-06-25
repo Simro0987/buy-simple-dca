@@ -35,7 +35,15 @@ import {
   overheatedWarning,
 } from '@/lib/stakeAdvisor';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
-import type { DecisionRating } from '@/lib/hcdDecisionLog';
+import { HcdLearningLog } from '@/components/staking/HcdLearningLog';
+import { useAlchemixAutonomy } from '@/hooks/useAlchemixAutonomy';
+import {
+  computeAlchemixRedistribution,
+  isAlchemixApyBelowFloor,
+  lockAlchemixAutonomous,
+  type AlchemixRedistribution,
+} from '@/lib/hcdAlchemixAutonomy';
+import { applyConfidenceReward, type DecisionRating } from '@/lib/hcdDecisionLog';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -121,6 +129,7 @@ function CyborgCommandLine({
   lang,
   decimals = 2,
   muted,
+  usdMode,
 }: {
   prefix: string;
   amount: number;
@@ -128,6 +137,7 @@ function CyborgCommandLine({
   lang: Lang;
   decimals?: number;
   muted?: boolean;
+  usdMode?: boolean;
 }) {
   return (
     <div
@@ -137,9 +147,19 @@ function CyborgCommandLine({
     >
       <p className="text-[11px] font-mono font-semibold text-foreground tabular-nums flex flex-wrap items-center gap-1.5">
         <span>{prefix}</span>
-        <span>{amount.toFixed(decimals)}</span>
-        <CopyAmountButton lang={lang} value={amount} decimals={decimals} />
-        {suffix && <span>{suffix}</span>}
+        {usdMode ? (
+          <>
+            <span>{formatUsd(amount)}</span>
+            <CopyAmountButton lang={lang} value={amount} decimals={2} />
+            <span>USD</span>
+          </>
+        ) : (
+          <>
+            <span>{amount.toFixed(decimals)}</span>
+            <CopyAmountButton lang={lang} value={amount} decimals={decimals} />
+            {suffix && <span>{suffix}</span>}
+          </>
+        )}
       </p>
     </div>
   );
@@ -151,12 +171,16 @@ function ManualPlanConfirm({
   disabled,
   onConfirm,
   onRevert,
+  autonomousMode,
+  onAutonomous,
 }: {
   lang: Lang;
   confirmed: boolean;
   disabled?: boolean;
   onConfirm: () => void;
   onRevert: () => void;
+  autonomousMode?: boolean;
+  onAutonomous?: () => void;
 }) {
   const sk = lang === 'sk';
 
@@ -171,6 +195,20 @@ function ManualPlanConfirm({
         className="h-8 text-[10px] font-semibold touch-manipulation border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
       >
         {sk ? 'Aktualizované' : 'Updated'}
+      </Button>
+    );
+  }
+
+  if (autonomousMode && onAutonomous) {
+    return (
+      <Button
+        type="button"
+        size="sm"
+        onClick={onAutonomous}
+        disabled={disabled}
+        className="h-8 text-[10px] font-semibold touch-manipulation bg-amber-600 hover:bg-amber-500 text-white"
+      >
+        {sk ? '🤖 Autonómny rebalans' : '🤖 Autonomous rebalance'}
       </Button>
     );
   }
@@ -261,6 +299,9 @@ function CyborgActionPlan({
   execDisabled,
   showBorrowCommand = true,
   feedback,
+  autonomousMode,
+  onAutonomous,
+  redistributionLines,
 }: {
   sk: boolean;
   layerPct: number;
@@ -286,6 +327,9 @@ function CyborgActionPlan({
   execDisabled: boolean;
   showBorrowCommand?: boolean;
   feedback?: PlanFeedbackProps;
+  autonomousMode?: boolean;
+  onAutonomous?: () => void;
+  redistributionLines?: Array<{ label: string; qty: number; decimals: number; suffix: string }>;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -333,8 +377,29 @@ function CyborgActionPlan({
           disabled={execDisabled}
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
+          autonomousMode={autonomousMode}
+          onAutonomous={onAutonomous}
         />
       </div>
+
+      {redistributionLines && redistributionLines.length > 0 && (
+        <div className="rounded-lg border border-amber-500/35 bg-amber-500/5 px-3 py-2.5 space-y-1.5">
+          <p className="text-[10px] font-bold text-amber-200">
+            {sk ? 'Presun kapitálu (HCD Mozog)' : 'Capital routing (HCD brain)'}
+          </p>
+          {redistributionLines.map(line => (
+            <CyborgCommandLine
+              key={line.label}
+              prefix={line.label}
+              amount={line.qty}
+              suffix={line.suffix}
+              lang={lang}
+              decimals={line.decimals}
+              muted={lineMuted}
+            />
+          ))}
+        </div>
+      )}
 
       {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
@@ -379,15 +444,14 @@ function CyborgActionPlan({
       {showBorrowFlow && combinedBorrowUsdc > 0 && (
         <>
           <CyborgCommandLine
-            prefix={sk ? 'Kúpte LBTC za:' : 'Buy LBTC:'}
-            amount={projectedLbtcQty}
-            suffix="LBTC"
+            prefix={sk ? 'Kúpte za:' : 'Buy for:'}
+            amount={projectedLbtcUsd}
             lang={lang}
-            decimals={6}
+            usdMode
             muted={lineMuted}
           />
           <p className="text-[9px] text-muted-foreground tabular-nums">
-            {sk ? 'Kombinovaný úver ETH+SOL' : 'Combined ETH+SOL borrow'}: {combinedBorrowUsdc.toFixed(2)} USDC · {formatUsd(projectedLbtcUsd)}
+            {sk ? 'Kombinovaný úver ETH+SOL' : 'Combined ETH+SOL borrow'}: {combinedBorrowUsdc.toFixed(2)} USDC · ~{projectedLbtcQty.toFixed(6)} LBTC
           </p>
           <p className="text-[9px] text-muted-foreground" title={lbtcYieldText}>
             Morpho borrow: {apyLabel(terminalApys.usdcBorrow)} · {lbtcYieldText}
@@ -753,8 +817,13 @@ function AlchemixLayerExecution({
   ethPrice,
   rebalanceLocked,
   alchemixApyPct,
+  indicators,
+  ltvMax,
+  stakedEntries,
   buildDecisionMeta,
   feedback,
+  autonomyLocked,
+  autonomyRedistribution,
 }: {
   lang: Lang;
   layer: HcdLayerTarget;
@@ -762,27 +831,124 @@ function AlchemixLayerExecution({
   ethPrice: number;
   rebalanceLocked: boolean;
   alchemixApyPct: number;
+  indicators: HcdIndicators;
+  ltvMax: number;
+  stakedEntries: StakedEntry[];
   buildDecisionMeta: () => DecisionConfirmMeta;
   feedback: PlanFeedbackProps;
+  autonomyLocked: boolean;
+  autonomyRedistribution: AlchemixRedistribution | null;
 }) {
   const sk = lang === 'sk';
-  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
-  const layerPct = layer.pctTarget;
-  const targetQty = totalEthQty * (layerPct / 100);
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed, executeAlchemixAutonomousRebalance } = usePortfolio();
+  const layerPct = autonomyLocked ? 0 : layer.pctTarget;
+  const targetQty = totalEthQty * (layer.pctTarget / 100);
   const targetUsd = targetQty * ethPrice;
   const planKey = planKeyForLayer(layer.id);
-  const planConfirmed = isExecutionConfirmed(planKey);
+  const planConfirmed = isExecutionConfirmed(planKey) || autonomyLocked;
   const exitAlert = computeAlchemixRebalanceAlert(alchemixApyPct);
+  const showAutonomous = isAlchemixApyBelowFloor(alchemixApyPct) && !autonomyLocked;
+
+  const alchemixDeployedQty = stakedEntries
+    .filter(e => /alchemix/i.test(e.protocol))
+    .reduce((s, e) => s + e.amount, 0);
+  const freedEthQty = Math.max(targetQty, alchemixDeployedQty);
+
+  const previewRedistribution = useMemo(
+    () => (freedEthQty > 0 ? computeAlchemixRedistribution(freedEthQty, indicators) : null),
+    [freedEthQty, indicators],
+  );
+
+  const redistributionLines = useMemo(() => {
+    const dist = autonomyRedistribution ?? previewRedistribution;
+    if (!dist) return [];
+    const tacticalUsd = dist.tacticalEthQty * ethPrice;
+    const usdcBorrow = tacticalUsd * (ltvMax / 100);
+    return [
+      {
+        label: sk ? '→ Vrstva 2 (Core):' : '→ Layer 2 (Core):',
+        qty: dist.coreEthQty,
+        decimals: 4,
+        suffix: 'ETH',
+      },
+      {
+        label: sk ? '→ Vrstva 3 (Taktická):' : '→ Layer 3 (Tactical):',
+        qty: dist.tacticalEthQty,
+        decimals: 4,
+        suffix: 'ETH',
+      },
+      ...(usdcBorrow > 0 ? [{
+        label: sk ? '→ Borrow max:' : '→ Borrow max:',
+        qty: usdcBorrow,
+        decimals: 2,
+        suffix: 'USDC',
+      }] : []),
+    ];
+  }, [autonomyRedistribution, previewRedistribution, ethPrice, ltvMax, sk]);
 
   const handleConfirmPlan = useCallback(() => {
     confirmExecutionStep(planKey, { alchemixEthQty: targetQty }, buildDecisionMeta());
     toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
   }, [confirmExecutionStep, planKey, targetQty, buildDecisionMeta, sk]);
 
+  const handleAutonomousRebalance = useCallback(() => {
+    if (!previewRedistribution || freedEthQty <= 0) return;
+    const tacticalUsd = previewRedistribution.tacticalEthQty * ethPrice;
+    const usdcBorrow = tacticalUsd * (ltvMax / 100);
+
+    const withdrawQty = alchemixDeployedQty > 0
+      ? Math.min(freedEthQty, alchemixDeployedQty)
+      : 0;
+
+    executeAlchemixAutonomousRebalance({
+      withdrawAlchemixEth: withdrawQty,
+      coreEthQty: previewRedistribution.coreEthQty,
+      tacticalEthQty: previewRedistribution.tacticalEthQty,
+      usdcBorrowed: usdcBorrow,
+    }, buildDecisionMeta());
+
+    lockAlchemixAutonomous(previewRedistribution);
+    applyConfidenceReward('eth-alchemix-autonomous', 1);
+
+    toast.success(sk
+      ? 'Autonómny rebalans dokončený · Vrstva 4 zamknutá'
+      : 'Autonomous rebalance complete · Layer 4 locked');
+  }, [
+    previewRedistribution, freedEthQty, ethPrice, ltvMax,
+    executeAlchemixAutonomousRebalance, buildDecisionMeta, sk,
+  ]);
+
   const handleRevertPlan = useCallback(() => {
     revertExecutionStep(planKey);
     toast.success(sk ? 'Exekúcia vrátená späť' : 'Execution reverted');
   }, [revertExecutionStep, planKey, sk]);
+
+  if (autonomyLocked) {
+    return (
+      <div className="rounded-xl border border-border/50 bg-muted/30 p-3 space-y-2 opacity-80">
+        <div className="flex items-center gap-2">
+          <Lock className="w-4 h-4 text-muted-foreground shrink-0" />
+          <p className="text-[11px] font-semibold text-muted-foreground">
+            {sk ? 'Autonómny rebalans · HCD Mozog' : 'Autonomous rebalance · HCD brain'}
+          </p>
+        </div>
+        <p className="text-[10px] text-muted-foreground leading-snug">
+          {sk
+            ? 'Vrstva 4 je zamknutá na 0 %. Kapitál bol presunutý podľa rizika HCD mozgu.'
+            : 'Layer 4 is locked at 0%. Capital was routed per HCD brain risk profile.'}
+        </p>
+        {redistributionLines.length > 0 && (
+          <div className="space-y-1.5 pt-1">
+            {redistributionLines.map(line => (
+              <p key={line.label} className="text-[10px] font-mono text-foreground/80 tabular-nums">
+                {line.label} {line.qty.toFixed(line.decimals)} {line.suffix}
+              </p>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <Collapsible
@@ -823,6 +989,9 @@ function AlchemixLayerExecution({
           execDisabled={rebalanceLocked}
           showBorrowCommand={false}
           feedback={feedback}
+          autonomousMode={showAutonomous}
+          onAutonomous={handleAutonomousRebalance}
+          redistributionLines={showAutonomous ? redistributionLines : undefined}
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer.protocol} · Bez likvidácie` : `${layer.protocol} · No liquidation`}
@@ -853,6 +1022,8 @@ function AssetHcdCard({
   alchemixApyPct,
   buildDecisionMeta,
   getPlanFeedback,
+  alchemixAutonomyLocked,
+  alchemixRedistribution,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -874,6 +1045,8 @@ function AssetHcdCard({
   alchemixApyPct: number;
   buildDecisionMeta: () => DecisionConfirmMeta;
   getPlanFeedback: (planKey: string) => PlanFeedbackProps;
+  alchemixAutonomyLocked: boolean;
+  alchemixRedistribution: AlchemixRedistribution | null;
 }) {
   const sk = lang === 'sk';
   const { isExecutionConfirmed } = usePortfolio();
@@ -913,14 +1086,18 @@ function AssetHcdCard({
           const isInfoOnly = !isTactical && !isAlchemix && !isCore;
           const planKey = planKeyForLayer(layer.id);
           const corePlanConfirmed = isCore && isExecutionConfirmed(planKey);
+          const isAlchemixLocked = isAlchemix && alchemixAutonomyLocked;
+          const displayPct = isAlchemixLocked ? 0 : layer.pctTarget;
 
           return (
             <div
               key={layer.id}
               className={`rounded-xl border p-2.5 sm:p-3 space-y-2 min-w-0 ${
-                corePlanConfirmed
-                  ? 'border-border/30 bg-muted/20 opacity-75'
-                  : 'border-border/50 bg-background/30'
+                isAlchemixLocked
+                  ? 'border-border/40 bg-muted/30 opacity-75'
+                  : corePlanConfirmed
+                    ? 'border-border/30 bg-muted/20 opacity-75'
+                    : 'border-border/50 bg-background/30'
               }`}
             >
               <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between min-w-0">
@@ -929,9 +1106,15 @@ function AssetHcdCard({
                     <span className="text-[10px] font-bold uppercase tracking-wider text-violet-300/90">
                       Vrstva {layer.layer}
                     </span>
-                    <span className="text-xs font-semibold text-foreground">
+                    <span className={`text-xs font-semibold ${isAlchemixLocked ? 'text-muted-foreground' : 'text-foreground'}`}>
                       {sk ? layer.nameSk : layer.nameEn}
                     </span>
+                    {isAlchemixLocked && (
+                      <span className="inline-flex items-center gap-1 text-[9px] font-semibold text-muted-foreground bg-muted/50 border border-border/50 px-1.5 py-0.5 rounded">
+                        <Lock className="w-3 h-3" />
+                        {sk ? 'HCD Mozog' : 'HCD brain'}
+                      </span>
+                    )}
                   </div>
                   <p className="text-[10px] text-muted-foreground mt-1 break-words">
                     {layer.asset} · {layer.protocol}
@@ -945,8 +1128,10 @@ function AssetHcdCard({
                   )}
                 </div>
                 <div className="text-right shrink-0">
-                  <p className="font-mono text-sm font-bold text-violet-200 tabular-nums">
-                    {layer.pctTarget.toFixed(1)}%
+                  <p className={`font-mono text-sm font-bold tabular-nums ${
+                    isAlchemixLocked ? 'text-muted-foreground' : 'text-violet-200'
+                  }`}>
+                    {displayPct.toFixed(1)}%
                   </p>
                   <p className="text-[9px] text-muted-foreground tabular-nums">
                     {layer.pctMin}–{layer.pctMax}%
@@ -986,8 +1171,13 @@ function AssetHcdCard({
                   ethPrice={price}
                   rebalanceLocked={rebalanceLocked}
                   alchemixApyPct={alchemixApyPct}
+                  indicators={indicators}
+                  ltvMax={ltvMax}
+                  stakedEntries={stakedEntries}
                   buildDecisionMeta={buildDecisionMeta}
                   feedback={getPlanFeedback(planKey)}
+                  autonomyLocked={alchemixAutonomyLocked}
+                  autonomyRedistribution={alchemixRedistribution}
                 />
               )}
 
@@ -1024,6 +1214,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const { data: defiApys } = useDefiApys();
   const { indicators, rebalance, borrowLoading, borrowRates, temperamentPct } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
+  const { locked: alchemixAutonomyLocked, redistribution: alchemixRedistribution } = useAlchemixAutonomy();
   const win = getTimingWindow(marketScore);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
   const rebalanceLocked = (!rebalance.unlocked || win.locked) && !isEmergencyUnlocked;
@@ -1118,7 +1309,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       `ETH Borrow: $${ethBorrowUsdc.toFixed(2)} USDC`,
       `SOL Borrow: $${solBorrowUsdc.toFixed(2)} USDC`,
       `Combined Borrow: $${combinedBorrowUsdc.toFixed(2)} USDC`,
-      `Buy: ${projectedLbtcQty.toFixed(6)} LBTC (projected)`,
+      `Buy: ${formatUsd(projectedLbtcUsd)} (LBTC projected)`,
     ].join('\n');
     try {
       await navigator.clipboard.writeText(plan);
@@ -1129,7 +1320,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   }, [
     sk, marketState, market?.fearGreed, ethTacticalLayer, solTacticalLayer,
     deployREth, deployMSol, ltvMax, ethBorrowUsdc, solBorrowUsdc,
-    combinedBorrowUsdc, projectedLbtcQty,
+    combinedBorrowUsdc, projectedLbtcUsd,
   ]);
 
   if (portfolioData.loading || borrowLoading) {
@@ -1339,6 +1530,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
+      <HcdLearningLog lang={lang} portfolioUsd={portfolioUsd} />
+
       {/* ── HCD Vrstvy s integrovanou exekúciou ── */}
       <AssetHcdCard
         symbol="ETH"
@@ -1361,6 +1554,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
         getPlanFeedback={getPlanFeedback}
+        alchemixAutonomyLocked={alchemixAutonomyLocked}
+        alchemixRedistribution={alchemixRedistribution}
       />
 
       <AssetHcdCard
@@ -1384,6 +1579,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
         getPlanFeedback={getPlanFeedback}
+        alchemixAutonomyLocked={false}
+        alchemixRedistribution={null}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">

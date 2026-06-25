@@ -85,6 +85,7 @@ function clampConfidence(value: number): number {
 }
 
 export function actionTypeFromStepKey(stepKey: string): string {
+  if (stepKey.includes('autonomous-alchemix')) return 'alchemix-autonomous-rebalance';
   if (stepKey.includes('core')) return 'core-stake';
   if (stepKey.includes('tactical')) return 'tactical-deploy';
   if (stepKey.includes('alchemix')) return 'alchemix-deposit';
@@ -99,13 +100,15 @@ export function appendDecisionLogEntry(input: {
   stepKey: string;
   portfolioUsdAtConfirm: number;
   marketConditions: MarketConditionsSnapshot;
+  actionType?: string;
+  strategyKey?: string;
 }): DecisionLogEntry {
   const entries = loadDecisionLog().filter(e => e.stepKey !== input.stepKey);
   const entry: DecisionLogEntry = {
     id: `${input.stepKey}-${Date.now()}`,
     stepKey: input.stepKey,
-    actionType: actionTypeFromStepKey(input.stepKey),
-    strategyKey: strategyKeyFromStepKey(input.stepKey),
+    actionType: input.actionType ?? actionTypeFromStepKey(input.stepKey),
+    strategyKey: input.strategyKey ?? strategyKeyFromStepKey(input.stepKey),
     confirmedAt: Date.now(),
     portfolioUsdAtConfirm: input.portfolioUsdAtConfirm,
     marketConditions: input.marketConditions,

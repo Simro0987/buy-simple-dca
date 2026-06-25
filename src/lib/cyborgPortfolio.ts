@@ -131,6 +131,26 @@ export function revertPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): vo
   }
 }
 
+export function applyAlchemixAutonomousRebalance(input: {
+  withdrawAlchemixEth: number;
+  coreEthQty: number;
+  tacticalEthQty: number;
+  usdcBorrowed: number;
+}): void {
+  if (input.withdrawAlchemixEth > 0) {
+    removeStake('ETH', 'Alchemix Vault (ETH)', input.withdrawAlchemixEth);
+  }
+  if (input.coreEthQty > 0) {
+    addStake('ETH', 'Rocket Pool (rETH)', input.coreEthQty);
+  }
+  if (input.tacticalEthQty > 0) {
+    addStake('ETH', 'Aave V3 Lending', input.tacticalEthQty);
+  }
+  if (input.usdcBorrowed > 0) {
+    addCyborgUsdcDebt(input.usdcBorrowed);
+  }
+}
+
 export function buildCyborgExecutionUpdate(input: {
   rEthQty: number;
   mSolQty: number;

@@ -9,6 +9,7 @@ import type { PriceData } from '@/lib/crypto';
 import { buildPortfolioData, type PortfolioData } from '@/lib/portfolioData';
 import {
   applyPortfolioBalanceUpdate,
+  applyAlchemixAutonomousRebalance,
   loadCyborgUsdcDebt,
   loadConfirmedSteps,
   markStepConfirmed,
@@ -59,6 +60,10 @@ interface PortfolioCtx {
   cyborgUsdcDebt: number;
   markProfitMoved: (usd: number) => void;
   confirmExecutionStep: (key: string, update: PortfolioBalanceUpdate, meta?: DecisionConfirmMeta) => void;
+  executeAlchemixAutonomousRebalance: (
+    input: Parameters<typeof applyAlchemixAutonomousRebalance>[0],
+    meta?: DecisionConfirmMeta,
+  ) => void;
   revertExecutionStep: (key: string) => void;
   isExecutionConfirmed: (key: string) => boolean;
   selected: AssetFilter;
@@ -110,6 +115,25 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
         stepKey: key,
         portfolioUsdAtConfirm: meta.marketConditions.portfolioUsd ?? metrics.totalValue,
         marketConditions: meta.marketConditions,
+      });
+    }
+    setConfirmedSteps(loadConfirmedSteps());
+    setCyborgUsdcDebt(loadCyborgUsdcDebt());
+  }, [metrics.totalValue]);
+
+  const executeAlchemixAutonomousRebalanceFn = useCallback((
+    input: Parameters<typeof applyAlchemixAutonomousRebalance>[0],
+    meta?: DecisionConfirmMeta,
+  ) => {
+    applyAlchemixAutonomousRebalance(input);
+    markStepConfirmed('hcd-autonomous-alchemix', {});
+    if (meta?.marketConditions) {
+      appendDecisionLogEntry({
+        stepKey: 'hcd-autonomous-alchemix',
+        portfolioUsdAtConfirm: meta.marketConditions.portfolioUsd ?? metrics.totalValue,
+        marketConditions: meta.marketConditions,
+        actionType: 'alchemix-autonomous-rebalance',
+        strategyKey: 'eth-alchemix-autonomous',
       });
     }
     setConfirmedSteps(loadConfirmedSteps());
@@ -223,13 +247,14 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       markProfitMoved,
       updatePortfolioBalances,
       confirmExecutionStep,
+      executeAlchemixAutonomousRebalance: executeAlchemixAutonomousRebalanceFn,
       revertExecutionStep,
       isExecutionConfirmed,
       selected,
       setSelected,
       toggleSelected,
     };
-  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, executeAlchemixAutonomousRebalanceFn, revertExecutionStep, isExecutionConfirmed]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
