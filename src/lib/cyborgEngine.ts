@@ -30,10 +30,15 @@ function emitEngineChange(): void {
 }
 
 export function logCyborgDiagnostic(message: string, detail?: unknown): void {
-  if (detail !== undefined) {
-    console.log(`${DIAG_PREFIX} ${message}`, detail);
+  const line = `${DIAG_PREFIX} ${message}`;
+  const isFailure = /fail|error|timeout|fallback/i.test(message);
+  if (isFailure) {
+    if (detail !== undefined) console.warn(line, detail);
+    else console.warn(line);
+  } else if (detail !== undefined) {
+    console.log(line, detail);
   } else {
-    console.log(`${DIAG_PREFIX} ${message}`);
+    console.log(line);
   }
 }
 
@@ -56,6 +61,18 @@ export function diagnoseCyborgFailure(error: unknown): string {
 
 export function getCyborgEngineState(): CyborgEngineState {
   return { ...engineState };
+}
+
+export function hardResetCyborgEngineForStakeMount(): void {
+  engineState = {
+    phase: 'idle',
+    lastError: null,
+    lastInitAt: null,
+    restartCount: 0,
+    forceReload: true,
+  };
+  logCyborgDiagnostic('Stake mount: hard reset — cleared error/fallback state');
+  emitEngineChange();
 }
 
 export function resetCyborgEngineToIdle(): void {
@@ -171,23 +188,22 @@ export async function initializeCyborgEngine(
     logCyborgDiagnostic('initializeCyborgEngine: ready');
   } catch (error) {
     const reason = diagnoseCyborgFailure(error);
-    setCyborgEnginePhase('error', reason);
-    logCyborgDiagnostic(`initializeCyborgEngine failed — ${reason}`, error);
-    throw error;
+    logCyborgDiagnostic(`initializeCyborgEngine failed (background) — ${reason}`, error);
+    setCyborgEnginePhase('idle');
   }
 }
 
 export function reportSilentTrackerFailure(error: unknown): void {
   const reason = diagnoseCyborgFailure(error);
-  if (engineState.phase === 'ready') {
-    setCyborgEnginePhase('fallback', reason);
-  } else {
-    setCyborgEnginePhase('error', reason);
+  logCyborgDiagnostic(`SilentTracker background failure — ${reason}`, error);
+  // UI is decoupled — never persist error/fallback phase for rendering.
+  if (engineState.phase !== 'ready') {
+    setCyborgEnginePhase('idle');
   }
 }
 
 export function reportSilentTrackerSuccess(): void {
-  if (engineState.phase === 'loading' || engineState.phase === 'fallback' || engineState.phase === 'error') {
+  if (engineState.phase === 'loading') {
     setCyborgEnginePhase('ready');
   }
 }

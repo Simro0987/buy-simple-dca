@@ -42,9 +42,7 @@ import {
   type AlchemixRedistribution,
 } from '@/lib/hcdAlchemixAutonomy';
 import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
-import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
-import { useCyborgEngine } from '@/hooks/useCyborgEngine';
-import { ensurePortfolioData, getAggregatedPortfolioTotals } from '@/lib/portfolioData';
+import { getAggregatedPortfolioTotals } from '@/lib/portfolioData';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
@@ -59,7 +57,6 @@ import {
 interface Props {
   lang: Lang;
   marketScore: number;
-  onRestartReady?: (restart: () => Promise<void>) => void;
 }
 
 const NEUTRAL_FG = 50;
@@ -1163,21 +1160,12 @@ function AssetHcdCard({
   );
 }
 
-export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
+export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
   const { portfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
-  const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
-  const { restartEngine, restartToken } = useCyborgEngine({
-    onMarketRefresh: () => refresh(),
-  });
-
-  useEffect(() => {
-    onRestartReady?.(restartEngine);
-  }, [onRestartReady, restartEngine]);
-
-  const safePortfolio = useMemo(() => ensurePortfolioData(portfolioData), [portfolioData]);
   const { data: defiApys } = useDefiApys();
   const { indicators, rebalance, borrowLoading, borrowRates, temperamentPct } = useHcdIndicators(lang);
+  const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
   const { locked: alchemixAutonomyLocked, redistribution: alchemixRedistribution } = useAlchemixAutonomy();
   const win = getTimingWindow(marketScore);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
@@ -1186,19 +1174,16 @@ export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
   const ltvRestricted = indicators.volatilityRegime === 'high' || indicators.borrowWarning;
 
   const aggregated = useMemo(
-    () => getAggregatedPortfolioTotals(safePortfolio),
-    [safePortfolio],
+    () => getAggregatedPortfolioTotals(portfolioData),
+    [portfolioData],
   );
   const ethTotalQty = aggregated.ethQty;
   const solTotalQty = aggregated.solQty;
   const ethPrice = aggregated.ethPrice;
   const solPrice = aggregated.solPrice;
-  const btcPrice = safePortfolio.prices?.btc ?? 0;
+  const btcPrice = portfolioData.prices?.btc ?? 0;
 
   const portfolioUsd = aggregated.portfolioUsd;
-  const hasCachedBalances = ethTotalQty > 0 || solTotalQty > 0;
-
-  useHcdSilentTrackerEngine(safePortfolio, cyborgUsdcDebt, hasCachedBalances, restartToken);
 
   const ethLayers = useMemo(
     () => {
@@ -1224,8 +1209,8 @@ export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
   const ethTacticalLayer = ethLayers.find(layer => layer.id.includes('tactical'));
   const solTacticalLayer = solLayers.find(layer => layer.id.includes('tactical'));
   const alchemixApyPct = defiApys?.alchemixVault ?? 2.2;
-  const ethStakedEntries = safePortfolio.assets?.ETH?.stakedEntries ?? [];
-  const solStakedEntries = safePortfolio.assets?.SOL?.stakedEntries ?? [];
+  const ethStakedEntries = portfolioData.assets?.ETH?.stakedEntries ?? [];
+  const solStakedEntries = portfolioData.assets?.SOL?.stakedEntries ?? [];
 
   const deployREth = tacticalCollateralQty(ethTotalQty, ethTacticalLayer);
   const deployMSol = tacticalCollateralQty(solTotalQty, solTacticalLayer);
@@ -1255,7 +1240,7 @@ export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
   const buildDecisionMeta = useCallback((): DecisionConfirmMeta => {
     let balanceSnapshot;
     try {
-      balanceSnapshot = capturePortfolioSnapshot(safePortfolio, cyborgUsdcDebt);
+      balanceSnapshot = capturePortfolioSnapshot(portfolioData, cyborgUsdcDebt);
     } catch {
       balanceSnapshot = undefined;
     }
@@ -1272,7 +1257,7 @@ export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
       },
       balanceSnapshot,
     };
-  }, [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield, safePortfolio, cyborgUsdcDebt]);
+  }, [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield, portfolioData, cyborgUsdcDebt]);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -1301,16 +1286,6 @@ export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
     deployREth, deployMSol, ltvMax, ethBorrowUsdc, solBorrowUsdc,
     combinedBorrowUsdc, projectedLbtcUsd,
   ]);
-
-  const metricsStillLoading = safePortfolio.loading && !hasCachedBalances;
-  if (metricsStillLoading) {
-    return (
-      <div className="glass-card p-3 text-sm text-muted-foreground flex items-center gap-2">
-        <Loader2 className="w-4 h-4 animate-spin" />
-        {sk ? 'Načítavam agregované zostatky…' : 'Loading aggregated balances…'}
-      </div>
-    );
-  }
 
   const showMarketBanner = marketState != null && marketState.state !== 3;
   const marketBannerText = marketState
