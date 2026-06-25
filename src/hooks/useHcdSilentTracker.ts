@@ -12,6 +12,11 @@ import {
   loadDecisionLog,
   processSilentPerformanceChecks,
 } from '@/lib/hcdDecisionLog';
+import {
+  logCyborgDiagnostic,
+  reportSilentTrackerFailure,
+  reportSilentTrackerSuccess,
+} from '@/lib/cyborgEngine';
 import type { PortfolioData } from '@/lib/portfolioData';
 
 function subscribe(onStoreChange: () => void): () => void {
@@ -72,12 +77,13 @@ export function useHcdSilentTrackerState() {
 
 /**
  * Background 24h PnL engine — deferred, non-blocking, failure-isolated.
- * Never throws; portfolio UI must render even when this fails.
+ * Participates in CyborgEngine phase lifecycle (idle → loading → ready / error / fallback).
  */
 export function useHcdSilentTrackerEngine(
   portfolioData: PortfolioData,
   usdcDebt: number,
   enabled: boolean,
+  restartToken = 0,
 ) {
   const pendingCount = useSyncExternalStore(subscribe, safePendingCount, () => 0);
 
@@ -86,7 +92,12 @@ export function useHcdSilentTrackerEngine(
   const balancesReady = portfolioData.balancesReady ?? true;
 
   useEffect(() => {
-    if (!enabled || !balancesReady) return;
+    if (!enabled || !balancesReady) {
+      logCyborgDiagnostic('SilentTracker: waiting for portfolio', { enabled, balancesReady });
+      return;
+    }
+
+    logCyborgDiagnostic('SilentTracker: scheduling run', { restartToken });
 
     const timeoutId = window.setTimeout(() => {
       try {
@@ -96,6 +107,7 @@ export function useHcdSilentTrackerEngine(
           && (portfolioData.totalEthPortfolio ?? 0) <= 0
           && (portfolioData.totalSolPortfolio ?? 0) <= 0
         ) {
+          logCyborgDiagnostic('SilentTracker: empty snapshot — skipping');
           return;
         }
 
@@ -105,10 +117,14 @@ export function useHcdSilentTrackerEngine(
 
         const stillPending = safePendingCount() > 0;
         if (!stillPending) markAlgorithmStable();
+
+        reportSilentTrackerSuccess();
+        logCyborgDiagnostic('SilentTracker: run complete');
       } catch (error) {
-        console.error('[HCD Silent Tracker]', error);
+        reportSilentTrackerFailure(error);
+        logCyborgDiagnostic('SilentTracker: run failed', error);
       }
-    }, 500);
+    }, 300);
 
     return () => window.clearTimeout(timeoutId);
   }, [
@@ -120,6 +136,7 @@ export function useHcdSilentTrackerEngine(
     solUsd,
     usdcDebt,
     pendingCount,
+    restartToken,
   ]);
 }
 

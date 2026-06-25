@@ -43,6 +43,7 @@ import {
 } from '@/lib/hcdAlchemixAutonomy';
 import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
 import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
+import { useCyborgEngine } from '@/hooks/useCyborgEngine';
 import { ensurePortfolioData, getAggregatedPortfolioTotals } from '@/lib/portfolioData';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 import { temperamentLabel } from '@/lib/hcdTemperament';
@@ -58,6 +59,7 @@ import {
 interface Props {
   lang: Lang;
   marketScore: number;
+  onRestartReady?: (restart: () => Promise<void>) => void;
 }
 
 const NEUTRAL_FG = 50;
@@ -1161,13 +1163,21 @@ function AssetHcdCard({
   );
 }
 
-export function HcdStakePanel({ lang, marketScore }: Props) {
+export function HcdStakePanel({ lang, marketScore, onRestartReady }: Props) {
   const sk = lang === 'sk';
   const { portfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
+  const { restartEngine, restartToken } = useCyborgEngine({
+    onMarketRefresh: () => refresh(),
+  });
+
+  useEffect(() => {
+    onRestartReady?.(restartEngine);
+  }, [onRestartReady, restartEngine]);
+
   const safePortfolio = useMemo(() => ensurePortfolioData(portfolioData), [portfolioData]);
   const { data: defiApys } = useDefiApys();
   const { indicators, rebalance, borrowLoading, borrowRates, temperamentPct } = useHcdIndicators(lang);
-  const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
   const { locked: alchemixAutonomyLocked, redistribution: alchemixRedistribution } = useAlchemixAutonomy();
   const win = getTimingWindow(marketScore);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
@@ -1188,7 +1198,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const portfolioUsd = aggregated.portfolioUsd;
   const hasCachedBalances = ethTotalQty > 0 || solTotalQty > 0;
 
-  useHcdSilentTrackerEngine(safePortfolio, cyborgUsdcDebt, hasCachedBalances);
+  useHcdSilentTrackerEngine(safePortfolio, cyborgUsdcDebt, hasCachedBalances, restartToken);
 
   const ethLayers = useMemo(
     () => {
