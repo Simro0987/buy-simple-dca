@@ -23,9 +23,7 @@ import {
 import type { StakedEntry } from '@/lib/stakingLedger';
 import {
   computeAlchemixRebalanceAlert,
-  computeCoreOpportunityAlert,
   computeTacticalWithdrawAlert,
-  sumCoreDeployedQty,
   sumTacticalDeployedQty,
   type ExitStrategyAlert,
 } from '@/lib/hcdExitStrategy';
@@ -165,7 +163,7 @@ function CyborgCommandLine({
 
 function ExitStrategyBanner({ alert, sk }: { alert: ExitStrategyAlert; sk: boolean }) {
   const variantClass = {
-    urgent: 'border-orange-500/60 bg-orange-500/15 text-orange-100',
+    urgent: 'border-red-500/60 bg-red-500/15 text-red-100',
     warning: 'border-amber-500/50 bg-amber-500/10 text-amber-100',
     opportunity: 'border-emerald-500/50 bg-emerald-500/10 text-emerald-100',
   }[alert.variant];
@@ -176,12 +174,14 @@ function ExitStrategyBanner({ alert, sk }: { alert: ExitStrategyAlert; sk: boole
   return (
     <div className={`rounded-lg border px-3 py-2.5 space-y-1.5 ${variantClass}`}>
       <p className="text-[11px] font-bold leading-snug">{sk ? alert.commandSk : alert.commandEn}</p>
-      <p className="text-[10px] opacity-90 leading-snug">{sk ? alert.reasonSk : alert.reasonEn}</p>
-      {alert.withdrawQty != null && alert.withdrawQty > 0 && (
+      {alert.reasonSk && alert.reasonEn && (
+        <p className="text-[10px] opacity-90 leading-snug">{sk ? alert.reasonSk : alert.reasonEn}</p>
+      )}
+      {alert.showLtvWithdrawLine && alert.withdrawQty != null && alert.withdrawQty > 0 && (
         <p className="text-[10px] font-mono font-semibold tabular-nums">
           {sk
-            ? `Odporúčaný výber: ${alert.withdrawQty.toFixed(withdrawDecimals)} ${withdrawLabel}`.trim()
-            : `Recommended withdrawal: ${alert.withdrawQty.toFixed(withdrawDecimals)} ${withdrawLabel}`.trim()}
+            ? `Odporúčaný výber: ${alert.withdrawQty.toFixed(withdrawDecimals)} ${withdrawLabel} pre návrat k LTV 20%.`
+            : `Recommended withdrawal: ${alert.withdrawQty.toFixed(withdrawDecimals)} ${withdrawLabel} to return to 20% LTV.`}
         </p>
       )}
       {alert.repayUsdc != null && alert.repayUsdc > 0 && (
@@ -197,26 +197,15 @@ function CyborgRoutingMeta({
   token,
   network,
   protocol,
-  instruction,
 }: {
   token: string;
   network: string;
   protocol: string;
-  instruction: string;
 }) {
-  const badgeClass = 'inline-flex items-center rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-[9px] font-semibold text-foreground/90';
-
   return (
-    <div className="space-y-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className={badgeClass}>Token: {token}</span>
-        <span className="text-[9px] text-muted-foreground">|</span>
-        <span className={badgeClass}>Sieť: {network}</span>
-        <span className="text-[9px] text-muted-foreground">|</span>
-        <span className={badgeClass}>Protokol: {protocol}</span>
-      </div>
-      <p className="text-[10px] text-foreground/90 leading-snug">{instruction}</p>
-    </div>
+    <p className="text-[10px] font-mono text-foreground/90 leading-snug">
+      [Token: {token} | Sieť: {network} | Protokol: {protocol}]
+    </p>
   );
 }
 
@@ -276,7 +265,7 @@ function CyborgActionPlan({
   onConfirmLbtc: () => void;
   onRevertLbtc: () => void;
   collateralDecimals: number;
-  routing: { token: string; network: string; protocol: string; instruction: string };
+  routing: { token: string; network: string; protocol: string };
   exitAlert?: ExitStrategyAlert | null;
 }) {
   const execDisabled = rebalanceLocked;
@@ -291,7 +280,6 @@ function CyborgActionPlan({
         token={routing.token}
         network={routing.network}
         protocol={routing.protocol}
-        instruction={routing.instruction}
       />
 
       {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
@@ -433,22 +421,8 @@ function TacticalLayerExecution({
     decimals: collateralDecimals,
   });
   const routing = symbol === 'ETH'
-    ? {
-      token: 'rETH',
-      network: 'Arbitrum',
-      protocol: 'Morpho',
-      instruction: sk
-        ? 'Premostiť rETH na Arbitrum a vložiť ako kolaterál.'
-        : 'Bridge rETH to Arbitrum and deposit as collateral.',
-    }
-    : {
-      token: 'mSOL',
-      network: 'Solana',
-      protocol: 'Kamino',
-      instruction: sk
-        ? 'Vložiť mSOL priamo do Kamino Lend.'
-        : 'Deposit mSOL directly into Kamino Lend.',
-    };
+    ? { token: 'rETH', network: 'Arbitrum', protocol: 'Morpho' }
+    : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
 
   return (
     <Collapsible defaultOpen className="rounded-xl border border-violet-500/30 bg-violet-500/5">
@@ -535,14 +509,7 @@ function AlchemixLayerExecution({
             {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
           </p>
 
-          <CyborgRoutingMeta
-            token="ETH"
-            network="Ethereum L1"
-            protocol="Alchemix"
-            instruction={sk
-              ? 'Vložiť priamo na ETH Mainnete (Self-repaying vault).'
-              : 'Deposit directly on ETH Mainnet (Self-repaying vault).'}
-          />
+          <CyborgRoutingMeta token="ETH" network="Ethereum L1" protocol="Alchemix" />
 
           {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
@@ -604,9 +571,7 @@ function AssetHcdCard({
   usdcDebt,
   indicators,
   stakedEntries,
-  rebalanceUnlocked,
   alchemixApyPct,
-  tacticalLayer,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -638,9 +603,7 @@ function AssetHcdCard({
   usdcDebt: number;
   indicators: HcdIndicators;
   stakedEntries: StakedEntry[];
-  rebalanceUnlocked: boolean;
   alchemixApyPct: number;
-  tacticalLayer?: HcdLayerTarget;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -681,24 +644,8 @@ function AssetHcdCard({
           const apy = layerApy(layer, apys);
           const isTactical = layer.id.includes('tactical');
           const isAlchemix = layer.id.includes('alchemix');
-          const isCore = layer.id.includes('core');
           const isInfoOnly = !isTactical && !isAlchemix;
           const canExecute = !rebalanceLocked && !!layer.ledgerProtocol && qty > 0 && isInfoOnly;
-
-          const coreTokenLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
-          const coreDecimals = symbol === 'SOL' ? 2 : 4;
-          const coreExitAlert = isCore && tacticalLayer
-            ? computeCoreOpportunityAlert({
-              rebalanceUnlocked,
-              volatilityRegime: indicators.volatilityRegime,
-              netBorrowCostPct: indicators.borrowApyPct,
-              coreDeployedQty: sumCoreDeployedQty(stakedEntries, symbol),
-              tacticalTargetQty: totalPortfolioQty * (tacticalLayer.pctTarget / 100),
-              tacticalDeployedQty: sumTacticalDeployedQty(stakedEntries, symbol),
-              tokenLabel: coreTokenLabel,
-              decimals: coreDecimals,
-            })
-            : null;
 
           return (
             <div
@@ -783,10 +730,6 @@ function AssetHcdCard({
                   onRevert={onRevertAlchemix}
                   alchemixApyPct={alchemixApyPct}
                 />
-              )}
-
-              {isInfoOnly && coreExitAlert?.active && (
-                <ExitStrategyBanner alert={coreExitAlert} sk={sk} />
               )}
 
               {isInfoOnly && layer.ledgerProtocol && (
@@ -1179,9 +1122,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         usdcDebt={cyborgUsdcDebt}
         indicators={indicators}
         stakedEntries={ethStakedEntries}
-        rebalanceUnlocked={rebalance.unlocked}
         alchemixApyPct={alchemixApyPct}
-        tacticalLayer={ethTacticalLayer}
       />
 
       <AssetHcdCard
@@ -1212,9 +1153,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         usdcDebt={cyborgUsdcDebt}
         indicators={indicators}
         stakedEntries={solStakedEntries}
-        rebalanceUnlocked={rebalance.unlocked}
         alchemixApyPct={alchemixApyPct}
-        tacticalLayer={solTacticalLayer}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">

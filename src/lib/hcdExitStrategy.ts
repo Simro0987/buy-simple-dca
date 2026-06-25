@@ -9,12 +9,14 @@ export interface ExitStrategyAlert {
   variant: ExitAlertVariant;
   commandSk: string;
   commandEn: string;
-  reasonSk: string;
-  reasonEn: string;
+  reasonSk?: string;
+  reasonEn?: string;
   withdrawQty?: number;
   repayUsdc?: number;
   tokenLabel?: string;
   decimals?: number;
+  /** Tactical layer 3: show LTV 20% withdrawal recommendation line */
+  showLtvWithdrawLine?: boolean;
 }
 
 export const EXIT_BORROW_URGENT_PCT = 8;
@@ -75,25 +77,33 @@ export function computeTacticalWithdrawAlert(input: {
 
   const effectiveCollateralQty = Math.max(input.deployedCollateralQty, input.collateralQty);
   const collateralUsd = effectiveCollateralQty * input.collateralPrice;
-  const { withdrawQty, repayUsdc } = computeWithdrawToTargetLtv(
+  const { withdrawQty: ltvWithdraw, repayUsdc, currentLtvPct } = computeWithdrawToTargetLtv(
     collateralUsd,
     input.collateralPrice,
     input.usdcDebt,
   );
 
-  const qtyStr = withdrawQty.toFixed(input.decimals);
+  let withdrawQty = ltvWithdraw;
+  if (withdrawQty <= 0 && effectiveCollateralQty > 0) {
+    if (input.usdcDebt > 0 && currentLtvPct > EXIT_TARGET_LTV_PCT) {
+      withdrawQty = effectiveCollateralQty;
+    } else if (input.collateralQty > 0) {
+      withdrawQty = input.collateralQty;
+    } else {
+      withdrawQty = effectiveCollateralQty;
+    }
+  }
 
   return {
     active: true,
     variant: 'urgent',
-    commandSk: `🚨 URGENTNÝ PRÍKAZ NA ÚSTUP: Znížte kolaterál o ${qtyStr} ${input.tokenLabel} a splaťte časť USDC dlhu!`,
-    commandEn: `🚨 URGENT EXIT ORDER: Reduce collateral by ${qtyStr} ${input.tokenLabel} and repay part of your USDC debt!`,
-    reasonSk: 'Dôvod: Úrokové sadzby/Volatilita prekročili bezpečné HCD limity. Likvidačné riziko stúplo. Stiahnutím kapitálu stabilizujete pozíciu.',
-    reasonEn: 'Reason: Borrow rates/volatility exceeded safe HCD limits. Liquidation risk increased. Withdrawing capital stabilizes your position.',
+    commandSk: '🚨 PRÍKAZ NA ÚSTUP: Znížte kolaterál, likvidačné riziko stúplo.',
+    commandEn: '🚨 EXIT ORDER: Reduce collateral, liquidation risk has increased.',
     withdrawQty,
     repayUsdc,
     tokenLabel: input.tokenLabel,
     decimals: input.decimals,
+    showLtvWithdrawLine: true,
   };
 }
 
@@ -103,42 +113,7 @@ export function computeAlchemixRebalanceAlert(alchemixApyPct: number): ExitStrat
   return {
     active: true,
     variant: 'warning',
-    commandSk: '⚠️ ODPORÚČANIE NA REBALANS: Zvážte výber ETH z Alchemix Vaultu.',
-    commandEn: '⚠️ REBALANCE RECOMMENDATION: Consider withdrawing ETH from the Alchemix Vault.',
-    reasonSk: 'Dôvod: Výnosy generované vaultom sú príliš nízke. Strategicky výhodnejšie je preliať tento kapitál do Core Stakingu (rETH) pre vyšší čistý výnos.',
-    reasonEn: 'Reason: Vault yields are too low. Strategically better to rotate this capital into Core Staking (rETH) for higher net yield.',
-  };
-}
-
-export function computeCoreOpportunityAlert(input: {
-  rebalanceUnlocked: boolean;
-  volatilityRegime: VolatilityRegime;
-  netBorrowCostPct: number;
-  coreDeployedQty: number;
-  tacticalTargetQty: number;
-  tacticalDeployedQty: number;
-  tokenLabel: string;
-  decimals: number;
-}): ExitStrategyAlert | null {
-  const active = input.rebalanceUnlocked
-    && input.volatilityRegime === 'low'
-    && input.netBorrowCostPct < EXIT_BORROW_OPPORTUNITY_PCT;
-  if (!active) return null;
-
-  const withdrawQty = Math.min(
-    input.coreDeployedQty,
-    Math.max(0, input.tacticalTargetQty - input.tacticalDeployedQty),
-  );
-
-  const qtyStr = withdrawQty.toFixed(input.decimals);
-
-  return {
-    active: true,
-    variant: 'opportunity',
-    commandSk: `💡 PRÍLEŽITOSŤ: Môžete bezpečne odobrať ${qtyStr} ${input.tokenLabel} z pasívneho stakingu.`,
-    commandEn: `💡 OPPORTUNITY: You can safely withdraw ${qtyStr} ${input.tokenLabel} from passive staking.`,
-    reasonSk: 'Dôvod: Trh je stabilný a úvery sú lacné. HCD Mozog odporúča presunúť časť kapitálu do Vrstvy 3 na zachytenie taktickej likvidity.',
-    reasonEn: 'Reason: Market is stable and borrows are cheap. HCD brain recommends moving part of capital to Layer 3 to capture tactical liquidity.',
-    withdrawQty,
+    commandSk: '⚠️ ODPORÚČANIE NA REBALANS: Výnosy sú nízke, zvážte presun do Core Stakingu.',
+    commandEn: '⚠️ REBALANCE RECOMMENDATION: Yields are low, consider moving to Core Staking.',
   };
 }
