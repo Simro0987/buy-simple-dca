@@ -1,4 +1,4 @@
-import type { HcdIndicators, VolatilityRegime } from '@/lib/hcdArchitecture';
+import type { HcdIndicators } from '@/lib/hcdArchitecture';
 import { HCD_LTV_MAX_RESTRICTED } from '@/lib/hcdArchitecture';
 import type { StakedEntry } from '@/lib/stakingLedger';
 
@@ -20,19 +20,11 @@ export interface ExitStrategyAlert {
 }
 
 export const EXIT_BORROW_URGENT_PCT = 8;
-export const EXIT_BORROW_OPPORTUNITY_PCT = 4;
 export const EXIT_ALCHEMIX_APY_FLOOR = 2.5;
 export const EXIT_TARGET_LTV_PCT = HCD_LTV_MAX_RESTRICTED;
 
 export function sumTacticalDeployedQty(entries: StakedEntry[], symbol: 'ETH' | 'SOL'): number {
   const patterns = symbol === 'ETH' ? [/aave/i, /morpho/i] : [/kamino/i];
-  return entries
-    .filter(e => patterns.some(p => p.test(e.protocol)))
-    .reduce((s, e) => s + e.amount, 0);
-}
-
-export function sumCoreDeployedQty(entries: StakedEntry[], symbol: 'ETH' | 'SOL'): number {
-  const patterns = symbol === 'ETH' ? [/rocket\s*pool/i, /reth/i] : [/marinade/i, /msol/i];
   return entries
     .filter(e => patterns.some(p => p.test(e.protocol)))
     .reduce((s, e) => s + e.amount, 0);
