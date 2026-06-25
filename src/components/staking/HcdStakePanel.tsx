@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
-  AlertTriangle, Bot, ChevronDown, ClipboardCopy, Layers, Loader2, Lock, RefreshCw, Shield, Zap,
+  AlertTriangle, Bot, ChevronDown, ClipboardCopy, Layers, Loader2, Lock, RefreshCw, Shield, Unlock, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
@@ -678,10 +678,11 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
   const { portfolioData, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const { entries } = useStakingLedger();
-  const { indicators, rebalance } = useHcdIndicators(lang);
+  const { indicators, rebalance, borrowLoading } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
   const win = getTimingWindow(marketScore);
-  const rebalanceLocked = !rebalance.unlocked || win.locked;
+  const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
+  const rebalanceLocked = (!rebalance.unlocked || win.locked) && !isEmergencyUnlocked;
   const ltvMax = getHcdLtvMax(indicators);
   const ltvRestricted = indicators.volatilityRegime === 'high' || indicators.borrowWarning;
 
@@ -814,7 +815,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     );
   }
 
-  const banner = marketState
+  const showMarketBanner = marketState != null && marketState.state !== 3;
+  const marketBannerText = marketState
     ? (sk ? marketState.bannerSk : marketState.bannerEn)
     : marketLoading
       ? (sk ? 'Načítavam trhové signály…' : 'Loading market signals…')
@@ -904,26 +906,63 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       )}
 
       <div
-        className={`rounded-xl border px-3 py-2.5 flex items-start gap-2 text-[11px] leading-snug ${
-          rebalanceLocked
+        className={`rounded-xl border px-3 py-2.5 flex flex-col sm:flex-row sm:items-center gap-2 text-[11px] leading-snug ${
+          rebalanceLocked && !isEmergencyUnlocked
             ? 'border-red-500/50 bg-red-500/10 text-red-200'
-            : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
+            : isEmergencyUnlocked
+              ? 'border-amber-500/50 bg-amber-500/10 text-amber-200'
+              : 'border-emerald-500/40 bg-emerald-500/10 text-emerald-200'
         }`}
       >
-        {rebalanceLocked ? <Lock className="w-4 h-4 shrink-0 mt-0.5 text-red-400" /> : <Zap className="w-4 h-4 shrink-0 mt-0.5" />}
-        <p>{rebalanceLockMessage(lang, rebalance)}</p>
+        <div className="flex items-start gap-2 flex-1 min-w-0">
+          {isEmergencyUnlocked ? (
+            <Unlock className="w-4 h-4 shrink-0 mt-0.5 text-amber-400" />
+          ) : rebalanceLocked ? (
+            <Lock className="w-4 h-4 shrink-0 mt-0.5 text-red-400" />
+          ) : (
+            <Zap className="w-4 h-4 shrink-0 mt-0.5" />
+          )}
+          <p className="min-w-0">
+            {isEmergencyUnlocked
+              ? (sk
+                ? '🔓 Núdzové odomknutie aktívne — exekúcia povolená mimo kvartálneho okna.'
+                : '🔓 Emergency override active — execution allowed outside quarterly window.')
+              : rebalanceLockMessage(lang, rebalance)}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant={isEmergencyUnlocked ? 'default' : 'outline'}
+          size="sm"
+          onClick={() => setIsEmergencyUnlocked(v => !v)}
+          className={`shrink-0 h-8 px-2.5 text-[10px] font-semibold touch-manipulation ${
+            isEmergencyUnlocked
+              ? 'bg-amber-500/20 border-amber-500/40 text-amber-100 hover:bg-amber-500/30'
+              : 'border-red-500/40 text-red-200 hover:bg-red-500/15'
+          }`}
+        >
+          {isEmergencyUnlocked ? (
+            <><Lock className="w-3 h-3 mr-1" />{sk ? 'Zamknúť' : 'Lock'}</>
+          ) : (
+            <><Unlock className="w-3 h-3 mr-1" />{sk ? '🔓 Núdzový Override' : '🔓 Emergency Override'}</>
+          )}
+        </Button>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 min-w-0">
         {[
-          { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime },
-          { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%` },
-          { l: 'USDC Borrow', v: `${fmtNum(indicators.borrowApyPct, 2)}%`, sub: indicators.borrowWarning ? 'warn' : 'ok' },
-          { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress },
+          { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime, loading: false },
+          { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%`, loading: false },
+          { l: 'USDC Borrow', v: `${fmtNum(indicators.borrowApyPct, 2)}%`, sub: indicators.borrowWarning ? 'warn' : 'live', loading: borrowLoading },
+          { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress, loading: false },
         ].map(item => (
           <div key={item.l} className="rounded-lg border border-border/50 bg-background/40 p-2 min-w-0">
             <p className="text-[9px] text-muted-foreground uppercase tracking-wide truncate">{item.l}</p>
-            <p className="font-mono text-sm font-bold text-foreground tabular-nums">{item.v}</p>
+            {item.loading ? (
+              <p className="font-mono text-sm font-bold text-muted-foreground animate-pulse">…</p>
+            ) : (
+              <p className="font-mono text-sm font-bold text-foreground tabular-nums">{item.v}</p>
+            )}
             <p className="text-[9px] text-muted-foreground capitalize truncate">{item.sub}</p>
           </div>
         ))}
@@ -954,14 +993,16 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
-      <div className={`rounded-xl border p-3 text-[11px] leading-snug font-medium ${marketState?.bannerClass ?? 'border-border/40 bg-muted/20 text-muted-foreground'}`}>
-        {banner}
-        {usingNeutralSignals && marketState && (
-          <p className="mt-1.5 text-[10px] font-normal text-muted-foreground">
-            {sk ? 'F&G/RSI nedostupné — neutrálne hodnoty (50).' : 'F&G/RSI unavailable — neutral defaults (50).'}
-          </p>
-        )}
-      </div>
+      {showMarketBanner && (
+        <div className={`rounded-xl border p-3 text-[11px] leading-snug font-medium ${marketState?.bannerClass ?? 'border-border/40 bg-muted/20 text-muted-foreground'}`}>
+          {marketBannerText}
+          {usingNeutralSignals && (
+            <p className="mt-1.5 text-[10px] font-normal text-muted-foreground">
+              {sk ? 'F&G/RSI nedostupné — neutrálne hodnoty (50).' : 'F&G/RSI unavailable — neutral defaults (50).'}
+            </p>
+          )}
+        </div>
+      )}
 
       {/* ── HCD Vrstvy s integrovanou exekúciou ── */}
       <AssetHcdCard
