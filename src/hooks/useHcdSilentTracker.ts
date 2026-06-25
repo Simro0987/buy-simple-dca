@@ -35,39 +35,67 @@ const DEFAULT_CALIBRATION = (): StrategyCalibration => ({
   lastPnlEth: null,
 });
 
+function safePendingCount(): number {
+  try {
+    return loadDecisionLog().filter(e => !e.confidenceRewardApplied).length;
+  } catch {
+    return 0;
+  }
+}
+
 /** Read-only state for HCD Learning Log — does not run background checks. */
 export function useHcdSilentTrackerState() {
-  const decisionLog = useSyncExternalStore(subscribe, loadDecisionLog, () => []);
+  const decisionLog = useSyncExternalStore(
+    subscribe,
+    () => {
+      try {
+        return loadDecisionLog();
+      } catch {
+        return [];
+      }
+    },
+    () => [],
+  );
   const calibration = useSyncExternalStore(
     subscribe,
-    loadStrategyCalibration,
+    () => {
+      try {
+        return loadStrategyCalibration();
+      } catch {
+        return DEFAULT_CALIBRATION();
+      }
+    },
     DEFAULT_CALIBRATION,
   );
   return { decisionLog, calibration };
 }
 
 /**
- * Background 24h PnL engine — deferred so balance UI renders first.
- * Secondary priority vs on-chain balance display.
+ * Background 24h PnL engine — deferred, non-blocking, failure-isolated.
+ * Never throws; portfolio UI must render even when this fails.
  */
 export function useHcdSilentTrackerEngine(
   portfolioData: PortfolioData,
   usdcDebt: number,
   enabled: boolean,
 ) {
-  const pendingCount = useSyncExternalStore(
-    subscribe,
-    () => loadDecisionLog().filter(e => !e.confidenceRewardApplied).length,
-    () => 0,
-  );
+  const pendingCount = useSyncExternalStore(subscribe, safePendingCount, () => 0);
+
+  const ethUsd = portfolioData.ethBaseline?.totalUsd ?? 0;
+  const solUsd = portfolioData.solBaseline?.totalUsd ?? 0;
+  const balancesReady = portfolioData.balancesReady ?? true;
 
   useEffect(() => {
-    if (!enabled || !portfolioData.balancesReady) return;
+    if (!enabled || !balancesReady) return;
 
     const timeoutId = window.setTimeout(() => {
       try {
         const snapshot = capturePortfolioSnapshot(portfolioData, usdcDebt);
-        if (snapshot.totalUsd <= 0 && portfolioData.totalEthPortfolio <= 0 && portfolioData.totalSolPortfolio <= 0) {
+        if (
+          snapshot.totalUsd <= 0
+          && (portfolioData.totalEthPortfolio ?? 0) <= 0
+          && (portfolioData.totalSolPortfolio ?? 0) <= 0
+        ) {
           return;
         }
 
@@ -75,21 +103,21 @@ export function useHcdSilentTrackerEngine(
 
         processSilentPerformanceChecks(snapshot);
 
-        const stillPending = loadDecisionLog().some(e => !e.confidenceRewardApplied);
+        const stillPending = safePendingCount() > 0;
         if (!stillPending) markAlgorithmStable();
       } catch (error) {
         console.error('[HCD Silent Tracker]', error);
       }
-    }, 250);
+    }, 500);
 
     return () => window.clearTimeout(timeoutId);
   }, [
     enabled,
-    portfolioData.balancesReady,
+    balancesReady,
     portfolioData.totalEthPortfolio,
     portfolioData.totalSolPortfolio,
-    portfolioData.ethBaseline.totalUsd,
-    portfolioData.solBaseline.totalUsd,
+    ethUsd,
+    solUsd,
     usdcDebt,
     pendingCount,
   ]);

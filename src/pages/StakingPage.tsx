@@ -1,6 +1,7 @@
 import { Lang } from '@/lib/i18n';
 import { HcdStakePanel } from '@/components/staking/HcdStakePanel';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
+import { StakePortfolioFallback } from '@/components/staking/StakePortfolioFallback';
 import { PortfolioProvider } from '@/contexts/PortfolioContext';
 import { StakingApyProvider } from '@/contexts/StakingApyContext';
 import { useMarketCycleScore } from '@/hooks/useMarketCycle';
@@ -12,7 +13,17 @@ function StakingPageContent({ lang, marketScore }: { lang: Lang; marketScore: nu
   const sk = lang === 'sk';
 
   return (
-    <StakeErrorBoundary message={sk ? 'Chyba pri načítaní dát.' : 'Error loading data.'}>
+    <StakeErrorBoundary
+      message={sk ? 'Chyba pri načítaní dát.' : 'Error loading data.'}
+      fallback={(
+        <StakePortfolioFallback
+          lang={lang}
+          notice={sk
+            ? 'HCD panel dočasne nedostupný — zobrazujeme uložené zostatky z Portfólia.'
+            : 'HCD panel temporarily unavailable — showing cached Portfolio balances.'}
+        />
+      )}
+    >
       <div className="pb-4">
         <HcdStakePanel lang={lang} marketScore={marketScore} />
       </div>

@@ -43,7 +43,8 @@ import {
 } from '@/lib/hcdAlchemixAutonomy';
 import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
 import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
-import { getAggregatedPortfolioTotals } from '@/lib/portfolioData';
+import { ensurePortfolioData, getAggregatedPortfolioTotals } from '@/lib/portfolioData';
+import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -1163,6 +1164,7 @@ function AssetHcdCard({
 export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
   const { portfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const safePortfolio = useMemo(() => ensurePortfolioData(portfolioData), [portfolioData]);
   const { data: defiApys } = useDefiApys();
   const { indicators, rebalance, borrowLoading, borrowRates, temperamentPct } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
@@ -1173,31 +1175,47 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const ltvMax = getHcdLtvMax(indicators, temperamentPct);
   const ltvRestricted = indicators.volatilityRegime === 'high' || indicators.borrowWarning;
 
-  const aggregated = getAggregatedPortfolioTotals(portfolioData);
+  const aggregated = useMemo(
+    () => getAggregatedPortfolioTotals(safePortfolio),
+    [safePortfolio],
+  );
   const ethTotalQty = aggregated.ethQty;
   const solTotalQty = aggregated.solQty;
   const ethPrice = aggregated.ethPrice;
   const solPrice = aggregated.solPrice;
-  const btcPrice = portfolioData.prices?.btc ?? 0;
+  const btcPrice = safePortfolio.prices?.btc ?? 0;
 
   const portfolioUsd = aggregated.portfolioUsd;
+  const hasCachedBalances = ethTotalQty > 0 || solTotalQty > 0;
 
-  useHcdSilentTrackerEngine(portfolioData, cyborgUsdcDebt, aggregated.ethQty > 0 || aggregated.solQty > 0);
+  useHcdSilentTrackerEngine(safePortfolio, cyborgUsdcDebt, hasCachedBalances);
 
   const ethLayers = useMemo(
-    () => computeHcdLayerTargets('ETH', indicators, temperamentPct) ?? [],
+    () => {
+      try {
+        return computeHcdLayerTargets('ETH', indicators, temperamentPct) ?? [];
+      } catch {
+        return [];
+      }
+    },
     [indicators, temperamentPct],
   );
   const solLayers = useMemo(
-    () => computeHcdLayerTargets('SOL', indicators, temperamentPct) ?? [],
+    () => {
+      try {
+        return computeHcdLayerTargets('SOL', indicators, temperamentPct) ?? [];
+      } catch {
+        return [];
+      }
+    },
     [indicators, temperamentPct],
   );
 
   const ethTacticalLayer = ethLayers.find(layer => layer.id.includes('tactical'));
   const solTacticalLayer = solLayers.find(layer => layer.id.includes('tactical'));
   const alchemixApyPct = defiApys?.alchemixVault ?? 2.2;
-  const ethStakedEntries = portfolioData.assets?.ETH?.stakedEntries ?? [];
-  const solStakedEntries = portfolioData.assets?.SOL?.stakedEntries ?? [];
+  const ethStakedEntries = safePortfolio.assets?.ETH?.stakedEntries ?? [];
+  const solStakedEntries = safePortfolio.assets?.SOL?.stakedEntries ?? [];
 
   const deployREth = tacticalCollateralQty(ethTotalQty, ethTacticalLayer);
   const deployMSol = tacticalCollateralQty(solTotalQty, solTacticalLayer);
@@ -1224,19 +1242,27 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
   const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
 
-  const buildDecisionMeta = useCallback((): DecisionConfirmMeta => ({
-    marketConditions: {
-      fearGreed: market?.fearGreed ?? null,
-      btcRsi: market?.btcRsi ?? null,
-      volatilityRegime: indicators.volatilityRegime,
-      borrowApyPct: indicators.borrowApyPct,
-      targetLtvPct: indicators.targetLtvPct,
-      temperamentPct,
-      portfolioUsd,
-      netYieldPct: netYield,
-    },
-    balanceSnapshot: capturePortfolioSnapshot(portfolioData, cyborgUsdcDebt),
-  }), [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield, portfolioData, cyborgUsdcDebt]);
+  const buildDecisionMeta = useCallback((): DecisionConfirmMeta => {
+    let balanceSnapshot;
+    try {
+      balanceSnapshot = capturePortfolioSnapshot(safePortfolio, cyborgUsdcDebt);
+    } catch {
+      balanceSnapshot = undefined;
+    }
+    return {
+      marketConditions: {
+        fearGreed: market?.fearGreed ?? null,
+        btcRsi: market?.btcRsi ?? null,
+        volatilityRegime: indicators.volatilityRegime,
+        borrowApyPct: indicators.borrowApyPct,
+        targetLtvPct: indicators.targetLtvPct,
+        temperamentPct,
+        portfolioUsd,
+        netYieldPct: netYield,
+      },
+      balanceSnapshot,
+    };
+  }, [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield, safePortfolio, cyborgUsdcDebt]);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -1266,7 +1292,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     combinedBorrowUsdc, projectedLbtcUsd,
   ]);
 
-  if (!portfolioData.balancesReady) {
+  const metricsStillLoading = safePortfolio.loading && !hasCachedBalances;
+  if (metricsStillLoading) {
     return (
       <div className="glass-card p-3 text-sm text-muted-foreground flex items-center gap-2">
         <Loader2 className="w-4 h-4 animate-spin" />
@@ -1522,7 +1549,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixRedistribution={null}
       />
 
-      <HcdLearningLog lang={lang} />
+      <StakeErrorBoundary fallback={null}>
+        <HcdLearningLog lang={lang} />
+      </StakeErrorBoundary>
 
       <p className="text-[10px] text-muted-foreground leading-snug">
         {sk

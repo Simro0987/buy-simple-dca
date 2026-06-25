@@ -222,25 +222,109 @@ export function buildPortfolioData(input: {
 
 /** Aggregated baseline totals used by Portfolio + Stake (wallet + DeFi). */
 export function getAggregatedPortfolioTotals(data: PortfolioData) {
-  const ethQty = data.totalEthPortfolio
-    ?? data.ethBaseline?.totalQty
-    ?? data.assets?.ETH?.holdings
-    ?? 0;
-  const solQty = data.totalSolPortfolio
-    ?? data.solBaseline?.totalQty
-    ?? data.assets?.SOL?.holdings
-    ?? 0;
-  const ethPrice = data.prices?.eth ?? data.assets?.ETH?.currentPrice ?? 0;
-  const solPrice = data.prices?.sol ?? data.assets?.SOL?.currentPrice ?? 0;
+  try {
+    const ethQty = data.totalEthPortfolio
+      ?? data.ethBaseline?.totalQty
+      ?? data.assets?.ETH?.holdings
+      ?? 0;
+    const solQty = data.totalSolPortfolio
+      ?? data.solBaseline?.totalQty
+      ?? data.assets?.SOL?.holdings
+      ?? 0;
+    const ethPrice = data.prices?.eth ?? data.assets?.ETH?.currentPrice ?? 0;
+    const solPrice = data.prices?.sol ?? data.assets?.SOL?.currentPrice ?? 0;
 
-  return {
-    ethQty,
-    solQty,
-    ethPrice,
-    solPrice,
-    ethUsd: data.ethBaseline?.totalUsd ?? ethQty * ethPrice,
-    solUsd: data.solBaseline?.totalUsd ?? solQty * solPrice,
-    portfolioUsd: (data.ethBaseline?.totalUsd ?? ethQty * ethPrice)
-      + (data.solBaseline?.totalUsd ?? solQty * solPrice),
-  };
+    return {
+      ethQty,
+      solQty,
+      ethPrice,
+      solPrice,
+      ethUsd: data.ethBaseline?.totalUsd ?? ethQty * ethPrice,
+      solUsd: data.solBaseline?.totalUsd ?? solQty * solPrice,
+      portfolioUsd: (data.ethBaseline?.totalUsd ?? ethQty * ethPrice)
+        + (data.solBaseline?.totalUsd ?? solQty * solPrice),
+    };
+  } catch {
+    return {
+      ethQty: 0,
+      solQty: 0,
+      ethPrice: 0,
+      solPrice: 0,
+      ethUsd: 0,
+      solUsd: 0,
+      portfolioUsd: 0,
+    };
+  }
+}
+
+const EMPTY_BASELINE: AggregatedAssetBaseline = {
+  totalQty: 0,
+  totalUsd: 0,
+  walletQty: 0,
+  stakedQty: 0,
+  motorQty: 0,
+  alchemixQty: 0,
+  otherStakedQty: 0,
+};
+
+/** Guards against partial/stale portfolio snapshots so Stake never crashes on render. */
+export function ensurePortfolioData(data: PortfolioData | null | undefined): PortfolioData {
+  if (!data || typeof data !== 'object') {
+    return buildPortfolioData({
+      metrics: { loading: true, totalValue: 0, totalInvested: 0, totalPnl: 0, totalPnlPct: 0, assets: [], history: [], capitalEntries: [] },
+      prices: undefined,
+      pricesLoading: true,
+      breakdown: [],
+    });
+  }
+
+  try {
+    const eth = data.assets?.ETH ?? EMPTY_ASSET('ETH');
+    const sol = data.assets?.SOL ?? EMPTY_ASSET('SOL');
+    const ethBaseline = data.ethBaseline ?? computeEthAggregatedBaseline(eth, 0, 0);
+    const solBaseline = data.solBaseline ?? computeSolAggregatedBaseline(sol, 0);
+
+    return {
+      ...data,
+      loading: Boolean(data.loading),
+      balancesReady: data.balancesReady ?? !data.loading,
+      prices: data.prices ?? { btc: 0, eth: 0, sol: 0 },
+      assets: {
+        BTC: data.assets?.BTC ?? EMPTY_ASSET('BTC'),
+        ETH: eth,
+        SOL: sol,
+      },
+      alchemixReserve: data.alchemixReserve ?? { eth: protocolBalance('Alchemix ETH', 0, 0, 'alchemix') },
+      activeMotor: data.activeMotor ?? {
+        rEth: protocolBalance('rETH', 0, 0, 'motor'),
+        mSol: protocolBalance('mSOL', 0, 0, 'motor'),
+      },
+      lbtc: data.lbtc ?? protocolBalance('LBTC', 0, 0, 'motor'),
+      totalAlchemixUsd: data.totalAlchemixUsd ?? 0,
+      totalMotorUsd: data.totalMotorUsd ?? 0,
+      ethBaseline,
+      solBaseline,
+      totalEthPortfolio: data.totalEthPortfolio ?? ethBaseline.totalQty,
+      totalSolPortfolio: data.totalSolPortfolio ?? solBaseline.totalQty,
+    };
+  } catch {
+    return {
+      loading: false,
+      balancesReady: true,
+      prices: { btc: 0, eth: 0, sol: 0 },
+      assets: { BTC: EMPTY_ASSET('BTC'), ETH: EMPTY_ASSET('ETH'), SOL: EMPTY_ASSET('SOL') },
+      alchemixReserve: { eth: protocolBalance('Alchemix ETH', 0, 0, 'alchemix') },
+      activeMotor: {
+        rEth: protocolBalance('rETH', 0, 0, 'motor'),
+        mSol: protocolBalance('mSOL', 0, 0, 'motor'),
+      },
+      lbtc: protocolBalance('LBTC', 0, 0, 'motor'),
+      totalAlchemixUsd: 0,
+      totalMotorUsd: 0,
+      ethBaseline: EMPTY_BASELINE,
+      solBaseline: EMPTY_BASELINE,
+      totalEthPortfolio: 0,
+      totalSolPortfolio: 0,
+    };
+  }
 }
