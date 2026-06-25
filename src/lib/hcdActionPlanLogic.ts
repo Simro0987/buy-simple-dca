@@ -1,3 +1,4 @@
+import type { ArbitrumProtocolQuote, ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
 import {
   getHcdLtvMax,
   type HcdIndicators,
@@ -6,18 +7,30 @@ import {
 import { EXIT_ALCHEMIX_APY_FLOOR } from '@/lib/hcdExitStrategy';
 import type { StakedEntry } from '@/lib/stakingLedger';
 
-/** Arbitrum L2 collateral max LTV reference caps (protocol limits for wstETH / wETH). */
-const ARBITRUM_AAVE_MAX_LTV = 80;
-const ARBITRUM_MORPHO_MAX_LTV = 86;
+/** Fallback caps when live Morpho/Aave feeds are unavailable. */
+const FALLBACK_AAVE_QUOTE: ArbitrumProtocolQuote = {
+  id: 'aave',
+  name: 'Aave V3',
+  sourceUrl: 'https://app.aave.com/?marketName=proto_arbitrum_v3',
+  collateralToken: 'wstETH',
+  collateralAddress: '0x5979D7b546E38E414F7E9822514be443A4800529',
+  loanSymbol: 'USDC',
+  usdcBorrowApyPct: 5.5,
+  maxCollateralLtvPct: 75,
+};
 
-export interface ArbitrumTacticalWinner {
-  id: 'aave' | 'morpho';
-  name: string;
-  collateralToken: 'wstETH' | 'wETH';
-  network: 'Arbitrum';
-  usdcBorrowApyPct: number;
-  maxCollateralLtvPct: number;
-}
+const FALLBACK_MORPHO_QUOTE: ArbitrumProtocolQuote = {
+  id: 'morpho',
+  name: 'Morpho',
+  sourceUrl: 'https://app.morpho.org/vaults?chains=42161',
+  collateralToken: 'wETH',
+  collateralAddress: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
+  loanSymbol: 'USDC',
+  usdcBorrowApyPct: 5.0,
+  maxCollateralLtvPct: 86,
+};
+
+export type ArbitrumTacticalWinner = ArbitrumProtocolQuote & { network: 'Arbitrum' };
 
 export interface ActionPlanLtvCaps {
   targetLtvPct: number;
@@ -30,6 +43,7 @@ export interface EthLayerPlanState {
   alchemixRedirectedPct: number;
   bullish: boolean;
   arbitrumWinner: ArbitrumTacticalWinner;
+  arbitrumRouting: ArbitrumRoutingSnapshot | null;
 }
 
 /** Temperament-aware LTV caps for Action Plan math (50% → target 30%, max 33%). */
@@ -47,43 +61,44 @@ function scoreArbitrumOption(borrowApyPct: number, maxLtvPct: number): number {
   return -borrowApyPct + maxLtvPct / 100;
 }
 
-/** Pick Aave V3 vs Morpho on Arbitrum for ETH tactical layer. */
-export function selectArbitrumTacticalWinner(
-  aaveBorrowApy: number | null | undefined,
-  morphoBorrowApy: number | null | undefined,
-): ArbitrumTacticalWinner {
-  const aaveApy = aaveBorrowApy ?? 5.5;
-  const morphoApy = morphoBorrowApy ?? 5.0;
+function toWinner(quote: ArbitrumProtocolQuote): ArbitrumTacticalWinner {
+  return { ...quote, network: 'Arbitrum' };
+}
 
-  const aaveScore = scoreArbitrumOption(aaveApy, ARBITRUM_AAVE_MAX_LTV);
-  const morphoScore = scoreArbitrumOption(morphoApy, ARBITRUM_MORPHO_MAX_LTV);
-
-  if (morphoScore >= aaveScore) {
-    return {
-      id: 'morpho',
-      name: 'Morpho',
-      collateralToken: 'wETH',
-      network: 'Arbitrum',
-      usdcBorrowApyPct: morphoApy,
-      maxCollateralLtvPct: ARBITRUM_MORPHO_MAX_LTV,
-    };
-  }
-
+function resolveArbitrumQuotes(snapshot?: ArbitrumRoutingSnapshot | null): {
+  aave: ArbitrumProtocolQuote;
+  morpho: ArbitrumProtocolQuote;
+} {
   return {
-    id: 'aave',
-    name: 'Aave V3',
-    collateralToken: 'wstETH',
-    network: 'Arbitrum',
-    usdcBorrowApyPct: aaveApy,
-    maxCollateralLtvPct: ARBITRUM_AAVE_MAX_LTV,
+    aave: snapshot?.aave ?? FALLBACK_AAVE_QUOTE,
+    morpho: snapshot?.morpho ?? FALLBACK_MORPHO_QUOTE,
   };
 }
 
-export function formatArbitrumPlanInstruction(winner: ArbitrumTacticalWinner, sk: boolean): string {
-  if (sk) {
-    return `Presun: ETH -> ${winner.collateralToken} | Protokol: ${winner.name} (${winner.network}) | Borrow: USDC`;
-  }
-  return `Route: ETH -> ${winner.collateralToken} | Protocol: ${winner.name} (${winner.network}) | Borrow: USDC`;
+/** Pick Aave V3 vs Morpho on Arbitrum — lowest USDC borrow APY, tie-break higher collateral LTV. */
+export function selectArbitrumTacticalWinner(
+  routing?: ArbitrumRoutingSnapshot | null,
+): ArbitrumTacticalWinner {
+  const { aave, morpho } = resolveArbitrumQuotes(routing);
+  const aaveScore = scoreArbitrumOption(aave.usdcBorrowApyPct, aave.maxCollateralLtvPct);
+  const morphoScore = scoreArbitrumOption(morpho.usdcBorrowApyPct, morpho.maxCollateralLtvPct);
+  return toWinner(morphoScore >= aaveScore ? morpho : aave);
+}
+
+export function formatArbitrumPlanInstruction(
+  winner: ArbitrumTacticalWinner,
+  sk: boolean,
+  routing?: ArbitrumRoutingSnapshot | null,
+): string {
+  const { aave, morpho } = resolveArbitrumQuotes(routing);
+  const loser = winner.id === 'morpho' ? aave : morpho;
+  const routeLine = sk
+    ? `Presun: ETH -> ${winner.collateralToken} | Protokol: ${winner.name} (Arbitrum) | Borrow: USDC`
+    : `Route: ETH -> ${winner.collateralToken} | Protocol: ${winner.name} (Arbitrum) | Borrow: USDC`;
+  const compareLine = sk
+    ? `Porovnanie: ${winner.name} ${winner.usdcBorrowApyPct.toFixed(2)}% / LTV ${winner.maxCollateralLtvPct}% vs ${loser.name} ${loser.usdcBorrowApyPct.toFixed(2)}% / LTV ${loser.maxCollateralLtvPct}%`
+    : `Compare: ${winner.name} ${winner.usdcBorrowApyPct.toFixed(2)}% / LTV ${winner.maxCollateralLtvPct}% vs ${loser.name} ${loser.usdcBorrowApyPct.toFixed(2)}% / LTV ${loser.maxCollateralLtvPct}%`;
+  return `${routeLine} · ${compareLine}`;
 }
 
 export function isAlchemixLayerUnsuitable(
@@ -141,8 +156,7 @@ export function buildEthLayerPlanState(input: {
   indicators: HcdIndicators;
   fearGreed: number | null | undefined;
   marketScore: number;
-  aaveArbitrumBorrowApy: number | null | undefined;
-  morphoArbitrumBorrowApy: number | null | undefined;
+  arbitrumRouting?: ArbitrumRoutingSnapshot | null;
 }): EthLayerPlanState {
   const layers = input.layers ?? [];
   const alchemixLayer = layers.find(l => l?.id?.includes('alchemix'));
@@ -159,10 +173,7 @@ export function buildEthLayerPlanState(input: {
     ? applyAlchemixFallbackToLayers(layers, alchemixPct, bullish)
     : layers;
 
-  const arbitrumWinner = selectArbitrumTacticalWinner(
-    input.aaveArbitrumBorrowApy,
-    input.morphoArbitrumBorrowApy,
-  );
+  const arbitrumWinner = selectArbitrumTacticalWinner(input.arbitrumRouting);
 
   return {
     effectiveLayers,
@@ -170,6 +181,7 @@ export function buildEthLayerPlanState(input: {
     alchemixRedirectedPct: alchemixLocked ? alchemixPct : 0,
     bullish,
     arbitrumWinner,
+    arbitrumRouting: input.arbitrumRouting ?? null,
   };
 }
 

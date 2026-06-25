@@ -47,6 +47,7 @@ import {
   tacticalBorrowAtTargetLtv,
   type ArbitrumTacticalWinner,
 } from '@/lib/hcdActionPlanLogic';
+import type { ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -658,6 +659,7 @@ function TacticalLayerExecution({
   stakedEntries,
   buildDecisionMeta,
   arbitrumWinner,
+  arbitrumRouting,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -679,6 +681,7 @@ function TacticalLayerExecution({
   stakedEntries: StakedEntry[];
   buildDecisionMeta: () => DecisionConfirmMeta;
   arbitrumWinner?: ArbitrumTacticalWinner;
+  arbitrumRouting?: ArbitrumRoutingSnapshot | null;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -724,7 +727,7 @@ function TacticalLayerExecution({
       ? { token: 'wETH', network: 'Arbitrum', protocol: 'Morpho' }
       : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
   const planSummary = symbol === 'ETH' && arbitrumWinner
-    ? formatArbitrumPlanInstruction(arbitrumWinner, sk)
+    ? formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting)
     : undefined;
 
   const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
@@ -913,6 +916,7 @@ function AssetHcdCard({
   arbitrumWinner,
   alchemixLocked,
   targetLtvPct,
+  arbitrumRouting,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -936,6 +940,7 @@ function AssetHcdCard({
   arbitrumWinner?: ArbitrumTacticalWinner;
   alchemixLocked?: boolean;
   targetLtvPct: number;
+  arbitrumRouting?: ArbitrumRoutingSnapshot | null;
 }) {
   const sk = lang === 'sk';
   const { isExecutionConfirmed } = usePortfolio();
@@ -1040,6 +1045,7 @@ function AssetHcdCard({
                   stakedEntries={stakedEntries}
                   buildDecisionMeta={buildDecisionMeta}
                   arbitrumWinner={symbol === 'ETH' ? arbitrumWinner : undefined}
+                  arbitrumRouting={symbol === 'ETH' ? arbitrumRouting : undefined}
                 />
               )}
 
@@ -1164,10 +1170,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       indicators: safeIndicators,
       fearGreed: market?.fearGreed ?? null,
       marketScore: marketScore ?? 50,
-      aaveArbitrumBorrowApy: borrowRates?.aaveArbitrumUsdcBorrowPct,
-      morphoArbitrumBorrowApy: borrowRates?.morphoUsdcBorrowPct,
+      arbitrumRouting: borrowRates?.arbitrumRouting ?? null,
     }),
-    [ethLayers, alchemixApyPct, safeIndicators, market?.fearGreed, marketScore, borrowRates],
+    [ethLayers, alchemixApyPct, safeIndicators, market?.fearGreed, marketScore, borrowRates?.arbitrumRouting],
   );
 
   const ethEffectiveLayers = ethLayerPlan.effectiveLayers;
@@ -1483,6 +1488,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         arbitrumWinner={ethLayerPlan.arbitrumWinner}
         alchemixLocked={ethLayerPlan.alchemixLocked}
         targetLtvPct={targetLtvPct}
+        arbitrumRouting={ethLayerPlan.arbitrumRouting}
       />
 
       <AssetHcdCard

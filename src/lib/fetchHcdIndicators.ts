@@ -1,8 +1,10 @@
 const KAMINO_MAIN_MARKET = '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF';
 const KAMINO_METRICS_URL = `https://api.kamino.finance/kamino-market/${KAMINO_MAIN_MARKET}/reserves/metrics`;
-const MORPHO_GRAPHQL = 'https://blue-api.morpho.org/graphql';
 
-import { fetchLlamaPools, normalizeApyPercent } from '@/lib/defiLlamaAggregator';
+import {
+  fetchArbitrumRoutingSnapshot,
+  type ArbitrumRoutingSnapshot,
+} from '@/lib/arbitrumProtocolRouting';
 
 export interface HcdBorrowRates {
   morphoUsdcBorrowPct: number | null;
@@ -13,82 +15,17 @@ export interface HcdBorrowRates {
   avgBorrowPct: number;
   unavailable: string[];
   fetchedAt: Date;
+  /** Layer 3 — live Morpho vaults vs Aave proto_arbitrum_v3 comparison. */
+  arbitrumRouting: ArbitrumRoutingSnapshot | null;
 }
 
 function decimalToPercent(value: number | string | null | undefined): number | null {
   if (value == null) return null;
   const n = typeof value === 'string' ? parseFloat(value) : value;
   if (!Number.isFinite(n) || n < 0) return null;
-  // APIs return 0.057 for 5.7% or occasionally already in percent.
   const pct = n > 0 && n <= 1 ? n * 100 : n;
   if (pct > 50) return null;
   return Math.round(pct * 100) / 100;
-}
-
-async function fetchMorphoUsdcBorrowPct(chainId?: number): Promise<number | null> {
-  const chainFilter = chainId != null ? `, where: { chainId_in: [${chainId}] }` : '';
-  const query = `{
-    markets(first: 100${chainFilter}) {
-      items {
-        loanAsset { symbol }
-        state { borrowApy }
-      }
-    }
-  }`;
-  const res = await fetch(MORPHO_GRAPHQL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ query }),
-  });
-  if (!res.ok) throw new Error(`Morpho ${res.status}`);
-  const json = await res.json();
-  const items = json?.data?.markets?.items ?? [];
-  let best: number | null = null;
-  for (const m of items) {
-    if (m?.loanAsset?.symbol !== 'USDC') continue;
-    const pct = decimalToPercent(m?.state?.borrowApy);
-    if (pct == null) continue;
-    if (best === null || pct > best) best = pct;
-  }
-  return best;
-}
-
-function pickArbitrumBorrowFromLlama(
-  pools: Awaited<ReturnType<typeof fetchLlamaPools>>,
-  projectMatch: RegExp,
-): number | null {
-  let best: number | null = null;
-  for (const p of pools) {
-    if (p.chain !== 'Arbitrum') continue;
-    if (!projectMatch.test(p.project)) continue;
-    if (!/USDC/i.test(p.symbol)) continue;
-    const borrow = normalizeApyPercent(p.apyBaseBorrow ?? p.apy);
-    if (borrow == null) continue;
-    if (best === null || borrow < best) best = borrow;
-  }
-  return best;
-}
-
-async function fetchAaveArbitrumUsdcBorrowPct(): Promise<number | null> {
-  try {
-    const pools = await fetchLlamaPools();
-    const fromLlama = pickArbitrumBorrowFromLlama(pools, /aave/i);
-    if (fromLlama != null) return fromLlama;
-  } catch { /* fallback below */ }
-  return null;
-}
-
-async function fetchMorphoArbitrumUsdcBorrowPct(): Promise<number | null> {
-  try {
-    const fromGraph = await fetchMorphoUsdcBorrowPct(42161);
-    if (fromGraph != null) return fromGraph;
-  } catch { /* fallback below */ }
-  try {
-    const pools = await fetchLlamaPools();
-    return pickArbitrumBorrowFromLlama(pools, /morpho/i);
-  } catch {
-    return null;
-  }
 }
 
 interface KaminoReserveMetric {
@@ -113,31 +50,25 @@ async function fetchKaminoUsdcBorrowPct(): Promise<number | null> {
 }
 
 /**
- * Live HCD borrow snapshot — Morpho (Aave/Morpho ETH path) + Kamino USDC.
- * On failure returns 0% average so UI clearly shows missing data (no mock APY).
+ * Live HCD borrow snapshot — Arbitrum Morpho/Aave routing + Kamino USDC.
+ * On failure returns null APYs so UI clearly shows missing data (no mock APY).
  */
 export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
   const unavailable: string[] = [];
-  let morphoUsdcBorrowPct: number | null = null;
-  let aaveArbitrumUsdcBorrowPct: number | null = null;
   let kaminoUsdcBorrowPct: number | null = null;
+  let arbitrumRouting: ArbitrumRoutingSnapshot | null = null;
 
-  const [morphoSettled, aaveSettled, kaminoSettled] = await Promise.allSettled([
-    fetchMorphoArbitrumUsdcBorrowPct(),
-    fetchAaveArbitrumUsdcBorrowPct(),
+  const [routingSettled, kaminoSettled] = await Promise.allSettled([
+    fetchArbitrumRoutingSnapshot(),
     fetchKaminoUsdcBorrowPct(),
   ]);
 
-  if (morphoSettled.status === 'fulfilled' && morphoSettled.value != null) {
-    morphoUsdcBorrowPct = morphoSettled.value;
+  if (routingSettled.status === 'fulfilled') {
+    arbitrumRouting = routingSettled.value;
+    if (!arbitrumRouting.morpho) unavailable.push('Morpho (Arbitrum)');
+    if (!arbitrumRouting.aave) unavailable.push('Aave V3 (Arbitrum)');
   } else {
-    unavailable.push('Morpho');
-  }
-
-  if (aaveSettled.status === 'fulfilled' && aaveSettled.value != null) {
-    aaveArbitrumUsdcBorrowPct = aaveSettled.value;
-  } else {
-    unavailable.push('Aave V3');
+    unavailable.push('Morpho (Arbitrum)', 'Aave V3 (Arbitrum)');
   }
 
   if (kaminoSettled.status === 'fulfilled' && kaminoSettled.value != null) {
@@ -145,6 +76,9 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
   } else {
     unavailable.push('Kamino');
   }
+
+  const morphoUsdcBorrowPct = arbitrumRouting?.morpho?.usdcBorrowApyPct ?? null;
+  const aaveArbitrumUsdcBorrowPct = arbitrumRouting?.aave?.usdcBorrowApyPct ?? null;
 
   const rates = [morphoUsdcBorrowPct, aaveArbitrumUsdcBorrowPct, kaminoUsdcBorrowPct].filter(
     (r): r is number => r != null && Number.isFinite(r),
@@ -161,7 +95,8 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
     kaminoUsdcBorrowPct,
     avgBorrowPct,
     unavailable,
-    fetchedAt: new Date(),
+    fetchedAt: arbitrumRouting?.fetchedAt ?? new Date(),
+    arbitrumRouting,
   };
 }
 
