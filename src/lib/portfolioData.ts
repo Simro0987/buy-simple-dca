@@ -23,6 +23,19 @@ export interface AssetSlice {
   stakedEntries: StakedEntry[];
 }
 
+export interface AggregatedAssetBaseline {
+  /** Read-only 100% baseline: wallet native + all DeFi positions */
+  totalQty: number;
+  totalUsd: number;
+  walletQty: number;
+  stakedQty: number;
+  /** rETH (ETH) or mSOL (SOL) across core + tactical layers */
+  motorQty: number;
+  /** ETH layer 4 only */
+  alchemixQty: number;
+  otherStakedQty: number;
+}
+
 export interface PortfolioData {
   loading: boolean;
   prices: { btc: number; eth: number; sol: number };
@@ -32,6 +45,12 @@ export interface PortfolioData {
   lbtc: ProtocolBalance;
   totalAlchemixUsd: number;
   totalMotorUsd: number;
+  /** Aggregated 100% ETH baseline (wallet + DeFi); invariant when moving between layers */
+  ethBaseline: AggregatedAssetBaseline;
+  /** Aggregated 100% SOL baseline (wallet + DeFi); invariant when moving between layers */
+  solBaseline: AggregatedAssetBaseline;
+  totalEthPortfolio: number;
+  totalSolPortfolio: number;
 }
 
 const EMPTY_ASSET = (symbol: LedgerSymbol): AssetSlice => ({
@@ -56,9 +75,52 @@ function protocolBalance(
   symbol: ProtocolToken,
   qty: number,
   price: number,
-  role: 'cold' | 'motor',
+  role: 'alchemix' | 'motor',
 ): ProtocolBalance {
   return { symbol, qty, usd: qty * price, role };
+}
+
+/**
+ * Read-only aggregated baseline: wallet native + all on-ledger DeFi positions.
+ * Moving tokens between layers only shifts walletQty ↔ stakedQty; totalQty (= holdings) stays fixed.
+ */
+export function computeEthAggregatedBaseline(
+  slice: AssetSlice,
+  rEthQty: number,
+  alchemixEthQty: number,
+): AggregatedAssetBaseline {
+  const walletQty = slice.liquidQty;
+  const stakedQty = slice.stakedQty;
+  const otherStakedQty = Math.max(0, stakedQty - rEthQty - alchemixEthQty);
+  const totalQty = slice.holdings;
+  return {
+    totalQty,
+    totalUsd: totalQty * slice.currentPrice,
+    walletQty,
+    stakedQty,
+    motorQty: rEthQty,
+    alchemixQty: alchemixEthQty,
+    otherStakedQty,
+  };
+}
+
+export function computeSolAggregatedBaseline(
+  slice: AssetSlice,
+  mSolQty: number,
+): AggregatedAssetBaseline {
+  const walletQty = slice.liquidQty;
+  const stakedQty = slice.stakedQty;
+  const otherStakedQty = Math.max(0, stakedQty - mSolQty);
+  const totalQty = slice.holdings;
+  return {
+    totalQty,
+    totalUsd: totalQty * slice.currentPrice,
+    walletQty,
+    stakedQty,
+    motorQty: mSolQty,
+    alchemixQty: 0,
+    otherStakedQty,
+  };
 }
 
 export function buildPortfolioData(input: {
@@ -133,6 +195,9 @@ export function buildPortfolioData(input: {
   const totalAlchemixUsd = alchemixReserve.eth.usd;
   const totalMotorUsd = activeMotor.rEth.usd + activeMotor.mSol.usd;
 
+  const ethBaseline = computeEthAggregatedBaseline(assets.ETH, rEthQty, alchemixEthQty);
+  const solBaseline = computeSolAggregatedBaseline(assets.SOL, mSolQty);
+
   return {
     loading: input.metrics.loading || input.pricesLoading,
     prices: { btc: btcPrice, eth: ethPrice, sol: solPrice },
@@ -142,5 +207,9 @@ export function buildPortfolioData(input: {
     lbtc,
     totalAlchemixUsd,
     totalMotorUsd,
+    ethBaseline,
+    solBaseline,
+    totalEthPortfolio: ethBaseline.totalQty,
+    totalSolPortfolio: solBaseline.totalQty,
   };
 }

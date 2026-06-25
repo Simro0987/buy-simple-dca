@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Bot, ChevronDown, ClipboardCopy, Layers, Loader2, Lock, RefreshCw, Unlock, Zap,
+  AlertTriangle, Bot, ChevronDown, ClipboardCopy, Info, Layers, Loader2, Lock, RefreshCw, Unlock, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
@@ -509,7 +509,7 @@ function AlchemixLayerExecution({
 function AssetHcdCard({
   symbol,
   lang,
-  liquidQty,
+  totalPortfolioQty,
   price,
   layers,
   rebalanceLocked,
@@ -537,7 +537,7 @@ function AssetHcdCard({
 }: {
   symbol: HcdSymbol;
   lang: Lang;
-  liquidQty: number;
+  totalPortfolioQty: number;
   price: number;
   layers: HcdLayerTarget[];
   rebalanceLocked: boolean;
@@ -567,8 +567,8 @@ function AssetHcdCard({
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const apys = useStakingSplitApys();
   const decimals = symbol === 'SOL' ? 2 : 3;
-  const totalUsd = liquidQty * price;
-  const deployQty = advised?.breakdown.recommendedQty ?? liquidQty;
+  const totalUsd = totalPortfolioQty * price;
+  const deployQty = advised?.breakdown.recommendedQty ?? totalPortfolioQty;
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/25 min-w-0">
@@ -577,9 +577,20 @@ function AssetHcdCard({
           <Layers className="w-4 h-4 text-violet-300 shrink-0" />
           <h3 className="text-sm font-bold text-foreground">{symbol} · HCD Vrstvy</h3>
         </div>
-        <p className="text-[10px] text-muted-foreground font-mono tabular-nums">
-          {liquidQty.toFixed(decimals)} {symbol} · {formatUsd(totalUsd)}
-        </p>
+        <div className="text-right shrink-0">
+          <p className="text-[10px] text-muted-foreground font-mono tabular-nums">
+            {totalPortfolioQty.toFixed(decimals)} {symbol} · {formatUsd(totalUsd)}
+          </p>
+          <p
+            className="text-[9px] text-muted-foreground/90 flex items-center justify-end gap-1 mt-0.5"
+            title={sk
+              ? 'Agregovaný zostatok (Peňaženka + DeFi pozície)'
+              : 'Aggregated balance (Wallet + DeFi positions)'}
+          >
+            <Info className="w-3 h-3 shrink-0 text-violet-400/80" />
+            {sk ? 'Agregovaný zostatok (Peňaženka + DeFi)' : 'Aggregated (Wallet + DeFi)'}
+          </p>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -639,7 +650,7 @@ function AssetHcdCard({
                   symbol={symbol}
                   lang={lang}
                   layer={layer}
-                  totalQty={liquidQty}
+                  totalQty={totalPortfolioQty}
                   assetPrice={price}
                   ltvMax={ltvMax}
                   ltvRestricted={ltvRestricted}
@@ -666,11 +677,11 @@ function AssetHcdCard({
                 <AlchemixLayerExecution
                   lang={lang}
                   layer={layer}
-                  totalEthQty={liquidQty}
+                  totalEthQty={totalPortfolioQty}
                   ethPrice={price}
                   rebalanceLocked={rebalanceLocked}
                   confirmed={alchemixConfirmed ?? false}
-                  onConfirm={() => onConfirmAlchemix(liquidQty * (layer.pctTarget / 100))}
+                  onConfirm={() => onConfirmAlchemix(totalPortfolioQty * (layer.pctTarget / 100))}
                   onRevert={onRevertAlchemix}
                 />
               )}
@@ -725,13 +736,13 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
   const ethSlice = portfolioData.assets?.ETH ?? EMPTY_SLICE;
   const solSlice = portfolioData.assets?.SOL ?? EMPTY_SLICE;
-  const ethTotalQty = ethSlice.liquidQty ?? 0;
-  const solTotalQty = solSlice.liquidQty ?? 0;
+  const ethTotalQty = portfolioData.totalEthPortfolio;
+  const solTotalQty = portfolioData.totalSolPortfolio;
   const ethPrice = portfolioData.prices?.eth ?? 0;
   const solPrice = portfolioData.prices?.sol ?? 0;
   const btcPrice = portfolioData.prices?.btc ?? 0;
 
-  const portfolioUsd = ethTotalQty * ethPrice + solTotalQty * solPrice;
+  const portfolioUsd = portfolioData.ethBaseline.totalUsd + portfolioData.solBaseline.totalUsd;
 
   const ethLayers = useMemo(() => computeHcdLayerTargets('ETH', indicators) ?? [], [indicators]);
   const solLayers = useMemo(() => computeHcdLayerTargets('SOL', indicators) ?? [], [indicators]);
@@ -1029,7 +1040,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       <AssetHcdCard
         symbol="ETH"
         lang={lang}
-        liquidQty={ethSlice.liquidQty ?? 0}
+        totalPortfolioQty={ethTotalQty}
         price={ethSlice.currentPrice ?? 0}
         layers={ethLayers}
         rebalanceLocked={rebalanceLocked}
@@ -1063,7 +1074,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       <AssetHcdCard
         symbol="SOL"
         lang={lang}
-        liquidQty={solSlice.liquidQty ?? 0}
+        totalPortfolioQty={solTotalQty}
         price={solSlice.currentPrice ?? 0}
         layers={solLayers}
         rebalanceLocked={rebalanceLocked}
