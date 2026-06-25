@@ -1,8 +1,13 @@
+import {
+  applySilentCalibration,
+  compareBalanceSnapshots,
+  layerLabelFromActionType,
+  type PortfolioBalanceSnapshot,
+} from '@/lib/hcdSilentTracker';
+
 const LOG_KEY = 'hcd-decision-log-v1';
 const CONFIDENCE_KEY = 'hcd-strategy-confidence-v1';
 export const HCD_DECISION_LOG_EVENT = 'hcd-decision-log-changed';
-
-export type DecisionRating = 'up' | 'down';
 
 export interface MarketConditionsSnapshot {
   fearGreed?: number | null;
@@ -22,13 +27,14 @@ export interface DecisionLogEntry {
   strategyKey: string;
   confirmedAt: number;
   portfolioUsdAtConfirm: number;
+  balanceSnapshot?: PortfolioBalanceSnapshot;
   portfolioUsdAt24h?: number;
   pnl24hUsd?: number;
   pnl24hPct?: number;
+  pnl24hEth?: number;
   marketConditions: MarketConditionsSnapshot;
-  userRating?: DecisionRating | null;
-  ratedAt?: number;
   confidenceRewardApplied?: boolean;
+  calibrationApplied?: boolean;
 }
 
 export type StrategyConfidenceMap = Record<string, number>;
@@ -100,6 +106,7 @@ export function appendDecisionLogEntry(input: {
   stepKey: string;
   portfolioUsdAtConfirm: number;
   marketConditions: MarketConditionsSnapshot;
+  balanceSnapshot?: PortfolioBalanceSnapshot;
   actionType?: string;
   strategyKey?: string;
 }): DecisionLogEntry {
@@ -110,10 +117,11 @@ export function appendDecisionLogEntry(input: {
     actionType: input.actionType ?? actionTypeFromStepKey(input.stepKey),
     strategyKey: input.strategyKey ?? strategyKeyFromStepKey(input.stepKey),
     confirmedAt: Date.now(),
-    portfolioUsdAtConfirm: input.portfolioUsdAtConfirm,
+    portfolioUsdAtConfirm: input.balanceSnapshot?.totalUsd ?? input.portfolioUsdAtConfirm,
+    balanceSnapshot: input.balanceSnapshot,
     marketConditions: input.marketConditions,
-    userRating: null,
     confidenceRewardApplied: false,
+    calibrationApplied: false,
   };
   entries.push(entry);
   persistLog(entries);
@@ -123,19 +131,6 @@ export function appendDecisionLogEntry(input: {
 export function removeDecisionLogEntry(stepKey: string): void {
   const entries = loadDecisionLog().filter(e => e.stepKey !== stepKey);
   persistLog(entries);
-}
-
-export function rateDecision(stepKey: string, rating: DecisionRating): DecisionLogEntry | null {
-  const entries = loadDecisionLog();
-  const idx = entries.findIndex(e => e.stepKey === stepKey);
-  if (idx < 0) return null;
-  entries[idx] = {
-    ...entries[idx],
-    userRating: rating,
-    ratedAt: Date.now(),
-  };
-  persistLog(entries);
-  return entries[idx];
 }
 
 export function getDecisionForStep(stepKey: string): DecisionLogEntry | null {
@@ -148,7 +143,7 @@ export function getDecisionForStep(stepKey: string): DecisionLogEntry | null {
 
 function computeConfidenceBoost(pnlPct: number): number {
   if (pnlPct <= 0) return 0;
-  return Math.min(8, Math.max(1, Math.round(pnlPct * 0.4)));
+  return Math.min(3, Math.max(1, Math.round(pnlPct * 0.3)));
 }
 
 export function applyConfidenceReward(strategyKey: string, pnlPct: number): number {
@@ -161,7 +156,10 @@ export function applyConfidenceReward(strategyKey: string, pnlPct: number): numb
   return next;
 }
 
-export function processPerformanceRewards(currentPortfolioUsd: number): DecisionLogEntry[] {
+/** Silent 24h on-chain balance check + autonomous strategy calibration. */
+export function processSilentPerformanceChecks(
+  currentSnapshot: PortfolioBalanceSnapshot,
+): DecisionLogEntry[] {
   const now = Date.now();
   const entries = loadDecisionLog();
   let changed = false;
@@ -170,26 +168,57 @@ export function processPerformanceRewards(currentPortfolioUsd: number): Decision
     if (entry.confidenceRewardApplied) return entry;
     if (now < entry.confirmedAt + MS_24H) return entry;
 
-    const portfolioUsdAt24h = currentPortfolioUsd;
-    const pnl24hUsd = portfolioUsdAt24h - entry.portfolioUsdAtConfirm;
-    const pnl24hPct = entry.portfolioUsdAtConfirm > 0
-      ? (pnl24hUsd / entry.portfolioUsdAtConfirm) * 100
-      : 0;
+    const before = entry.balanceSnapshot;
+    const comparison = before
+      ? compareBalanceSnapshots(before, currentSnapshot)
+      : {
+        pnlUsd: currentSnapshot.totalUsd - entry.portfolioUsdAtConfirm,
+        pnlEth: 0,
+        pnlPct: entry.portfolioUsdAtConfirm > 0
+          ? ((currentSnapshot.totalUsd - entry.portfolioUsdAtConfirm) / entry.portfolioUsdAtConfirm) * 100
+          : 0,
+      };
 
-    if (pnl24hUsd > 0) {
-      applyConfidenceReward(entry.strategyKey, pnl24hPct);
+    if (!entry.calibrationApplied) {
+      applySilentCalibration({
+        actionType: entry.actionType,
+        layerLabel: layerLabelFromActionType(entry.actionType, true),
+        pnlUsd: comparison.pnlUsd,
+        pnlEth: comparison.pnlEth,
+      });
+    }
+
+    if (comparison.pnlUsd > 0) {
+      applyConfidenceReward(entry.strategyKey, comparison.pnlPct);
     }
 
     changed = true;
     return {
       ...entry,
-      portfolioUsdAt24h,
-      pnl24hUsd,
-      pnl24hPct,
+      portfolioUsdAt24h: currentSnapshot.totalUsd,
+      pnl24hUsd: comparison.pnlUsd,
+      pnl24hPct: comparison.pnlPct,
+      pnl24hEth: comparison.pnlEth,
       confidenceRewardApplied: true,
+      calibrationApplied: true,
     };
   });
 
   if (changed) persistLog(updated);
   return updated;
+}
+
+/** @deprecated Use processSilentPerformanceChecks */
+export function processPerformanceRewards(currentPortfolioUsd: number): DecisionLogEntry[] {
+  return processSilentPerformanceChecks({
+    capturedAt: Date.now(),
+    totalUsd: currentPortfolioUsd,
+    prices: { btc: 0, eth: 0, sol: 0 },
+    btc: { holdings: 0, liquidQty: 0, stakedQty: 0, totalUsd: 0, stakedEntries: [] },
+    eth: { holdings: 0, liquidQty: 0, stakedQty: 0, totalUsd: 0, motorQty: 0, alchemixQty: 0, stakedEntries: [] },
+    sol: { holdings: 0, liquidQty: 0, stakedQty: 0, totalUsd: 0, motorQty: 0, alchemixQty: 0, stakedEntries: [] },
+    lbtcQty: 0,
+    lbtcUsd: 0,
+    usdcDebt: 0,
+  });
 }

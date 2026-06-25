@@ -25,9 +25,11 @@ import {
   removeDecisionLogEntry,
   type MarketConditionsSnapshot,
 } from '@/lib/hcdDecisionLog';
+import type { PortfolioBalanceSnapshot } from '@/lib/hcdSilentTracker';
 
 export interface DecisionConfirmMeta {
   marketConditions: MarketConditionsSnapshot;
+  balanceSnapshot?: PortfolioBalanceSnapshot;
 }
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
@@ -113,8 +115,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     if (meta?.marketConditions) {
       appendDecisionLogEntry({
         stepKey: key,
-        portfolioUsdAtConfirm: meta.marketConditions.portfolioUsd ?? metrics.totalValue,
+        portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
         marketConditions: meta.marketConditions,
+        balanceSnapshot: meta.balanceSnapshot,
       });
     }
     setConfirmedSteps(loadConfirmedSteps());
@@ -130,8 +133,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     if (meta?.marketConditions) {
       appendDecisionLogEntry({
         stepKey: 'hcd-autonomous-alchemix',
-        portfolioUsdAtConfirm: meta.marketConditions.portfolioUsd ?? metrics.totalValue,
+        portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
         marketConditions: meta.marketConditions,
+        balanceSnapshot: meta.balanceSnapshot,
         actionType: 'alchemix-autonomous-rebalance',
         strategyKey: 'eth-alchemix-autonomous',
       });

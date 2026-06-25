@@ -1,4 +1,4 @@
-import { Lang } from '@/lib/i18n';
+import { getLayerCalibrationBias } from '@/lib/hcdSilentTracker';
 
 export type HcdSymbol = 'ETH' | 'SOL';
 export type VolatilityRegime = 'high' | 'normal' | 'low';
@@ -244,7 +244,7 @@ function resolveLayerPct(
     if (volatilityRegime === 'high') base = layer.pctMax;
     else if (volatilityRegime === 'low') base = lerp(layer.pctMin, layer.pctMax, 0.45);
     else base = lerp(layer.pctMin, layer.pctMax, 0.65);
-    const bias = lerp(1.06, 0.92, t);
+    const bias = lerp(1.06, 0.92, t) * getLayerCalibrationBias('core');
     return clamp(base * bias, layer.pctMin, layer.pctMax);
   }
   if (role === 'tactical') {
@@ -252,7 +252,7 @@ function resolveLayerPct(
     if (volatilityRegime === 'high') base = layer.pctMin;
     else if (volatilityRegime === 'low') base = layer.pctMax;
     else base = lerp(layer.pctMin, layer.pctMax, 0.5);
-    const bias = lerp(0.88, 1.14, t);
+    const bias = lerp(0.88, 1.14, t) * getLayerCalibrationBias('tactical');
     return clamp(base * bias, layer.pctMin, layer.pctMax);
   }
   // alchemix
@@ -260,7 +260,7 @@ function resolveLayerPct(
   if (volatilityRegime === 'high') base = layer.pctMin;
   else if (volatilityRegime === 'low') base = layer.pctMax;
   else base = lerp(layer.pctMin, layer.pctMax, 0.4);
-  const bias = lerp(0.9, 1.1, t);
+  const bias = lerp(0.9, 1.1, t) * getLayerCalibrationBias('alchemix');
   return clamp(base * bias, layer.pctMin, layer.pctMax);
 }
 

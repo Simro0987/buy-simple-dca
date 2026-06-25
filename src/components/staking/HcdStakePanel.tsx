@@ -10,7 +10,6 @@ import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
-import { DecisionFeedbackButtons } from '@/components/staking/DecisionFeedbackButtons';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -29,7 +28,6 @@ import {
   type ExitStrategyAlert,
 } from '@/lib/hcdExitStrategy';
 import { useDefiApys } from '@/hooks/useDefiApys';
-import { useHcdDecisionFeedback } from '@/hooks/useHcdDecisionFeedback';
 import {
   getTimingWindow,
   overheatedWarning,
@@ -43,7 +41,7 @@ import {
   lockAlchemixAutonomous,
   type AlchemixRedistribution,
 } from '@/lib/hcdAlchemixAutonomy';
-import { applyConfidenceReward, type DecisionRating } from '@/lib/hcdDecisionLog';
+import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -62,14 +60,6 @@ interface Props {
 const NEUTRAL_FG = 50;
 const NEUTRAL_RSI = 50;
 const EMPTY_SLICE = { liquidQty: 0, currentPrice: 0 };
-
-interface PlanFeedbackProps {
-  planKey: string;
-  rating: DecisionRating | null;
-  confidenceScore: number;
-  onRate: (rating: DecisionRating) => void;
-}
-
 
 const ACTION_LABEL: Record<CyborgAction, { sk: string; en: string }> = {
   DEPOSIT_BORROW: { sk: 'Nasadiť kolaterál + požičať USDC', en: 'Deploy collateral + borrow USDC' },
@@ -298,7 +288,6 @@ function CyborgActionPlan({
   onRevertPlan,
   execDisabled,
   showBorrowCommand = true,
-  feedback,
   autonomousMode,
   onAutonomous,
   redistributionLines,
@@ -326,7 +315,6 @@ function CyborgActionPlan({
   onRevertPlan: () => void;
   execDisabled: boolean;
   showBorrowCommand?: boolean;
-  feedback?: PlanFeedbackProps;
   autonomousMode?: boolean;
   onAutonomous?: () => void;
   redistributionLines?: Array<{ label: string; qty: number; decimals: number; suffix: string }>;
@@ -458,16 +446,6 @@ function CyborgActionPlan({
           </p>
         </>
       )}
-
-      {planConfirmed && feedback && (
-        <DecisionFeedbackButtons
-          lang={lang}
-          stepKey={feedback.planKey}
-          rating={feedback.rating}
-          confidenceScore={feedback.confidenceScore}
-          onRate={feedback.onRate}
-        />
-      )}
     </div>
   );
 }
@@ -490,7 +468,6 @@ function CoreCyborgActionPlan({
   onConfirmPlan,
   onRevertPlan,
   execDisabled,
-  feedback,
 }: {
   sk: boolean;
   lang: Lang;
@@ -505,7 +482,6 @@ function CoreCyborgActionPlan({
   onConfirmPlan: () => void;
   onRevertPlan: () => void;
   execDisabled: boolean;
-  feedback?: PlanFeedbackProps;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -581,16 +557,6 @@ function CoreCyborgActionPlan({
         decimals={stakeDecimals}
         muted={lineMuted}
       />
-
-      {planConfirmed && feedback && (
-        <DecisionFeedbackButtons
-          lang={lang}
-          stepKey={feedback.planKey}
-          rating={feedback.rating}
-          confidenceScore={feedback.confidenceScore}
-          onRate={feedback.onRate}
-        />
-      )}
     </div>
   );
 }
@@ -604,7 +570,6 @@ function CoreLayerExecution({
   rebalanceLocked,
   apyText,
   buildDecisionMeta,
-  feedback,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -614,7 +579,6 @@ function CoreLayerExecution({
   rebalanceLocked: boolean;
   apyText?: string | null;
   buildDecisionMeta: () => DecisionConfirmMeta;
-  feedback: PlanFeedbackProps;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -671,7 +635,6 @@ function CoreLayerExecution({
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
-          feedback={feedback}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -697,7 +660,6 @@ function TacticalLayerExecution({
   indicators,
   stakedEntries,
   buildDecisionMeta,
-  feedback,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -717,7 +679,6 @@ function TacticalLayerExecution({
   indicators: HcdIndicators;
   stakedEntries: StakedEntry[];
   buildDecisionMeta: () => DecisionConfirmMeta;
-  feedback: PlanFeedbackProps;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -803,7 +764,6 @@ function TacticalLayerExecution({
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
-          feedback={feedback}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -821,7 +781,6 @@ function AlchemixLayerExecution({
   ltvMax,
   stakedEntries,
   buildDecisionMeta,
-  feedback,
   autonomyLocked,
   autonomyRedistribution,
 }: {
@@ -835,7 +794,6 @@ function AlchemixLayerExecution({
   ltvMax: number;
   stakedEntries: StakedEntry[];
   buildDecisionMeta: () => DecisionConfirmMeta;
-  feedback: PlanFeedbackProps;
   autonomyLocked: boolean;
   autonomyRedistribution: AlchemixRedistribution | null;
 }) {
@@ -908,7 +866,6 @@ function AlchemixLayerExecution({
     }, buildDecisionMeta());
 
     lockAlchemixAutonomous(previewRedistribution);
-    applyConfidenceReward('eth-alchemix-autonomous', 1);
 
     toast.success(sk
       ? 'Autonómny rebalans dokončený · Vrstva 4 zamknutá'
@@ -988,7 +945,6 @@ function AlchemixLayerExecution({
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
           showBorrowCommand={false}
-          feedback={feedback}
           autonomousMode={showAutonomous}
           onAutonomous={handleAutonomousRebalance}
           redistributionLines={showAutonomous ? redistributionLines : undefined}
@@ -1021,7 +977,6 @@ function AssetHcdCard({
   stakedEntries,
   alchemixApyPct,
   buildDecisionMeta,
-  getPlanFeedback,
   alchemixAutonomyLocked,
   alchemixRedistribution,
 }: {
@@ -1044,7 +999,6 @@ function AssetHcdCard({
   stakedEntries: StakedEntry[];
   alchemixApyPct: number;
   buildDecisionMeta: () => DecisionConfirmMeta;
-  getPlanFeedback: (planKey: string) => PlanFeedbackProps;
   alchemixAutonomyLocked: boolean;
   alchemixRedistribution: AlchemixRedistribution | null;
 }) {
@@ -1159,7 +1113,6 @@ function AssetHcdCard({
                   indicators={indicators}
                   stakedEntries={stakedEntries}
                   buildDecisionMeta={buildDecisionMeta}
-                  feedback={getPlanFeedback(planKey)}
                 />
               )}
 
@@ -1175,7 +1128,6 @@ function AssetHcdCard({
                   ltvMax={ltvMax}
                   stakedEntries={stakedEntries}
                   buildDecisionMeta={buildDecisionMeta}
-                  feedback={getPlanFeedback(planKey)}
                   autonomyLocked={alchemixAutonomyLocked}
                   autonomyRedistribution={alchemixRedistribution}
                 />
@@ -1191,7 +1143,6 @@ function AssetHcdCard({
                   rebalanceLocked={rebalanceLocked}
                   apyText={apy}
                   buildDecisionMeta={buildDecisionMeta}
-                  feedback={getPlanFeedback(planKey)}
                 />
               )}
 
@@ -1230,7 +1181,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const btcPrice = portfolioData.prices?.btc ?? 0;
 
   const portfolioUsd = portfolioData.ethBaseline.totalUsd + portfolioData.solBaseline.totalUsd;
-  const { getRating, getConfidence, submitRating } = useHcdDecisionFeedback(portfolioUsd);
 
   const ethLayers = useMemo(
     () => computeHcdLayerTargets('ETH', indicators, temperamentPct) ?? [],
@@ -1283,17 +1233,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       portfolioUsd,
       netYieldPct: netYield,
     },
-  }), [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield]);
-
-  const getPlanFeedback = useCallback((planKey: string): PlanFeedbackProps => ({
-    planKey,
-    rating: getRating(planKey),
-    confidenceScore: getConfidence(planKey),
-    onRate: (rating) => {
-      submitRating(planKey, rating);
-      toast.success(sk ? 'Hodnotenie uložené do decision logu' : 'Rating saved to decision log');
-    },
-  }), [getRating, getConfidence, submitRating, sk]);
+    balanceSnapshot: capturePortfolioSnapshot(portfolioData, cyborgUsdcDebt),
+  }), [market?.fearGreed, market?.btcRsi, indicators, temperamentPct, portfolioUsd, netYield, portfolioData, cyborgUsdcDebt]);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -1530,7 +1471,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
-      <HcdLearningLog lang={lang} portfolioUsd={portfolioUsd} />
+      <HcdLearningLog lang={lang} portfolioData={portfolioData} usdcDebt={cyborgUsdcDebt} />
 
       {/* ── HCD Vrstvy s integrovanou exekúciou ── */}
       <AssetHcdCard
@@ -1553,7 +1494,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         stakedEntries={ethStakedEntries}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
-        getPlanFeedback={getPlanFeedback}
         alchemixAutonomyLocked={alchemixAutonomyLocked}
         alchemixRedistribution={alchemixRedistribution}
       />
@@ -1578,7 +1518,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         stakedEntries={solStakedEntries}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
-        getPlanFeedback={getPlanFeedback}
         alchemixAutonomyLocked={false}
         alchemixRedistribution={null}
       />
