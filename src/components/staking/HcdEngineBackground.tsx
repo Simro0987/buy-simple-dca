@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useCyborgEngine } from '@/hooks/useCyborgEngine';
-import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
+// import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
 import { hardResetCyborgEngineForStakeMount } from '@/lib/cyborgEngine';
-import { ensurePortfolioData, getAggregatedPortfolioTotals } from '@/lib/portfolioData';
+// import { ensurePortfolioData, getAggregatedPortfolioTotals } from '@/lib/portfolioData';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 
 /**
@@ -11,22 +11,24 @@ import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
  * Renders nothing — failures are logged only and never block Stake dashboard.
  */
 function HcdEngineBackgroundInner() {
-  const { portfolioData, cyborgUsdcDebt } = usePortfolio();
+  usePortfolio();
 
   useEffect(() => {
     hardResetCyborgEngineForStakeMount();
   }, []);
 
-  const { restartToken } = useCyborgEngine();
+  const { restartToken: _restartToken } = useCyborgEngine();
+  void _restartToken;
 
-  const safePortfolio = ensurePortfolioData(portfolioData);
-  const { ethQty, solQty } = getAggregatedPortfolioTotals(safePortfolio);
-  useHcdSilentTrackerEngine(
-    safePortfolio,
-    cyborgUsdcDebt ?? 0,
-    ethQty > 0 || solQty > 0,
-    restartToken,
-  );
+  // HARD DISABLE: useHcdSilentTrackerEngine causes fatal Stake crash — re-enable after stabilization
+  // const safePortfolio = ensurePortfolioData(portfolioData);
+  // const { ethQty, solQty } = getAggregatedPortfolioTotals(safePortfolio);
+  // useHcdSilentTrackerEngine(
+  //   safePortfolio,
+  //   cyborgUsdcDebt ?? 0,
+  //   ethQty > 0 || solQty > 0,
+  //   restartToken,
+  // );
 
   return null;
 }

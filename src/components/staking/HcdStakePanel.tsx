@@ -33,7 +33,8 @@ import {
   overheatedWarning,
 } from '@/lib/stakeAdvisor';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
-import { HcdLearningLog } from '@/components/staking/HcdLearningLog';
+// HARD DISABLE: HcdLearningLog causes fatal Stake crash — re-enable after stabilization
+// import { HcdLearningLog } from '@/components/staking/HcdLearningLog';
 import { useAlchemixAutonomy } from '@/hooks/useAlchemixAutonomy';
 import {
   computeAlchemixRedistribution,
@@ -43,7 +44,6 @@ import {
 } from '@/lib/hcdAlchemixAutonomy';
 import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
 import { getAggregatedPortfolioTotals, ensurePortfolioData } from '@/lib/portfolioData';
-import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -1170,9 +1170,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const { locked: alchemixAutonomyLocked, redistribution: alchemixRedistribution } = useAlchemixAutonomy();
   const win = getTimingWindow(marketScore);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
-  const rebalanceLocked = (!rebalance.unlocked || win.locked) && !isEmergencyUnlocked;
+  const rebalanceLocked = (!(rebalance?.unlocked ?? false) || win.locked) && !isEmergencyUnlocked;
   const ltvMax = getHcdLtvMax(indicators, temperamentPct);
-  const ltvRestricted = indicators.volatilityRegime === 'high' || indicators.borrowWarning;
+  const ltvRestricted = indicators?.volatilityRegime === 'high' || Boolean(indicators?.borrowWarning);
 
   const aggregated = useMemo(
     () => getAggregatedPortfolioTotals(portfolioData),
@@ -1426,7 +1426,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         {[
           { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime, loading: false },
           { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%`, loading: false },
-          { l: 'USDC Borrow', v: borrowLoading ? '…' : (borrowRates?.unavailable.length === 2 ? '0%' : `${fmtNum(indicators.borrowApyPct, 2)}%`), sub: borrowLoading ? (sk ? 'načítavam' : 'loading') : (indicators.borrowWarning ? 'warn' : (borrowRates?.unavailable.length ? 'partial' : 'live')), loading: borrowLoading },
+          { l: 'USDC Borrow', v: borrowLoading ? '…' : ((borrowRates?.unavailable?.length ?? 0) === 2 ? '0%' : `${fmtNum(indicators?.borrowApyPct, 2)}%`), sub: borrowLoading ? (sk ? 'načítavam' : 'loading') : (indicators?.borrowWarning ? 'warn' : ((borrowRates?.unavailable?.length ?? 0) > 0 ? 'partial' : 'live')), loading: borrowLoading },
           { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress, loading: false },
           { l: sk ? 'Temperament' : 'Temperament', v: `${temperamentPct}%`, sub: temperamentLabel(temperamentPct, sk), loading: false },
         ].map(item => (
@@ -1442,11 +1442,11 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         ))}
       </div>
 
-      {(borrowRates?.unavailable.length ?? 0) > 0 && (
+      {(borrowRates?.unavailable?.length ?? 0) > 0 && (
         <p className="text-[10px] text-amber-400/90">
           {sk
-            ? `Borrow zdroje nedostupné (${borrowRates?.unavailable.join(', ')}). Zobrazené 0 % do načítania live dát.`
-            : `Borrow sources unavailable (${borrowRates?.unavailable.join(', ')}). Showing 0% until live data loads.`}
+            ? `Borrow zdroje nedostupné (${borrowRates?.unavailable?.join(', ') ?? ''}). Zobrazené 0 % do načítania live dát.`
+            : `Borrow sources unavailable (${borrowRates?.unavailable?.join(', ') ?? ''}). Showing 0% until live data loads.`}
         </p>
       )}
 
@@ -1502,7 +1502,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         projectedLbtcUsd={projectedLbtcUsd}
         terminalApys={terminalApysSafe}
         lbtcYieldText={lbtcYieldText}
-        usdcDebt={cyborgUsdcDebt}
+        usdcDebt={cyborgUsdcDebt ?? 0}
         indicators={indicators}
         stakedEntries={ethStakedEntries}
         alchemixApyPct={alchemixApyPct}
@@ -1526,7 +1526,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         projectedLbtcUsd={projectedLbtcUsd}
         terminalApys={terminalApysSafe}
         lbtcYieldText={lbtcYieldText}
-        usdcDebt={cyborgUsdcDebt}
+        usdcDebt={cyborgUsdcDebt ?? 0}
         indicators={indicators}
         stakedEntries={solStakedEntries}
         alchemixApyPct={alchemixApyPct}
@@ -1535,17 +1535,11 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixRedistribution={null}
       />
 
-      <StakeErrorBoundary
-        fallback={(
-          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-[10px] text-amber-200">
-            {sk
-              ? 'HCD Learning Log dočasne nedostupný — hlavný panel a vrstvy zostávajú aktívne.'
-              : 'HCD Learning Log temporarily unavailable — main panel and layers remain active.'}
-          </div>
-        )}
-      >
+      {/* HARD DISABLE: HcdLearningLog — re-enable after stabilization
+      <StakeErrorBoundary fallback={null}>
         <HcdLearningLog lang={lang} />
       </StakeErrorBoundary>
+      */}
 
       <p className="text-[10px] text-muted-foreground leading-snug">
         {sk
