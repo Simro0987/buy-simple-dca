@@ -80,16 +80,16 @@ export function useHcdSilentTrackerState() {
  * Participates in CyborgEngine phase lifecycle (idle → loading → ready / error / fallback).
  */
 export function useHcdSilentTrackerEngine(
-  portfolioData: PortfolioData,
+  portfolioData: PortfolioData | null | undefined,
   usdcDebt: number,
   enabled: boolean,
   restartToken = 0,
 ) {
   const pendingCount = useSyncExternalStore(subscribe, safePendingCount, () => 0);
 
-  const ethUsd = portfolioData.ethBaseline?.totalUsd ?? 0;
-  const solUsd = portfolioData.solBaseline?.totalUsd ?? 0;
-  const balancesReady = portfolioData.balancesReady ?? true;
+  const ethUsd = portfolioData?.ethBaseline?.totalUsd ?? 0;
+  const solUsd = portfolioData?.solBaseline?.totalUsd ?? 0;
+  const balancesReady = portfolioData?.balancesReady ?? true;
 
   useEffect(() => {
     if (!enabled || !balancesReady) {
@@ -101,11 +101,12 @@ export function useHcdSilentTrackerEngine(
 
     const timeoutId = window.setTimeout(() => {
       try {
+        if (!portfolioData) return;
         const snapshot = capturePortfolioSnapshot(portfolioData, usdcDebt);
         if (
           snapshot.totalUsd <= 0
-          && (portfolioData.totalEthPortfolio ?? 0) <= 0
-          && (portfolioData.totalSolPortfolio ?? 0) <= 0
+          && (portfolioData?.totalEthPortfolio ?? 0) <= 0
+          && (portfolioData?.totalSolPortfolio ?? 0) <= 0
         ) {
           logCyborgDiagnostic('SilentTracker: empty snapshot — skipping');
           return;
@@ -130,8 +131,8 @@ export function useHcdSilentTrackerEngine(
   }, [
     enabled,
     balancesReady,
-    portfolioData.totalEthPortfolio,
-    portfolioData.totalSolPortfolio,
+    portfolioData?.totalEthPortfolio,
+    portfolioData?.totalSolPortfolio,
     ethUsd,
     solUsd,
     usdcDebt,

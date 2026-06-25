@@ -42,7 +42,7 @@ import {
   type AlchemixRedistribution,
 } from '@/lib/hcdAlchemixAutonomy';
 import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
-import { getAggregatedPortfolioTotals } from '@/lib/portfolioData';
+import { getAggregatedPortfolioTotals, ensurePortfolioData } from '@/lib/portfolioData';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
@@ -1162,7 +1162,8 @@ function AssetHcdCard({
 
 export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
-  const { portfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const { portfolioData: rawPortfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const portfolioData = ensurePortfolioData(rawPortfolioData);
   const { data: defiApys } = useDefiApys();
   const { indicators, rebalance, borrowLoading, borrowRates, temperamentPct } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
@@ -1534,7 +1535,15 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixRedistribution={null}
       />
 
-      <StakeErrorBoundary fallback={null}>
+      <StakeErrorBoundary
+        fallback={(
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3 text-[10px] text-amber-200">
+            {sk
+              ? 'HCD Learning Log dočasne nedostupný — hlavný panel a vrstvy zostávajú aktívne.'
+              : 'HCD Learning Log temporarily unavailable — main panel and layers remain active.'}
+          </div>
+        )}
+      >
         <HcdLearningLog lang={lang} />
       </StakeErrorBoundary>
 

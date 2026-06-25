@@ -194,7 +194,11 @@ export function applySilentCalibration(input: {
 }
 
 export function getLayerCalibrationBias(role: LayerRole): number {
-  return loadStrategyCalibration().layerBias[role] ?? 1;
+  try {
+    return loadStrategyCalibration().layerBias[role] ?? 1;
+  } catch {
+    return 1;
+  }
 }
 
 export function markAlgorithmStable(): void {

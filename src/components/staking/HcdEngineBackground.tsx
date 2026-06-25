@@ -3,7 +3,7 @@ import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useCyborgEngine } from '@/hooks/useCyborgEngine';
 import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
 import { hardResetCyborgEngineForStakeMount } from '@/lib/cyborgEngine';
-import { getAggregatedPortfolioTotals } from '@/lib/portfolioData';
+import { ensurePortfolioData, getAggregatedPortfolioTotals } from '@/lib/portfolioData';
 import { StakeErrorBoundary } from '@/components/staking/StakeErrorBoundary';
 
 /**
@@ -19,10 +19,11 @@ function HcdEngineBackgroundInner() {
 
   const { restartToken } = useCyborgEngine();
 
-  const { ethQty, solQty } = getAggregatedPortfolioTotals(portfolioData);
+  const safePortfolio = ensurePortfolioData(portfolioData);
+  const { ethQty, solQty } = getAggregatedPortfolioTotals(safePortfolio);
   useHcdSilentTrackerEngine(
-    portfolioData,
-    cyborgUsdcDebt,
+    safePortfolio,
+    cyborgUsdcDebt ?? 0,
     ethQty > 0 || solQty > 0,
     restartToken,
   );
