@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  AlertTriangle, Bot, ChevronDown, ClipboardCopy, Layers, Loader2, Lock, RefreshCw, Shield, Unlock, Zap,
+  AlertTriangle, Bot, ChevronDown, ClipboardCopy, Layers, Loader2, Lock, RefreshCw, Unlock, Zap,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
@@ -10,14 +10,12 @@ import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
-import { Slider } from '@/components/ui/slider';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   computeHcdLayerTargets,
   getHcdLtvMax,
   rebalanceLockMessage,
-  type HcdIndicators,
   type HcdLayerTarget,
   type HcdSymbol,
 } from '@/lib/hcdArchitecture';
@@ -33,7 +31,6 @@ import {
   computeNetYield,
   computeProjectedLbtcQty,
   computeTotalLbtcApy,
-  computeUsdcLoan,
   formatLbtcYieldLabel,
   resolveCyborgState,
   type CyborgAction,
@@ -81,6 +78,14 @@ function layerApy(layer: HcdLayerTarget, apys: { rEth: number; mSol: number }): 
   return null;
 }
 
+function tacticalCollateralQty(motorQty: number, layer: HcdLayerTarget | undefined): number {
+  return motorQty * ((layer?.pctTarget ?? 0) / 100);
+}
+
+function tacticalBorrowUsdc(collateralQty: number, price: number, ltvMax: number): number {
+  return collateralQty * price * (ltvMax / 100);
+}
+
 function buildLayerUpdate(layer: HcdLayerTarget, qty: number): PortfolioBalanceUpdate {
   if (layer.ledgerProtocol?.includes('Rocket')) return { rEthQty: qty };
   if (layer.ledgerProtocol?.includes('Marinade')) return { mSolQty: qty };
@@ -108,86 +113,168 @@ function marketStateLabel(state: number | undefined, fg: number | null, sk: bool
   return sk ? `Stav ${state ?? '—'}` : `State ${state ?? '—'}`;
 }
 
-function SliderBlock({
-  label, value, onChange, hint, danger, disabled, max = 100,
+function CyborgCommandLine({
+  label,
+  value,
+  lang,
+  confirmed,
+  disabled,
+  onConfirm,
+  onRevert,
+  decimals = 2,
 }: {
   label: string;
   value: number;
-  onChange: (v: number) => void;
-  hint: string;
-  danger?: boolean;
+  lang: Lang;
+  confirmed: boolean;
   disabled?: boolean;
-  max?: number;
+  onConfirm: () => void;
+  onRevert: () => void;
+  decimals?: number;
 }) {
   return (
-    <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <label className="text-[11px] font-semibold text-foreground">{label}</label>
-        <span className={`text-[11px] font-bold tabular-nums ${danger ? 'text-amber-400' : 'text-emerald-400'}`}>
-          {value}%
-        </span>
-      </div>
-      <Slider
-        value={[Math.min(value, max)]}
-        min={0}
-        max={max}
-        step={1}
-        disabled={disabled}
-        onValueChange={([v]) => onChange(v)}
-        className={`py-2 touch-manipulation [&_[role=slider]]:h-6 [&_[role=slider]]:w-6 ${
-          danger ? '[&_[role=slider]]:border-amber-500 [&_[role=slider]]:bg-amber-500/30' : ''
-        }`}
+    <div
+      className={`rounded-lg border px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${
+        confirmed ? 'border-border/40 bg-muted/25 opacity-80' : 'border-violet-500/35 bg-violet-500/5'
+      }`}
+    >
+      <p className="text-[11px] font-mono font-semibold text-foreground tabular-nums">{label}</p>
+      <GranularExecutionButtons
+        lang={lang}
+        value={value}
+        decimals={decimals}
+        confirmed={confirmed}
+        disabled={disabled || value <= 0}
+        onConfirm={onConfirm}
+        onRevert={onRevert}
       />
-      <p className={`text-[10px] ${danger ? 'text-amber-400' : 'text-muted-foreground'}`}>{hint}</p>
     </div>
   );
 }
 
-function BalanceRow({
-  icon, label, sublabel, qty, usd, decimals, lang, confirmed, onConfirm, onRevert, disabled,
+function CyborgActionPlan({
+  sk,
+  layerPct,
+  collateralQty,
+  collateralLabel,
+  collateralUsd,
+  safeBorrowUsdc,
+  ltvMax,
+  ltvRestricted,
+  rebalanceLocked,
+  showBorrowFlow,
+  combinedBorrowUsdc,
+  projectedLbtcQty,
+  projectedLbtcUsd,
+  lbtcYieldText,
+  terminalApys,
+  lang,
+  collateralConfirmed,
+  borrowConfirmed,
+  lbtcConfirmed,
+  onConfirmCollateral,
+  onRevertCollateral,
+  onConfirmBorrow,
+  onRevertBorrow,
+  onConfirmLbtc,
+  onRevertLbtc,
+  collateralDecimals,
 }: {
-  icon: ReactNode;
-  label: string;
-  sublabel: string;
-  qty: number;
-  usd: number;
-  decimals: number;
+  sk: boolean;
+  layerPct: number;
+  collateralQty: number;
+  collateralLabel: string;
+  collateralUsd: number;
+  safeBorrowUsdc: number;
+  ltvMax: number;
+  ltvRestricted: boolean;
+  rebalanceLocked: boolean;
+  showBorrowFlow: boolean;
+  combinedBorrowUsdc: number;
+  projectedLbtcQty: number;
+  projectedLbtcUsd: number;
+  lbtcYieldText: string;
+  terminalApys: { usdcBorrow: number; lbtcSupply: number };
   lang: Lang;
-  confirmed: boolean;
-  onConfirm: () => void;
-  onRevert: () => void;
-  disabled?: boolean;
+  collateralConfirmed: boolean;
+  borrowConfirmed: boolean;
+  lbtcConfirmed: boolean;
+  onConfirmCollateral: () => void;
+  onRevertCollateral: () => void;
+  onConfirmBorrow: () => void;
+  onRevertBorrow: () => void;
+  onConfirmLbtc: () => void;
+  onRevertLbtc: () => void;
+  collateralDecimals: number;
 }) {
+  const execDisabled = rebalanceLocked;
+
   return (
-    <div
-      className={`rounded-xl border p-2.5 space-y-1.5 ${
-        confirmed ? 'border-border/30 bg-muted/20 opacity-70' : 'border-border/50 bg-background/30'
-      }`}
-    >
-      <div className="flex items-center gap-2">
-        {icon}
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-foreground">{label}</p>
-          <p className="text-[10px] text-muted-foreground truncate">{sublabel}</p>
-        </div>
-        <span className="text-[10px] font-semibold text-emerald-400 tabular-nums shrink-0">
-          {formatUsd(usd)}
-        </span>
-      </div>
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-mono tabular-nums text-foreground flex-1">
-          {qty.toFixed(decimals)} {label}
+    <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 space-y-3">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
+        {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
+      </p>
+
+      <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
+        <p>
+          {sk ? 'Požadovaný kolaterál' : 'Required collateral'}:{' '}
+          <span className="text-foreground font-semibold">{layerPct.toFixed(1)}%</span>
+          {' · '}
+          <span className="font-mono text-foreground tabular-nums">
+            {collateralQty.toFixed(collateralDecimals)} {collateralLabel} ({formatUsd(collateralUsd)})
+          </span>
         </p>
-        <GranularExecutionButtons
-          lang={lang}
-          value={qty}
-          decimals={decimals}
-          confirmed={confirmed}
-          disabled={disabled || qty <= 0}
-          onConfirm={onConfirm}
-          onRevert={onRevert}
-        />
+        <p>
+          {sk ? 'Bezpečný úver' : 'Safe borrow'} (LTV {ltvMax}%):
+          {' '}
+          <span className={`font-mono font-semibold tabular-nums ${ltvRestricted ? 'text-amber-400' : 'text-emerald-400'}`}>
+            {safeBorrowUsdc.toFixed(2)} USDC
+          </span>
+        </p>
       </div>
+
+      <CyborgCommandLine
+        label={sk ? `Vložte presne: ${collateralQty.toFixed(collateralDecimals)} ${collateralLabel}` : `Deposit exactly: ${collateralQty.toFixed(collateralDecimals)} ${collateralLabel}`}
+        value={collateralQty}
+        lang={lang}
+        confirmed={collateralConfirmed}
+        disabled={execDisabled}
+        onConfirm={onConfirmCollateral}
+        onRevert={onRevertCollateral}
+        decimals={collateralDecimals}
+      />
+
+      <CyborgCommandLine
+        label={sk ? `Požičajte si max: ${safeBorrowUsdc.toFixed(2)} USDC` : `Borrow max: ${safeBorrowUsdc.toFixed(2)} USDC`}
+        value={safeBorrowUsdc}
+        lang={lang}
+        confirmed={borrowConfirmed}
+        disabled={execDisabled}
+        onConfirm={onConfirmBorrow}
+        onRevert={onRevertBorrow}
+        decimals={2}
+      />
+
+      {showBorrowFlow && combinedBorrowUsdc > 0 && (
+        <>
+          <CyborgCommandLine
+            label={sk ? `Kúpte LBTC za: ${projectedLbtcQty.toFixed(6)} LBTC` : `Buy LBTC: ${projectedLbtcQty.toFixed(6)} LBTC`}
+            value={projectedLbtcQty}
+            lang={lang}
+            confirmed={lbtcConfirmed}
+            disabled={execDisabled}
+            onConfirm={onConfirmLbtc}
+            onRevert={onRevertLbtc}
+            decimals={6}
+          />
+          <p className="text-[9px] text-muted-foreground tabular-nums">
+            {sk ? 'Kombinovaný úver ETH+SOL' : 'Combined ETH+SOL borrow'}: {combinedBorrowUsdc.toFixed(2)} USDC · {formatUsd(projectedLbtcUsd)}
+          </p>
+          <p className="text-[9px] text-muted-foreground" title={lbtcYieldText}>
+            Morpho borrow: {apyLabel(terminalApys.usdcBorrow)} · {lbtcYieldText}
+          </p>
+        </>
+      )}
     </div>
   );
 }
@@ -196,24 +283,16 @@ function TacticalLayerExecution({
   symbol,
   lang,
   layer,
-  collateralPct,
-  onCollateralChange,
-  ltvPct,
-  onLtvChange,
+  motorQty,
+  motorPrice,
   ltvMax,
   ltvRestricted,
-  motorQty,
-  motorUsd,
-  deployQty,
-  deployUsd,
-  price,
   rebalanceLocked,
   showBorrowFlow,
-  usdcLoan,
+  combinedBorrowUsdc,
   projectedLbtcQty,
   projectedLbtcUsd,
   terminalApys,
-  isLbtcSupplied,
   lbtcYieldText,
   onConfirmMotor,
   onRevertMotor,
@@ -228,29 +307,21 @@ function TacticalLayerExecution({
   symbol: HcdSymbol;
   lang: Lang;
   layer: HcdLayerTarget;
-  collateralPct: number;
-  onCollateralChange: (v: number) => void;
-  ltvPct: number;
-  onLtvChange: (v: number) => void;
+  motorQty: number;
+  motorPrice: number;
   ltvMax: number;
   ltvRestricted: boolean;
-  motorQty: number;
-  motorUsd: number;
-  deployQty: number;
-  deployUsd: number;
-  price: number;
   rebalanceLocked: boolean;
   showBorrowFlow: boolean;
-  usdcLoan: number;
+  combinedBorrowUsdc: number;
   projectedLbtcQty: number;
   projectedLbtcUsd: number;
   terminalApys: { usdcBorrow: number; lbtcSupply: number };
-  isLbtcSupplied: boolean;
   lbtcYieldText: string;
-  onConfirmMotor: () => void;
+  onConfirmMotor: (qty: number) => void;
   onRevertMotor: () => void;
   motorConfirmed: boolean;
-  onConfirmUsdc: () => void;
+  onConfirmUsdc: (usd: number) => void;
   onRevertUsdc: () => void;
   onConfirmLbtc: () => void;
   onRevertLbtc: () => void;
@@ -258,9 +329,12 @@ function TacticalLayerExecution({
   lbtcConfirmed: boolean;
 }) {
   const sk = lang === 'sk';
-  const decimals = symbol === 'SOL' ? 2 : 4;
+  const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
-  const execDisabled = rebalanceLocked || motorUsd <= 0;
+  const layerPct = layer.pctTarget;
+  const collateralQty = motorQty * (layerPct / 100);
+  const collateralUsd = collateralQty * motorPrice;
+  const safeBorrowUsdc = collateralUsd * (ltvMax / 100);
 
   return (
     <Collapsible defaultOpen className="rounded-xl border border-violet-500/30 bg-violet-500/5">
@@ -270,115 +344,35 @@ function TacticalLayerExecution({
         </span>
         <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-3 pb-3 space-y-3">
-        <BalanceRow
-          icon={<Shield className="w-3.5 h-3.5 text-violet-300" />}
-          label={motorLabel}
-          sublabel={layer.protocol}
-          qty={deployQty}
-          usd={deployUsd}
-          decimals={decimals}
+      <CollapsibleContent className="px-3 pb-3">
+        <CyborgActionPlan
+          sk={sk}
+          layerPct={layerPct}
+          collateralQty={collateralQty}
+          collateralLabel={motorLabel}
+          collateralUsd={collateralUsd}
+          safeBorrowUsdc={safeBorrowUsdc}
+          ltvMax={ltvMax}
+          ltvRestricted={ltvRestricted}
+          rebalanceLocked={rebalanceLocked}
+          showBorrowFlow={showBorrowFlow}
+          combinedBorrowUsdc={combinedBorrowUsdc}
+          projectedLbtcQty={projectedLbtcQty}
+          projectedLbtcUsd={projectedLbtcUsd}
+          lbtcYieldText={lbtcYieldText}
+          terminalApys={terminalApys}
           lang={lang}
-          confirmed={motorConfirmed}
-          disabled={execDisabled}
-          onConfirm={onConfirmMotor}
-          onRevert={onRevertMotor}
+          collateralConfirmed={motorConfirmed}
+          borrowConfirmed={usdcConfirmed}
+          lbtcConfirmed={lbtcConfirmed}
+          onConfirmCollateral={() => onConfirmMotor(collateralQty)}
+          onRevertCollateral={onRevertMotor}
+          onConfirmBorrow={() => onConfirmUsdc(safeBorrowUsdc)}
+          onRevertBorrow={onRevertUsdc}
+          onConfirmLbtc={onConfirmLbtc}
+          onRevertLbtc={onRevertLbtc}
+          collateralDecimals={collateralDecimals}
         />
-
-        <div className="rounded-xl border border-border/50 bg-background/40 p-3 space-y-4">
-          <SliderBlock
-            label={sk ? 'Nasadenie kolaterálu %' : 'Collateral Deployment %'}
-            value={collateralPct}
-            onChange={onCollateralChange}
-            hint={`${collateralPct}% · ${formatUsd(motorUsd * (collateralPct / 100))}`}
-            disabled={execDisabled}
-          />
-          <SliderBlock
-            label={sk ? 'Cieľové LTV %' : 'Target LTV %'}
-            value={ltvPct}
-            onChange={onLtvChange}
-            max={ltvMax}
-            danger={ltvRestricted}
-            hint={
-              ltvRestricted
-                ? (sk
-                  ? `⚠ HCD mozog limituje max LTV na ${ltvMax}%`
-                  : `⚠ HCD brain caps max LTV at ${ltvMax}%`)
-                : `${ltvPct}% · max ${ltvMax}%`
-            }
-            disabled={execDisabled}
-          />
-        </div>
-
-        {showBorrowFlow && (
-          <>
-            <div
-              className={`flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between rounded-lg border px-3 py-2 ${
-                usdcConfirmed
-                  ? 'bg-muted/30 border-border/40 opacity-70'
-                  : 'bg-emerald-500/10 border-emerald-500/25'
-              }`}
-            >
-              <span className="text-[11px] text-muted-foreground">
-                {sk ? 'Vypočítaný USDC loan (ETH+SOL)' : 'Calculated USDC loan (ETH+SOL)'}
-              </span>
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-bold text-emerald-300 tabular-nums">
-                  {formatUsd(usdcLoan)}
-                </span>
-                <GranularExecutionButtons
-                  lang={lang}
-                  value={usdcLoan}
-                  decimals={2}
-                  confirmed={usdcConfirmed}
-                  disabled={execDisabled || usdcLoan <= 0}
-                  onConfirm={onConfirmUsdc}
-                  onRevert={onRevertUsdc}
-                />
-              </div>
-            </div>
-
-            <div
-              className={`rounded-lg border px-3 py-2 space-y-1.5 ${
-                lbtcConfirmed
-                  ? 'border-emerald-500/40 bg-emerald-500/5 opacity-80'
-                  : 'border-border/40 bg-background/30'
-              }`}
-            >
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold text-foreground">LBTC Projected Buy</p>
-                  <p className="text-[9px] text-muted-foreground">
-                    {sk ? 'USDC loan ÷ BTC cena' : 'USDC loan ÷ BTC price'}
-                  </p>
-                </div>
-                <GranularExecutionButtons
-                  lang={lang}
-                  value={projectedLbtcQty}
-                  decimals={6}
-                  confirmed={lbtcConfirmed}
-                  disabled={execDisabled || projectedLbtcQty <= 0}
-                  onConfirm={onConfirmLbtc}
-                  onRevert={onRevertLbtc}
-                />
-              </div>
-              <div className="flex items-center justify-between text-[11px]">
-                <span className="font-mono tabular-nums text-foreground">
-                  {projectedLbtcQty.toFixed(6)} LBTC
-                </span>
-                <span className="text-muted-foreground tabular-nums">{formatUsd(projectedLbtcUsd)}</span>
-              </div>
-            </div>
-
-            <p className="text-[10px] text-muted-foreground leading-snug" title={lbtcYieldText}>
-              Morpho borrow: {apyLabel(terminalApys.usdcBorrow)} · {lbtcYieldText}
-            </p>
-          </>
-        )}
-
-        <p className="text-[9px] text-muted-foreground font-mono tabular-nums">
-          {motorQty.toFixed(decimals)} {motorLabel} · {formatUsd(motorUsd)} @ {formatUsd(price)}
-        </p>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -387,9 +381,8 @@ function TacticalLayerExecution({
 function AlchemixLayerExecution({
   lang,
   layer,
-  alchemixQty,
-  alchemixUsd,
-  alchemixTotalUsd,
+  totalEthQty,
+  ethPrice,
   rebalanceLocked,
   confirmed,
   onConfirm,
@@ -397,15 +390,17 @@ function AlchemixLayerExecution({
 }: {
   lang: Lang;
   layer: HcdLayerTarget;
-  alchemixQty: number;
-  alchemixUsd: number;
-  alchemixTotalUsd: number;
+  totalEthQty: number;
+  ethPrice: number;
   rebalanceLocked: boolean;
   confirmed: boolean;
   onConfirm: () => void;
   onRevert: () => void;
 }) {
   const sk = lang === 'sk';
+  const layerPct = layer.pctTarget;
+  const targetQty = totalEthQty * (layerPct / 100);
+  const targetUsd = targetQty * ethPrice;
 
   return (
     <Collapsible defaultOpen className="rounded-xl border border-sky-500/30 bg-sky-500/5">
@@ -415,24 +410,33 @@ function AlchemixLayerExecution({
         </span>
         <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-3 pb-3 space-y-2">
-        <BalanceRow
-          icon={<Lock className="w-3.5 h-3.5 text-sky-300" />}
-          label="ETH"
-          sublabel={sk ? `${layer.protocol} · Bez likvidácie` : `${layer.protocol} · No liquidation`}
-          qty={alchemixQty}
-          usd={alchemixUsd}
-          decimals={4}
-          lang={lang}
-          confirmed={confirmed}
-          disabled={rebalanceLocked}
-          onConfirm={onConfirm}
-          onRevert={onRevert}
-        />
-        <p className="text-[10px] text-muted-foreground">
-          {sk ? 'Alchemix celkom' : 'Alchemix total'}:{' '}
-          <span className="text-foreground font-semibold tabular-nums">{formatUsd(alchemixTotalUsd)}</span>
-        </p>
+      <CollapsibleContent className="px-3 pb-3 space-y-3">
+        <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-300">
+            {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
+          </p>
+          <p className="text-[10px] text-muted-foreground">
+            {sk ? 'Cieľová alokácia' : 'Target allocation'}:{' '}
+            <span className="text-foreground font-semibold">{layerPct.toFixed(1)}%</span>
+            {' · '}
+            <span className="font-mono text-foreground tabular-nums">
+              {targetQty.toFixed(4)} ETH ({formatUsd(targetUsd)})
+            </span>
+          </p>
+          <CyborgCommandLine
+            label={sk ? `Vložte presne: ${targetQty.toFixed(4)} ETH` : `Deposit exactly: ${targetQty.toFixed(4)} ETH`}
+            value={targetQty}
+            lang={lang}
+            confirmed={confirmed}
+            disabled={rebalanceLocked}
+            onConfirm={onConfirm}
+            onRevert={onRevert}
+            decimals={4}
+          />
+          <p className="text-[9px] text-muted-foreground">
+            {sk ? `${layer.protocol} · Bez likvidácie` : `${layer.protocol} · No liquidation`}
+          </p>
+        </div>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -446,24 +450,15 @@ function AssetHcdCard({
   layers,
   rebalanceLocked,
   advised,
-  indicators,
   ltvMax,
   ltvRestricted,
-  ethCollateralPct,
-  solCollateralPct,
-  onEthCollateralChange,
-  onSolCollateralChange,
-  ltvPct,
-  onLtvChange,
-  motorData,
+  motorQty,
   showBorrowFlow,
-  usdcLoan,
+  combinedBorrowUsdc,
   projectedLbtcQty,
   projectedLbtcUsd,
   terminalApys,
-  isLbtcSupplied,
   lbtcYieldText,
-  alchemixData,
   onConfirmMotor,
   onRevertMotor,
   motorConfirmed,
@@ -484,34 +479,25 @@ function AssetHcdCard({
   layers: HcdLayerTarget[];
   rebalanceLocked: boolean;
   advised: AdvisorResult | null;
-  indicators: HcdIndicators;
   ltvMax: number;
   ltvRestricted: boolean;
-  ethCollateralPct: number;
-  solCollateralPct: number;
-  onEthCollateralChange: (v: number) => void;
-  onSolCollateralChange: (v: number) => void;
-  ltvPct: number;
-  onLtvChange: (v: number) => void;
-  motorData: { qty: number; usd: number; deployQty: number; deployUsd: number };
+  motorQty: number;
   showBorrowFlow: boolean;
-  usdcLoan: number;
+  combinedBorrowUsdc: number;
   projectedLbtcQty: number;
   projectedLbtcUsd: number;
   terminalApys: { usdcBorrow: number; lbtcSupply: number };
-  isLbtcSupplied: boolean;
   lbtcYieldText: string;
-  alchemixData?: { qty: number; usd: number; totalUsd: number };
-  onConfirmMotor: () => void;
+  onConfirmMotor: (qty: number) => void;
   onRevertMotor: () => void;
   motorConfirmed: boolean;
-  onConfirmUsdc: () => void;
+  onConfirmUsdc: (usd: number) => void;
   onRevertUsdc: () => void;
   onConfirmLbtc: () => void;
   onRevertLbtc: () => void;
   usdcConfirmed: boolean;
   lbtcConfirmed: boolean;
-  onConfirmAlchemix?: () => void;
+  onConfirmAlchemix?: (qty: number) => void;
   onRevertAlchemix?: () => void;
   alchemixConfirmed?: boolean;
 }) {
@@ -521,8 +507,6 @@ function AssetHcdCard({
   const decimals = symbol === 'SOL' ? 2 : 3;
   const totalUsd = liquidQty * price;
   const deployQty = advised?.breakdown.recommendedQty ?? liquidQty;
-  const collateralPct = symbol === 'ETH' ? ethCollateralPct : solCollateralPct;
-  const onCollateralChange = symbol === 'ETH' ? onEthCollateralChange : onSolCollateralChange;
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/25 min-w-0">
@@ -593,24 +577,16 @@ function AssetHcdCard({
                   symbol={symbol}
                   lang={lang}
                   layer={layer}
-                  collateralPct={collateralPct}
-                  onCollateralChange={onCollateralChange}
-                  ltvPct={ltvPct}
-                  onLtvChange={onLtvChange}
+                  motorQty={motorQty}
+                  motorPrice={price}
                   ltvMax={ltvMax}
                   ltvRestricted={ltvRestricted}
-                  motorQty={motorData.qty}
-                  motorUsd={motorData.usd}
-                  deployQty={motorData.deployQty}
-                  deployUsd={motorData.deployUsd}
-                  price={price}
                   rebalanceLocked={rebalanceLocked}
                   showBorrowFlow={showBorrowFlow}
-                  usdcLoan={usdcLoan}
+                  combinedBorrowUsdc={combinedBorrowUsdc}
                   projectedLbtcQty={projectedLbtcQty}
                   projectedLbtcUsd={projectedLbtcUsd}
                   terminalApys={terminalApys}
-                  isLbtcSupplied={isLbtcSupplied}
                   lbtcYieldText={lbtcYieldText}
                   onConfirmMotor={onConfirmMotor}
                   onRevertMotor={onRevertMotor}
@@ -624,16 +600,15 @@ function AssetHcdCard({
                 />
               )}
 
-              {isAlchemix && alchemixData && onConfirmAlchemix && onRevertAlchemix && (
+              {isAlchemix && onConfirmAlchemix && onRevertAlchemix && (
                 <AlchemixLayerExecution
                   lang={lang}
                   layer={layer}
-                  alchemixQty={alchemixData.qty}
-                  alchemixUsd={alchemixData.usd}
-                  alchemixTotalUsd={alchemixData.totalUsd}
+                  totalEthQty={liquidQty}
+                  ethPrice={price}
                   rebalanceLocked={rebalanceLocked}
                   confirmed={alchemixConfirmed ?? false}
-                  onConfirm={onConfirmAlchemix}
+                  onConfirm={() => onConfirmAlchemix(liquidQty * (layer.pctTarget / 100))}
                   onRevert={onRevertAlchemix}
                 />
               )}
@@ -686,29 +661,29 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const ltvMax = getHcdLtvMax(indicators);
   const ltvRestricted = indicators.volatilityRegime === 'high' || indicators.borrowWarning;
 
-  const [ethCollateralPct, setEthCollateralPct] = useState(50);
-  const [solCollateralPct, setSolCollateralPct] = useState(50);
-  const [ltvPct, setLtvPct] = useState(indicators.targetLtvPct);
-  const [slidersTouched, setSlidersTouched] = useState(false);
-
   const ethSlice = portfolioData.assets?.ETH ?? EMPTY_SLICE;
   const solSlice = portfolioData.assets?.SOL ?? EMPTY_SLICE;
   const { rEth, mSol } = portfolioData.activeMotor ?? { rEth: { qty: 0, usd: 0 }, mSol: { qty: 0, usd: 0 } };
-  const alchemixReserve = portfolioData.alchemixReserve ?? { eth: { qty: 0, usd: 0 } };
   const ethPrice = portfolioData.prices?.eth ?? 0;
   const solPrice = portfolioData.prices?.sol ?? 0;
   const btcPrice = portfolioData.prices?.btc ?? 0;
 
-  const deployREth = (rEth.qty ?? 0) * (ethCollateralPct / 100);
-  const deployMSol = (mSol.qty ?? 0) * (solCollateralPct / 100);
   const ethMotorUsd = (rEth.qty ?? 0) * ethPrice;
   const solMotorUsd = (mSol.qty ?? 0) * solPrice;
   const motorUsd = ethMotorUsd + solMotorUsd;
-  const avgCollateralPct = motorUsd > 0
-    ? ((ethMotorUsd * ethCollateralPct + solMotorUsd * solCollateralPct) / motorUsd)
-    : 50;
-  const usdcLoan = computeUsdcLoan(rEth.qty ?? 0, mSol.qty ?? 0, ethPrice, solPrice, avgCollateralPct, ltvPct);
-  const projectedLbtcQty = computeProjectedLbtcQty(usdcLoan, btcPrice);
+
+  const ethLayers = useMemo(() => computeHcdLayerTargets('ETH', indicators) ?? [], [indicators]);
+  const solLayers = useMemo(() => computeHcdLayerTargets('SOL', indicators) ?? [], [indicators]);
+
+  const ethTacticalLayer = ethLayers.find(layer => layer.id.includes('tactical'));
+  const solTacticalLayer = solLayers.find(layer => layer.id.includes('tactical'));
+
+  const deployREth = tacticalCollateralQty(rEth.qty ?? 0, ethTacticalLayer);
+  const deployMSol = tacticalCollateralQty(mSol.qty ?? 0, solTacticalLayer);
+  const ethBorrowUsdc = tacticalBorrowUsdc(deployREth, ethPrice, ltvMax);
+  const solBorrowUsdc = tacticalBorrowUsdc(deployMSol, solPrice, ltvMax);
+  const combinedBorrowUsdc = ethBorrowUsdc + solBorrowUsdc;
+  const projectedLbtcQty = computeProjectedLbtcQty(combinedBorrowUsdc, btcPrice);
   const projectedLbtcUsd = projectedLbtcQty * btcPrice;
 
   const isLbtcSupplied = isExecutionConfirmed(EXEC_KEYS.lbtcSupply);
@@ -720,34 +695,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     if (!market?.ready) return null;
     const fg = market.fearGreed ?? NEUTRAL_FG;
     const rsi = market.btcRsi ?? NEUTRAL_RSI;
-    return resolveCyborgState(fg, rsi, netYield, ltvPct);
-  }, [market, netYield, ltvPct]);
+    return resolveCyborgState(fg, rsi, netYield, ltvMax);
+  }, [market, netYield, ltvMax]);
 
   const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
-
-  useEffect(() => {
-    if (!marketState || slidersTouched) return;
-    setEthCollateralPct(marketState.sliders.collateralPct);
-    setSolCollateralPct(marketState.sliders.collateralPct);
-    setLtvPct(Math.min(marketState.sliders.ltvPct, ltvMax));
-  }, [marketState?.state, marketState?.sliders.collateralPct, marketState?.sliders.ltvPct, slidersTouched, ltvMax]);
-
-  useEffect(() => {
-    if (slidersTouched) return;
-    setLtvPct(Math.min(indicators.targetLtvPct, ltvMax));
-  }, [indicators.targetLtvPct, slidersTouched, ltvMax]);
-
-  useEffect(() => {
-    setLtvPct(prev => Math.min(prev, ltvMax));
-  }, [ltvMax]);
-
-  useEffect(() => {
-    if (!market) return;
-    setSlidersTouched(false);
-  }, [market?.fetchedAt]);
-
-  const ethLayers = useMemo(() => computeHcdLayerTargets('ETH', indicators) ?? [], [indicators]);
-  const solLayers = useMemo(() => computeHcdLayerTargets('SOL', indicators) ?? [], [indicators]);
 
   const ethAdvice = useMemo(() => computeAdvice({
     symbol: 'ETH',
@@ -787,10 +738,12 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       '--- HCD CYBORG MATRIX ---',
       `Market State: ${stateText}`,
       `Action: ${actionText}`,
-      `ETH Deploy: ${ethCollateralPct}% · ${deployREth.toFixed(4)} rETH`,
-      `SOL Deploy: ${solCollateralPct}% · ${deployMSol.toFixed(2)} mSOL`,
-      `Target LTV: ${ltvPct}% (max ${ltvMax}%)`,
-      `Borrow: $${usdcLoan.toFixed(2)} USDC`,
+      `ETH Layer 3: ${(ethTacticalLayer?.pctTarget ?? 0).toFixed(1)}% · ${deployREth.toFixed(4)} rETH`,
+      `SOL Layer 3: ${(solTacticalLayer?.pctTarget ?? 0).toFixed(1)}% · ${deployMSol.toFixed(2)} mSOL`,
+      `Safe LTV: ${ltvMax}% (HCD brain max)`,
+      `ETH Borrow: $${ethBorrowUsdc.toFixed(2)} USDC`,
+      `SOL Borrow: $${solBorrowUsdc.toFixed(2)} USDC`,
+      `Combined Borrow: $${combinedBorrowUsdc.toFixed(2)} USDC`,
       `Buy: ${projectedLbtcQty.toFixed(6)} LBTC (projected)`,
     ].join('\n');
     try {
@@ -799,12 +752,11 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     } catch {
       toast.error(sk ? 'Kopírovanie zlyhalo' : 'Copy failed');
     }
-  }, [sk, marketState, market?.fearGreed, ethCollateralPct, solCollateralPct, deployREth, deployMSol, ltvPct, ltvMax, usdcLoan, projectedLbtcQty]);
-
-  const handleLtvChange = useCallback((v: number) => {
-    setSlidersTouched(true);
-    setLtvPct(Math.min(v, ltvMax));
-  }, [ltvMax]);
+  }, [
+    sk, marketState, market?.fearGreed, ethTacticalLayer, solTacticalLayer,
+    deployREth, deployMSol, ltvMax, ethBorrowUsdc, solBorrowUsdc,
+    combinedBorrowUsdc, projectedLbtcQty,
+  ]);
 
   if (portfolioData.loading || borrowLoading) {
     return (
@@ -983,8 +935,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
             <p className="font-bold">{sk ? 'VAROVANIE: Net Borrow Cost > 8%' : 'WARNING: Net Borrow Cost > 8%'}</p>
             <p className="mt-1 text-red-200/80">
               {sk
-                ? 'Úrok na Aave/Kamino je príliš vysoký. Zníž taktický kolaterál a splať USDC dlh. LTV slider je limitovaný na 20%.'
-                : 'Aave/Kamino borrow rate is too high. Reduce tactical collateral and repay USDC debt. LTV slider capped at 20%.'}
+                ? 'Úrok na Aave/Kamino je príliš vysoký. Zníž taktický kolaterál a splať USDC dlh. HCD mozog limituje max LTV na 20%.'
+                : 'Aave/Kamino borrow rate is too high. Reduce tactical collateral and repay USDC debt. HCD brain caps max LTV at 20%.'}
             </p>
           </div>
         </div>
@@ -1021,32 +973,19 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         layers={ethLayers}
         rebalanceLocked={rebalanceLocked}
         advised={ethAdvice.eligible ? ethAdvice : null}
-        indicators={indicators}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
-        ethCollateralPct={ethCollateralPct}
-        solCollateralPct={solCollateralPct}
-        onEthCollateralChange={v => { setSlidersTouched(true); setEthCollateralPct(v); }}
-        onSolCollateralChange={v => { setSlidersTouched(true); setSolCollateralPct(v); }}
-        ltvPct={ltvPct}
-        onLtvChange={handleLtvChange}
-        motorData={{ qty: rEth.qty ?? 0, usd: ethMotorUsd, deployQty: deployREth, deployUsd: deployREth * ethPrice }}
+        motorQty={rEth.qty ?? 0}
         showBorrowFlow
-        usdcLoan={usdcLoan}
+        combinedBorrowUsdc={combinedBorrowUsdc}
         projectedLbtcQty={projectedLbtcQty}
         projectedLbtcUsd={projectedLbtcUsd}
         terminalApys={terminalApysSafe}
-        isLbtcSupplied={isLbtcSupplied}
         lbtcYieldText={lbtcYieldText}
-        alchemixData={{
-          qty: alchemixReserve.eth.qty ?? 0,
-          usd: alchemixReserve.eth.usd ?? 0,
-          totalUsd: portfolioData.totalAlchemixUsd ?? 0,
-        }}
-        onConfirmMotor={() => confirmRow(EXEC_KEYS.rEth, { rEthQty: deployREth })}
+        onConfirmMotor={qty => confirmRow(EXEC_KEYS.rEth, { rEthQty: qty })}
         onRevertMotor={() => revertRow(EXEC_KEYS.rEth)}
         motorConfirmed={isExecutionConfirmed(EXEC_KEYS.rEth)}
-        onConfirmUsdc={() => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usdcLoan })}
+        onConfirmUsdc={usd => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usd })}
         onRevertUsdc={() => revertRow(EXEC_KEYS.usdcBorrow)}
         usdcConfirmed={isExecutionConfirmed(EXEC_KEYS.usdcBorrow)}
         onConfirmLbtc={() => confirmRow(
@@ -1056,7 +995,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         )}
         onRevertLbtc={() => revertRow(EXEC_KEYS.lbtcSupply)}
         lbtcConfirmed={isLbtcSupplied}
-        onConfirmAlchemix={() => confirmRow(EXEC_KEYS.alchemixEth, { alchemixEthQty: alchemixReserve.eth.qty ?? 0 })}
+        onConfirmAlchemix={qty => confirmRow(EXEC_KEYS.alchemixEth, { alchemixEthQty: qty })}
         onRevertAlchemix={() => revertRow(EXEC_KEYS.alchemixEth)}
         alchemixConfirmed={isExecutionConfirmed(EXEC_KEYS.alchemixEth)}
       />
@@ -1069,27 +1008,19 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         layers={solLayers}
         rebalanceLocked={rebalanceLocked}
         advised={solAdvice.eligible ? solAdvice : null}
-        indicators={indicators}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
-        ethCollateralPct={ethCollateralPct}
-        solCollateralPct={solCollateralPct}
-        onEthCollateralChange={v => { setSlidersTouched(true); setEthCollateralPct(v); }}
-        onSolCollateralChange={v => { setSlidersTouched(true); setSolCollateralPct(v); }}
-        ltvPct={ltvPct}
-        onLtvChange={handleLtvChange}
-        motorData={{ qty: mSol.qty ?? 0, usd: solMotorUsd, deployQty: deployMSol, deployUsd: deployMSol * solPrice }}
+        motorQty={mSol.qty ?? 0}
         showBorrowFlow={false}
-        usdcLoan={usdcLoan}
+        combinedBorrowUsdc={combinedBorrowUsdc}
         projectedLbtcQty={projectedLbtcQty}
         projectedLbtcUsd={projectedLbtcUsd}
         terminalApys={terminalApysSafe}
-        isLbtcSupplied={isLbtcSupplied}
         lbtcYieldText={lbtcYieldText}
-        onConfirmMotor={() => confirmRow(EXEC_KEYS.mSol, { mSolQty: deployMSol })}
+        onConfirmMotor={qty => confirmRow(EXEC_KEYS.mSol, { mSolQty: qty })}
         onRevertMotor={() => revertRow(EXEC_KEYS.mSol)}
         motorConfirmed={isExecutionConfirmed(EXEC_KEYS.mSol)}
-        onConfirmUsdc={() => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usdcLoan })}
+        onConfirmUsdc={usd => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usd })}
         onRevertUsdc={() => revertRow(EXEC_KEYS.usdcBorrow)}
         onConfirmLbtc={() => {}}
         onRevertLbtc={() => {}}
@@ -1099,8 +1030,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
       <p className="text-[10px] text-muted-foreground leading-snug">
         {sk
-          ? 'HCD mozog riadi indikátory a limity LTV. Exekúcia (slidery, borrow, Alchemix) je priamo vo Vrstve 3 a 4. Rebalans len v kvartálnych mesiacoch.'
-          : 'HCD brain drives indicators and LTV limits. Execution (sliders, borrow, Alchemix) lives in Layers 3 and 4. Rebalance only in quarterly months.'}
+          ? 'HCD mozog riadi indikátory a limity LTV. Exekúcia (presné príkazy, borrow, Alchemix) je priamo vo Vrstve 3 a 4. Rebalans len v kvartálnych mesiacoch.'
+          : 'HCD brain drives indicators and LTV limits. Execution (exact commands, borrow, Alchemix) lives in Layers 3 and 4. Rebalance only in quarterly months.'}
       </p>
     </div>
   );
