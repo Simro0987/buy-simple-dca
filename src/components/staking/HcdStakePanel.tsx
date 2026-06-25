@@ -78,8 +78,8 @@ function layerApy(layer: HcdLayerTarget, apys: { rEth: number; mSol: number }): 
   return null;
 }
 
-function tacticalCollateralQty(motorQty: number, layer: HcdLayerTarget | undefined): number {
-  return motorQty * ((layer?.pctTarget ?? 0) / 100);
+function tacticalCollateralQty(totalQty: number, layer: HcdLayerTarget | undefined): number {
+  return totalQty * ((layer?.pctTarget ?? 0) / 100);
 }
 
 function tacticalBorrowUsdc(collateralQty: number, price: number, ltvMax: number): number {
@@ -152,6 +152,33 @@ function CyborgCommandLine({
   );
 }
 
+function CyborgRoutingMeta({
+  token,
+  network,
+  protocol,
+  instruction,
+}: {
+  token: string;
+  network: string;
+  protocol: string;
+  instruction: string;
+}) {
+  const badgeClass = 'inline-flex items-center rounded-md border border-border/60 bg-background/60 px-1.5 py-0.5 text-[9px] font-semibold text-foreground/90';
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <span className={badgeClass}>Token: {token}</span>
+        <span className="text-[9px] text-muted-foreground">|</span>
+        <span className={badgeClass}>Sieť: {network}</span>
+        <span className="text-[9px] text-muted-foreground">|</span>
+        <span className={badgeClass}>Protokol: {protocol}</span>
+      </div>
+      <p className="text-[10px] text-foreground/90 leading-snug">{instruction}</p>
+    </div>
+  );
+}
+
 function CyborgActionPlan({
   sk,
   layerPct,
@@ -179,6 +206,7 @@ function CyborgActionPlan({
   onConfirmLbtc,
   onRevertLbtc,
   collateralDecimals,
+  routing,
 }: {
   sk: boolean;
   layerPct: number;
@@ -206,6 +234,7 @@ function CyborgActionPlan({
   onConfirmLbtc: () => void;
   onRevertLbtc: () => void;
   collateralDecimals: number;
+  routing: { token: string; network: string; protocol: string; instruction: string };
 }) {
   const execDisabled = rebalanceLocked;
 
@@ -214,6 +243,13 @@ function CyborgActionPlan({
       <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
         {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
       </p>
+
+      <CyborgRoutingMeta
+        token={routing.token}
+        network={routing.network}
+        protocol={routing.protocol}
+        instruction={routing.instruction}
+      />
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
         <p>
@@ -283,8 +319,8 @@ function TacticalLayerExecution({
   symbol,
   lang,
   layer,
-  motorQty,
-  motorPrice,
+  totalQty,
+  assetPrice,
   ltvMax,
   ltvRestricted,
   rebalanceLocked,
@@ -307,8 +343,8 @@ function TacticalLayerExecution({
   symbol: HcdSymbol;
   lang: Lang;
   layer: HcdLayerTarget;
-  motorQty: number;
-  motorPrice: number;
+  totalQty: number;
+  assetPrice: number;
   ltvMax: number;
   ltvRestricted: boolean;
   rebalanceLocked: boolean;
@@ -332,9 +368,26 @@ function TacticalLayerExecution({
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
   const layerPct = layer.pctTarget;
-  const collateralQty = motorQty * (layerPct / 100);
-  const collateralUsd = collateralQty * motorPrice;
+  const collateralQty = totalQty * (layerPct / 100);
+  const collateralUsd = collateralQty * assetPrice;
   const safeBorrowUsdc = collateralUsd * (ltvMax / 100);
+  const routing = symbol === 'ETH'
+    ? {
+      token: 'rETH',
+      network: 'Arbitrum',
+      protocol: 'Morpho',
+      instruction: sk
+        ? 'Premostiť rETH na Arbitrum a vložiť ako kolaterál.'
+        : 'Bridge rETH to Arbitrum and deposit as collateral.',
+    }
+    : {
+      token: 'mSOL',
+      network: 'Solana',
+      protocol: 'Kamino',
+      instruction: sk
+        ? 'Vložiť mSOL priamo do Kamino Lend.'
+        : 'Deposit mSOL directly into Kamino Lend.',
+    };
 
   return (
     <Collapsible defaultOpen className="rounded-xl border border-violet-500/30 bg-violet-500/5">
@@ -372,6 +425,7 @@ function TacticalLayerExecution({
           onConfirmLbtc={onConfirmLbtc}
           onRevertLbtc={onRevertLbtc}
           collateralDecimals={collateralDecimals}
+          routing={routing}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -415,6 +469,16 @@ function AlchemixLayerExecution({
           <p className="text-[10px] font-bold uppercase tracking-wider text-sky-300">
             {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
           </p>
+
+          <CyborgRoutingMeta
+            token="ETH / WETH"
+            network="Ethereum (L1)"
+            protocol="Alchemix"
+            instruction={sk
+              ? 'Vložiť priamo na ETH Mainnete (Self-repaying vault).'
+              : 'Deposit directly on ETH Mainnet (Self-repaying vault).'}
+          />
+
           <p className="text-[10px] text-muted-foreground">
             {sk ? 'Cieľová alokácia' : 'Target allocation'}:{' '}
             <span className="text-foreground font-semibold">{layerPct.toFixed(1)}%</span>
@@ -452,7 +516,6 @@ function AssetHcdCard({
   advised,
   ltvMax,
   ltvRestricted,
-  motorQty,
   showBorrowFlow,
   combinedBorrowUsdc,
   projectedLbtcQty,
@@ -481,7 +544,6 @@ function AssetHcdCard({
   advised: AdvisorResult | null;
   ltvMax: number;
   ltvRestricted: boolean;
-  motorQty: number;
   showBorrowFlow: boolean;
   combinedBorrowUsdc: number;
   projectedLbtcQty: number;
@@ -577,8 +639,8 @@ function AssetHcdCard({
                   symbol={symbol}
                   lang={lang}
                   layer={layer}
-                  motorQty={motorQty}
-                  motorPrice={price}
+                  totalQty={liquidQty}
+                  assetPrice={price}
                   ltvMax={ltvMax}
                   ltvRestricted={ltvRestricted}
                   rebalanceLocked={rebalanceLocked}
@@ -663,14 +725,13 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
   const ethSlice = portfolioData.assets?.ETH ?? EMPTY_SLICE;
   const solSlice = portfolioData.assets?.SOL ?? EMPTY_SLICE;
-  const { rEth, mSol } = portfolioData.activeMotor ?? { rEth: { qty: 0, usd: 0 }, mSol: { qty: 0, usd: 0 } };
+  const ethTotalQty = ethSlice.liquidQty ?? 0;
+  const solTotalQty = solSlice.liquidQty ?? 0;
   const ethPrice = portfolioData.prices?.eth ?? 0;
   const solPrice = portfolioData.prices?.sol ?? 0;
   const btcPrice = portfolioData.prices?.btc ?? 0;
 
-  const ethMotorUsd = (rEth.qty ?? 0) * ethPrice;
-  const solMotorUsd = (mSol.qty ?? 0) * solPrice;
-  const motorUsd = ethMotorUsd + solMotorUsd;
+  const portfolioUsd = ethTotalQty * ethPrice + solTotalQty * solPrice;
 
   const ethLayers = useMemo(() => computeHcdLayerTargets('ETH', indicators) ?? [], [indicators]);
   const solLayers = useMemo(() => computeHcdLayerTargets('SOL', indicators) ?? [], [indicators]);
@@ -678,8 +739,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const ethTacticalLayer = ethLayers.find(layer => layer.id.includes('tactical'));
   const solTacticalLayer = solLayers.find(layer => layer.id.includes('tactical'));
 
-  const deployREth = tacticalCollateralQty(rEth.qty ?? 0, ethTacticalLayer);
-  const deployMSol = tacticalCollateralQty(mSol.qty ?? 0, solTacticalLayer);
+  const deployREth = tacticalCollateralQty(ethTotalQty, ethTacticalLayer);
+  const deployMSol = tacticalCollateralQty(solTotalQty, solTacticalLayer);
   const ethBorrowUsdc = tacticalBorrowUsdc(deployREth, ethPrice, ltvMax);
   const solBorrowUsdc = tacticalBorrowUsdc(deployMSol, solPrice, ltvMax);
   const combinedBorrowUsdc = ethBorrowUsdc + solBorrowUsdc;
@@ -818,7 +879,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
             variant="secondary"
             size="sm"
             onClick={() => void copyPlan()}
-            disabled={motorUsd <= 0}
+            disabled={portfolioUsd <= 0}
             className="h-9 px-2.5 text-[11px] touch-manipulation"
           >
             <ClipboardCopy className="w-3.5 h-3.5 mr-1" />
@@ -975,7 +1036,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         advised={ethAdvice.eligible ? ethAdvice : null}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
-        motorQty={rEth.qty ?? 0}
         showBorrowFlow
         combinedBorrowUsdc={combinedBorrowUsdc}
         projectedLbtcQty={projectedLbtcQty}
@@ -1010,7 +1070,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         advised={solAdvice.eligible ? solAdvice : null}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
-        motorQty={mSol.qty ?? 0}
         showBorrowFlow={false}
         combinedBorrowUsdc={combinedBorrowUsdc}
         projectedLbtcQty={projectedLbtcQty}
