@@ -42,6 +42,8 @@ import {
   type AlchemixRedistribution,
 } from '@/lib/hcdAlchemixAutonomy';
 import { capturePortfolioSnapshot } from '@/lib/hcdSilentTracker';
+import { useHcdSilentTrackerEngine } from '@/hooks/useHcdSilentTracker';
+import { getAggregatedPortfolioTotals } from '@/lib/portfolioData';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -59,7 +61,6 @@ interface Props {
 
 const NEUTRAL_FG = 50;
 const NEUTRAL_RSI = 50;
-const EMPTY_SLICE = { liquidQty: 0, currentPrice: 0 };
 
 const ACTION_LABEL: Record<CyborgAction, { sk: string; en: string }> = {
   DEPOSIT_BORROW: { sk: 'Nasadiť kolaterál + požičať USDC', en: 'Deploy collateral + borrow USDC' },
@@ -1172,15 +1173,16 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const ltvMax = getHcdLtvMax(indicators, temperamentPct);
   const ltvRestricted = indicators.volatilityRegime === 'high' || indicators.borrowWarning;
 
-  const ethSlice = portfolioData.assets?.ETH ?? EMPTY_SLICE;
-  const solSlice = portfolioData.assets?.SOL ?? EMPTY_SLICE;
-  const ethTotalQty = portfolioData.totalEthPortfolio;
-  const solTotalQty = portfolioData.totalSolPortfolio;
-  const ethPrice = portfolioData.prices?.eth ?? 0;
-  const solPrice = portfolioData.prices?.sol ?? 0;
+  const aggregated = getAggregatedPortfolioTotals(portfolioData);
+  const ethTotalQty = aggregated.ethQty;
+  const solTotalQty = aggregated.solQty;
+  const ethPrice = aggregated.ethPrice;
+  const solPrice = aggregated.solPrice;
   const btcPrice = portfolioData.prices?.btc ?? 0;
 
-  const portfolioUsd = portfolioData.ethBaseline.totalUsd + portfolioData.solBaseline.totalUsd;
+  const portfolioUsd = aggregated.portfolioUsd;
+
+  useHcdSilentTrackerEngine(portfolioData, cyborgUsdcDebt, aggregated.ethQty > 0 || aggregated.solQty > 0);
 
   const ethLayers = useMemo(
     () => computeHcdLayerTargets('ETH', indicators, temperamentPct) ?? [],
@@ -1264,11 +1266,11 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     combinedBorrowUsdc, projectedLbtcUsd,
   ]);
 
-  if (portfolioData.loading || borrowLoading) {
+  if (!portfolioData.balancesReady) {
     return (
       <div className="glass-card p-3 text-sm text-muted-foreground flex items-center gap-2">
         <Loader2 className="w-4 h-4 animate-spin" />
-        {sk ? 'Načítavam dáta…' : 'Loading data…'}
+        {sk ? 'Načítavam agregované zostatky…' : 'Loading aggregated balances…'}
       </div>
     );
   }
@@ -1411,7 +1413,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         {[
           { l: sk ? 'Volatilita' : 'Volatility', v: `${fmtNum(indicators.volatilityPct)}%`, sub: indicators.volatilityRegime, loading: false },
           { l: sk ? 'Cieľové LTV' : 'Target LTV', v: `${indicators.targetLtvPct ?? 30}%`, sub: `max ${ltvMax}%`, loading: false },
-          { l: 'USDC Borrow', v: borrowRates?.unavailable.length === 2 ? '0%' : `${fmtNum(indicators.borrowApyPct, 2)}%`, sub: indicators.borrowWarning ? 'warn' : (borrowRates?.unavailable.length ? 'partial' : 'live'), loading: false },
+          { l: 'USDC Borrow', v: borrowLoading ? '…' : (borrowRates?.unavailable.length === 2 ? '0%' : `${fmtNum(indicators.borrowApyPct, 2)}%`), sub: borrowLoading ? (sk ? 'načítavam' : 'loading') : (indicators.borrowWarning ? 'warn' : (borrowRates?.unavailable.length ? 'partial' : 'live')), loading: borrowLoading },
           { l: sk ? 'Gas vrstva' : 'Gas layer', v: `${fmtNum(indicators.gasLayerPct)}%`, sub: indicators.gasStress, loading: false },
           { l: sk ? 'Temperament' : 'Temperament', v: `${temperamentPct}%`, sub: temperamentLabel(temperamentPct, sk), loading: false },
         ].map(item => (
@@ -1471,14 +1473,12 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         </div>
       )}
 
-      <HcdLearningLog lang={lang} portfolioData={portfolioData} usdcDebt={cyborgUsdcDebt} />
-
       {/* ── HCD Vrstvy s integrovanou exekúciou ── */}
       <AssetHcdCard
         symbol="ETH"
         lang={lang}
         totalPortfolioQty={ethTotalQty}
-        price={ethSlice.currentPrice ?? 0}
+        price={ethPrice}
         layers={ethLayers}
         rebalanceLocked={rebalanceLocked}
         ltvMax={ltvMax}
@@ -1502,7 +1502,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         symbol="SOL"
         lang={lang}
         totalPortfolioQty={solTotalQty}
-        price={solSlice.currentPrice ?? 0}
+        price={solPrice}
         layers={solLayers}
         rebalanceLocked={rebalanceLocked}
         ltvMax={ltvMax}
@@ -1521,6 +1521,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixAutonomyLocked={false}
         alchemixRedistribution={null}
       />
+
+      <HcdLearningLog lang={lang} />
 
       <p className="text-[10px] text-muted-foreground leading-snug">
         {sk

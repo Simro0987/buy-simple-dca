@@ -38,6 +38,8 @@ export interface AggregatedAssetBaseline {
 
 export interface PortfolioData {
   loading: boolean;
+  /** True when holdings/ledger are available (independent of live price refresh) */
+  balancesReady: boolean;
   prices: { btc: number; eth: number; sol: number };
   assets: Record<LedgerSymbol, AssetSlice>;
   alchemixReserve: { eth: ProtocolBalance };
@@ -198,8 +200,12 @@ export function buildPortfolioData(input: {
   const ethBaseline = computeEthAggregatedBaseline(assets.ETH, rEthQty, alchemixEthQty);
   const solBaseline = computeSolAggregatedBaseline(assets.SOL, mSolQty);
 
+  /** Portfolio metrics ready — prices may still be refreshing in background */
+  const balancesReady = !input.metrics.loading;
+
   return {
     loading: input.metrics.loading || input.pricesLoading,
+    balancesReady,
     prices: { btc: btcPrice, eth: ethPrice, sol: solPrice },
     assets,
     alchemixReserve,
@@ -211,5 +217,30 @@ export function buildPortfolioData(input: {
     solBaseline,
     totalEthPortfolio: ethBaseline.totalQty,
     totalSolPortfolio: solBaseline.totalQty,
+  };
+}
+
+/** Aggregated baseline totals used by Portfolio + Stake (wallet + DeFi). */
+export function getAggregatedPortfolioTotals(data: PortfolioData) {
+  const ethQty = data.totalEthPortfolio
+    ?? data.ethBaseline?.totalQty
+    ?? data.assets?.ETH?.holdings
+    ?? 0;
+  const solQty = data.totalSolPortfolio
+    ?? data.solBaseline?.totalQty
+    ?? data.assets?.SOL?.holdings
+    ?? 0;
+  const ethPrice = data.prices?.eth ?? data.assets?.ETH?.currentPrice ?? 0;
+  const solPrice = data.prices?.sol ?? data.assets?.SOL?.currentPrice ?? 0;
+
+  return {
+    ethQty,
+    solQty,
+    ethPrice,
+    solPrice,
+    ethUsd: data.ethBaseline?.totalUsd ?? ethQty * ethPrice,
+    solUsd: data.solBaseline?.totalUsd ?? solQty * solPrice,
+    portfolioUsd: (data.ethBaseline?.totalUsd ?? ethQty * ethPrice)
+      + (data.solBaseline?.totalUsd ?? solQty * solPrice),
   };
 }

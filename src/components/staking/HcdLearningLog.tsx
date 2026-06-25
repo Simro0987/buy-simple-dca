@@ -2,13 +2,10 @@ import { Brain } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { layerLabelFromActionType } from '@/lib/hcdSilentTracker';
-import { useHcdSilentTracker } from '@/hooks/useHcdSilentTracker';
-import type { PortfolioData } from '@/lib/portfolioData';
+import { useHcdSilentTrackerState } from '@/hooks/useHcdSilentTracker';
 
 interface Props {
   lang: Lang;
-  portfolioData: PortfolioData;
-  usdcDebt: number;
 }
 
 function formatPnlUsd(value: number | null): string {
@@ -23,9 +20,9 @@ function formatPnlEth(value: number | null): string {
   return `${sign}${value.toFixed(4)} ETH`;
 }
 
-export function HcdLearningLog({ lang, portfolioData, usdcDebt }: Props) {
+export function HcdLearningLog({ lang }: Props) {
   const sk = lang === 'sk';
-  const { decisionLog, calibration } = useHcdSilentTracker(portfolioData, usdcDebt);
+  const { decisionLog, calibration } = useHcdSilentTrackerState();
 
   const latestCompleted = [...decisionLog].reverse().find(e => e.confidenceRewardApplied);
   const latestPending = [...decisionLog].reverse()[0];

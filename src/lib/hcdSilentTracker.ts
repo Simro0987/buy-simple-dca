@@ -90,13 +90,16 @@ export function capturePortfolioSnapshot(
   const sol = portfolioData.assets?.SOL;
   const btc = portfolioData.assets?.BTC;
   const prices = portfolioData.prices ?? { btc: 0, eth: 0, sol: 0 };
+  const ethBaseline = portfolioData.ethBaseline;
+  const solBaseline = portfolioData.solBaseline;
+  const lbtc = portfolioData.lbtc;
 
   return {
     capturedAt: Date.now(),
-    totalUsd: portfolioData.ethBaseline.totalUsd
-      + portfolioData.solBaseline.totalUsd
+    totalUsd: (ethBaseline?.totalUsd ?? eth?.totalUsd ?? 0)
+      + (solBaseline?.totalUsd ?? sol?.totalUsd ?? 0)
       + (btc?.totalUsd ?? 0)
-      + portfolioData.lbtc.usd,
+      + (lbtc?.usd ?? 0),
     prices: { ...prices },
     btc: {
       holdings: btc?.holdings ?? 0,
@@ -110,8 +113,8 @@ export function capturePortfolioSnapshot(
       liquidQty: eth?.liquidQty ?? 0,
       stakedQty: eth?.stakedQty ?? 0,
       totalUsd: eth?.totalUsd ?? 0,
-      motorQty: portfolioData.ethBaseline.motorQty,
-      alchemixQty: portfolioData.ethBaseline.alchemixQty,
+      motorQty: ethBaseline?.motorQty ?? 0,
+      alchemixQty: ethBaseline?.alchemixQty ?? 0,
       stakedEntries: eth?.stakedEntries ?? [],
     },
     sol: {
@@ -119,12 +122,12 @@ export function capturePortfolioSnapshot(
       liquidQty: sol?.liquidQty ?? 0,
       stakedQty: sol?.stakedQty ?? 0,
       totalUsd: sol?.totalUsd ?? 0,
-      motorQty: portfolioData.solBaseline.motorQty,
+      motorQty: solBaseline?.motorQty ?? 0,
       alchemixQty: 0,
       stakedEntries: sol?.stakedEntries ?? [],
     },
-    lbtcQty: portfolioData.lbtc.qty,
-    lbtcUsd: portfolioData.lbtc.usd,
+    lbtcQty: lbtc?.qty ?? 0,
+    lbtcUsd: lbtc?.usd ?? 0,
     usdcDebt,
   };
 }
