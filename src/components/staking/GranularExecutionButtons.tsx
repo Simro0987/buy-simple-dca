@@ -1,7 +1,7 @@
-import { ClipboardCopy, Undo2 } from 'lucide-react';
-import { toast } from 'sonner';
+import { Undo2 } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { Button } from '@/components/ui/button';
+import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 
 interface Props {
   lang: Lang;
@@ -13,16 +13,6 @@ interface Props {
   onRevert?: () => void;
 }
 
-async function copyNumericAmount(value: number, decimals: number, lang: Lang): Promise<void> {
-  const text = value.toFixed(decimals);
-  try {
-    await navigator.clipboard.writeText(text);
-    toast.success(lang === 'sk' ? 'Skopírované' : 'Copied');
-  } catch {
-    toast.error(lang === 'sk' ? 'Kopírovanie zlyhalo' : 'Copy failed');
-  }
-}
-
 export function GranularExecutionButtons({
   lang, value, decimals, confirmed, disabled, onConfirm, onRevert,
 }: Props) {
@@ -30,17 +20,7 @@ export function GranularExecutionButtons({
 
   return (
     <div className="flex items-center gap-2 shrink-0">
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon"
-        className="h-7 w-7 touch-manipulation"
-        disabled={disabled || value <= 0}
-        onClick={() => void copyNumericAmount(value, decimals, lang)}
-        title={sk ? 'Kopírovať hodnotu' : 'Copy value'}
-      >
-        <span className="text-sm leading-none">📋</span>
-      </Button>
+      <CopyAmountButton lang={lang} value={value} decimals={decimals} disabled={disabled} />
       {confirmed ? (
         <Button
           type="button"

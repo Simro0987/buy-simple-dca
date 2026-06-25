@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle, Bot, ChevronDown, ClipboardCopy, Info, Layers, Loader2, Lock, RefreshCw, Unlock, Zap,
 } from 'lucide-react';
@@ -10,6 +10,7 @@ import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
+import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -54,13 +55,6 @@ const NEUTRAL_FG = 50;
 const NEUTRAL_RSI = 50;
 const EMPTY_SLICE = { liquidQty: 0, currentPrice: 0 };
 
-const EXEC_KEYS = {
-  rEth: 'motor-reth',
-  mSol: 'motor-msol',
-  alchemixEth: 'hcd-alchemix-eth',
-  lbtcSupply: 'lbtc-supply',
-  usdcBorrow: 'usdc-borrow',
-} as const;
 
 const ACTION_LABEL: Record<CyborgAction, { sk: string; en: string }> = {
   DEPOSIT_BORROW: { sk: 'Nasadiť kolaterál + požičať USDC', en: 'Deploy collateral + borrow USDC' },
@@ -123,41 +117,76 @@ function marketStateLabel(state: number | undefined, fg: number | null, sk: bool
 }
 
 function CyborgCommandLine({
-  label,
-  value,
+  prefix,
+  amount,
+  suffix,
+  lang,
+  decimals = 2,
+  muted,
+}: {
+  prefix: string;
+  amount: number;
+  suffix?: string;
+  lang: Lang;
+  decimals?: number;
+  muted?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-lg border px-3 py-2.5 ${
+        muted ? 'border-border/40 bg-muted/25 opacity-80' : 'border-violet-500/35 bg-violet-500/5'
+      }`}
+    >
+      <p className="text-[11px] font-mono font-semibold text-foreground tabular-nums flex flex-wrap items-center gap-1.5">
+        <span>{prefix}</span>
+        <span>{amount.toFixed(decimals)}</span>
+        <CopyAmountButton lang={lang} value={amount} decimals={decimals} />
+        {suffix && <span>{suffix}</span>}
+      </p>
+    </div>
+  );
+}
+
+function ManualPlanConfirm({
   lang,
   confirmed,
   disabled,
   onConfirm,
   onRevert,
-  decimals = 2,
 }: {
-  label: string;
-  value: number;
   lang: Lang;
   confirmed: boolean;
   disabled?: boolean;
   onConfirm: () => void;
   onRevert: () => void;
-  decimals?: number;
 }) {
+  const sk = lang === 'sk';
+
+  if (confirmed) {
+    return (
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRevert}
+        disabled={disabled}
+        className="h-8 text-[10px] font-semibold touch-manipulation border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+      >
+        {sk ? 'Aktualizované' : 'Updated'}
+      </Button>
+    );
+  }
+
   return (
-    <div
-      className={`rounded-lg border px-3 py-2.5 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between ${
-        confirmed ? 'border-border/40 bg-muted/25 opacity-80' : 'border-violet-500/35 bg-violet-500/5'
-      }`}
+    <Button
+      type="button"
+      size="sm"
+      onClick={onConfirm}
+      disabled={disabled}
+      className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white"
     >
-      <p className="text-[11px] font-mono font-semibold text-foreground tabular-nums">{label}</p>
-      <GranularExecutionButtons
-        lang={lang}
-        value={value}
-        decimals={decimals}
-        confirmed={confirmed}
-        disabled={disabled || value <= 0}
-        onConfirm={onConfirm}
-        onRevert={onRevert}
-      />
-    </div>
+      {sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution'}
+    </Button>
   );
 }
 
@@ -218,7 +247,6 @@ function CyborgActionPlan({
   safeBorrowUsdc,
   ltvMax,
   ltvRestricted,
-  rebalanceLocked,
   showBorrowFlow,
   combinedBorrowUsdc,
   projectedLbtcQty,
@@ -226,18 +254,14 @@ function CyborgActionPlan({
   lbtcYieldText,
   terminalApys,
   lang,
-  collateralConfirmed,
-  borrowConfirmed,
-  lbtcConfirmed,
-  onConfirmCollateral,
-  onRevertCollateral,
-  onConfirmBorrow,
-  onRevertBorrow,
-  onConfirmLbtc,
-  onRevertLbtc,
   collateralDecimals,
   routing,
   exitAlert,
+  planConfirmed,
+  onConfirmPlan,
+  onRevertPlan,
+  execDisabled,
+  showBorrowCommand = true,
 }: {
   sk: boolean;
   layerPct: number;
@@ -247,7 +271,6 @@ function CyborgActionPlan({
   safeBorrowUsdc: number;
   ltvMax: number;
   ltvRestricted: boolean;
-  rebalanceLocked: boolean;
   showBorrowFlow: boolean;
   combinedBorrowUsdc: number;
   projectedLbtcQty: number;
@@ -255,32 +278,63 @@ function CyborgActionPlan({
   lbtcYieldText: string;
   terminalApys: { usdcBorrow: number; lbtcSupply: number };
   lang: Lang;
-  collateralConfirmed: boolean;
-  borrowConfirmed: boolean;
-  lbtcConfirmed: boolean;
-  onConfirmCollateral: () => void;
-  onRevertCollateral: () => void;
-  onConfirmBorrow: () => void;
-  onRevertBorrow: () => void;
-  onConfirmLbtc: () => void;
-  onRevertLbtc: () => void;
   collateralDecimals: number;
   routing: { token: string; network: string; protocol: string };
   exitAlert?: ExitStrategyAlert | null;
+  planConfirmed: boolean;
+  onConfirmPlan: () => void;
+  onRevertPlan: () => void;
+  execDisabled: boolean;
+  showBorrowCommand?: boolean;
 }) {
-  const execDisabled = rebalanceLocked;
+  const [flashBorder, setFlashBorder] = useState(false);
+  const wasConfirmedRef = useRef(planConfirmed);
+
+  useEffect(() => {
+    if (planConfirmed && !wasConfirmedRef.current) {
+      setFlashBorder(true);
+      const timer = window.setTimeout(() => setFlashBorder(false), 3000);
+      wasConfirmedRef.current = planConfirmed;
+      return () => window.clearTimeout(timer);
+    }
+    wasConfirmedRef.current = planConfirmed;
+  }, [planConfirmed]);
+
+  const lineMuted = planConfirmed;
 
   return (
-    <div className="rounded-xl border border-violet-500/30 bg-violet-500/5 p-3 space-y-3">
+    <div
+      className={`rounded-xl border p-3 space-y-3 transition-colors duration-500 ${
+        flashBorder
+          ? 'border-emerald-500/70 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]'
+          : planConfirmed
+            ? 'border-emerald-500/40 bg-emerald-500/5'
+            : 'border-violet-500/30 bg-violet-500/5'
+      }`}
+    >
       <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
         {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
+        {planConfirmed && (
+          <span className="ml-2 normal-case font-semibold text-emerald-400">
+            · {sk ? 'Exekuované' : 'Executed'}
+          </span>
+        )}
       </p>
 
-      <CyborgRoutingMeta
-        token={routing.token}
-        network={routing.network}
-        protocol={routing.protocol}
-      />
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <CyborgRoutingMeta
+          token={routing.token}
+          network={routing.network}
+          protocol={routing.protocol}
+        />
+        <ManualPlanConfirm
+          lang={lang}
+          confirmed={planConfirmed}
+          disabled={execDisabled}
+          onConfirm={onConfirmPlan}
+          onRevert={onRevertPlan}
+        />
+      </div>
 
       {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
@@ -303,38 +357,34 @@ function CyborgActionPlan({
       </div>
 
       <CyborgCommandLine
-        label={sk ? `Vložte presne: ${collateralQty.toFixed(collateralDecimals)} ${collateralLabel}` : `Deposit exactly: ${collateralQty.toFixed(collateralDecimals)} ${collateralLabel}`}
-        value={collateralQty}
+        prefix={sk ? 'Vložte presne:' : 'Deposit exactly:'}
+        amount={collateralQty}
+        suffix={collateralLabel}
         lang={lang}
-        confirmed={collateralConfirmed}
-        disabled={execDisabled}
-        onConfirm={onConfirmCollateral}
-        onRevert={onRevertCollateral}
         decimals={collateralDecimals}
+        muted={lineMuted}
       />
 
-      <CyborgCommandLine
-        label={sk ? `Požičajte si max: ${safeBorrowUsdc.toFixed(2)} USDC` : `Borrow max: ${safeBorrowUsdc.toFixed(2)} USDC`}
-        value={safeBorrowUsdc}
-        lang={lang}
-        confirmed={borrowConfirmed}
-        disabled={execDisabled}
-        onConfirm={onConfirmBorrow}
-        onRevert={onRevertBorrow}
-        decimals={2}
-      />
+      {showBorrowCommand && (
+        <CyborgCommandLine
+          prefix={sk ? 'Požičajte si max:' : 'Borrow max:'}
+          amount={safeBorrowUsdc}
+          suffix="USDC"
+          lang={lang}
+          decimals={2}
+          muted={lineMuted}
+        />
+      )}
 
       {showBorrowFlow && combinedBorrowUsdc > 0 && (
         <>
           <CyborgCommandLine
-            label={sk ? `Kúpte LBTC za: ${projectedLbtcQty.toFixed(6)} LBTC` : `Buy LBTC: ${projectedLbtcQty.toFixed(6)} LBTC`}
-            value={projectedLbtcQty}
+            prefix={sk ? 'Kúpte LBTC za:' : 'Buy LBTC:'}
+            amount={projectedLbtcQty}
+            suffix="LBTC"
             lang={lang}
-            confirmed={lbtcConfirmed}
-            disabled={execDisabled}
-            onConfirm={onConfirmLbtc}
-            onRevert={onRevertLbtc}
             decimals={6}
+            muted={lineMuted}
           />
           <p className="text-[9px] text-muted-foreground tabular-nums">
             {sk ? 'Kombinovaný úver ETH+SOL' : 'Combined ETH+SOL borrow'}: {combinedBorrowUsdc.toFixed(2)} USDC · {formatUsd(projectedLbtcUsd)}
@@ -346,6 +396,10 @@ function CyborgActionPlan({
       )}
     </div>
   );
+}
+
+function planKeyForLayer(layerId: string): string {
+  return `hcd-plan-${layerId}`;
 }
 
 function TacticalLayerExecution({
@@ -363,15 +417,6 @@ function TacticalLayerExecution({
   projectedLbtcUsd,
   terminalApys,
   lbtcYieldText,
-  onConfirmMotor,
-  onRevertMotor,
-  motorConfirmed,
-  onConfirmUsdc,
-  onRevertUsdc,
-  onConfirmLbtc,
-  onRevertLbtc,
-  usdcConfirmed,
-  lbtcConfirmed,
   usdcDebt,
   indicators,
   stakedEntries,
@@ -390,20 +435,12 @@ function TacticalLayerExecution({
   projectedLbtcUsd: number;
   terminalApys: { usdcBorrow: number; lbtcSupply: number };
   lbtcYieldText: string;
-  onConfirmMotor: (qty: number) => void;
-  onRevertMotor: () => void;
-  motorConfirmed: boolean;
-  onConfirmUsdc: (usd: number) => void;
-  onRevertUsdc: () => void;
-  onConfirmLbtc: () => void;
-  onRevertLbtc: () => void;
-  usdcConfirmed: boolean;
-  lbtcConfirmed: boolean;
   usdcDebt: number;
   indicators: HcdIndicators;
   stakedEntries: StakedEntry[];
 }) {
   const sk = lang === 'sk';
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH' ? 'rETH' : 'mSOL';
   const layerPct = layer.pctTarget;
@@ -411,6 +448,9 @@ function TacticalLayerExecution({
   const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries, symbol);
   const collateralUsd = collateralQty * assetPrice;
   const safeBorrowUsdc = collateralUsd * (ltvMax / 100);
+  const planKey = planKeyForLayer(layer.id);
+  const planConfirmed = isExecutionConfirmed(planKey);
+
   const exitAlert = computeTacticalWithdrawAlert({
     indicators,
     collateralQty,
@@ -424,8 +464,35 @@ function TacticalLayerExecution({
     ? { token: 'rETH', network: 'Arbitrum', protocol: 'Morpho' }
     : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
 
+  const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
+    const update: PortfolioBalanceUpdate = {};
+    if (symbol === 'ETH') {
+      update.rEthQty = collateralQty;
+      if (showBorrowFlow && projectedLbtcQty > 0) update.lbtcQty = projectedLbtcQty;
+    } else {
+      update.mSolQty = collateralQty;
+    }
+    if (safeBorrowUsdc > 0) update.usdcBorrowed = safeBorrowUsdc;
+    return update;
+  }, [symbol, collateralQty, safeBorrowUsdc, showBorrowFlow, projectedLbtcQty]);
+
+  const handleConfirmPlan = useCallback(() => {
+    confirmExecutionStep(planKey, buildPlanUpdate());
+    toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
+  }, [confirmExecutionStep, planKey, buildPlanUpdate, sk]);
+
+  const handleRevertPlan = useCallback(() => {
+    revertExecutionStep(planKey);
+    toast.success(sk ? 'Exekúcia vrátená späť' : 'Execution reverted');
+  }, [revertExecutionStep, planKey, sk]);
+
   return (
-    <Collapsible defaultOpen className="rounded-xl border border-violet-500/30 bg-violet-500/5">
+    <Collapsible
+      defaultOpen
+      className={`rounded-xl border transition-colors duration-500 ${
+        planConfirmed ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-violet-500/30 bg-violet-500/5'
+      }`}
+    >
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-violet-500/5 transition-colors">
         <span className="text-[11px] font-semibold text-violet-200">
           {sk ? 'Exekúcia · Taktický motor' : 'Execution · Tactical motor'}
@@ -442,7 +509,6 @@ function TacticalLayerExecution({
           safeBorrowUsdc={safeBorrowUsdc}
           ltvMax={ltvMax}
           ltvRestricted={ltvRestricted}
-          rebalanceLocked={rebalanceLocked}
           showBorrowFlow={showBorrowFlow}
           combinedBorrowUsdc={combinedBorrowUsdc}
           projectedLbtcQty={projectedLbtcQty}
@@ -450,18 +516,13 @@ function TacticalLayerExecution({
           lbtcYieldText={lbtcYieldText}
           terminalApys={terminalApys}
           lang={lang}
-          collateralConfirmed={motorConfirmed}
-          borrowConfirmed={usdcConfirmed}
-          lbtcConfirmed={lbtcConfirmed}
-          onConfirmCollateral={() => onConfirmMotor(collateralQty)}
-          onRevertCollateral={onRevertMotor}
-          onConfirmBorrow={() => onConfirmUsdc(safeBorrowUsdc)}
-          onRevertBorrow={onRevertUsdc}
-          onConfirmLbtc={onConfirmLbtc}
-          onRevertLbtc={onRevertLbtc}
           collateralDecimals={collateralDecimals}
           routing={routing}
           exitAlert={exitAlert}
+          planConfirmed={planConfirmed}
+          onConfirmPlan={handleConfirmPlan}
+          onRevertPlan={handleRevertPlan}
+          execDisabled={rebalanceLocked}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -474,9 +535,6 @@ function AlchemixLayerExecution({
   totalEthQty,
   ethPrice,
   rebalanceLocked,
-  confirmed,
-  onConfirm,
-  onRevert,
   alchemixApyPct,
 }: {
   lang: Lang;
@@ -484,57 +542,69 @@ function AlchemixLayerExecution({
   totalEthQty: number;
   ethPrice: number;
   rebalanceLocked: boolean;
-  confirmed: boolean;
-  onConfirm: () => void;
-  onRevert: () => void;
   alchemixApyPct: number;
 }) {
   const sk = lang === 'sk';
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const layerPct = layer.pctTarget;
   const targetQty = totalEthQty * (layerPct / 100);
   const targetUsd = targetQty * ethPrice;
+  const planKey = planKeyForLayer(layer.id);
+  const planConfirmed = isExecutionConfirmed(planKey);
   const exitAlert = computeAlchemixRebalanceAlert(alchemixApyPct);
 
+  const handleConfirmPlan = useCallback(() => {
+    confirmExecutionStep(planKey, { alchemixEthQty: targetQty });
+    toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
+  }, [confirmExecutionStep, planKey, targetQty, sk]);
+
+  const handleRevertPlan = useCallback(() => {
+    revertExecutionStep(planKey);
+    toast.success(sk ? 'Exekúcia vrátená späť' : 'Execution reverted');
+  }, [revertExecutionStep, planKey, sk]);
+
   return (
-    <Collapsible defaultOpen className="rounded-xl border border-sky-500/30 bg-sky-500/5">
+    <Collapsible
+      defaultOpen
+      className={`rounded-xl border transition-colors duration-500 ${
+        planConfirmed ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-sky-500/30 bg-sky-500/5'
+      }`}
+    >
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-sky-500/5 transition-colors">
         <span className="text-[11px] font-semibold text-sky-200">
           {sk ? 'Exekúcia · Alchemix Vault' : 'Execution · Alchemix Vault'}
         </span>
         <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
       </CollapsibleTrigger>
-      <CollapsibleContent className="px-3 pb-3 space-y-3">
-        <div className="rounded-xl border border-sky-500/30 bg-sky-500/5 p-3 space-y-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-sky-300">
-            {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
-          </p>
-
-          <CyborgRoutingMeta token="ETH" network="Ethereum L1" protocol="Alchemix" />
-
-          {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
-
-          <p className="text-[10px] text-muted-foreground">
-            {sk ? 'Cieľová alokácia' : 'Target allocation'}:{' '}
-            <span className="text-foreground font-semibold">{layerPct.toFixed(1)}%</span>
-            {' · '}
-            <span className="font-mono text-foreground tabular-nums">
-              {targetQty.toFixed(4)} ETH ({formatUsd(targetUsd)})
-            </span>
-          </p>
-          <CyborgCommandLine
-            label={sk ? `Vložte presne: ${targetQty.toFixed(4)} ETH` : `Deposit exactly: ${targetQty.toFixed(4)} ETH`}
-            value={targetQty}
-            lang={lang}
-            confirmed={confirmed}
-            disabled={rebalanceLocked}
-            onConfirm={onConfirm}
-            onRevert={onRevert}
-            decimals={4}
-          />
-          <p className="text-[9px] text-muted-foreground">
-            {sk ? `${layer.protocol} · Bez likvidácie` : `${layer.protocol} · No liquidation`}
-          </p>
-        </div>
+      <CollapsibleContent className="px-3 pb-3">
+        <CyborgActionPlan
+          sk={sk}
+          layerPct={layerPct}
+          collateralQty={targetQty}
+          collateralLabel="ETH"
+          collateralUsd={targetUsd}
+          safeBorrowUsdc={0}
+          ltvMax={0}
+          ltvRestricted={false}
+          showBorrowFlow={false}
+          combinedBorrowUsdc={0}
+          projectedLbtcQty={0}
+          projectedLbtcUsd={0}
+          lbtcYieldText=""
+          terminalApys={{ usdcBorrow: 0, lbtcSupply: 0 }}
+          lang={lang}
+          collateralDecimals={4}
+          routing={{ token: 'ETH', network: 'Ethereum L1', protocol: 'Alchemix' }}
+          exitAlert={exitAlert}
+          planConfirmed={planConfirmed}
+          onConfirmPlan={handleConfirmPlan}
+          onRevertPlan={handleRevertPlan}
+          execDisabled={rebalanceLocked}
+          showBorrowCommand={false}
+        />
+        <p className="text-[9px] text-muted-foreground mt-2 px-1">
+          {sk ? `${layer.protocol} · Bez likvidácie` : `${layer.protocol} · No liquidation`}
+        </p>
       </CollapsibleContent>
     </Collapsible>
   );
@@ -556,18 +626,6 @@ function AssetHcdCard({
   projectedLbtcUsd,
   terminalApys,
   lbtcYieldText,
-  onConfirmMotor,
-  onRevertMotor,
-  motorConfirmed,
-  onConfirmUsdc,
-  onRevertUsdc,
-  onConfirmLbtc,
-  onRevertLbtc,
-  usdcConfirmed,
-  lbtcConfirmed,
-  onConfirmAlchemix,
-  onRevertAlchemix,
-  alchemixConfirmed,
   usdcDebt,
   indicators,
   stakedEntries,
@@ -588,18 +646,6 @@ function AssetHcdCard({
   projectedLbtcUsd: number;
   terminalApys: { usdcBorrow: number; lbtcSupply: number };
   lbtcYieldText: string;
-  onConfirmMotor: (qty: number) => void;
-  onRevertMotor: () => void;
-  motorConfirmed: boolean;
-  onConfirmUsdc: (usd: number) => void;
-  onRevertUsdc: () => void;
-  onConfirmLbtc: () => void;
-  onRevertLbtc: () => void;
-  usdcConfirmed: boolean;
-  lbtcConfirmed: boolean;
-  onConfirmAlchemix?: (qty: number) => void;
-  onRevertAlchemix?: () => void;
-  alchemixConfirmed?: boolean;
   usdcDebt: number;
   indicators: HcdIndicators;
   stakedEntries: StakedEntry[];
@@ -703,31 +749,19 @@ function AssetHcdCard({
                   projectedLbtcUsd={projectedLbtcUsd}
                   terminalApys={terminalApys}
                   lbtcYieldText={lbtcYieldText}
-                  onConfirmMotor={onConfirmMotor}
-                  onRevertMotor={onRevertMotor}
-                  motorConfirmed={motorConfirmed}
-                  onConfirmUsdc={onConfirmUsdc}
-                  onRevertUsdc={onRevertUsdc}
-                  onConfirmLbtc={onConfirmLbtc}
-                  onRevertLbtc={onRevertLbtc}
-                  usdcConfirmed={usdcConfirmed}
-                  lbtcConfirmed={lbtcConfirmed}
                   usdcDebt={usdcDebt}
                   indicators={indicators}
                   stakedEntries={stakedEntries}
                 />
               )}
 
-              {isAlchemix && onConfirmAlchemix && onRevertAlchemix && (
+              {isAlchemix && symbol === 'ETH' && (
                 <AlchemixLayerExecution
                   lang={lang}
                   layer={layer}
                   totalEthQty={totalPortfolioQty}
                   ethPrice={price}
                   rebalanceLocked={rebalanceLocked}
-                  confirmed={alchemixConfirmed ?? false}
-                  onConfirm={() => onConfirmAlchemix(totalPortfolioQty * (layer.pctTarget / 100))}
-                  onRevert={onRevertAlchemix}
                   alchemixApyPct={alchemixApyPct}
                 />
               )}
@@ -770,7 +804,7 @@ function AssetHcdCard({
 
 export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
-  const { portfolioData, confirmExecutionStep, revertExecutionStep, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const { portfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
   const { data: defiApys } = useDefiApys();
   const { entries } = useStakingLedger();
   const { indicators, rebalance, borrowLoading, borrowRates } = useHcdIndicators(lang);
@@ -808,7 +842,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const projectedLbtcQty = computeProjectedLbtcQty(combinedBorrowUsdc, btcPrice);
   const projectedLbtcUsd = projectedLbtcQty * btcPrice;
 
-  const isLbtcSupplied = isExecutionConfirmed(EXEC_KEYS.lbtcSupply);
+  const ethTacticalPlanKey = ethTacticalLayer ? planKeyForLayer(ethTacticalLayer.id) : '';
+  const isLbtcSupplied = ethTacticalPlanKey
+    ? isExecutionConfirmed(ethTacticalPlanKey)
+    : false;
   const totalLbtcApy = computeTotalLbtcApy(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0);
   const netYield = computeNetYield(totalLbtcApy, terminalApys?.usdcBorrow ?? 0);
   const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0, sk);
@@ -837,20 +874,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     marketScore,
     ledgerEntries: entries ?? [],
   }), [solSlice, marketScore, entries]);
-
-  const confirmRow = useCallback((
-    key: string,
-    update: Parameters<typeof confirmExecutionStep>[1],
-    successMsg?: string,
-  ) => {
-    confirmExecutionStep(key, update);
-    toast.success(successMsg ?? (sk ? 'Portfólio aktualizované!' : 'Portfolio updated!'));
-  }, [confirmExecutionStep, sk]);
-
-  const revertRow = useCallback((key: string) => {
-    revertExecutionStep(key);
-    toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
-  }, [revertExecutionStep, sk]);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -1103,22 +1126,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         projectedLbtcUsd={projectedLbtcUsd}
         terminalApys={terminalApysSafe}
         lbtcYieldText={lbtcYieldText}
-        onConfirmMotor={qty => confirmRow(EXEC_KEYS.rEth, { rEthQty: qty })}
-        onRevertMotor={() => revertRow(EXEC_KEYS.rEth)}
-        motorConfirmed={isExecutionConfirmed(EXEC_KEYS.rEth)}
-        onConfirmUsdc={usd => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usd })}
-        onRevertUsdc={() => revertRow(EXEC_KEYS.usdcBorrow)}
-        usdcConfirmed={isExecutionConfirmed(EXEC_KEYS.usdcBorrow)}
-        onConfirmLbtc={() => confirmRow(
-          EXEC_KEYS.lbtcSupply,
-          { lbtcQty: projectedLbtcQty },
-          sk ? 'LBTC supply potvrdené' : 'LBTC supply confirmed',
-        )}
-        onRevertLbtc={() => revertRow(EXEC_KEYS.lbtcSupply)}
-        lbtcConfirmed={isLbtcSupplied}
-        onConfirmAlchemix={qty => confirmRow(EXEC_KEYS.alchemixEth, { alchemixEthQty: qty })}
-        onRevertAlchemix={() => revertRow(EXEC_KEYS.alchemixEth)}
-        alchemixConfirmed={isExecutionConfirmed(EXEC_KEYS.alchemixEth)}
         usdcDebt={cyborgUsdcDebt}
         indicators={indicators}
         stakedEntries={ethStakedEntries}
@@ -1141,15 +1148,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         projectedLbtcUsd={projectedLbtcUsd}
         terminalApys={terminalApysSafe}
         lbtcYieldText={lbtcYieldText}
-        onConfirmMotor={qty => confirmRow(EXEC_KEYS.mSol, { mSolQty: qty })}
-        onRevertMotor={() => revertRow(EXEC_KEYS.mSol)}
-        motorConfirmed={isExecutionConfirmed(EXEC_KEYS.mSol)}
-        onConfirmUsdc={usd => confirmRow(EXEC_KEYS.usdcBorrow, { usdcBorrowed: usd })}
-        onRevertUsdc={() => revertRow(EXEC_KEYS.usdcBorrow)}
-        onConfirmLbtc={() => {}}
-        onRevertLbtc={() => {}}
-        usdcConfirmed={isExecutionConfirmed(EXEC_KEYS.usdcBorrow)}
-        lbtcConfirmed={isLbtcSupplied}
         usdcDebt={cyborgUsdcDebt}
         indicators={indicators}
         stakedEntries={solStakedEntries}
