@@ -9,7 +9,6 @@ import { usePortfolio, type PortfolioBalanceUpdate } from '@/contexts/PortfolioC
 import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
-import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
 import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -30,12 +29,9 @@ import {
 } from '@/lib/hcdExitStrategy';
 import { useDefiApys } from '@/hooks/useDefiApys';
 import {
-  computeAdvice,
   getTimingWindow,
   overheatedWarning,
-  type AdvisorResult,
 } from '@/lib/stakeAdvisor';
-import { useStakingLedger } from '@/hooks/useStakingLedger';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 import {
   computeNetYield,
@@ -87,15 +83,6 @@ function tacticalCollateralQty(totalQty: number, layer: HcdLayerTarget | undefin
 
 function tacticalBorrowUsdc(collateralQty: number, price: number, ltvMax: number): number {
   return collateralQty * price * (ltvMax / 100);
-}
-
-function buildLayerUpdate(layer: HcdLayerTarget, qty: number): PortfolioBalanceUpdate {
-  if (layer.ledgerProtocol?.includes('Rocket')) return { rEthQty: qty };
-  if (layer.ledgerProtocol?.includes('Marinade')) return { mSolQty: qty };
-  if (layer.ledgerProtocol?.includes('Alchemix')) return { alchemixEthQty: qty };
-  if (layer.ledgerProtocol?.includes('Aave')) return { rEthQty: qty };
-  if (layer.ledgerProtocol?.includes('Kamino')) return { mSolQty: qty };
-  return {};
 }
 
 function formatTime(d: Date): string {
@@ -402,6 +389,191 @@ function planKeyForLayer(layerId: string): string {
   return `hcd-plan-${layerId}`;
 }
 
+function CoreCyborgActionPlan({
+  sk,
+  lang,
+  layerPct,
+  stakeQty,
+  stakeLabel,
+  stakeUsd,
+  stakeDecimals,
+  routing,
+  apyText,
+  planConfirmed,
+  onConfirmPlan,
+  onRevertPlan,
+  execDisabled,
+}: {
+  sk: boolean;
+  lang: Lang;
+  layerPct: number;
+  stakeQty: number;
+  stakeLabel: string;
+  stakeUsd: number;
+  stakeDecimals: number;
+  routing: { token: string; network: string; protocol: string };
+  apyText?: string | null;
+  planConfirmed: boolean;
+  onConfirmPlan: () => void;
+  onRevertPlan: () => void;
+  execDisabled: boolean;
+}) {
+  const [flashBorder, setFlashBorder] = useState(false);
+  const wasConfirmedRef = useRef(planConfirmed);
+
+  useEffect(() => {
+    if (planConfirmed && !wasConfirmedRef.current) {
+      setFlashBorder(true);
+      const timer = window.setTimeout(() => setFlashBorder(false), 3000);
+      wasConfirmedRef.current = planConfirmed;
+      return () => window.clearTimeout(timer);
+    }
+    wasConfirmedRef.current = planConfirmed;
+  }, [planConfirmed]);
+
+  const lineMuted = planConfirmed;
+
+  return (
+    <div
+      className={`rounded-xl border p-3 space-y-3 transition-colors duration-500 ${
+        flashBorder
+          ? 'border-emerald-500/70 bg-emerald-500/10 shadow-[0_0_0_1px_rgba(16,185,129,0.35)]'
+          : planConfirmed
+            ? 'border-emerald-500/40 bg-emerald-500/5'
+            : 'border-teal-500/30 bg-teal-500/5'
+      }`}
+    >
+      <p className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
+        {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
+        {planConfirmed && (
+          <span className="ml-2 normal-case font-semibold text-emerald-400">
+            · {sk ? 'Exekuované' : 'Executed'}
+          </span>
+        )}
+      </p>
+
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <CyborgRoutingMeta
+          token={routing.token}
+          network={routing.network}
+          protocol={routing.protocol}
+        />
+        <ManualPlanConfirm
+          lang={lang}
+          confirmed={planConfirmed}
+          disabled={execDisabled}
+          onConfirm={onConfirmPlan}
+          onRevert={onRevertPlan}
+        />
+      </div>
+
+      <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
+        <p>
+          {sk ? 'Požadovaný stake' : 'Required stake'}:{' '}
+          <span className="text-foreground font-semibold">{layerPct.toFixed(1)}%</span>
+          {' · '}
+          <span className="font-mono text-foreground tabular-nums">
+            {stakeQty.toFixed(stakeDecimals)} {stakeLabel} ({formatUsd(stakeUsd)})
+          </span>
+        </p>
+        {apyText && (
+          <p>
+            APY:{' '}
+            <span className="font-mono font-semibold text-emerald-400 tabular-nums">{apyText}</span>
+          </p>
+        )}
+      </div>
+
+      <CyborgCommandLine
+        prefix={sk ? 'Stake presne:' : 'Stake exactly:'}
+        amount={stakeQty}
+        suffix={stakeLabel}
+        lang={lang}
+        decimals={stakeDecimals}
+        muted={lineMuted}
+      />
+    </div>
+  );
+}
+
+function CoreLayerExecution({
+  symbol,
+  lang,
+  layer,
+  totalQty,
+  assetPrice,
+  rebalanceLocked,
+  apyText,
+}: {
+  symbol: HcdSymbol;
+  lang: Lang;
+  layer: HcdLayerTarget;
+  totalQty: number;
+  assetPrice: number;
+  rebalanceLocked: boolean;
+  apyText?: string | null;
+}) {
+  const sk = lang === 'sk';
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const layerPct = layer.pctTarget;
+  const stakeDecimals = symbol === 'SOL' ? 2 : 4;
+  const stakeLabel = symbol === 'ETH' ? 'ETH' : 'SOL';
+  const stakeQty = totalQty * (layerPct / 100);
+  const stakeUsd = stakeQty * assetPrice;
+  const planKey = planKeyForLayer(layer.id);
+  const planConfirmed = isExecutionConfirmed(planKey);
+  const routing = symbol === 'ETH'
+    ? { token: 'rETH', network: 'Ethereum L1', protocol: 'Rocket Pool' }
+    : { token: 'mSOL', network: 'Solana', protocol: 'Marinade' };
+
+  const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => (
+    symbol === 'ETH' ? { rEthQty: stakeQty } : { mSolQty: stakeQty }
+  ), [symbol, stakeQty]);
+
+  const handleConfirmPlan = useCallback(() => {
+    confirmExecutionStep(planKey, buildPlanUpdate());
+    toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
+  }, [confirmExecutionStep, planKey, buildPlanUpdate, sk]);
+
+  const handleRevertPlan = useCallback(() => {
+    revertExecutionStep(planKey);
+    toast.success(sk ? 'Exekúcia vrátená späť' : 'Execution reverted');
+  }, [revertExecutionStep, planKey, sk]);
+
+  return (
+    <Collapsible
+      defaultOpen
+      className={`rounded-xl border transition-colors duration-500 ${
+        planConfirmed ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-teal-500/30 bg-teal-500/5'
+      }`}
+    >
+      <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-teal-500/5 transition-colors">
+        <span className="text-[11px] font-semibold text-teal-200">
+          {sk ? 'Exekúcia · Core Fortress' : 'Execution · Core Fortress'}
+        </span>
+        <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
+      </CollapsibleTrigger>
+      <CollapsibleContent className="px-3 pb-3">
+        <CoreCyborgActionPlan
+          sk={sk}
+          lang={lang}
+          layerPct={layerPct}
+          stakeQty={stakeQty}
+          stakeLabel={stakeLabel}
+          stakeUsd={stakeUsd}
+          stakeDecimals={stakeDecimals}
+          routing={routing}
+          apyText={apyText}
+          planConfirmed={planConfirmed}
+          onConfirmPlan={handleConfirmPlan}
+          onRevertPlan={handleRevertPlan}
+          execDisabled={rebalanceLocked}
+        />
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
 function TacticalLayerExecution({
   symbol,
   lang,
@@ -617,7 +789,6 @@ function AssetHcdCard({
   price,
   layers,
   rebalanceLocked,
-  advised,
   ltvMax,
   ltvRestricted,
   showBorrowFlow,
@@ -637,7 +808,6 @@ function AssetHcdCard({
   price: number;
   layers: HcdLayerTarget[];
   rebalanceLocked: boolean;
-  advised: AdvisorResult | null;
   ltvMax: number;
   ltvRestricted: boolean;
   showBorrowFlow: boolean;
@@ -652,11 +822,10 @@ function AssetHcdCard({
   alchemixApyPct: number;
 }) {
   const sk = lang === 'sk';
-  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { isExecutionConfirmed } = usePortfolio();
   const apys = useStakingSplitApys();
   const decimals = symbol === 'SOL' ? 2 : 3;
   const totalUsd = totalPortfolioQty * price;
-  const deployQty = advised?.breakdown.recommendedQty ?? totalPortfolioQty;
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/25 min-w-0">
@@ -683,21 +852,19 @@ function AssetHcdCard({
 
       <div className="space-y-2">
         {(layers ?? []).map(layer => {
-          const qty = deployQty * (layer.pctTarget / 100);
-          const usd = qty * price;
-          const stepKey = `hcd-${layer.id}`;
-          const confirmed = isExecutionConfirmed(stepKey);
           const apy = layerApy(layer, apys);
           const isTactical = layer.id.includes('tactical');
           const isAlchemix = layer.id.includes('alchemix');
-          const isInfoOnly = !isTactical && !isAlchemix;
-          const canExecute = !rebalanceLocked && !!layer.ledgerProtocol && qty > 0 && isInfoOnly;
+          const isCore = layer.id.includes('core');
+          const isInfoOnly = !isTactical && !isAlchemix && !isCore;
+          const planKey = planKeyForLayer(layer.id);
+          const corePlanConfirmed = isCore && isExecutionConfirmed(planKey);
 
           return (
             <div
               key={layer.id}
               className={`rounded-xl border p-2.5 sm:p-3 space-y-2 min-w-0 ${
-                confirmed && isInfoOnly
+                corePlanConfirmed
                   ? 'border-border/30 bg-muted/20 opacity-75'
                   : 'border-border/50 bg-background/30'
               }`}
@@ -766,27 +933,16 @@ function AssetHcdCard({
                 />
               )}
 
-              {isInfoOnly && layer.ledgerProtocol && (
-                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between pt-1 border-t border-border/30">
-                  <p className="text-[10px] font-mono text-foreground tabular-nums">
-                    {qty.toFixed(decimals)} {symbol} · {formatUsd(usd)}
-                  </p>
-                  <GranularExecutionButtons
-                    lang={lang}
-                    value={qty}
-                    decimals={decimals}
-                    confirmed={confirmed}
-                    disabled={!canExecute}
-                    onConfirm={() => {
-                      confirmExecutionStep(stepKey, buildLayerUpdate(layer, qty));
-                      toast.success(sk ? 'HCD vrstva potvrdená' : 'HCD layer confirmed');
-                    }}
-                    onRevert={() => {
-                      revertExecutionStep(stepKey);
-                      toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
-                    }}
-                  />
-                </div>
+              {isCore && (
+                <CoreLayerExecution
+                  symbol={symbol}
+                  lang={lang}
+                  layer={layer}
+                  totalQty={totalPortfolioQty}
+                  assetPrice={price}
+                  rebalanceLocked={rebalanceLocked}
+                  apyText={apy}
+                />
               )}
 
               {isInfoOnly && !layer.ledgerProtocol && (
@@ -806,7 +962,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
   const { portfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
   const { data: defiApys } = useDefiApys();
-  const { entries } = useStakingLedger();
   const { indicators, rebalance, borrowLoading, borrowRates } = useHcdIndicators(lang);
   const { market, marketLoading, updating, refresh, unavailable, terminalApys } = useCyborgMarketData();
   const win = getTimingWindow(marketScore);
@@ -858,22 +1013,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   }, [market, netYield, ltvMax]);
 
   const usingNeutralSignals = market?.ready && (market.fearGreed === null || market.btcRsi === null);
-
-  const ethAdvice = useMemo(() => computeAdvice({
-    symbol: 'ETH',
-    liquidQty: ethSlice.liquidQty ?? 0,
-    pricePerUnit: ethSlice.currentPrice ?? 0,
-    marketScore,
-    ledgerEntries: entries ?? [],
-  }), [ethSlice, marketScore, entries]);
-
-  const solAdvice = useMemo(() => computeAdvice({
-    symbol: 'SOL',
-    liquidQty: solSlice.liquidQty ?? 0,
-    pricePerUnit: solSlice.currentPrice ?? 0,
-    marketScore,
-    ledgerEntries: entries ?? [],
-  }), [solSlice, marketScore, entries]);
 
   const copyPlan = useCallback(async () => {
     const action = marketState?.action ?? 'HOLD';
@@ -1117,7 +1256,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         price={ethSlice.currentPrice ?? 0}
         layers={ethLayers}
         rebalanceLocked={rebalanceLocked}
-        advised={ethAdvice.eligible ? ethAdvice : null}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
         showBorrowFlow
@@ -1139,7 +1277,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         price={solSlice.currentPrice ?? 0}
         layers={solLayers}
         rebalanceLocked={rebalanceLocked}
-        advised={solAdvice.eligible ? solAdvice : null}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
         showBorrowFlow={false}
