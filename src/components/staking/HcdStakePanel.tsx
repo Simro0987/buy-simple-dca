@@ -36,6 +36,17 @@ import {
 } from '@/lib/stakeAdvisor';
 import { DATA_UNAVAILABLE } from '@/lib/defiLlamaAggregator';
 import { getAggregatedPortfolioTotals, ensurePortfolioData } from '@/lib/portfolioData';
+import {
+  ALCHEMIX_FALLBACK_PLAN_EN,
+  ALCHEMIX_FALLBACK_PLAN_SK,
+  buildEthLayerPlanState,
+  computeDeltaQty,
+  computeDeployedCoreQty,
+  formatArbitrumPlanInstruction,
+  getActionPlanLtvCaps,
+  tacticalBorrowAtTargetLtv,
+  type ArbitrumTacticalWinner,
+} from '@/lib/hcdActionPlanLogic';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
   computeNetYield,
@@ -273,6 +284,9 @@ function CyborgActionPlan({
   onRevertPlan,
   execDisabled,
   showBorrowCommand = true,
+  planSummary,
+  copyCollateralQty,
+  hideCopyBoxes = false,
 }: {
   sk: boolean;
   layerPct: number;
@@ -297,6 +311,9 @@ function CyborgActionPlan({
   onRevertPlan: () => void;
   execDisabled: boolean;
   showBorrowCommand?: boolean;
+  planSummary?: string;
+  copyCollateralQty?: number;
+  hideCopyBoxes?: boolean;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -312,6 +329,7 @@ function CyborgActionPlan({
   }, [planConfirmed]);
 
   const lineMuted = planConfirmed;
+  const copyQty = copyCollateralQty ?? collateralQty;
 
   return (
     <div
@@ -350,6 +368,9 @@ function CyborgActionPlan({
       {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
+        {planSummary && (
+          <p className="text-foreground/90 font-medium">{planSummary}</p>
+        )}
         <p>
           {sk ? 'Požadovaný kolaterál' : 'Required collateral'}:{' '}
           <span className="text-foreground font-semibold">{layerPct.toFixed(1)}%</span>
@@ -367,16 +388,18 @@ function CyborgActionPlan({
         </p>
       </div>
 
-      <CyborgCommandLine
-        prefix={sk ? 'Vložte presne:' : 'Deposit exactly:'}
-        amount={collateralQty}
-        suffix={collateralLabel}
-        lang={lang}
-        decimals={collateralDecimals}
-        muted={lineMuted}
-      />
+      {!hideCopyBoxes && (
+        <CyborgCommandLine
+          prefix={sk ? 'Vložte presne:' : 'Deposit exactly:'}
+          amount={copyQty}
+          suffix={collateralLabel}
+          lang={lang}
+          decimals={collateralDecimals}
+          muted={lineMuted}
+        />
+      )}
 
-      {showBorrowCommand && (
+      {!hideCopyBoxes && showBorrowCommand && (
         <CyborgCommandLine
           prefix={sk ? 'Požičajte si max:' : 'Borrow max:'}
           amount={safeBorrowUsdc}
@@ -389,13 +412,15 @@ function CyborgActionPlan({
 
       {showBorrowFlow && combinedBorrowUsdc > 0 && (
         <>
-          <CyborgCommandLine
-            prefix={sk ? 'Kúpte LBTC za:' : 'Buy LBTC for:'}
-            amount={projectedLbtcUsd}
-            lang={lang}
-            usdMode
-            muted={lineMuted}
-          />
+          {!hideCopyBoxes && (
+            <CyborgCommandLine
+              prefix={sk ? 'Kúpte LBTC za:' : 'Buy LBTC for:'}
+              amount={projectedLbtcUsd}
+              lang={lang}
+              usdMode
+              muted={lineMuted}
+            />
+          )}
           <p className="text-[9px] text-muted-foreground tabular-nums">
             {sk ? 'Kombinovaný úver ETH+SOL' : 'Combined ETH+SOL borrow'}: {(combinedBorrowUsdc ?? 0).toFixed(2)} USDC
             {(projectedLbtcQty ?? 0) > 0 && (
@@ -429,6 +454,7 @@ function CoreCyborgActionPlan({
   onConfirmPlan,
   onRevertPlan,
   execDisabled,
+  copyStakeQty,
 }: {
   sk: boolean;
   lang: Lang;
@@ -443,6 +469,7 @@ function CoreCyborgActionPlan({
   onConfirmPlan: () => void;
   onRevertPlan: () => void;
   execDisabled: boolean;
+  copyStakeQty?: number;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -458,6 +485,7 @@ function CoreCyborgActionPlan({
   }, [planConfirmed]);
 
   const lineMuted = planConfirmed;
+  const copyQty = copyStakeQty ?? stakeQty;
 
   return (
     <div
@@ -512,7 +540,7 @@ function CoreCyborgActionPlan({
 
       <CyborgCommandLine
         prefix={sk ? 'Stake presne:' : 'Stake exactly:'}
-        amount={stakeQty}
+        amount={copyQty}
         suffix={stakeLabel}
         lang={lang}
         decimals={stakeDecimals}
@@ -531,6 +559,8 @@ function CoreLayerExecution({
   rebalanceLocked,
   apyText,
   buildDecisionMeta,
+  stakedEntries,
+  targetLtvPct,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -540,6 +570,8 @@ function CoreLayerExecution({
   rebalanceLocked: boolean;
   apyText?: string | null;
   buildDecisionMeta: () => DecisionConfirmMeta;
+  stakedEntries: StakedEntry[];
+  targetLtvPct: number;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -548,6 +580,8 @@ function CoreLayerExecution({
   const stakeLabel = symbol === 'ETH' ? 'ETH' : 'SOL';
   const stakeQty = (totalQty ?? 0) * (layerPct / 100);
   const stakeUsd = stakeQty * (assetPrice ?? 0);
+  const deployedQty = computeDeployedCoreQty(stakedEntries, symbol);
+  const copyStakeQty = computeDeltaQty(stakeQty, deployedQty);
   const planKey = planKeyForLayer(layer?.id ?? 'core');
   const planConfirmed = isExecutionConfirmed(planKey);
   const routing = symbol === 'ETH'
@@ -596,6 +630,7 @@ function CoreLayerExecution({
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
+          copyStakeQty={copyStakeQty}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -609,6 +644,7 @@ function TacticalLayerExecution({
   totalQty,
   assetPrice,
   ltvMax,
+  targetLtvPct,
   ltvRestricted,
   rebalanceLocked,
   showBorrowFlow,
@@ -621,6 +657,7 @@ function TacticalLayerExecution({
   indicators,
   stakedEntries,
   buildDecisionMeta,
+  arbitrumWinner,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -628,6 +665,7 @@ function TacticalLayerExecution({
   totalQty: number;
   assetPrice: number;
   ltvMax: number;
+  targetLtvPct: number;
   ltvRestricted: boolean;
   rebalanceLocked: boolean;
   showBorrowFlow: boolean;
@@ -640,16 +678,20 @@ function TacticalLayerExecution({
   indicators: HcdIndicators;
   stakedEntries: StakedEntry[];
   buildDecisionMeta: () => DecisionConfirmMeta;
+  arbitrumWinner?: ArbitrumTacticalWinner;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
-  const motorLabel = symbol === 'ETH' ? 'wETH' : 'mSOL';
+  const motorLabel = symbol === 'ETH'
+    ? (arbitrumWinner?.collateralToken ?? 'wETH')
+    : 'mSOL';
   const layerPct = layer?.pctTarget ?? 0;
   const collateralQty = (totalQty ?? 0) * (layerPct / 100);
   const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries ?? [], symbol);
+  const copyCollateralQty = computeDeltaQty(collateralQty, deployedCollateralQty);
   const collateralUsd = collateralQty * (assetPrice ?? 0);
-  const safeBorrowUsdc = collateralUsd * ((ltvMax ?? 0) / 100);
+  const safeBorrowUsdc = tacticalBorrowAtTargetLtv(copyCollateralQty, assetPrice, targetLtvPct);
   const planKey = planKeyForLayer(layer?.id ?? 'tactical');
 
   const exitAlert = useMemo(() => {
@@ -676,9 +718,14 @@ function TacticalLayerExecution({
     collateralDecimals,
   ]);
   const planConfirmed = isExecutionConfirmed(planKey);
-  const routing = symbol === 'ETH'
-    ? { token: 'wETH', network: 'Arbitrum', protocol: 'Morpho' }
-    : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
+  const routing = symbol === 'ETH' && arbitrumWinner
+    ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.name }
+    : symbol === 'ETH'
+      ? { token: 'wETH', network: 'Arbitrum', protocol: 'Morpho' }
+      : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
+  const planSummary = symbol === 'ETH' && arbitrumWinner
+    ? formatArbitrumPlanInstruction(arbitrumWinner, sk)
+    : undefined;
 
   const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
     const update: PortfolioBalanceUpdate = {};
@@ -723,7 +770,7 @@ function TacticalLayerExecution({
           collateralLabel={motorLabel}
           collateralUsd={collateralUsd}
           safeBorrowUsdc={safeBorrowUsdc}
-          ltvMax={ltvMax}
+          ltvMax={targetLtvPct}
           ltvRestricted={ltvRestricted}
           showBorrowFlow={showBorrowFlow}
           combinedBorrowUsdc={combinedBorrowUsdc}
@@ -739,6 +786,8 @@ function TacticalLayerExecution({
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
+          planSummary={planSummary}
+          copyCollateralQty={copyCollateralQty}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -753,6 +802,7 @@ function AlchemixLayerExecution({
   rebalanceLocked,
   alchemixApyPct,
   buildDecisionMeta,
+  alchemixLocked,
 }: {
   lang: Lang;
   layer: HcdLayerTarget;
@@ -761,21 +811,24 @@ function AlchemixLayerExecution({
   rebalanceLocked: boolean;
   alchemixApyPct: number;
   buildDecisionMeta: () => DecisionConfirmMeta;
+  alchemixLocked: boolean;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
-  const layerPct = layer?.pctTarget ?? 0;
-  const targetQty = (totalEthQty ?? 0) * (layerPct / 100);
+  const layerPct = alchemixLocked ? 0 : (layer?.pctTarget ?? 0);
+  const targetQty = alchemixLocked ? 0 : (totalEthQty ?? 0) * ((layer?.pctTarget ?? 0) / 100);
   const targetUsd = targetQty * (ethPrice ?? 0);
   const planKey = planKeyForLayer(layer?.id ?? 'alchemix');
   const planConfirmed = isExecutionConfirmed(planKey);
+  const fallbackText = sk ? ALCHEMIX_FALLBACK_PLAN_SK : ALCHEMIX_FALLBACK_PLAN_EN;
   const exitAlert = useMemo(() => {
+    if (alchemixLocked) return null;
     try {
       return computeAlchemixRebalanceAlert(alchemixApyPct ?? 0);
     } catch {
       return null;
     }
-  }, [alchemixApyPct]);
+  }, [alchemixApyPct, alchemixLocked]);
 
   const handleConfirmPlan = useCallback(() => {
     confirmExecutionStep(planKey, { alchemixEthQty: targetQty }, buildDecisionMeta());
@@ -823,8 +876,11 @@ function AlchemixLayerExecution({
           planConfirmed={planConfirmed}
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
-          execDisabled={rebalanceLocked}
+          execDisabled={rebalanceLocked || alchemixLocked}
           showBorrowCommand={false}
+          planSummary={alchemixLocked ? fallbackText : undefined}
+          hideCopyBoxes={alchemixLocked}
+          copyCollateralQty={0}
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}
@@ -854,6 +910,9 @@ function AssetHcdCard({
   stakedEntries,
   alchemixApyPct,
   buildDecisionMeta,
+  arbitrumWinner,
+  alchemixLocked,
+  targetLtvPct,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -874,6 +933,9 @@ function AssetHcdCard({
   stakedEntries: StakedEntry[];
   alchemixApyPct: number;
   buildDecisionMeta: () => DecisionConfirmMeta;
+  arbitrumWinner?: ArbitrumTacticalWinner;
+  alchemixLocked?: boolean;
+  targetLtvPct: number;
 }) {
   const sk = lang === 'sk';
   const { isExecutionConfirmed } = usePortfolio();
@@ -914,7 +976,7 @@ function AssetHcdCard({
           const isInfoOnly = !isTactical && !isAlchemix && !isCore;
           const planKey = planKeyForLayer(layerId);
           const corePlanConfirmed = isCore && isExecutionConfirmed(planKey);
-          const displayPct = layer?.pctTarget ?? 0;
+          const displayPct = isAlchemix && alchemixLocked ? 0 : (layer?.pctTarget ?? 0);
 
           return (
             <div
@@ -964,6 +1026,7 @@ function AssetHcdCard({
                   totalQty={totalPortfolioQty}
                   assetPrice={price}
                   ltvMax={ltvMax}
+                  targetLtvPct={targetLtvPct}
                   ltvRestricted={ltvRestricted}
                   rebalanceLocked={rebalanceLocked}
                   showBorrowFlow={showBorrowFlow}
@@ -976,6 +1039,7 @@ function AssetHcdCard({
                   indicators={indicators}
                   stakedEntries={stakedEntries}
                   buildDecisionMeta={buildDecisionMeta}
+                  arbitrumWinner={symbol === 'ETH' ? arbitrumWinner : undefined}
                 />
               )}
 
@@ -988,6 +1052,7 @@ function AssetHcdCard({
                   rebalanceLocked={rebalanceLocked}
                   alchemixApyPct={alchemixApyPct}
                   buildDecisionMeta={buildDecisionMeta}
+                  alchemixLocked={Boolean(alchemixLocked)}
                 />
               )}
 
@@ -1001,6 +1066,8 @@ function AssetHcdCard({
                   rebalanceLocked={rebalanceLocked}
                   apyText={apy}
                   buildDecisionMeta={buildDecisionMeta}
+                  stakedEntries={stakedEntries}
+                  targetLtvPct={targetLtvPct}
                 />
               )}
 
@@ -1046,13 +1113,12 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const win = getTimingWindow(marketScore ?? 50);
   const [isEmergencyUnlocked, setIsEmergencyUnlocked] = useState(false);
   const rebalanceLocked = (!(safeRebalance?.unlocked ?? false) || (win?.locked ?? false)) && !isEmergencyUnlocked;
-  const ltvMax = useMemo(() => {
-    try {
-      return getHcdLtvMax(safeIndicators, temperamentPct);
-    } catch {
-      return 30;
-    }
-  }, [safeIndicators, temperamentPct]);
+  const ltvCaps = useMemo(
+    () => getActionPlanLtvCaps(safeIndicators, temperamentPct),
+    [safeIndicators, temperamentPct],
+  );
+  const targetLtvPct = ltvCaps.targetLtvPct;
+  const ltvMax = ltvCaps.maxLtvPct;
   const ltvRestricted = safeIndicators?.volatilityRegime === 'high' || Boolean(safeIndicators?.borrowWarning);
 
   const aggregated = useMemo(
@@ -1066,6 +1132,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const btcPrice = portfolioData.prices?.btc ?? 0;
 
   const portfolioUsd = aggregated.portfolioUsd;
+  const alchemixApyPct = defiApys?.alchemixVault ?? 2.2;
+  const ethStakedEntries = portfolioData.assets?.ETH?.stakedEntries ?? [];
+  const solStakedEntries = portfolioData.assets?.SOL?.stakedEntries ?? [];
 
   const ethLayers = useMemo(
     () => {
@@ -1088,16 +1157,27 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     [safeIndicators, temperamentPct],
   );
 
-  const ethTacticalLayer = (ethLayers ?? []).find(layer => layer?.id?.includes('tactical'));
+  const ethLayerPlan = useMemo(
+    () => buildEthLayerPlanState({
+      layers: ethLayers ?? [],
+      alchemixApyPct,
+      indicators: safeIndicators,
+      fearGreed: market?.fearGreed ?? null,
+      marketScore: marketScore ?? 50,
+      aaveArbitrumBorrowApy: borrowRates?.aaveArbitrumUsdcBorrowPct,
+      morphoArbitrumBorrowApy: borrowRates?.morphoUsdcBorrowPct,
+    }),
+    [ethLayers, alchemixApyPct, safeIndicators, market?.fearGreed, marketScore, borrowRates],
+  );
+
+  const ethEffectiveLayers = ethLayerPlan.effectiveLayers;
+  const ethTacticalLayer = (ethEffectiveLayers ?? []).find(layer => layer?.id?.includes('tactical'));
   const solTacticalLayer = (solLayers ?? []).find(layer => layer?.id?.includes('tactical'));
-  const alchemixApyPct = defiApys?.alchemixVault ?? 2.2;
-  const ethStakedEntries = portfolioData.assets?.ETH?.stakedEntries ?? [];
-  const solStakedEntries = portfolioData.assets?.SOL?.stakedEntries ?? [];
 
   const deployREth = tacticalCollateralQty(ethTotalQty, ethTacticalLayer);
   const deployMSol = tacticalCollateralQty(solTotalQty, solTacticalLayer);
-  const ethBorrowUsdc = tacticalBorrowUsdc(deployREth, ethPrice, ltvMax);
-  const solBorrowUsdc = tacticalBorrowUsdc(deployMSol, solPrice, ltvMax);
+  const ethBorrowUsdc = tacticalBorrowUsdc(deployREth, ethPrice, targetLtvPct);
+  const solBorrowUsdc = tacticalBorrowUsdc(deployMSol, solPrice, targetLtvPct);
   const combinedBorrowUsdc = ethBorrowUsdc + solBorrowUsdc;
   const projectedLbtcQty = computeProjectedLbtcQty(combinedBorrowUsdc, btcPrice);
   const projectedLbtcUsd = projectedLbtcQty * btcPrice;
@@ -1385,7 +1465,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         lang={lang}
         totalPortfolioQty={ethTotalQty}
         price={ethPrice}
-        layers={ethLayers ?? []}
+        layers={ethEffectiveLayers ?? []}
         rebalanceLocked={rebalanceLocked}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
@@ -1400,6 +1480,9 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         stakedEntries={ethStakedEntries ?? []}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
+        arbitrumWinner={ethLayerPlan.arbitrumWinner}
+        alchemixLocked={ethLayerPlan.alchemixLocked}
+        targetLtvPct={targetLtvPct}
       />
 
       <AssetHcdCard
@@ -1422,6 +1505,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         stakedEntries={solStakedEntries ?? []}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
+        targetLtvPct={targetLtvPct}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">

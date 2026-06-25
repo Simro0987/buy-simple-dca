@@ -2,7 +2,12 @@ const KAMINO_MAIN_MARKET = '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF';
 const KAMINO_METRICS_URL = `https://api.kamino.finance/kamino-market/${KAMINO_MAIN_MARKET}/reserves/metrics`;
 const MORPHO_GRAPHQL = 'https://blue-api.morpho.org/graphql';
 
+import { fetchLlamaPools, normalizeApyPercent } from '@/lib/defiLlamaAggregator';
+
 export interface HcdBorrowRates {
+  morphoUsdcBorrowPct: number | null;
+  aaveArbitrumUsdcBorrowPct: number | null;
+  /** @deprecated use morphoUsdcBorrowPct */
   aaveV3UsdcBorrowPct: number | null;
   kaminoUsdcBorrowPct: number | null;
   avgBorrowPct: number;
@@ -20,9 +25,10 @@ function decimalToPercent(value: number | string | null | undefined): number | n
   return Math.round(pct * 100) / 100;
 }
 
-async function fetchMorphoUsdcBorrowPct(): Promise<number | null> {
+async function fetchMorphoUsdcBorrowPct(chainId?: number): Promise<number | null> {
+  const chainFilter = chainId != null ? `, where: { chainId_in: [${chainId}] }` : '';
   const query = `{
-    markets(first: 100) {
+    markets(first: 100${chainFilter}) {
       items {
         loanAsset { symbol }
         state { borrowApy }
@@ -45,6 +51,44 @@ async function fetchMorphoUsdcBorrowPct(): Promise<number | null> {
     if (best === null || pct > best) best = pct;
   }
   return best;
+}
+
+function pickArbitrumBorrowFromLlama(
+  pools: Awaited<ReturnType<typeof fetchLlamaPools>>,
+  projectMatch: RegExp,
+): number | null {
+  let best: number | null = null;
+  for (const p of pools) {
+    if (p.chain !== 'Arbitrum') continue;
+    if (!projectMatch.test(p.project)) continue;
+    if (!/USDC/i.test(p.symbol)) continue;
+    const borrow = normalizeApyPercent(p.apyBaseBorrow ?? p.apy);
+    if (borrow == null) continue;
+    if (best === null || borrow < best) best = borrow;
+  }
+  return best;
+}
+
+async function fetchAaveArbitrumUsdcBorrowPct(): Promise<number | null> {
+  try {
+    const pools = await fetchLlamaPools();
+    const fromLlama = pickArbitrumBorrowFromLlama(pools, /aave/i);
+    if (fromLlama != null) return fromLlama;
+  } catch { /* fallback below */ }
+  return null;
+}
+
+async function fetchMorphoArbitrumUsdcBorrowPct(): Promise<number | null> {
+  try {
+    const fromGraph = await fetchMorphoUsdcBorrowPct(42161);
+    if (fromGraph != null) return fromGraph;
+  } catch { /* fallback below */ }
+  try {
+    const pools = await fetchLlamaPools();
+    return pickArbitrumBorrowFromLlama(pools, /morpho/i);
+  } catch {
+    return null;
+  }
 }
 
 interface KaminoReserveMetric {
@@ -74,18 +118,26 @@ async function fetchKaminoUsdcBorrowPct(): Promise<number | null> {
  */
 export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
   const unavailable: string[] = [];
-  let aaveV3UsdcBorrowPct: number | null = null;
+  let morphoUsdcBorrowPct: number | null = null;
+  let aaveArbitrumUsdcBorrowPct: number | null = null;
   let kaminoUsdcBorrowPct: number | null = null;
 
-  const [morphoSettled, kaminoSettled] = await Promise.allSettled([
-    fetchMorphoUsdcBorrowPct(),
+  const [morphoSettled, aaveSettled, kaminoSettled] = await Promise.allSettled([
+    fetchMorphoArbitrumUsdcBorrowPct(),
+    fetchAaveArbitrumUsdcBorrowPct(),
     fetchKaminoUsdcBorrowPct(),
   ]);
 
   if (morphoSettled.status === 'fulfilled' && morphoSettled.value != null) {
-    aaveV3UsdcBorrowPct = morphoSettled.value;
+    morphoUsdcBorrowPct = morphoSettled.value;
   } else {
-    unavailable.push('Aave/Morpho');
+    unavailable.push('Morpho');
+  }
+
+  if (aaveSettled.status === 'fulfilled' && aaveSettled.value != null) {
+    aaveArbitrumUsdcBorrowPct = aaveSettled.value;
+  } else {
+    unavailable.push('Aave V3');
   }
 
   if (kaminoSettled.status === 'fulfilled' && kaminoSettled.value != null) {
@@ -94,7 +146,7 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
     unavailable.push('Kamino');
   }
 
-  const rates = [aaveV3UsdcBorrowPct, kaminoUsdcBorrowPct].filter(
+  const rates = [morphoUsdcBorrowPct, aaveArbitrumUsdcBorrowPct, kaminoUsdcBorrowPct].filter(
     (r): r is number => r != null && Number.isFinite(r),
   );
   const avgBorrowPct =
@@ -103,7 +155,9 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
       : 0;
 
   return {
-    aaveV3UsdcBorrowPct,
+    morphoUsdcBorrowPct,
+    aaveArbitrumUsdcBorrowPct,
+    aaveV3UsdcBorrowPct: morphoUsdcBorrowPct,
     kaminoUsdcBorrowPct,
     avgBorrowPct,
     unavailable,
