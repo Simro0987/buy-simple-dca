@@ -53,8 +53,11 @@ import {
   tacticalBorrowAtTargetLtv,
   TAKE_PROFIT_FULFILLED_EN,
   TAKE_PROFIT_FULFILLED_SK,
+  TAKE_PROFIT_NO_PROFIT_EN,
+  TAKE_PROFIT_NO_PROFIT_SK,
   TAKE_PROFIT_PLAN_EN,
   TAKE_PROFIT_PLAN_SK,
+  resolveSymbolEarnedProfit,
   type ArbitrumTacticalWinner,
 } from '@/lib/hcdActionPlanLogic';
 import type { ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
@@ -459,31 +462,31 @@ function TakeProfitCyborgActionPlan({
   lang,
   symbol,
   takeProfitPct,
-  takeProfitTargetQty,
-  takeProfitTargetUsd,
+  profitUsd,
+  takeProfitTargetUsdc,
   targetUsdc,
   deltaUsdc,
   targetMet,
+  noProfit,
   planConfirmed,
   onConfirmPlan,
   onRevertPlan,
   execDisabled,
-  nativeDecimals,
 }: {
   sk: boolean;
   lang: Lang;
   symbol: HcdSymbol;
   takeProfitPct: number;
-  takeProfitTargetQty: number;
-  takeProfitTargetUsd: number;
+  profitUsd: number;
+  takeProfitTargetUsdc: number;
   targetUsdc: number;
   deltaUsdc: number;
   targetMet: boolean;
+  noProfit: boolean;
   planConfirmed: boolean;
   onConfirmPlan: () => void;
   onRevertPlan: () => void;
   execDisabled: boolean;
-  nativeDecimals: number;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -499,8 +502,11 @@ function TakeProfitCyborgActionPlan({
   }, [planConfirmed]);
 
   const lineMuted = planConfirmed;
-  const planSummary = sk ? TAKE_PROFIT_PLAN_SK : TAKE_PROFIT_PLAN_EN;
+  const planSummary = noProfit
+    ? (sk ? TAKE_PROFIT_NO_PROFIT_SK : TAKE_PROFIT_NO_PROFIT_EN)
+    : (sk ? TAKE_PROFIT_PLAN_SK : TAKE_PROFIT_PLAN_EN);
   const confirmLabel = sk ? 'Vykonaj Swap do USDC' : 'Execute Swap to USDC';
+  const buttonDisabled = execDisabled || noProfit;
 
   return (
     <div
@@ -530,7 +536,7 @@ function TakeProfitCyborgActionPlan({
         <ManualPlanConfirm
           lang={lang}
           confirmed={planConfirmed}
-          disabled={execDisabled}
+          disabled={buttonDisabled}
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
           confirmLabel={confirmLabel}
@@ -539,23 +545,43 @@ function TakeProfitCyborgActionPlan({
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
         <p className="text-foreground/90 font-medium">{planSummary}</p>
-        <p>
-          {sk ? 'Take Profit alokácia' : 'Take Profit allocation'}:{' '}
-          <span className="text-foreground font-semibold">{(takeProfitPct * 100).toFixed(0)}%</span>
-          {' · '}
-          <span className="font-mono text-foreground tabular-nums">
-            {takeProfitTargetQty.toFixed(nativeDecimals)} {symbol} ({formatUsd(takeProfitTargetUsd)})
-          </span>
-        </p>
-        <p>
-          {sk ? 'Cieľ USDC' : 'USDC target'}:{' '}
-          <span className="font-mono font-semibold text-foreground tabular-nums">
-            {targetUsdc.toFixed(2)} USDC
-          </span>
-        </p>
+        {!noProfit && (
+          <>
+            <p>
+              {sk ? 'Vygenerovaný zisk' : 'Earned profit'}:{' '}
+              <span className="font-mono font-semibold text-foreground tabular-nums">
+                {formatUsd(profitUsd)}
+              </span>
+            </p>
+            <p>
+              {sk ? 'Take Profit alokácia' : 'Take Profit allocation'}:{' '}
+              <span className="text-foreground font-semibold">{(takeProfitPct * 100).toFixed(0)}%</span>
+              {' · '}
+              <span className="font-mono text-foreground tabular-nums">
+                {formatUsd(takeProfitTargetUsdc)} USDC
+              </span>
+            </p>
+            <p>
+              {sk ? 'Cieľ USDC' : 'USDC target'}:{' '}
+              <span className="font-mono font-semibold text-foreground tabular-nums">
+                {targetUsdc.toFixed(2)} USDC
+              </span>
+            </p>
+          </>
+        )}
       </div>
 
-      {targetMet ? (
+      {noProfit ? (
+        <CyborgCommandLine
+          prefix={sk ? 'Swap do USDC:' : 'Swap to USDC:'}
+          amount={0}
+          suffix="USDC"
+          lang={lang}
+          decimals={2}
+          muted={lineMuted}
+          usdMode
+        />
+      ) : targetMet ? (
         <div
           className={`rounded-lg border px-3 py-2.5 ${
             lineMuted ? 'border-border/30 bg-muted/20 opacity-60' : 'border-border/50 bg-muted/30'
@@ -584,9 +610,7 @@ function TakeProfitLayerExecution({
   symbol,
   lang,
   layer,
-  takeProfitTargetQty,
-  takeProfitPercent,
-  nativePrice,
+  capitalFunnel,
   usdcBalance,
   rebalanceLocked,
   buildDecisionMeta,
@@ -594,22 +618,19 @@ function TakeProfitLayerExecution({
   symbol: HcdSymbol;
   lang: Lang;
   layer: HcdLayerTarget;
-  takeProfitTargetQty: number;
-  takeProfitPercent: number;
-  nativePrice: number;
+  capitalFunnel: ReturnType<typeof computeCapitalFunnel>;
   usdcBalance: number;
   rebalanceLocked: boolean;
   buildDecisionMeta: () => DecisionConfirmMeta;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
-  const nativeDecimals = symbol === 'SOL' ? 2 : 4;
   const planKey = planKeyForLayer(layer?.id ?? 'gas');
   const planConfirmed = isExecutionConfirmed(planKey);
-  const takeProfitTargetUsd = takeProfitTargetQty * (nativePrice ?? 0);
+  const noProfit = !capitalFunnel?.hasEarnedProfit;
   const usdcDelta = useMemo(
-    () => computeTakeProfitUsdcDelta(takeProfitTargetQty, nativePrice, usdcBalance),
-    [takeProfitTargetQty, nativePrice, usdcBalance],
+    () => computeTakeProfitUsdcDelta(capitalFunnel?.takeProfitTargetUsdc, usdcBalance),
+    [capitalFunnel?.takeProfitTargetUsdc, usdcBalance],
   );
 
   const handleConfirmPlan = useCallback(() => {
@@ -640,17 +661,17 @@ function TakeProfitLayerExecution({
           sk={sk}
           lang={lang}
           symbol={symbol}
-          takeProfitPct={takeProfitPercent}
-          takeProfitTargetQty={takeProfitTargetQty}
-          takeProfitTargetUsd={takeProfitTargetUsd}
+          takeProfitPct={capitalFunnel?.takeProfitPercent ?? 0}
+          profitUsd={capitalFunnel?.profitUsd ?? 0}
+          takeProfitTargetUsdc={capitalFunnel?.takeProfitTargetUsdc ?? 0}
           targetUsdc={usdcDelta.targetUsdc}
           deltaUsdc={usdcDelta.deltaUsdc}
           targetMet={usdcDelta.targetMet}
+          noProfit={noProfit}
           planConfirmed={planConfirmed}
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
-          nativeDecimals={nativeDecimals}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1144,6 +1165,7 @@ function AssetHcdCard({
   arbitrumRouting,
   temperamentPct,
   usdcBalance,
+  profitUsd,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -1170,6 +1192,7 @@ function AssetHcdCard({
   arbitrumRouting?: ArbitrumRoutingSnapshot | null;
   temperamentPct: number;
   usdcBalance: number;
+  profitUsd: number;
 }) {
   const sk = lang === 'sk';
   const { isExecutionConfirmed } = usePortfolio();
@@ -1181,8 +1204,8 @@ function AssetHcdCard({
     [symbol, totalPortfolioQty],
   );
   const capitalFunnel = useMemo(
-    () => computeCapitalFunnel(allocationQty, temperamentPct),
-    [allocationQty, temperamentPct],
+    () => computeCapitalFunnel(allocationQty, temperamentPct, profitUsd),
+    [allocationQty, temperamentPct, profitUsd],
   );
   const workingCapitalQty = capitalFunnel.workingCapitalQty;
 
@@ -1292,9 +1315,7 @@ function AssetHcdCard({
                   symbol={symbol}
                   lang={lang}
                   layer={layer}
-                  takeProfitTargetQty={capitalFunnel.takeProfitTargetQty}
-                  takeProfitPercent={capitalFunnel.takeProfitPercent}
-                  nativePrice={price}
+                  capitalFunnel={capitalFunnel}
                   usdcBalance={usdcBalance}
                   rebalanceLocked={rebalanceLocked}
                   buildDecisionMeta={buildDecisionMeta}
@@ -1383,7 +1404,7 @@ function formatTimeSafe(d: Date | undefined | null): string {
 
 export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
-  const { portfolioData: rawPortfolioData, isExecutionConfirmed, cyborgUsdcDebt } = usePortfolio();
+  const { portfolioData: rawPortfolioData, isExecutionConfirmed, cyborgUsdcDebt, metrics } = usePortfolio();
   const portfolioData = ensurePortfolioData(rawPortfolioData);
   const { data: defiApys } = useDefiApys();
   const {
@@ -1419,13 +1440,25 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const solGasBuffer = useMemo(() => computeGasBuffer('SOL', solTotalQty), [solTotalQty]);
   const availableEth = ethGasBuffer.availableQty;
   const availableSol = solGasBuffer.availableQty;
+  const ethProfitUsd = useMemo(
+    () => resolveSymbolEarnedProfit({
+      metricsAsset: metrics?.assets?.find(a => a?.symbol === 'ETH'),
+    }).profitUsd,
+    [metrics?.assets],
+  );
+  const solProfitUsd = useMemo(
+    () => resolveSymbolEarnedProfit({
+      metricsAsset: metrics?.assets?.find(a => a?.symbol === 'SOL'),
+    }).profitUsd,
+    [metrics?.assets],
+  );
   const ethCapitalFunnel = useMemo(
-    () => computeCapitalFunnel(availableEth, temperamentPct),
-    [availableEth, temperamentPct],
+    () => computeCapitalFunnel(availableEth, temperamentPct, ethProfitUsd),
+    [availableEth, temperamentPct, ethProfitUsd],
   );
   const solCapitalFunnel = useMemo(
-    () => computeCapitalFunnel(availableSol, temperamentPct),
-    [availableSol, temperamentPct],
+    () => computeCapitalFunnel(availableSol, temperamentPct, solProfitUsd),
+    [availableSol, temperamentPct, solProfitUsd],
   );
   const stablesByNetwork = useStablesByNetwork();
   const usdcBalance = useMemo(
@@ -1793,6 +1826,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         arbitrumRouting={ethLayerPlan.arbitrumRouting}
         temperamentPct={temperamentPct}
         usdcBalance={usdcBalance}
+        profitUsd={ethProfitUsd}
       />
 
       <AssetHcdCard
@@ -1818,6 +1852,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         targetLtvPct={targetLtvPct}
         temperamentPct={temperamentPct}
         usdcBalance={usdcBalance}
+        profitUsd={solProfitUsd}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">

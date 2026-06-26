@@ -283,8 +283,34 @@ export function capCopyDeltasToAvailable(
 export interface CapitalFunnelResult {
   availableQty: number;
   takeProfitPercent: number;
-  takeProfitTargetQty: number;
+  profitUsd: number;
+  takeProfitTargetUsdc: number;
   workingCapitalQty: number;
+  hasEarnedProfit: boolean;
+}
+
+export interface SymbolProfitSnapshot {
+  profitUsd: number;
+  hasCostBasis: boolean;
+  principalUsd: number;
+}
+
+/** Resolve earned profit (USD) for ETH/SOL — principal protected when no cost basis exists. */
+export function resolveSymbolEarnedProfit(input: {
+  metricsAsset?: { invested?: number; value?: number; pnl?: number } | null;
+}): SymbolProfitSnapshot {
+  const invested = input.metricsAsset?.invested ?? 0;
+  const value = input.metricsAsset?.value ?? 0;
+  const hasCostBasis = Number.isFinite(invested) && invested > 0;
+  if (!hasCostBasis) {
+    return { profitUsd: 0, hasCostBasis: false, principalUsd: 0 };
+  }
+  const rawPnl = input.metricsAsset?.pnl;
+  const profitUsd = Math.max(
+    0,
+    Number.isFinite(rawPnl) ? (rawPnl ?? 0) : (value - invested),
+  );
+  return { profitUsd, hasCostBasis: true, principalUsd: invested };
 }
 
 /** Dynamic Take Profit % — conservative temperament secures more profit as USDC. */
@@ -295,16 +321,24 @@ export function computeTakeProfitPercent(temperamentPct: number | null | undefin
   return 0.20;
 }
 
-/** Available balance → Take Profit slice → working capital for layers 2–4. */
+/** Gas-buffered available balance + profit-only Take Profit; working capital stays full available. */
 export function computeCapitalFunnel(
   availableQty: number | null | undefined,
   temperamentPct: number | null | undefined,
+  profitUsd: number | null | undefined,
 ): CapitalFunnelResult {
   const avail = safeQty(availableQty);
+  const profit = Math.max(0, profitUsd ?? 0);
   const takeProfitPercent = computeTakeProfitPercent(temperamentPct);
-  const takeProfitTargetQty = avail * takeProfitPercent;
-  const workingCapitalQty = Math.max(0, avail - takeProfitTargetQty);
-  return { availableQty: avail, takeProfitPercent, takeProfitTargetQty, workingCapitalQty };
+  const takeProfitTargetUsdc = profit > 0 ? profit * takeProfitPercent : 0;
+  return {
+    availableQty: avail,
+    takeProfitPercent,
+    profitUsd: profit,
+    takeProfitTargetUsdc,
+    workingCapitalQty: avail,
+    hasEarnedProfit: profit > 0 && takeProfitTargetUsdc > 0,
+  };
 }
 
 export interface TakeProfitUsdcDelta {
@@ -314,12 +348,14 @@ export interface TakeProfitUsdcDelta {
 }
 
 export function computeTakeProfitUsdcDelta(
-  takeProfitTargetQty: number | null | undefined,
-  nativePrice: number | null | undefined,
+  takeProfitTargetUsdc: number | null | undefined,
   currentUsdcBalance: number | null | undefined,
 ): TakeProfitUsdcDelta {
-  const targetUsdc = safeQty(takeProfitTargetQty) * safeQty(nativePrice);
+  const targetUsdc = safeQty(takeProfitTargetUsdc);
   const currentUsdc = safeQty(currentUsdcBalance);
+  if (targetUsdc <= 0) {
+    return { targetUsdc: 0, deltaUsdc: 0, targetMet: false };
+  }
   if (currentUsdc >= targetUsdc) {
     return { targetUsdc, deltaUsdc: 0, targetMet: true };
   }
@@ -328,5 +364,7 @@ export function computeTakeProfitUsdcDelta(
 
 export const TAKE_PROFIT_PLAN_SK = 'Presun: Zabezpečenie zisku do USDC.';
 export const TAKE_PROFIT_PLAN_EN = 'Move: Secure profits into USDC.';
+export const TAKE_PROFIT_NO_PROFIT_SK = 'Zatiaľ žiadny vygenerovaný zisk na výber.';
+export const TAKE_PROFIT_NO_PROFIT_EN = 'No earned profit available to withdraw yet.';
 export const TAKE_PROFIT_FULFILLED_SK = 'Take Profit cieľ splnený';
 export const TAKE_PROFIT_FULFILLED_EN = 'Take Profit target met';
