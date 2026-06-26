@@ -3,9 +3,27 @@ import { computeGasBuffer } from '@/lib/hcdActionPlanLogic';
 /** Rough native ETH needed per on-chain step on Arbitrum (batch guard). */
 export const BATCH_GAS_ETH_PER_TX = 0.002;
 
-export type AtomicActionId = 'deposit' | 'borrow' | 'reserve' | 'yield' | 'growth';
+export type CollateralActionId = 'deposit' | 'borrow';
+export type YieldEngineActionId = 'auto_stake' | 'stable_swap' | 'hold_cash';
+
+/** @deprecated Use CollateralActionId / YieldEngineActionId */
+export type AtomicActionId = CollateralActionId | 'reserve' | 'yield' | 'growth' | YieldEngineActionId;
+
+export function collateralActionKey(planKey: string, actionId: CollateralActionId): string {
+  return `${planKey}-collateral-${actionId}`;
+}
+
+export function yieldEngineActionKey(planKey: string, actionId: YieldEngineActionId): string {
+  return `${planKey}-yield-${actionId}`;
+}
 
 export function atomicActionKey(planKey: string, actionId: AtomicActionId): string {
+  if (actionId === 'deposit' || actionId === 'borrow') {
+    return collateralActionKey(planKey, actionId);
+  }
+  if (actionId === 'auto_stake' || actionId === 'stable_swap' || actionId === 'hold_cash') {
+    return yieldEngineActionKey(planKey, actionId);
+  }
   return `${planKey}-${actionId}`;
 }
 
@@ -16,6 +34,22 @@ export function hasEnoughGasForBatch(availableEthQty: number, txCount: number): 
   return available >= BATCH_GAS_ETH_PER_TX * count;
 }
 
+export function countCollateralBatchTransactions(input: {
+  depositQty: number;
+  borrowUsd: number;
+  includeBorrow: boolean;
+}): number {
+  let count = 0;
+  if ((input.depositQty ?? 0) > 0) count += 1;
+  if (input.includeBorrow && (input.borrowUsd ?? 0) > 0) count += 1;
+  return count;
+}
+
+export function countYieldEngineBatchTransactions(deployUsd: number): number {
+  return (deployUsd ?? 0) > 0 ? 1 : 0;
+}
+
+/** @deprecated */
 export function countActiveBatchTransactions(input: {
   depositQty: number;
   borrowUsd: number;
