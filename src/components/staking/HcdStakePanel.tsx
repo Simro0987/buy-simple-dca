@@ -40,10 +40,14 @@ import {
   ALCHEMIX_FALLBACK_PLAN_EN,
   ALCHEMIX_FALLBACK_PLAN_SK,
   buildEthLayerPlanState,
+  capCopyDeltasToAvailable,
   computeDeltaQty,
+  computeDeployedAlchemixQty,
   computeDeployedCoreQty,
+  computeGasBuffer,
   formatArbitrumPlanInstruction,
   getActionPlanLtvCaps,
+  layerTargetQty,
   tacticalBorrowAtTargetLtv,
   type ArbitrumTacticalWinner,
 } from '@/lib/hcdActionPlanLogic';
@@ -100,8 +104,8 @@ function layerApy(layer: HcdLayerTarget, apys?: { rEth?: number; mSol?: number }
   return null;
 }
 
-function tacticalCollateralQty(totalQty: number, layer: HcdLayerTarget | undefined): number {
-  return totalQty * ((layer?.pctTarget ?? 0) / 100);
+function tacticalCollateralQty(availableQty: number, layer: HcdLayerTarget | undefined): number {
+  return layerTargetQty(availableQty, layer?.pctTarget);
 }
 
 function tacticalBorrowUsdc(collateralQty: number, price: number, ltvMax: number): number {
@@ -562,6 +566,7 @@ function CoreLayerExecution({
   buildDecisionMeta,
   stakedEntries,
   targetLtvPct,
+  copyQtyOverride,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -573,16 +578,17 @@ function CoreLayerExecution({
   buildDecisionMeta: () => DecisionConfirmMeta;
   stakedEntries: StakedEntry[];
   targetLtvPct: number;
+  copyQtyOverride?: number;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const layerPct = layer?.pctTarget ?? 0;
   const stakeDecimals = symbol === 'SOL' ? 2 : 4;
   const stakeLabel = symbol === 'ETH' ? 'ETH' : 'SOL';
-  const stakeQty = (totalQty ?? 0) * (layerPct / 100);
+  const stakeQty = layerTargetQty(totalQty, layerPct);
   const stakeUsd = stakeQty * (assetPrice ?? 0);
   const deployedQty = computeDeployedCoreQty(stakedEntries, symbol);
-  const copyStakeQty = computeDeltaQty(stakeQty, deployedQty);
+  const copyStakeQty = copyQtyOverride ?? computeDeltaQty(stakeQty, deployedQty);
   const planKey = planKeyForLayer(layer?.id ?? 'core');
   const planConfirmed = isExecutionConfirmed(planKey);
   const routing = symbol === 'ETH'
@@ -660,6 +666,7 @@ function TacticalLayerExecution({
   buildDecisionMeta,
   arbitrumWinner,
   arbitrumRouting,
+  copyQtyOverride,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -682,6 +689,7 @@ function TacticalLayerExecution({
   buildDecisionMeta: () => DecisionConfirmMeta;
   arbitrumWinner?: ArbitrumTacticalWinner;
   arbitrumRouting?: ArbitrumRoutingSnapshot | null;
+  copyQtyOverride?: number;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -690,9 +698,9 @@ function TacticalLayerExecution({
     ? (arbitrumWinner?.collateralToken ?? 'wETH')
     : 'mSOL';
   const layerPct = layer?.pctTarget ?? 0;
-  const collateralQty = (totalQty ?? 0) * (layerPct / 100);
+  const collateralQty = layerTargetQty(totalQty, layerPct);
   const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries ?? [], symbol);
-  const copyCollateralQty = computeDeltaQty(collateralQty, deployedCollateralQty);
+  const copyCollateralQty = copyQtyOverride ?? computeDeltaQty(collateralQty, deployedCollateralQty);
   const collateralUsd = collateralQty * (assetPrice ?? 0);
   const safeBorrowUsdc = tacticalBorrowAtTargetLtv(copyCollateralQty, assetPrice, targetLtvPct);
   const planKey = planKeyForLayer(layer?.id ?? 'tactical');
@@ -806,6 +814,8 @@ function AlchemixLayerExecution({
   alchemixApyPct,
   buildDecisionMeta,
   alchemixLocked,
+  copyQtyOverride,
+  stakedEntries,
 }: {
   lang: Lang;
   layer: HcdLayerTarget;
@@ -815,12 +825,15 @@ function AlchemixLayerExecution({
   alchemixApyPct: number;
   buildDecisionMeta: () => DecisionConfirmMeta;
   alchemixLocked: boolean;
+  copyQtyOverride?: number;
+  stakedEntries: StakedEntry[];
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const layerPct = alchemixLocked ? 0 : (layer?.pctTarget ?? 0);
-  const targetQty = alchemixLocked ? 0 : (totalEthQty ?? 0) * ((layer?.pctTarget ?? 0) / 100);
+  const targetQty = alchemixLocked ? 0 : layerTargetQty(totalEthQty, layer?.pctTarget);
   const targetUsd = targetQty * (ethPrice ?? 0);
+  const deployedAlchemixQty = computeDeployedAlchemixQty(stakedEntries);
   const planKey = planKeyForLayer(layer?.id ?? 'alchemix');
   const planConfirmed = isExecutionConfirmed(planKey);
   const fallbackText = sk ? ALCHEMIX_FALLBACK_PLAN_SK : ALCHEMIX_FALLBACK_PLAN_EN;
@@ -883,7 +896,7 @@ function AlchemixLayerExecution({
           showBorrowCommand={false}
           planSummary={alchemixLocked ? fallbackText : undefined}
           hideCopyBoxes={alchemixLocked}
-          copyCollateralQty={0}
+          copyCollateralQty={alchemixLocked ? 0 : (copyQtyOverride ?? computeDeltaQty(targetQty, deployedAlchemixQty))}
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}
@@ -947,6 +960,35 @@ function AssetHcdCard({
   const apys = useStakingSplitApys();
   const decimals = symbol === 'SOL' ? 2 : 3;
   const totalUsd = (totalPortfolioQty ?? 0) * (price ?? 0);
+  const allocationQty = useMemo(
+    () => computeGasBuffer(symbol === 'ETH' ? 'ETH' : 'SOL', totalPortfolioQty).availableQty,
+    [symbol, totalPortfolioQty],
+  );
+
+  const layerCopyQtyById = useMemo(() => {
+    const assetSymbol = symbol === 'ETH' ? 'ETH' : 'SOL';
+    const rows: { id: string; delta: number }[] = [];
+
+    for (const layer of layers ?? []) {
+      const layerId = layer?.id ?? '';
+      const isTactical = layerId.includes('tactical');
+      const isAlchemix = layerId.includes('alchemix');
+      const isCore = layerId.includes('core');
+      if (!isTactical && !isAlchemix && !isCore) continue;
+
+      const pct = isAlchemix && alchemixLocked ? 0 : (layer?.pctTarget ?? 0);
+      const target = layerTargetQty(allocationQty, pct);
+      let deployed = 0;
+      if (isCore) deployed = computeDeployedCoreQty(stakedEntries, assetSymbol);
+      else if (isTactical) deployed = sumTacticalDeployedQty(stakedEntries ?? [], assetSymbol);
+      else if (isAlchemix) deployed = computeDeployedAlchemixQty(stakedEntries);
+
+      rows.push({ id: layerId, delta: computeDeltaQty(target, deployed) });
+    }
+
+    const capped = capCopyDeltasToAvailable(rows.map(r => r.delta), allocationQty);
+    return new Map(rows.map((r, i) => [r.id, capped[i] ?? 0]));
+  }, [layers, allocationQty, stakedEntries, symbol, alchemixLocked]);
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/25 min-w-0">
@@ -1028,7 +1070,7 @@ function AssetHcdCard({
                   symbol={symbol}
                   lang={lang}
                   layer={layer}
-                  totalQty={totalPortfolioQty}
+                  totalQty={allocationQty}
                   assetPrice={price}
                   ltvMax={ltvMax}
                   targetLtvPct={targetLtvPct}
@@ -1046,6 +1088,7 @@ function AssetHcdCard({
                   buildDecisionMeta={buildDecisionMeta}
                   arbitrumWinner={symbol === 'ETH' ? arbitrumWinner : undefined}
                   arbitrumRouting={symbol === 'ETH' ? arbitrumRouting : undefined}
+                  copyQtyOverride={layerCopyQtyById.get(layerId)}
                 />
               )}
 
@@ -1053,12 +1096,14 @@ function AssetHcdCard({
                 <AlchemixLayerExecution
                   lang={lang}
                   layer={layer}
-                  totalEthQty={totalPortfolioQty}
+                  totalEthQty={allocationQty}
                   ethPrice={price}
                   rebalanceLocked={rebalanceLocked}
                   alchemixApyPct={alchemixApyPct}
                   buildDecisionMeta={buildDecisionMeta}
                   alchemixLocked={Boolean(alchemixLocked)}
+                  copyQtyOverride={layerCopyQtyById.get(layerId)}
+                  stakedEntries={stakedEntries}
                 />
               )}
 
@@ -1067,13 +1112,14 @@ function AssetHcdCard({
                   symbol={symbol}
                   lang={lang}
                   layer={layer}
-                  totalQty={totalPortfolioQty}
+                  totalQty={allocationQty}
                   assetPrice={price}
                   rebalanceLocked={rebalanceLocked}
                   apyText={apy}
                   buildDecisionMeta={buildDecisionMeta}
                   stakedEntries={stakedEntries}
                   targetLtvPct={targetLtvPct}
+                  copyQtyOverride={layerCopyQtyById.get(layerId)}
                 />
               )}
 
@@ -1133,6 +1179,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   );
   const ethTotalQty = aggregated.ethQty;
   const solTotalQty = aggregated.solQty;
+  const ethGasBuffer = useMemo(() => computeGasBuffer('ETH', ethTotalQty), [ethTotalQty]);
+  const solGasBuffer = useMemo(() => computeGasBuffer('SOL', solTotalQty), [solTotalQty]);
+  const availableEth = ethGasBuffer.availableQty;
+  const availableSol = solGasBuffer.availableQty;
   const ethPrice = aggregated.ethPrice;
   const solPrice = aggregated.solPrice;
   const btcPrice = portfolioData.prices?.btc ?? 0;
@@ -1179,8 +1229,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const ethTacticalLayer = (ethEffectiveLayers ?? []).find(layer => layer?.id?.includes('tactical'));
   const solTacticalLayer = (solLayers ?? []).find(layer => layer?.id?.includes('tactical'));
 
-  const deployREth = tacticalCollateralQty(ethTotalQty, ethTacticalLayer);
-  const deployMSol = tacticalCollateralQty(solTotalQty, solTacticalLayer);
+  const deployREth = tacticalCollateralQty(availableEth, ethTacticalLayer);
+  const deployMSol = tacticalCollateralQty(availableSol, solTacticalLayer);
   const ethBorrowUsdc = tacticalBorrowUsdc(deployREth, ethPrice, targetLtvPct);
   const solBorrowUsdc = tacticalBorrowUsdc(deployMSol, solPrice, targetLtvPct);
   const combinedBorrowUsdc = ethBorrowUsdc + solBorrowUsdc;

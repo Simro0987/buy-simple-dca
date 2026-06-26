@@ -200,6 +200,12 @@ export function computeDeployedCoreQty(
     .reduce((s, e) => s + (e?.amount ?? 0), 0);
 }
 
+export function computeDeployedAlchemixQty(entries: StakedEntry[] | null | undefined): number {
+  return (entries ?? [])
+    .filter(e => /alchemix/i.test(e?.protocol ?? ''))
+    .reduce((s, e) => s + safeQty(e?.amount), 0);
+}
+
 export function computeDeltaQty(targetQty: number, deployedQty: number): number {
   const delta = (targetQty ?? 0) - (deployedQty ?? 0);
   if (!Number.isFinite(delta)) return 0;
@@ -221,3 +227,55 @@ export const ALCHEMIX_FALLBACK_PLAN_SK =
   'Nevhodné podmienky pre Alchemix. Kapitál presmerovaný do Vrstvy 2 a 3.';
 export const ALCHEMIX_FALLBACK_PLAN_EN =
   'Unsuitable conditions for Alchemix. Capital redirected to Layers 2 and 3.';
+
+/** Hybrid gas buffer — 2 % of balance with a hard native-token cap. */
+export const GAS_BUFFER_PERCENT = 0.02;
+export const MAX_GAS_CAP_ETH = 0.015;
+export const MAX_GAS_CAP_SOL = 0.05;
+
+export interface GasBufferResult {
+  totalQty: number;
+  bufferQty: number;
+  availableQty: number;
+}
+
+function safeQty(value: number | null | undefined): number {
+  const n = value ?? 0;
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+}
+
+/** Reserve native token for fees; never allocate 100 % of wallet balance. */
+export function computeGasBuffer(
+  symbol: 'ETH' | 'SOL',
+  totalBalance: number | null | undefined,
+): GasBufferResult {
+  const totalQty = safeQty(totalBalance);
+  const maxCap = symbol === 'ETH' ? MAX_GAS_CAP_ETH : MAX_GAS_CAP_SOL;
+  const bufferQty = Math.min(totalQty * GAS_BUFFER_PERCENT, maxCap);
+  const availableQty = Math.max(0, totalQty - bufferQty);
+  return { totalQty, bufferQty, availableQty };
+}
+
+/** Layer target qty from gas-buffered available balance and HCD layer %. */
+export function layerTargetQty(
+  availableQty: number | null | undefined,
+  layerPct: number | null | undefined,
+): number {
+  const avail = safeQty(availableQty);
+  const pct = layerPct ?? 0;
+  if (!Number.isFinite(pct) || pct <= 0) return 0;
+  return avail * (pct / 100);
+}
+
+/** Scale copy deltas so proposed deposits never exceed available native balance. */
+export function capCopyDeltasToAvailable(
+  deltas: number[],
+  availableQty: number | null | undefined,
+): number[] {
+  const safeDeltas = (deltas ?? []).map(d => (Number.isFinite(d) ? Math.max(0, d) : 0));
+  const sum = safeDeltas.reduce((s, d) => s + d, 0);
+  const avail = safeQty(availableQty);
+  if (sum <= avail || sum <= 0) return safeDeltas;
+  const scale = avail / sum;
+  return safeDeltas.map(d => d * scale);
+}
