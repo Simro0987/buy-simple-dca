@@ -13,11 +13,11 @@ interface BinanceTicker {
 async function fetchTicker(symbol: string): Promise<number> {
   const res = await fetch(`https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`);
   if (!res.ok) throw new Error(`Binance ${symbol} ${res.status}`);
-  const json = (await res.json()) as BinanceTicker | { code?: number; msg?: string };
-  if ('code' in json && json.code !== undefined) {
+  const json = (await res.json()) as Partial<BinanceTicker> & { code?: number; msg?: string };
+  if (json.code !== undefined) {
     throw new Error(json.msg ?? `Binance ${symbol} blocked`);
   }
-  const price = parseFloat(json.price);
+  const price = parseFloat(json.price ?? '');
   if (!Number.isFinite(price) || price <= 0) throw new Error(`Binance ${symbol} invalid price`);
   return price;
 }
