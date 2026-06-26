@@ -22,6 +22,7 @@ import { generateDailyRiskReport } from '@/lib/dailyRiskReport';
 import { sendDailyRiskReportToTelegram } from '@/lib/telegramService';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
+import { LogicPanel } from '@/components/staking/LogicPanel';
 import {
   type DcaToken,
   DCA_TOKEN_COLORS,
@@ -541,6 +542,7 @@ function ModernPortfolioInner({ lang }: Props) {
                         <Lock className="w-4 h-4" />
                         Potvrdiť odpredaj → Profit Reservoir
                       </button>
+                      <LogicPanel action="dca_sell" lang={lang} />
                     </div>
                   )}
 

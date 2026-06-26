@@ -16,6 +16,15 @@ const baseState = (): MasterState => ({
   marketMode: 'BALANCED',
   prices: { btc: 100_000, eth: 3_000, sol: 150 },
   actionLock: { active: false, source: null, messageSk: '', messageEn: '' },
+  reasoningContext: {
+    marketScore: 50,
+    fearGreed: 50,
+    regime: 'sideways',
+    marketMode: 'BALANCED',
+    stakedRatio: 0,
+    totalBalanceUsd: 0,
+    weightedApyPct: 0,
+  },
   revision: 0,
 });
 
@@ -88,5 +97,12 @@ describe('cyborgEngine store', () => {
     expect(useCyborgEngine.getState().canAffordDcaUsd(100)).toBe(false);
     useCyborgEngine.getState().endStakeExecution();
     expect(useCyborgEngine.getState().canAffordDcaUsd(100)).toBe(true);
+  });
+
+  it('getReason returns contextual explanation', () => {
+    useCyborgEngine.getState().setReasoningContext({ marketScore: 19, fearGreed: 19 });
+    const reason = useCyborgEngine.getState().getReason('stake_eth', 'sk');
+    expect(reason).toContain('Prečo:');
+    expect(reason).toContain('19/100');
   });
 });

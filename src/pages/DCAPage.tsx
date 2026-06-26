@@ -165,6 +165,10 @@ export function DCAPage({ lang: _lang }: Props) {
       })),
       updatedAt: Date.now(),
     });
+    useCyborgEngine.getState().setReasoningContext({
+      marketScore: Number(plan.factorScore ?? 0),
+      regime: plan.regime,
+    });
   }, [inputs.capital, plan]);
 
   // Engine is fully automatic — no manual factor/regime overrides.
@@ -424,7 +428,7 @@ export function DCAPage({ lang: _lang }: Props) {
           <p className="text-xs font-medium">{engineComputed.dcaPauseMessageSk}</p>
         </div>
       )}
-      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={adjustedInvestableUsd} />
+      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={adjustedInvestableUsd} lang={_lang} />
 
 
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}

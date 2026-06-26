@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { usePrices } from '@/hooks/usePrices';
+import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useMarketEngine } from '@/contexts/MarketContext';
 import { subscribeCyborgLedgerSync, useCyborgEngine } from '@/stores/cyborgEngine';
 
@@ -8,6 +8,7 @@ import { subscribeCyborgLedgerSync, useCyborgEngine } from '@/stores/cyborgEngin
  */
 export function CyborgEngineBridge() {
   const { data: prices } = usePrices();
+  const { data: fearGreed } = useFearGreed();
   const { engine } = useMarketEngine();
 
   useEffect(() => {
@@ -27,6 +28,14 @@ export function CyborgEngineBridge() {
   useEffect(() => {
     useCyborgEngine.getState().setMarketMode(engine?.mode ?? 'UNKNOWN');
   }, [engine?.mode]);
+
+  useEffect(() => {
+    const fg = Number(fearGreed?.value ?? 0);
+    useCyborgEngine.getState().setReasoningContext({
+      fearGreed: Number.isFinite(fg) ? fg : 50,
+      marketScore: Number.isFinite(fg) && fg > 0 ? fg : useCyborgEngine.getState().reasoningContext.marketScore,
+    });
+  }, [fearGreed?.value]);
 
   return null;
 }

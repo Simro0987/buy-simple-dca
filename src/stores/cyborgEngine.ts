@@ -8,6 +8,12 @@ import {
   buildYieldPositionsFromEntries,
   calculateYield,
 } from '@/lib/yieldAggregator';
+import {
+  buildCyborgReason,
+  type CyborgReasonAction,
+  type ReasoningContext,
+} from '@/lib/cyborgReasoning';
+import type { Lang } from '@/lib/i18n';
 
 export type CyborgAsset = 'BTC' | 'ETH' | 'SOL';
 
@@ -56,6 +62,7 @@ export interface MasterState {
   marketMode: MarketMode | 'UNKNOWN';
   prices: { btc: number; eth: number; sol: number };
   actionLock: ActionLockState;
+  reasoningContext: ReasoningContext;
   revision: number;
 }
 
@@ -91,8 +98,33 @@ const INITIAL_STATE: MasterState = {
     messageSk: '',
     messageEn: '',
   },
+  reasoningContext: {
+    marketScore: 50,
+    fearGreed: 50,
+    regime: 'sideways',
+    marketMode: 'UNKNOWN',
+    stakedRatio: 0,
+    totalBalanceUsd: 0,
+    weightedApyPct: 0,
+  },
   revision: 0,
 };
+
+function buildReasoningSnapshot(state: MasterState): ReasoningContext {
+  const computed = computeCyborgMetrics(state);
+  const total = safeNum(computed.totalBalanceUsd);
+  const staked = safeNum(computed.totalStakedUsd);
+  return {
+    ...state.reasoningContext,
+    marketMode: state.marketMode ?? 'UNKNOWN',
+    stakedRatio: total > 0 ? staked / total : 0,
+    totalBalanceUsd: total,
+    weightedApyPct: safeNum(computed.weightedApyPct),
+  };
+}
+
+export type { CyborgReasonAction, ReasoningContext };
+export { buildCyborgReason } from '@/lib/cyborgReasoning';
 
 function loadHoldings(): Record<string, number> {
   try {
@@ -216,6 +248,7 @@ export function adjustDcaInvestableForMarketMode(
 
 interface CyborgEngineStore extends MasterState {
   getComputed: (apyRates?: ReturnType<typeof buildYieldApyRates>) => CyborgComputed;
+  getReason: (action: CyborgReasonAction, lang?: Lang) => string;
   syncFromSources: (input?: {
     holdings?: Record<string, number>;
     entries?: StakedEntry[];
@@ -224,6 +257,7 @@ interface CyborgEngineStore extends MasterState {
   setMarketMode: (mode: MasterState['marketMode']) => void;
   setDcaSchedule: (schedule: DcaScheduleSnapshot | null) => void;
   setPrices: (prices: { btc?: number; eth?: number; sol?: number }) => void;
+  setReasoningContext: (patch: Partial<ReasoningContext>) => void;
   beginStakeExecution: () => void;
   endStakeExecution: () => void;
   applyStakeExecution: (update: PortfolioBalanceUpdate, protocolHint?: string) => void;
@@ -236,6 +270,8 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
 
   getComputed: (apyRates) => computeCyborgMetrics(get(), apyRates),
 
+  getReason: (action, lang = 'sk') => buildCyborgReason(action, buildReasoningSnapshot(get()), lang),
+
   syncFromSources: (input) => {
     const holdings = input?.holdings ?? loadHoldings();
     const entries = input?.entries ?? getLedger();
@@ -244,15 +280,41 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
       eth: safeNum(input?.prices?.eth ?? get().prices.eth),
       sol: safeNum(input?.prices?.sol ?? get().prices.sol),
     };
-    set({
+    const partial: MasterState = {
+      ...get(),
       walletBalances: buildWalletFromSources(holdings, entries),
       stakingPositions: entriesToPositions(entries),
       prices,
       revision: get().revision + 1,
+    };
+    set({
+      ...partial,
+      reasoningContext: buildReasoningSnapshot(partial),
     });
   },
 
-  setMarketMode: (mode) => set({ marketMode: mode ?? 'UNKNOWN', revision: get().revision + 1 }),
+  setReasoningContext: (patch) => set({
+    reasoningContext: {
+      ...get().reasoningContext,
+      marketScore: safeNum(patch?.marketScore ?? get().reasoningContext.marketScore),
+      fearGreed: safeNum(patch?.fearGreed ?? get().reasoningContext.fearGreed),
+      regime: patch?.regime ?? get().reasoningContext.regime,
+      marketMode: patch?.marketMode ?? get().reasoningContext.marketMode,
+      stakedRatio: safeNum(patch?.stakedRatio ?? get().reasoningContext.stakedRatio),
+      totalBalanceUsd: safeNum(patch?.totalBalanceUsd ?? get().reasoningContext.totalBalanceUsd),
+      weightedApyPct: safeNum(patch?.weightedApyPct ?? get().reasoningContext.weightedApyPct),
+    },
+    revision: get().revision + 1,
+  }),
+
+  setMarketMode: (mode) => set({
+    marketMode: mode ?? 'UNKNOWN',
+    reasoningContext: {
+      ...get().reasoningContext,
+      marketMode: mode ?? 'UNKNOWN',
+    },
+    revision: get().revision + 1,
+  }),
 
   setDcaSchedule: (schedule) => set({ dcaSchedules: schedule, revision: get().revision + 1 }),
 

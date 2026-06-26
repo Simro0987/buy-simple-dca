@@ -10,6 +10,7 @@ import {
 import type { CollateralManagementSnapshot } from '@/lib/collateralManagement';
 import { LTV_STATUS_CLASS } from '@/lib/collateralManagement';
 import { AtomicActionBlock } from '@/components/staking/AtomicActionBlock';
+import { LogicPanel } from '@/components/staking/LogicPanel';
 import type { PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { evaluateTokenRequirement, isNewCollateralPosition } from '@/lib/portfolioTokenBalance';
@@ -156,6 +157,7 @@ export function CollateralActionChecklist({
           tokenCheck={depositCheck}
           onConfirm={() => onConfirm('deposit', { rEthQty: collateralQty })}
           onRevert={() => onRevert('deposit')}
+          reasonAction="collateral_deposit"
         />
       )}
 
@@ -173,6 +175,7 @@ export function CollateralActionChecklist({
           disabled={execDisabled}
           onConfirm={() => onConfirm('borrow', { usdcBorrowed: safeBorrowUsdc })}
           onRevert={() => onRevert('borrow')}
+          reasonAction="collateral_borrow"
         />
       )}
 
@@ -192,6 +195,7 @@ export function CollateralActionChecklist({
           >
             {sk ? `Potvrdiť všetko (${pendingCount})` : `Confirm all (${pendingCount})`}
           </Button>
+          <LogicPanel action="collateral" lang={lang} />
         </div>
       )}
 

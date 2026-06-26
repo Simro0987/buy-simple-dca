@@ -20,7 +20,9 @@ import {
 } from '@/lib/dynamicExecution';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
 import { useRegimeLimits } from '@/hooks/useRegimeLimits';
-import { useCyborgEngine, type CyborgAsset } from '@/stores/cyborgEngine';
+import { useCyborgEngine, type CyborgAsset, type CyborgReasonAction } from '@/stores/cyborgEngine';
+import { LogicPanel } from '@/components/staking/LogicPanel';
+import { Lang } from '@/lib/i18n';
 
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
@@ -47,6 +49,7 @@ interface Props {
   prices: PriceData | undefined;
   /** Týždenná alokácia v USD (z Final Score × kapitál). Rozdelí sa medzi BTC/ETH/SOL. */
   investableUsd: number;
+  lang?: Lang;
 }
 
 const COIN_PRICE_KEY: Record<CoinKey, string> = {
@@ -67,7 +70,7 @@ type Mode = 'market' | 'dynamic';
  *    Final Score, per-coin volatilitou/momentom a Fear & Greed indexom.
  */
 
-export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
+export function DynamicExecutionCard({ score, prices, investableUsd, lang = 'sk' }: Props) {
   const { data: metrics, isLoading } = usePerCoinMetrics();
   const { data: settings } = useAppSettings();
   const { data: fillRates } = useLimitFillRates();
@@ -123,6 +126,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     const symbol = coin.toUpperCase() as CyborgAsset;
     const qty = Number(amountUsd ?? 0) / px;
     useCyborgEngine.getState().applyDcaPurchase(symbol, qty);
+  };
+
+  const dcaReasonForCoin = (coin: CoinKey, mode: Mode): CyborgReasonAction => {
+    if (mode === 'dynamic') return 'dca_limit';
+    if (coin === 'btc') return 'dca_buy_btc';
+    if (coin === 'eth') return 'dca_buy_eth';
+    return 'dca_buy_sol';
   };
 
   // ===== DECOUPLED activation state — Market and Dynamic run independently =====
@@ -826,6 +836,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                                 ? <><ShoppingCart className="w-3 h-3" /> Aktivovať Market</>
                                 : 'Aktivovať Limit Dynamic')}
                           </button>
+                          {!card.isFilled && !card.isPending && !cardBusy && (
+                            <LogicPanel
+                              action={dcaReasonForCoin(c, card.mode)}
+                              lang={lang}
+                              className="mt-1.5"
+                            />
+                          )}
                           {card.mode === 'dynamic' && card.isPending && st?.limit?.id && (
                             <div className="mt-1 grid grid-cols-2 gap-1">
                               <button
