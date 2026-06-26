@@ -33,7 +33,7 @@ export interface DecisionConfirmMeta {
 }
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
-export type { PortfolioBalanceUpdate, DecisionConfirmMeta };
+export type { PortfolioBalanceUpdate };
 
 interface AssetBreakdown {
   symbol: string;

@@ -1,4 +1,5 @@
 import { getLayerCalibrationBias } from '@/lib/hcdSilentTracker';
+import type { Lang } from '@/lib/i18n';
 
 export type HcdSymbol = 'ETH' | 'SOL';
 export type VolatilityRegime = 'high' | 'normal' | 'low';
