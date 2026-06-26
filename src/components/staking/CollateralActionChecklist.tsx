@@ -32,6 +32,7 @@ export interface CollateralActionChecklistProps {
   onBatchConfirm: () => void;
   onManageGlobalYield?: () => void;
   showManageGlobalYield?: boolean;
+  usdcDebt?: number;
 }
 
 export function CollateralActionChecklist({
@@ -54,10 +55,27 @@ export function CollateralActionChecklist({
   onBatchConfirm,
   onManageGlobalYield,
   showManageGlobalYield = false,
+  usdcDebt,
 }: CollateralActionChecklistProps) {
-  const depositUsd = copyCollateralQty * (snapshot.targetUsd / Math.max(snapshot.targetQty, 1e-9));
-  const ltvClass = LTV_STATUS_CLASS[snapshot.ltvStatus];
+  const safeCollateral = Number(snapshot?.deployedQty ?? 0);
+  const safeBorrow = Number(usdcDebt ?? 0);
+  const safeCollateralQty = Number.isFinite(safeCollateral) ? safeCollateral : 0;
+  const safeBorrowUsd = Number.isFinite(safeBorrow) ? safeBorrow : 0;
+  const safeDeployedUsd = Number.isFinite(Number(snapshot?.deployedUsd ?? 0))
+    ? Number(snapshot?.deployedUsd ?? 0)
+    : 0;
+
+  const depositUsd = copyCollateralQty * (Number(snapshot?.targetUsd ?? 0) / Math.max(Number(snapshot?.targetQty ?? 0), 1e-9));
+  const ltvClass = LTV_STATUS_CLASS[snapshot?.ltvStatus ?? 'safe'];
   const includeBorrow = !supplyOnlyMode && safeBorrowUsdc > 0;
+
+  const projectedLtv = Number(snapshot?.projectedLtvPct ?? 0);
+  const currentLtv = Number(snapshot?.currentLtvPct ?? 0);
+  const calculatedLtvPct = Number.isFinite(projectedLtv) && projectedLtv > 0
+    ? projectedLtv
+    : (Number.isFinite(currentLtv) ? currentLtv : 0);
+  const calculatedLTV = `${calculatedLtvPct.toFixed(1)}%`;
+  const displayLTV = (safeCollateralQty === 0 && safeBorrowUsd === 0) ? '0.0%' : calculatedLTV;
 
   const batchTxCount = countCollateralBatchTransactions({
     depositQty: copyCollateralQty,
@@ -81,18 +99,18 @@ export function CollateralActionChecklist({
         <p>
           {sk ? 'Aktuálny kolaterál' : 'Current collateral'}:{' '}
           <span className="font-mono font-semibold text-foreground tabular-nums">
-            {snapshot.deployedQty.toFixed(collateralDecimals)} {collateralLabel}
+            {safeCollateralQty.toFixed(collateralDecimals)} {collateralLabel}
           </span>
           {' · '}
-          <span className="tabular-nums">{snapshot.deployedUsd.toFixed(2)} USD</span>
+          <span className="tabular-nums">{safeDeployedUsd.toFixed(2)} USD</span>
         </p>
         <p>
           {sk ? 'LTV Status' : 'LTV Status'}:{' '}
           <span className={`font-mono font-semibold tabular-nums ${ltvClass}`}>
-            {snapshot.projectedLtvPct > 0 ? snapshot.projectedLtvPct.toFixed(1) : snapshot.currentLtvPct.toFixed(1)}%
+            {displayLTV}
           </span>
           {' / max '}
-          {snapshot.maxLtvPct}%
+          {Number(snapshot?.maxLtvPct ?? 0)}%
         </p>
         <p>
           {sk ? 'Odporúčaný protokol' : 'Recommended protocol'}:{' '}

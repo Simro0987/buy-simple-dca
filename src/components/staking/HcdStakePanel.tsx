@@ -410,6 +410,15 @@ function CyborgActionPlan({
   const copyQty = copyCollateralQty ?? collateralQty;
   const collateralMode = Boolean(collateralSnapshot && collateralHandlers);
 
+  const safeCollateral = Number(positionCollateralQty ?? collateralSnapshot?.deployedQty ?? 0);
+  const safeBorrow = Number(positionUsdcDebt ?? 0);
+  const safeCollateralQty = Number.isFinite(safeCollateral) ? safeCollateral : 0;
+  const safeBorrowUsd = Number.isFinite(safeBorrow) ? safeBorrow : 0;
+  const showRetreatWarning = Boolean(
+    exitAlert?.active
+    && (exitAlert.variant !== 'urgent' || (safeCollateralQty > 0 && safeBorrowUsd > 0)),
+  );
+
   return (
     <div
       className={`rounded-xl border p-3 space-y-3 transition-colors duration-500 ${
@@ -472,7 +481,7 @@ function CyborgActionPlan({
         </label>
       )}
 
-      {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
+      {showRetreatWarning && exitAlert && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
         {planSummary && !collateralMode && (
@@ -523,6 +532,7 @@ function CyborgActionPlan({
           onBatchConfirm={collateralHandlers.onBatchConfirm}
           onManageGlobalYield={onManageGlobalYield}
           showManageGlobalYield={showManageGlobalYield}
+          usdcDebt={positionUsdcDebt}
         />
       )}
 
