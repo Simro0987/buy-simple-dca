@@ -53,8 +53,12 @@ export function GlobalYieldEngine({
   return (
     <section
       id={GLOBAL_YIELD_ENGINE_SECTION_ID}
+      data-component="global-yield-engine"
       className="scroll-mt-4 rounded-xl border border-emerald-500/35 bg-emerald-500/5 p-3 space-y-3"
     >
+      <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-200">
+        {sk ? 'Globálna optimalizácia borrow kapitálu' : 'Cross-network borrowed capital optimization'}
+      </p>
       <YieldEngineChecklist {...checklistProps} />
     </section>
   );

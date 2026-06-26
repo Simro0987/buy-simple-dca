@@ -128,8 +128,8 @@ export function buildYieldEnginePlan(input: {
   if (input.supplyOnlyMode) {
     return {
       ...empty,
-      blockReasonSk: 'Supply Only Mode — Yield Engine je neaktívny (bez borrow).',
-      blockReasonEn: 'Supply Only Mode — Yield Engine inactive (no borrow).',
+      blockReasonSk: 'Supply Only Mode — Global Yield Engine je neaktívny (bez borrow).',
+      blockReasonEn: 'Supply Only Mode — Global Yield Engine inactive (no borrow).',
     };
   }
 
@@ -142,8 +142,8 @@ export function buildYieldEnginePlan(input: {
   if (borrowedUsdcUsd <= 0) {
     return {
       ...empty,
-      blockReasonSk: 'Yield Engine sa aktivuje po vypožičaní USDC.',
-      blockReasonEn: 'Yield Engine activates after borrowing USDC.',
+      blockReasonSk: 'Global Yield Engine sa aktivuje po vypožičaní USDC.',
+      blockReasonEn: 'Global Yield Engine activates after borrowing USDC.',
     };
   }
 
