@@ -1,5 +1,6 @@
 import type { PortfolioData } from '@/lib/portfolioData';
 import { ensurePortfolioData } from '@/lib/portfolioData';
+import { sumTacticalDeployedQty } from '@/lib/hcdExitStrategy';
 
 export type PositionOverviewMode = 'staking' | 'lending' | 'alchemix' | 'yield' | 'gas';
 
@@ -10,6 +11,7 @@ export interface PositionOverviewInput {
   portfolio?: PortfolioData | null;
   usdcDebt?: number;
   stablesTotalUsd?: number;
+  usdcWalletBonus?: number;
   collateralQty?: number;
   decimals?: number;
 }
@@ -71,7 +73,7 @@ export function buildPositionOverview(input: PositionOverviewInput): PositionOve
     const asset = portfolio?.assets?.[symbol];
 
     if (mode === 'gas' || mode === 'yield') {
-      const walletQty = safeQty(input.stablesTotalUsd);
+      const walletQty = safeQty(input.stablesTotalUsd) + safeQty(input.usdcWalletBonus);
       const borrowQty = safeQty(input.usdcDebt);
       return {
         walletQty,
@@ -94,9 +96,12 @@ export function buildPositionOverview(input: PositionOverviewInput): PositionOve
     let collateralQty = safeQty(input.collateralQty);
     if (collateralQty <= 0 && portfolio) {
       if (mode === 'lending') {
-        collateralQty = symbol === 'ETH'
-          ? safeQty(portfolio.activeMotor?.rEth?.qty)
-          : safeQty(portfolio.activeMotor?.mSol?.qty);
+        const tacticalQty = sumTacticalDeployedQty(asset?.stakedEntries, symbol);
+        collateralQty = tacticalQty > 0
+          ? tacticalQty
+          : symbol === 'ETH'
+            ? safeQty(portfolio.activeMotor?.rEth?.qty)
+            : safeQty(portfolio.activeMotor?.mSol?.qty);
       } else if (mode === 'alchemix') {
         collateralQty = safeQty(portfolio.alchemixReserve?.eth?.qty);
       }
