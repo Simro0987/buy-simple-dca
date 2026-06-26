@@ -11,6 +11,7 @@ import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { PositionOverviewPanel } from '@/components/staking/PositionOverviewPanel';
+import { YieldDashboard } from '@/components/staking/YieldDashboard';
 import type { PositionOverviewMode } from '@/lib/positionOverview';
 import {
   CollateralActionChecklist,
@@ -1983,6 +1984,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/20 min-w-0 relative">
+      <YieldDashboard lang={lang} lbtcSupplyApyPct={terminalApysSafe.lbtcSupply} />
+
       {updating && (
         <div className="absolute top-2 right-2 z-10 flex items-center gap-1 rounded-full bg-background/90 border border-border/60 px-2 py-1 text-[10px] text-muted-foreground">
           <Loader2 className="w-3 h-3 animate-spin text-violet-400" />
