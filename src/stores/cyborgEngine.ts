@@ -18,6 +18,8 @@ import {
 
 export type CyborgAsset = 'BTC' | 'ETH' | 'SOL';
 
+export const CYBORG_ASSETS: readonly CyborgAsset[] = ['BTC', 'ETH', 'SOL'] as const;
+
 export interface WalletBalances {
   BTC: number;
   ETH: number;
@@ -76,6 +78,77 @@ export interface CyborgComputed {
   dcaPaused: boolean;
   dcaPauseMessageSk: string;
   dcaPauseMessageEn: string;
+}
+
+export interface AssetPortfolioSnapshot {
+  symbol: CyborgAsset;
+  walletQty: number;
+  stakedQty: number;
+  totalQty: number;
+  priceUsd: number;
+  walletUsd: number;
+  stakedUsd: number;
+  totalUsd: number;
+}
+
+export interface PortfolioSnapshot {
+  assets: AssetPortfolioSnapshot[];
+  bySymbol: Record<CyborgAsset, AssetPortfolioSnapshot>;
+  totalBalanceUsd: number;
+  totalWalletUsd: number;
+  totalStakedUsd: number;
+}
+
+function priceForAsset(prices: MasterState['prices'], symbol: CyborgAsset): number {
+  if (symbol === 'BTC') return safeNum(prices?.btc);
+  if (symbol === 'SOL') return safeNum(prices?.sol);
+  return safeNum(prices?.eth);
+}
+
+export function computePortfolioSnapshot(state: MasterState): PortfolioSnapshot {
+  const wallet = state.walletBalances ?? EMPTY_WALLET;
+  const prices = state.prices ?? { btc: 0, eth: 0, sol: 0 };
+  const stakedBySymbol: Record<CyborgAsset, number> = { BTC: 0, ETH: 0, SOL: 0 };
+
+  for (const pos of state.stakingPositions ?? []) {
+    if (pos.symbol === 'BTC' || pos.symbol === 'ETH' || pos.symbol === 'SOL') {
+      stakedBySymbol[pos.symbol] += safeNum(pos.amount);
+    }
+  }
+
+  const assets = CYBORG_ASSETS.map((symbol) => {
+    const walletQty = safeNum(wallet[symbol]);
+    const stakedQty = safeNum(stakedBySymbol[symbol]);
+    const priceUsd = priceForAsset(prices, symbol);
+    const walletUsd = walletQty * priceUsd;
+    const stakedUsd = stakedQty * priceUsd;
+    return {
+      symbol,
+      walletQty,
+      stakedQty,
+      totalQty: walletQty + stakedQty,
+      priceUsd,
+      walletUsd,
+      stakedUsd,
+      totalUsd: walletUsd + stakedUsd,
+    };
+  });
+
+  const bySymbol = assets.reduce((acc, asset) => {
+    acc[asset.symbol] = asset;
+    return acc;
+  }, {} as Record<CyborgAsset, AssetPortfolioSnapshot>);
+
+  const totalWalletUsd = assets.reduce((sum, a) => sum + a.walletUsd, 0);
+  const totalStakedUsd = assets.reduce((sum, a) => sum + a.stakedUsd, 0);
+
+  return {
+    assets,
+    bySymbol,
+    totalBalanceUsd: totalWalletUsd + totalStakedUsd,
+    totalWalletUsd,
+    totalStakedUsd,
+  };
 }
 
 const HOLDINGS_KEY = 'smart-alloc-holdings';
@@ -227,6 +300,7 @@ export function adjustDcaInvestableForMarketMode(
 
 interface CyborgEngineStore extends MasterState {
   getComputed: (apyRates?: ReturnType<typeof buildYieldApyRates>) => CyborgComputed;
+  getPortfolioSnapshot: () => PortfolioSnapshot;
   syncFromSources: (input?: {
     holdings?: Record<string, number>;
     entries?: StakedEntry[];
@@ -248,6 +322,8 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
   ...INITIAL_STATE,
 
   getComputed: (apyRates) => computeCyborgMetrics(get(), apyRates),
+
+  getPortfolioSnapshot: () => computePortfolioSnapshot(get()),
 
   syncFromSources: (input) => {
     const holdings = input?.holdings ?? loadHoldings();

@@ -2,6 +2,9 @@
  * DCA-Out Radar — pure business logic (Live Risk Score model).
  * UI lives in ModernPortfolioPage only.
  */
+import { loadHoldingsRecord, saveHoldingsRecord } from '@/lib/cyborgHoldingsSync';
+import { useCyborgEngine } from '@/stores/cyborgEngine';
+
 export type DcaToken = 'BTC' | 'ETH' | 'SOL';
 
 export const DCA_TOKEN_COLORS: Record<DcaToken, string> = {
@@ -16,7 +19,7 @@ export const DCA_SOURCES: Record<DcaToken, string[]> = {
   SOL: ['Natívne SOL', 'Marinade Native', 'INF (Sanctum)'],
 };
 export const DEFAULT_HOLD: Record<DcaToken, number> = {
-  BTC: 0.0323276, ETH: 0.527723, SOL: 0,
+  BTC: 0, ETH: 0, SOL: 0,
 };
 
 export function loadDcaPrices(): Record<DcaToken, number> {
@@ -35,7 +38,7 @@ export function saveCooldown(c: Record<string, number>) {
   try { localStorage.setItem('dca-out-cooldown-v1', JSON.stringify(c)); } catch { /* quota */ }
 }
 export function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); } catch { return {}; }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 export function calcRSI(closes: number[]): number {
@@ -114,12 +117,12 @@ export function generateSellReason(fg: number, rsi: number, pnlPct: number, sym:
 }
 
 export function confirmDcaSell(sym: DcaToken, sellQty: number, currentPrice: number) {
-  const h = loadHoldings();
-  const key = sym.toLowerCase();
-  h[key] = Math.max(0, (h[key] ?? DEFAULT_HOLD[sym]) - sellQty);
-  localStorage.setItem('smart-alloc-holdings', JSON.stringify(h));
+  const h = { ...loadHoldingsRecord() };
+  const key = sym.toLowerCase() as 'btc' | 'eth' | 'sol';
+  h[key] = Math.max(0, (Number(h[key] ?? 0) || 0) - sellQty);
+  saveHoldingsRecord(h);
 
-  const soldUsd = sellQty * currentPrice;
+  const soldUsd = sellQty * (Number(currentPrice ?? 0) || 0);
   const prevCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
   localStorage.setItem('free-cash', String(prevCash + soldUsd));
 
@@ -127,6 +130,7 @@ export function confirmDcaSell(sym: DcaToken, sellQty: number, currentPrice: num
   cd[sym] = currentPrice;
   saveCooldown(cd);
 
+  useCyborgEngine.getState().syncFromSources({ holdings: h });
   window.dispatchEvent(new Event('portfolio-updated'));
 }
 
@@ -138,7 +142,7 @@ export function computeTokenRadar(
   dcaPrice: number,
 ) {
   const holdings = loadHoldings();
-  const hold = holdings[sym.toLowerCase()] ?? DEFAULT_HOLD[sym];
+  const hold = Number(holdings[sym.toLowerCase()] ?? 0) || 0;
   const pnlPct = dcaPrice > 0 && currentPrice > 0 ? ((currentPrice - dcaPrice) / dcaPrice) * 100 : 0;
   const inProfit = pnlPct > 0;
   const score = inProfit ? liveRiskScore(fg, rsi, pnlPct) : 0;

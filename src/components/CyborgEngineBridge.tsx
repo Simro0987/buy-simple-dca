@@ -15,7 +15,13 @@ export function CyborgEngineBridge() {
 
   useEffect(() => {
     useCyborgEngine.getState().syncFromSources();
-    return subscribeCyborgLedgerSync();
+    const onPortfolioUpdated = () => useCyborgEngine.getState().syncFromSources();
+    window.addEventListener('portfolio-updated', onPortfolioUpdated);
+    const unsubLedger = subscribeCyborgLedgerSync();
+    return () => {
+      window.removeEventListener('portfolio-updated', onPortfolioUpdated);
+      unsubLedger();
+    };
   }, []);
 
   useEffect(() => {

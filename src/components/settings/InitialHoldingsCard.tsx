@@ -9,6 +9,7 @@ import {
   TOKEN_PRICE_ID,
   type CoinKey,
 } from '@/lib/manualHoldingsAccumulator';
+import { syncManualHoldingsToEngine } from '@/lib/cyborgHoldingsSync';
 
 // Immutable baseline (Master Top — držby pred spustením appky).
 const BASELINE = { btc: 0.01746423, eth: 0.23278498, sol: 2.60983568 } as const;
@@ -67,6 +68,11 @@ export function InitialHoldingsCard() {
     });
   }, [settings]);
 
+  useEffect(() => {
+    if (!settings?.manual_holdings) return;
+    syncManualHoldingsToEngine(settings.manual_holdings as Record<CoinKey, number>);
+  }, [settings?.manual_holdings]);
+
   const baselineOk =
     Number(settings?.manual_holdings?.btc ?? 0) >= BASELINE.btc &&
     Number(settings?.manual_holdings?.eth ?? 0) >= BASELINE.eth &&
@@ -87,6 +93,11 @@ export function InitialHoldingsCard() {
           eth: Number(costBasis.eth) || 0,
           sol: Number(costBasis.sol) || 0,
         },
+      });
+      syncManualHoldingsToEngine({
+        btc: Number(holdings.btc) || 0,
+        eth: Number(holdings.eth) || 0,
+        sol: Number(holdings.sol) || 0,
       });
       toast.success('Holdingy uložené ✓');
     } catch {
@@ -118,6 +129,7 @@ export function InitialHoldingsCard() {
         manual_holdings: result.manual_holdings,
         initial_cost_basis: result.initial_cost_basis,
       });
+      syncManualHoldingsToEngine(result.manual_holdings);
       setAccInput(s => ({ ...s, [key]: '' }));
       setPriceTouched(s => ({ ...s, [key]: false }));
       setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
@@ -152,6 +164,7 @@ export function InitialHoldingsCard() {
         manual_holdings: result.manual_holdings,
         initial_cost_basis: result.initial_cost_basis,
       });
+      syncManualHoldingsToEngine(result.manual_holdings);
       setAccInput(s => ({ ...s, [key]: '' }));
       setPriceTouched(s => ({ ...s, [key]: false }));
       setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));

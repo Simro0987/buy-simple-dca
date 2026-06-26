@@ -13,6 +13,7 @@ import { MacroNewsTicker } from '@/components/MacroNewsTicker';
 import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
 import { usePrices } from '@/hooks/usePrices';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
+import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 import { formatUsd, formatPrice, TOKENS } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import type { OctToken } from '@/hooks/useConfluenceMetrics';
@@ -42,11 +43,12 @@ function loadFreeCash(): number {
 export function TerminalDashboard({ onNavigate, lang }: Props) {
   const { data: prices, isFetching, refetch } = usePrices();
   const metrics = usePortfolioMetrics(prices);
+  const engineTotalUsd = useCyborgTotalUsd();
   const [octagonToken, setOctagonToken] = useState<OctToken>('BTC');
 
   const invested = loadInvested();
   const [freeCash, setFreeCash] = useState(loadFreeCash);
-  const totalValue = metrics.totalValue;
+  const totalValue = engineTotalUsd > 0 ? engineTotalUsd : Number(metrics.totalValue ?? 0) || 0;
   const pnlUsd = totalValue - invested;
   const pnlPct = invested > 0 ? (pnlUsd / invested) * 100 : 0;
   const pnlPos = pnlUsd >= 0;

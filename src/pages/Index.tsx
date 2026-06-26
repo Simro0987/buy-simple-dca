@@ -16,7 +16,7 @@ import { useUnreadHighImpact } from '@/hooks/useUnreadHighImpact';
 import { TOKENS } from '@/lib/crypto';
 import { TAB_ROUTES } from '@/lib/tabRoutes';
 import { TabPanel } from '@/components/deep-space/primitives';
-import { useCyborgEngine } from '@/stores/cyborgEngine';
+import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 
 function loadHoldings(): Record<string, number> {
   try {
@@ -55,18 +55,17 @@ const Index = () => {
     return () => window.removeEventListener('app-navigate-tab', handler);
   }, []);
 
-  const engineRevision = useCyborgEngine(s => s.revision);
+  const engineTotalUsd = useCyborgTotalUsd();
   const totalValue = useMemo(() => {
-    const engineUsd = Number(useCyborgEngine.getState().getComputed().totalBalanceUsd ?? 0);
-    if (engineUsd > 0) return engineUsd;
+    if (engineTotalUsd > 0) return engineTotalUsd;
     if (!prices) return 0;
     const holdings = loadHoldings();
     return TOKENS.reduce((sum, t) => {
-      const qty = Number(holdings[t.id] ?? 0);
-      const price = Number(prices[t.coingeckoId]?.usd ?? 0);
+      const qty = Number(holdings[t.id] ?? 0) || 0;
+      const price = Number(prices[t.coingeckoId]?.usd ?? 0) || 0;
       return sum + qty * price;
     }, 0);
-  }, [prices, engineRevision]);
+  }, [prices, engineTotalUsd]);
 
   if (!unlocked) {
     return <PinLock onUnlock={() => setUnlocked(true)} />;

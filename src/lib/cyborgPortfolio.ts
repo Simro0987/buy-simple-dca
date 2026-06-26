@@ -13,6 +13,15 @@ export interface PortfolioBalanceUpdate {
   usdcBorrowed?: number;
 }
 
+export function buildCollateralDepositUpdate(
+  baseAsset: 'ETH' | 'SOL',
+  qty: number,
+): PortfolioBalanceUpdate {
+  const amount = Number(qty ?? 0) || 0;
+  if (amount <= 0) return {};
+  return baseAsset === 'SOL' ? { mSolQty: amount } : { rEthQty: amount };
+}
+
 export interface ConfirmedStepData {
   update: PortfolioBalanceUpdate;
 }

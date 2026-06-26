@@ -15,7 +15,7 @@ import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
-import { useCyborgEngine } from '@/stores/cyborgEngine';
+import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generateDailyRiskReport } from '@/lib/dailyRiskReport';
@@ -71,12 +71,11 @@ function ModernPortfolioInner({ lang }: Props) {
     totalStakedValue, blendedApy, profitAvailable, portfolioData,
     totalValue,
   } = usePortfolio();
-  const engineRevision = useCyborgEngine(s => s.revision);
-  const engineTotalUsd = useMemo(() => {
-    const computed = useCyborgEngine.getState().getComputed();
-    return Number(computed.totalBalanceUsd ?? 0);
-  }, [engineRevision]);
-  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : Number(totalValue ?? 0);
+  const engineTotalUsd = useCyborgTotalUsd();
+  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : Number(totalValue ?? 0) || 0;
+  const displayPnl = Number(metrics.totalPnl ?? 0) || 0;
+  const displayPnlPct = Number(metrics.totalPnlPct ?? 0) || 0;
+  const isGain = displayPnl >= 0;
 
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
   const [confirmKey, setConfirmKey] = useState(0);
@@ -127,19 +126,19 @@ function ModernPortfolioInner({ lang }: Props) {
   const maxRisk = Math.max(...radarTokens.map(t => t.score), 0);
 
   const healthScore = useMemo(() => {
-    if (metrics.totalValue <= 0) return null;
-    const drift = metrics.assets.reduce((s, a) => s + Math.abs(a.deviationPct), 0);
+    if (displayTotalUsd <= 0) return null;
+    const drift = metrics.assets.reduce((s, a) => s + Math.abs(Number(a.deviationPct ?? 0) || 0), 0);
     const alloc = Math.max(0, 40 - drift * 2);
-    const present = metrics.assets.filter(a => a.actualPct > 0.01).length;
+    const present = metrics.assets.filter(a => (Number(a.actualPct ?? 0) || 0) > 0.01).length;
     const div = present === 3 ? 20 : present === 2 ? 12 : 5;
-    const stakedRatio = metrics.totalValue > 0 ? totalStakedValue / metrics.totalValue : 0;
+    const stakedRatio = displayTotalUsd > 0 ? (Number(totalStakedValue ?? 0) || 0) / displayTotalUsd : 0;
     const stake = stakedRatio >= 0.3 && stakedRatio <= 0.6 ? 20
       : stakedRatio < 0.3 ? Math.round((stakedRatio / 0.3) * 20)
       : Math.max(5, Math.round(20 - (stakedRatio - 0.6) * 30));
-    const pnlPct = metrics.totalPnlPct;
+    const pnlPct = displayPnlPct;
     const dd = pnlPct >= 0 ? 20 : Math.max(0, Math.round(20 + (pnlPct / 50) * 20));
     return Math.min(100, Math.round(alloc + div + stake + dd));
-  }, [metrics, totalStakedValue]);
+  }, [metrics, totalStakedValue, displayTotalUsd, displayPnlPct]);
 
   const halvingProgress = useMemo(() => {
     const total = NEXT_HALVING.getTime() - LAST_HALVING.getTime();
@@ -148,11 +147,11 @@ function ModernPortfolioInner({ lang }: Props) {
   }, []);
 
   const btcGoal = useMemo(() => {
-    const btcPrice = prices?.bitcoin?.usd ?? 0;
+    const btcPrice = Number(prices?.bitcoin?.usd ?? 0) || 0;
     if (btcPrice <= 0) return null;
-    const equiv = metrics.totalValue / btcPrice;
+    const equiv = displayTotalUsd / btcPrice;
     return { equiv, progress: Math.min(100, (equiv / GOAL_BTC) * 100) };
-  }, [metrics.totalValue, prices]);
+  }, [displayTotalUsd, prices]);
 
   const takeProfitRows = useMemo(() => metrics.assets.map(a => {
     const adj = a.holdings;
@@ -179,7 +178,6 @@ function ModernPortfolioInner({ lang }: Props) {
     }
   };
 
-  const isGain = metrics.totalPnl >= 0;
   const eligibleTakeProfitRows = useMemo(
     () => takeProfitRows.filter(r => r.eligible),
     [takeProfitRows],
@@ -260,11 +258,11 @@ function ModernPortfolioInner({ lang }: Props) {
             <div className="flex items-center gap-1.5 justify-end">
               {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
               <Money size="md" positive={isGain} negative={!isGain}>
-                {isGain ? '+' : ''}{formatUsd(metrics.totalPnl)}
+                {isGain ? '+' : ''}{formatUsd(displayPnl)}
               </Money>
             </div>
             <p className={`font-mono text-sm mt-1 ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}>
-              {isGain ? '+' : ''}{metrics.totalPnlPct.toFixed(2)}%
+              {isGain ? '+' : ''}{displayPnlPct.toFixed(2)}%
             </p>
           </div>
         </div>
@@ -298,7 +296,7 @@ function ModernPortfolioInner({ lang }: Props) {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
         {[
           { l: sk ? 'Investované' : 'Invested', v: formatUsd(metrics.totalInvested), d: 0.04 },
-          { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(metrics.totalPnl)}`, d: 0.08, pos: isGain },
+          { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(displayPnl)}`, d: 0.08, pos: isGain },
           { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: formatUsd(weeklyCapital), d: 0.12 },
           { l: sk ? 'Voľný cash' : 'Free cash', v: formatUsd(freeCash + reservoir.stable), d: 0.16 },
         ].map(s => (

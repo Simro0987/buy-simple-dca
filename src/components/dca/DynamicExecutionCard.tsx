@@ -93,12 +93,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     eth: `${engine.perToken.eth}%`,
     sol: `${engine.perToken.sol}%`,
   };
+  const engineRevision = useCyborgEngine(s => s.revision);
+  const walletBalances = useCyborgEngine(s => s.walletBalances);
   const fgValue = typeof fg?.value === 'number' ? fg.value : 50;
   const fgLabel = fg?.classification ?? 'Neutral';
   const reservoir = useProfitReservoir();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
-  const engineRevision = useCyborgEngine(s => s.revision);
   const engineComputed = useMemo(
     () => useCyborgEngine.getState().getComputed(),
     [engineRevision],
@@ -268,10 +269,8 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
       const writtenKey = `portfolio-limit-written-${lim.id}`;
       if (localStorage.getItem(writtenKey)) continue;
       try {
-        const h = JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}') as Record<string, number>;
-        const k = coinSym.toLowerCase();
-        h[k] = (h[k] ?? 0) + qty;
-        localStorage.setItem('smart-alloc-holdings', JSON.stringify(h));
+        const symbol = coinSym.toUpperCase() as CyborgAsset;
+        useCyborgEngine.getState().applyDcaPurchase(symbol, qty);
         localStorage.setItem(writtenKey, '1');
         window.dispatchEvent(new Event('portfolio-updated'));
         const px = Number(lim.executed_price ?? 0);
@@ -285,7 +284,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         qc.invalidateQueries({ queryKey: ['limit-fill-rates'] });
       } catch { /* noop */ }
     }
-  }, [execStatus, qc, week]);
+  }, [execStatus, qc, week, engineRevision]);
 
   const result = useMemo(() => {
     if (!metrics) {
@@ -502,7 +501,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
           const cancelLBusy = cancelBusy === `${c}-limit`;
 
-          const heldQty = Number((settings?.manual_holdings as any)?.[c] ?? 0);
+          const heldQty = Number(walletBalances[symU as CyborgAsset] ?? 0) || 0;
           const marketQty = marketPriceEffective > 0 ? marketUsd / marketPriceEffective : 0;
           const dynQty = dynPriceEffective > 0 ? dynUsd / dynPriceEffective : 0;
           const mAddedQty = mDone ? Number(st?.market?.quantity ?? 0) : 0;

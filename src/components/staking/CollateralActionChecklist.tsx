@@ -12,6 +12,7 @@ import { LTV_STATUS_CLASS } from '@/lib/collateralManagement';
 import { AtomicActionBlock } from '@/components/staking/AtomicActionBlock';
 import type { PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 import { usePortfolio } from '@/contexts/PortfolioContext';
+import { buildCollateralDepositUpdate } from '@/lib/cyborgPortfolio';
 import { evaluateTokenRequirement, isNewCollateralPosition } from '@/lib/portfolioTokenBalance';
 
 export interface CollateralActionChecklistProps {
@@ -21,6 +22,7 @@ export interface CollateralActionChecklistProps {
   copyCollateralQty: number;
   collateralQty: number;
   collateralLabel: string;
+  baseAssetSymbol: 'ETH' | 'SOL';
   collateralDecimals: number;
   safeBorrowUsdc: number;
   supplyOnlyMode: boolean;
@@ -45,6 +47,7 @@ export function CollateralActionChecklist({
   copyCollateralQty,
   collateralQty,
   collateralLabel,
+  baseAssetSymbol,
   collateralDecimals,
   safeBorrowUsdc,
   supplyOnlyMode,
@@ -154,7 +157,7 @@ export function CollateralActionChecklist({
           confirmed={isConfirmed('deposit')}
           disabled={execDisabled}
           tokenCheck={depositCheck}
-          onConfirm={() => onConfirm('deposit', { rEthQty: collateralQty })}
+          onConfirm={() => onConfirm('deposit', buildCollateralDepositUpdate(baseAssetSymbol, copyCollateralQty))}
           onRevert={() => onRevert('deposit')}
         />
       )}
