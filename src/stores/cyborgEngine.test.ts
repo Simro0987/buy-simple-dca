@@ -16,15 +16,6 @@ const baseState = (): MasterState => ({
   marketMode: 'BALANCED',
   prices: { btc: 100_000, eth: 3_000, sol: 150 },
   actionLock: { active: false, source: null, messageSk: '', messageEn: '' },
-  reasoningContext: {
-    marketScore: 50,
-    fearGreed: 50,
-    regime: 'sideways',
-    marketMode: 'BALANCED',
-    stakedRatio: 0,
-    totalBalanceUsd: 0,
-    weightedApyPct: 0,
-  },
   marketData: {
     btcPrice: 0,
     ethPrice: 0,
@@ -107,26 +98,5 @@ describe('cyborgEngine store', () => {
     expect(useCyborgEngine.getState().canAffordDcaUsd(100)).toBe(false);
     useCyborgEngine.getState().endStakeExecution();
     expect(useCyborgEngine.getState().canAffordDcaUsd(100)).toBe(true);
-  });
-
-  it('getReason returns dynamic score-aware explanation', () => {
-    useCyborgEngine.getState().setReasoningContext({ marketScore: 19, fearGreed: 19 });
-    useCyborgEngine.getState().setMarketData({
-      ethPrice: 3400,
-      protocolAPY: 3.6,
-      protocolAPY12mAvg: 3.2,
-      fearGreedIndex: 19,
-    });
-    const reason = useCyborgEngine.getState().getReason('stake_eth', 'sk');
-    expect(reason).toContain('Staking ETH');
-    expect(reason).toContain('APY 3.6%');
-  });
-
-  it('getDynamicReason on store reads live marketScore per token', () => {
-    useCyborgEngine.getState().setMarketData({ solPrice: 150, protocolAPY: 7.2, fearGreedIndex: 25 });
-    const sol = useCyborgEngine.getState().getDynamicReason('COLLATERAL', 'SOL', 'sk');
-    expect(sol).toContain('SOL $150');
-    const eth = useCyborgEngine.getState().getDynamicReason('COLLATERAL', 'ETH', 'sk');
-    expect(eth).not.toContain('SOL $150');
   });
 });

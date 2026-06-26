@@ -160,7 +160,6 @@ export function YieldEngineChecklist({
         disabled={execDisabled || !batchGasOk}
         onConfirm={() => onConfirm('auto_stake', {})}
         onRevert={() => onRevert('auto_stake')}
-        reasonAction="yield_auto_stake"
       />
 
       <AtomicActionBlock
@@ -176,7 +175,6 @@ export function YieldEngineChecklist({
         disabled={execDisabled || !batchGasOk}
         onConfirm={() => onConfirm('stable_swap', {})}
         onRevert={() => onRevert('stable_swap')}
-        reasonAction="yield_stable_swap"
       />
 
       <AtomicActionBlock
@@ -192,7 +190,6 @@ export function YieldEngineChecklist({
         disabled={execDisabled || !batchGasOk}
         onConfirm={() => onConfirm('hold_cash', {})}
         onRevert={() => onRevert('hold_cash')}
-        reasonAction="yield_hold_cash"
       />
     </div>
   );

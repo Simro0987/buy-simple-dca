@@ -13,8 +13,6 @@ import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { PositionOverviewPanel } from '@/components/staking/PositionOverviewPanel';
 import { YieldDashboard } from '@/components/staking/YieldDashboard';
 import { ActionTokenRequirementBanner } from '@/components/staking/ActionTokenRequirementBanner';
-import { LogicPanel } from '@/components/staking/LogicPanel';
-import type { CyborgReasonAction } from '@/stores/cyborgEngine';
 import { evaluateTokenRequirement, isNewCollateralPosition, shouldShowRetreatWarning } from '@/lib/portfolioTokenBalance';
 import type { PositionOverviewMode } from '@/lib/positionOverview';
 import {
@@ -227,8 +225,6 @@ function ManualPlanConfirm({
   onConfirm,
   onRevert,
   confirmLabel,
-  reasonAction,
-  tokenSymbol,
 }: {
   lang: Lang;
   confirmed: boolean;
@@ -236,8 +232,6 @@ function ManualPlanConfirm({
   onConfirm: () => void;
   onRevert: () => void;
   confirmLabel?: string;
-  reasonAction?: CyborgReasonAction;
-  tokenSymbol?: string;
 }) {
   const sk = lang === 'sk';
 
@@ -257,20 +251,15 @@ function ManualPlanConfirm({
   }
 
   return (
-    <div className="flex flex-col items-end gap-1.5 w-full sm:w-auto">
-      <Button
-        type="button"
-        size="sm"
-        onClick={onConfirm}
-        disabled={disabled}
-        className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white"
-      >
-        {confirmLabel ?? (sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution')}
-      </Button>
-      {reasonAction && (
-        <LogicPanel action={reasonAction} tokenSymbol={tokenSymbol} lang={lang} className="w-full" />
-      )}
-    </div>
+    <Button
+      type="button"
+      size="sm"
+      onClick={onConfirm}
+      disabled={disabled}
+      className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white w-full sm:w-auto"
+    >
+      {confirmLabel ?? (sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution')}
+    </Button>
   );
 }
 
@@ -359,8 +348,6 @@ function CyborgActionPlan({
   positionSymbol,
   positionTokenLabel,
   positionUsdcDebt,
-  reasonAction = 'collateral',
-  tokenSymbol,
 }: {
   sk: boolean;
   layerPct: number;
@@ -406,8 +393,6 @@ function CyborgActionPlan({
   positionSymbol?: 'ETH' | 'SOL';
   positionTokenLabel?: string;
   positionUsdcDebt?: number;
-  reasonAction?: CyborgReasonAction;
-  tokenSymbol?: string;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -491,8 +476,6 @@ function CyborgActionPlan({
             disabled={execDisabled || !depositTokenCheck.hasEnoughToken}
             onConfirm={onConfirmPlan}
             onRevert={onRevertPlan}
-            reasonAction={reasonAction}
-            tokenSymbol={tokenSymbol ?? positionSymbol ?? collateralLabel}
           />
         )}
       </div>
@@ -571,7 +554,6 @@ function CyborgActionPlan({
           onManageGlobalYield={onManageGlobalYield}
           showManageGlobalYield={showManageGlobalYield}
           usdcDebt={positionUsdcDebt}
-          tokenSymbol={tokenSymbol ?? positionSymbol ?? collateralLabel}
         />
       )}
 
@@ -693,8 +675,6 @@ function TakeProfitCyborgActionPlan({
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
           confirmLabel={confirmLabel}
-          reasonAction="take_profit"
-          tokenSymbol={symbol}
         />
       </div>
 
@@ -849,8 +829,6 @@ function CoreCyborgActionPlan({
   execDisabled,
   copyStakeQty,
   positionSymbol,
-  reasonAction,
-  tokenSymbol,
 }: {
   sk: boolean;
   lang: Lang;
@@ -867,8 +845,6 @@ function CoreCyborgActionPlan({
   execDisabled: boolean;
   copyStakeQty?: number;
   positionSymbol: 'ETH' | 'SOL';
-  reasonAction: CyborgReasonAction;
-  tokenSymbol: string;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -930,8 +906,6 @@ function CoreCyborgActionPlan({
           disabled={execDisabled || !stakeTokenCheck.hasEnoughToken}
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
-          reasonAction={reasonAction}
-          tokenSymbol={tokenSymbol}
         />
       </div>
 
@@ -1056,8 +1030,6 @@ function CoreLayerExecution({
           execDisabled={rebalanceLocked}
           copyStakeQty={copyStakeQty}
           positionSymbol={symbol}
-          reasonAction={symbol === 'ETH' ? 'stake_eth' : 'stake_sol'}
-          tokenSymbol={symbol}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1352,8 +1324,6 @@ function TacticalLayerExecution({
           positionSymbol={symbol}
           positionTokenLabel={motorLabel}
           positionUsdcDebt={usdcDebt}
-          reasonAction="collateral"
-          tokenSymbol={symbol}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1469,8 +1439,6 @@ function AlchemixLayerExecution({
           positionMode="alchemix"
           positionSymbol="ETH"
           positionTokenLabel="ETH"
-          reasonAction="stake_eth"
-          tokenSymbol="ETH"
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}

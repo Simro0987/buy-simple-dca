@@ -148,25 +148,6 @@ function confirmSell(sym: DcaT, sellQty: number, currentPrice: number) {
   window.dispatchEvent(new Event('portfolio-updated'));
 }
 
-// ─── reason generator ────────────────────────────────────────────────────────
-function generateReason(fg: number, rsi: number, pnlPct: number, sym: DcaT, score: number): string {
-  const fgC  = fg  * 0.4;
-  const rsiC = rsi * 0.4;
-  const pnlC = pnlPct * 0.2;
-  const max  = Math.max(fgC, rsiC, pnlC);
-
-  if (max === fgC && fg >= 70) {
-    if (fg > 85) return `Extrémne trhové FOMO. Globálna eufória (F&G: ${fg}) ťahá trh na vrchol. PnL: +${pnlPct.toFixed(1)}%. Ideálny čas na zníženie rizika – história ukazuje reverzie z takýchto úrovní.`;
-    return `Vysoká trhová eufória (F&G: ${fg}). Trh je v chamtivej fáze – emocionálne nákupy dominujú. PnL ${sym}: +${pnlPct.toFixed(1)}%. Odporúčam postupne znižovať expozíciu.`;
-  }
-  if (max === rsiC && rsi > 70) {
-    const mktMood = fg < 45 ? 'globálny trh je ešte v neutrálnej / bearish zóne' : 'globálny trh rastie';
-    return `Lokálna pumpa ${sym}. RSI(14d): ${rsi} – minca je výrazne prekúpená. ${mktMood} (F&G: ${fg}). PnL: +${pnlPct.toFixed(1)}%. Ideálne na parciálny výber pred korekciou.`;
-  }
-  if (score < 50) return `Mierny rast portfólia. ${sym} je v stabilnom zisku (+${pnlPct.toFixed(1)}%), F&G: ${fg}, RSI: ${rsi}. Plynulé odkrajovanie do Profit Reservoiru pre budúce Limit nákupy BTC.`;
-  return `Kombinovaný signál. F&G: ${fg}, RSI ${sym}: ${rsi}, PnL: +${pnlPct.toFixed(1)}%. Viacero indikátorov súčasne ukazuje na zníženie rizika.`;
-}
-
 // ─── Risk score progress bar ─────────────────────────────────────────────────
 function RiskBar({ score }: { score: number }) {
   const pct = Math.min(100, Math.max(0, score));
@@ -433,14 +414,6 @@ function TokenCard({
                 letterSpacing: '0.05em', textTransform: 'uppercase' }}>
                 ⚡ LIVE RISK SCORE: {score.toFixed(1)} / 100 — ODPORÚČANÝ ODPREDAJ {sellPct}%
               </p>
-              {/* 🧠 Reason explanation */}
-              <div style={{ marginBottom: 10, padding: '8px 10px', background: 'rgba(239,68,68,0.05)',
-                border: '1px solid rgba(239,68,68,0.15)', borderRadius: T.rs }}>
-                <p style={{ fontSize: 9.5, color: T.textSub, lineHeight: 1.5 }}>
-                  <span style={{ fontWeight: 800, color: T.red }}>🧠 DÔVOD: </span>
-                  {generateReason(fg, rsi, pnlPct, sym, score)}
-                </p>
-              </div>
               {[
                 { ico: '🔴', lbl: 'LIVE AKCIA', val: `Predaj ${sellQty.toFixed(4)} ${sym}  (${sellPct}% pozície · Risk Score ${score.toFixed(0)})`, isSell: true },
                 { ico: '📂', lbl: 'ZDROJ',      val: SOURCES[sym].join(' / '), isSell: false },

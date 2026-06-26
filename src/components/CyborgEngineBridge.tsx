@@ -38,10 +38,6 @@ export function CyborgEngineBridge() {
 
   useEffect(() => {
     const fg = Number(fearGreed?.value ?? 0);
-    useCyborgEngine.getState().setReasoningContext({
-      fearGreed: Number.isFinite(fg) ? fg : 50,
-      marketScore: Number.isFinite(fg) && fg > 0 ? fg : useCyborgEngine.getState().reasoningContext.marketScore,
-    });
     if (Number.isFinite(fg) && fg > 0) {
       useCyborgEngine.getState().setMarketData({ fearGreedIndex: fg });
     }

@@ -7,8 +7,6 @@ import { formatUsd } from '@/lib/crypto';
 import { formatAtomicCopyText } from '@/lib/atomicActionPlan';
 import type { TokenRequirementCheck } from '@/lib/portfolioTokenBalance';
 import { ActionTokenRequirementBanner } from '@/components/staking/ActionTokenRequirementBanner';
-import { LogicPanel } from '@/components/staking/LogicPanel';
-import type { CyborgReasonAction } from '@/stores/cyborgEngine';
 
 export interface AtomicActionBlockProps {
   lang: Lang;
@@ -24,7 +22,6 @@ export interface AtomicActionBlockProps {
   onConfirm: () => void;
   onRevert: () => void;
   tokenCheck?: TokenRequirementCheck | null;
-  reasonAction?: CyborgReasonAction;
 }
 
 export function AtomicActionBlock({
@@ -41,7 +38,6 @@ export function AtomicActionBlock({
   onConfirm,
   onRevert,
   tokenCheck,
-  reasonAction,
 }: AtomicActionBlockProps) {
   const sk = lang === 'sk';
   const [copied, setCopied] = useState(false);
@@ -107,26 +103,16 @@ export function AtomicActionBlock({
             {sk ? 'Potvrdené' : 'Confirmed'}
           </Button>
         ) : (
-          <div className="flex flex-col items-end gap-1.5 shrink-0">
-            <Button
-              type="button"
-              size="sm"
-              onClick={handleConfirm}
-              disabled={inactive || disabled}
-              className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white"
-            >
-              {sk ? 'Potvrdiť exekúciu' : 'Confirm execution'}
-              {actionUrl && <ExternalLink className="w-3 h-3 ml-1 opacity-80" />}
-            </Button>
-            {reasonAction && (
-              <LogicPanel
-                action={reasonAction}
-                tokenSymbol={tokenSymbol}
-                lang={lang}
-                className="w-full sm:min-w-[220px]"
-              />
-            )}
-          </div>
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleConfirm}
+            disabled={inactive || disabled}
+            className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white shrink-0"
+          >
+            {sk ? 'Potvrdiť exekúciu' : 'Confirm execution'}
+            {actionUrl && <ExternalLink className="w-3 h-3 ml-1 opacity-80" />}
+          </Button>
         )}
       </div>
 

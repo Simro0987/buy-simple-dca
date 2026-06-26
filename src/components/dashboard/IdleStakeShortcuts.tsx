@@ -3,7 +3,6 @@ import { Zap, Info, Lock, Unlock, ArrowRightLeft, Landmark, Loader2 } from 'luci
 import { usePortfolio, type PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 import { useStakingLedger } from '@/hooks/useStakingLedger';
 import { GranularExecutionButtons } from '@/components/staking/GranularExecutionButtons';
-import { useCyborgEngine } from '@/stores/cyborgEngine';
 import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { nativeTicker } from '@/lib/tickerLabels';
 import {
@@ -17,7 +16,6 @@ import {
   computeAdvice,
   computeUnstakeAdvice,
   getTimingWindow,
-  strategyCommentary,
   overheatedWarning,
   previewWindowNote,
   isEmergencyBypassActive,
@@ -314,15 +312,6 @@ function ShortcutRow({
                     </span></li>
                 )}
               </ol>
-              <div className="pt-1 border-t border-border/40">
-                <p className="text-[10px] font-semibold text-foreground mb-1">
-                  {sk ? 'Strategické zdôvodnenie:' : 'Strategic rationale:'}
-                </p>
-                <p className="text-[10px] text-muted-foreground leading-snug">
-                  <span className="mr-1">{strategyCommentary(marketScore, lang, { concentration, phase }).icon}</span>
-                  {strategyCommentary(marketScore, lang, { concentration, phase }).text}
-                </p>
-              </div>
               {locked && (
                 <p className="text-[10px] text-amber-300/90">{previewWindowNote(lang, daysRemaining)}</p>
               )}
@@ -428,10 +417,6 @@ function DynamicSplitPanel({
     return { mSolQty: qty };
   };
 
-  useEffect(() => {
-    useCyborgEngine.getState().setReasoningContext({ marketScore: Number(marketScore ?? 0) });
-  }, [marketScore]);
-
   return (
     <div
       onClick={e => e.stopPropagation()}
@@ -481,8 +466,6 @@ function DynamicSplitPanel({
                       decimals={decimals}
                       confirmed={confirmed}
                       disabled={locked || subQty <= 0}
-                      reasonAction={symbol === 'ETH' ? 'stake_eth' : symbol === 'SOL' ? 'stake_sol' : 'stake_btc'}
-                      tokenSymbol={symbol}
                       onConfirm={() => {
                         confirmExecutionStep(stepKey, buildUpdate(t, subQty));
                         toast.success(sk ? 'Portfólio aktualizované!' : 'Portfolio updated!');
