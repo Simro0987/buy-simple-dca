@@ -510,7 +510,7 @@ function CyborgActionPlan({
           collateralQty={collateralQty}
           collateralLabel={collateralLabel}
           collateralDecimals={collateralDecimals}
-          safeBorrowUsdc={hasDeployedCollateral && !supplyOnlyMode ? safeBorrowUsdc : 0}
+          safeBorrowUsdc={supplyOnlyMode ? 0 : safeBorrowUsdc}
           supplyOnlyMode={supplyOnlyMode}
           protocolUrl={collateralHandlers.protocolUrl}
           collateralContract={collateralHandlers.collateralContract}
@@ -1072,7 +1072,6 @@ function TacticalLayerExecution({
   const { supplyOnlyMode, setSupplyOnlyMode } = useSupplyOnlyMode();
   const planKey = planKeyForLayer(layer?.id ?? 'tactical');
   const useCollateralYieldUi = true;
-  const hasDeployedCollateral = deployedCollateralQty > 0;
 
   const collateralSnapshot = useMemo(() => buildCollateralManagementSnapshot({
     deployedQty: deployedCollateralQty,
@@ -1080,7 +1079,7 @@ function TacticalLayerExecution({
     targetQty: collateralQty,
     usdcDebt: usdcDebt ?? 0,
     maxLtvPct,
-    proposedBorrowUsd: !hasDeployedCollateral || supplyOnlyMode ? 0 : safeBorrowUsdc,
+    proposedBorrowUsd: supplyOnlyMode ? 0 : safeBorrowUsdc,
     recommendedProtocol: symbol === 'ETH' ? arbitrumWinner?.protocolName : kaminoWinner?.protocolName,
     recommendedVenue: symbol === 'ETH' ? arbitrumWinner?.venueLabel : kaminoWinner?.venueLabel,
     recommendedToken: motorLabel,
@@ -1093,7 +1092,6 @@ function TacticalLayerExecution({
     maxLtvPct,
     supplyOnlyMode,
     safeBorrowUsdc,
-    hasDeployedCollateral,
     symbol,
     arbitrumWinner,
     kaminoWinner,
@@ -1124,7 +1122,7 @@ function TacticalLayerExecution({
     collateralDecimals,
   ]);
   const planConfirmed = isExecutionConfirmed(planKey);
-  const borrowUsd = !hasDeployedCollateral || supplyOnlyMode ? 0 : safeBorrowUsdc;
+  const borrowUsd = supplyOnlyMode ? 0 : safeBorrowUsdc;
   const gasAvailableEth = symbol === 'ETH' ? resolveGasAvailableEth(totalPortfolioQty) : 0;
   const protocolUrl = symbol === 'ETH' ? arbitrumWinner?.sourceUrl : kaminoWinner?.sourceUrl;
   const collateralContract = arbitrumWinner?.collateralAddress;
@@ -1153,7 +1151,7 @@ function TacticalLayerExecution({
     if (copyCollateralQty > 0) {
       steps.push({ id: 'deposit', update: { rEthQty: collateralQty }, url: protocolUrl });
     }
-    if (!supplyOnlyMode && borrowUsd > 0 && hasDeployedCollateral) {
+    if (!supplyOnlyMode && borrowUsd > 0) {
       steps.push({ id: 'borrow', update: { usdcBorrowed: borrowUsd }, url: protocolUrl });
     }
     let confirmed = 0;
@@ -1188,7 +1186,7 @@ function TacticalLayerExecution({
     isConfirmed: isCollateralConfirmed,
   });
   const displayPlanConfirmed = useCollateralYieldUi ? collateralComplete : planConfirmed;
-  const hasActiveBorrow = hasDeployedCollateral && !supplyOnlyMode && ((usdcDebt ?? 0) > 0 || safeBorrowUsdc > 0);
+  const hasActiveBorrow = !supplyOnlyMode && ((usdcDebt ?? 0) > 0 || safeBorrowUsdc > 0);
   const gasBufferLine = formatGasBufferPlanLine(symbol === 'ETH' ? 'ETH' : 'SOL', totalPortfolioQty, sk);
   const routing = symbol === 'ETH' && arbitrumWinner
     ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.protocolName }
@@ -1244,7 +1242,7 @@ function TacticalLayerExecution({
           collateralQty={collateralQty}
           collateralLabel={motorLabel}
           collateralUsd={collateralUsd}
-          safeBorrowUsdc={hasDeployedCollateral && !supplyOnlyMode ? safeBorrowUsdc : 0}
+          safeBorrowUsdc={safeBorrowUsdc}
           ltvMax={targetLtvPct}
           ltvRestricted={ltvRestricted}
           showBorrowFlow={showBorrowFlow}
