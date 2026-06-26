@@ -2,9 +2,17 @@ const KAMINO_MAIN_MARKET = '7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF';
 const KAMINO_METRICS_URL = `https://api.kamino.finance/kamino-market/${KAMINO_MAIN_MARKET}/reserves/metrics`;
 
 import {
+  fetchAlchemixRoutingSnapshot,
+  type AlchemixRoutingSnapshot,
+} from '@/lib/alchemixProtocolRouting';
+import {
   fetchArbitrumRoutingSnapshot,
   type ArbitrumRoutingSnapshot,
 } from '@/lib/arbitrumProtocolRouting';
+import {
+  fetchKaminoRoutingSnapshot,
+  type KaminoRoutingSnapshot,
+} from '@/lib/kaminoProtocolRouting';
 
 export interface HcdBorrowRates {
   morphoUsdcBorrowPct: number | null;
@@ -15,8 +23,12 @@ export interface HcdBorrowRates {
   avgBorrowPct: number;
   unavailable: string[];
   fetchedAt: Date;
-  /** Layer 3 — live Morpho vaults vs Aave proto_arbitrum_v3 comparison. */
+  /** Layer 3 ETH — live Morpho vaults vs Aave proto_arbitrum_v3 comparison. */
   arbitrumRouting: ArbitrumRoutingSnapshot | null;
+  /** Layer 3 SOL — Kamino reserves + auto-yield vault scoring. */
+  kaminoRouting: KaminoRoutingSnapshot | null;
+  /** Layer 4 ETH — Alchemix transmuter / farm / vault strategies. */
+  alchemixRouting: AlchemixRoutingSnapshot | null;
 }
 
 function decimalToPercent(value: number | string | null | undefined): number | null {
@@ -50,18 +62,25 @@ async function fetchKaminoUsdcBorrowPct(): Promise<number | null> {
 }
 
 /**
- * Live HCD borrow snapshot — Arbitrum Morpho/Aave routing + Kamino USDC.
+ * Live HCD borrow snapshot — Arbitrum Morpho/Aave + Kamino + Alchemix routing.
  * On failure returns null APYs so UI clearly shows missing data (no mock APY).
  */
-export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
+export async function fetchHcdIndicators(
+  fallbackAlchemixApyPct?: number | null,
+): Promise<HcdBorrowRates> {
   const unavailable: string[] = [];
   let kaminoUsdcBorrowPct: number | null = null;
   let arbitrumRouting: ArbitrumRoutingSnapshot | null = null;
+  let kaminoRouting: KaminoRoutingSnapshot | null = null;
+  let alchemixRouting: AlchemixRoutingSnapshot | null = null;
 
-  const [routingSettled, kaminoSettled] = await Promise.allSettled([
-    fetchArbitrumRoutingSnapshot(),
-    fetchKaminoUsdcBorrowPct(),
-  ]);
+  const [routingSettled, kaminoBorrowSettled, kaminoRoutingSettled, alchemixSettled] =
+    await Promise.allSettled([
+      fetchArbitrumRoutingSnapshot(),
+      fetchKaminoUsdcBorrowPct(),
+      fetchKaminoRoutingSnapshot(),
+      fetchAlchemixRoutingSnapshot(fallbackAlchemixApyPct),
+    ]);
 
   if (routingSettled.status === 'fulfilled') {
     arbitrumRouting = routingSettled.value;
@@ -75,10 +94,25 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
     unavailable.push('Morpho (Arbitrum)', 'Aave V3 (Arbitrum)');
   }
 
-  if (kaminoSettled.status === 'fulfilled' && kaminoSettled.value != null) {
-    kaminoUsdcBorrowPct = kaminoSettled.value;
+  if (kaminoBorrowSettled.status === 'fulfilled' && kaminoBorrowSettled.value != null) {
+    kaminoUsdcBorrowPct = kaminoBorrowSettled.value;
   } else {
-    unavailable.push('Kamino');
+    unavailable.push('Kamino borrow');
+  }
+
+  if (kaminoRoutingSettled.status === 'fulfilled') {
+    kaminoRouting = kaminoRoutingSettled.value;
+    kaminoUsdcBorrowPct = kaminoRouting?.usdcBorrowApyPct ?? kaminoUsdcBorrowPct;
+    if (!kaminoRouting?.winner) unavailable.push('Kamino vaults');
+  } else {
+    unavailable.push('Kamino vaults');
+  }
+
+  if (alchemixSettled.status === 'fulfilled') {
+    alchemixRouting = alchemixSettled.value;
+    if (!alchemixRouting?.winner) unavailable.push('Alchemix');
+  } else {
+    unavailable.push('Alchemix');
   }
 
   const morphoUsdcBorrowPct = arbitrumRouting?.morpho?.usdcBorrowApyPct ?? null;
@@ -99,8 +133,10 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
     kaminoUsdcBorrowPct,
     avgBorrowPct,
     unavailable,
-    fetchedAt: arbitrumRouting?.fetchedAt ?? new Date(),
+    fetchedAt: arbitrumRouting?.fetchedAt ?? kaminoRouting?.fetchedAt ?? new Date(),
     arbitrumRouting,
+    kaminoRouting,
+    alchemixRouting,
   };
 }
 

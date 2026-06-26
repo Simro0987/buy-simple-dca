@@ -1,4 +1,13 @@
 import {
+  buildAlchemixCandidate,
+  formatAlchemixDecisionReason,
+  formatAlchemixPlanInstruction as buildAlchemixPlanText,
+  selectBestAlchemixCandidate,
+  type AlchemixStrategyCandidate,
+} from '@/lib/alchemixCollateralScoring';
+import type { AlchemixRoutingSnapshot } from '@/lib/alchemixProtocolRouting';
+import { ALCHEMIX_APP_URL } from '@/lib/alchemixProtocolRouting';
+import {
   buildCollateralCandidate,
   formatCollateralDecisionReason,
   formatCollateralPlanInstruction,
@@ -14,6 +23,16 @@ import {
   FALLBACK_MORPHO_VAULT_LABEL,
   MORPHO_ARBITRUM_VAULTS_URL,
 } from '@/lib/arbitrumProtocolRouting';
+import {
+  buildKaminoCandidate,
+  formatKaminoDecisionReason,
+  formatKaminoPlanInstruction as buildKaminoPlanText,
+  selectBestKaminoCandidate,
+  FALLBACK_KAMINO_VAULT_LABEL,
+  type KaminoCollateralCandidate,
+} from '@/lib/kaminoCollateralScoring';
+import type { KaminoRoutingSnapshot } from '@/lib/kaminoProtocolRouting';
+import { KAMINO_VAULTS_URL } from '@/lib/kaminoProtocolRouting';
 import {
   getHcdLtvMax,
   type HcdIndicators,
@@ -48,8 +67,41 @@ const FALLBACK_RUNNER_UP = buildCollateralCandidate({
   venueLabel: AAVE_ARBITRUM_MARKET_LABEL,
 });
 
+const FALLBACK_KAMINO_WINNER = buildKaminoCandidate({
+  venueKind: 'auto-yield',
+  venueLabel: FALLBACK_KAMINO_VAULT_LABEL,
+  sourceUrl: KAMINO_VAULTS_URL,
+  collateralToken: 'mSOL',
+  apyPct: 4.2,
+  tvlUsd: 695_000,
+  maxLtvPct: 0,
+  ilRiskPct: 20,
+  usdcBorrowApyPct: 5.8,
+});
+
+const FALLBACK_ALCHEMIX_WINNER = buildAlchemixCandidate({
+  strategyId: 'transmuter',
+  strategyLabel: 'Alchemix ETH Transmuter',
+  network: 'Ethereum',
+  sourceUrl: ALCHEMIX_APP_URL,
+  yieldPct: 2.2,
+  ltvPct: 50,
+  pegStabilityPct: 92,
+});
+
 export type ArbitrumTacticalWinner = ArbitrumCollateralCandidate & {
   network: 'Arbitrum';
+  decisionReasonSk: string;
+  decisionReasonEn: string;
+};
+
+export type KaminoTacticalWinner = KaminoCollateralCandidate & {
+  network: 'Solana';
+  decisionReasonSk: string;
+  decisionReasonEn: string;
+};
+
+export type AlchemixTacticalWinner = AlchemixStrategyCandidate & {
   decisionReasonSk: string;
   decisionReasonEn: string;
 };
@@ -66,6 +118,14 @@ export interface EthLayerPlanState {
   bullish: boolean;
   arbitrumWinner: ArbitrumTacticalWinner;
   arbitrumRouting: ArbitrumRoutingSnapshot | null;
+  alchemixWinner: AlchemixTacticalWinner;
+  alchemixRouting: AlchemixRoutingSnapshot | null;
+}
+
+export interface SolLayerPlanState {
+  layers: HcdLayerTarget[];
+  kaminoWinner: KaminoTacticalWinner;
+  kaminoRouting: KaminoRoutingSnapshot | null;
 }
 
 /** Temperament-aware LTV caps for Action Plan math (50% → target 30%, max 33%). */
@@ -85,6 +145,82 @@ function toTacticalWinner(candidate: ArbitrumCollateralCandidate): ArbitrumTacti
     decisionReasonSk: formatCollateralDecisionReason(candidate, true),
     decisionReasonEn: formatCollateralDecisionReason(candidate, false),
   };
+}
+
+function toKaminoWinner(candidate: KaminoCollateralCandidate): KaminoTacticalWinner {
+  return {
+    ...candidate,
+    network: 'Solana',
+    decisionReasonSk: formatKaminoDecisionReason(candidate, true),
+    decisionReasonEn: formatKaminoDecisionReason(candidate, false),
+  };
+}
+
+function toAlchemixWinner(candidate: AlchemixStrategyCandidate): AlchemixTacticalWinner {
+  return {
+    ...candidate,
+    decisionReasonSk: formatAlchemixDecisionReason(candidate, true),
+    decisionReasonEn: formatAlchemixDecisionReason(candidate, false),
+  };
+}
+
+/** Gas buffer line for Cyborg Action Plan (network-specific SOL/ETH caps). */
+export function formatGasBufferPlanLine(
+  symbol: 'ETH' | 'SOL',
+  totalBalance: number | null | undefined,
+  sk: boolean,
+): string {
+  const { bufferQty, availableQty } = computeGasBuffer(symbol, totalBalance);
+  const cap = symbol === 'ETH' ? MAX_GAS_CAP_ETH : MAX_GAS_CAP_SOL;
+  const decimals = symbol === 'ETH' ? 4 : 2;
+  return sk
+    ? `Gas buffer: ${bufferQty.toFixed(decimals)} ${symbol} (2 % · max ${cap}) · k dispozícii ${availableQty.toFixed(decimals)} ${symbol}`
+    : `Gas buffer: ${bufferQty.toFixed(decimals)} ${symbol} (2% · max ${cap}) · available ${availableQty.toFixed(decimals)} ${symbol}`;
+}
+
+export function selectKaminoTacticalWinner(
+  routing?: KaminoRoutingSnapshot | null,
+): KaminoTacticalWinner {
+  const winner = routing?.winner ?? selectBestKaminoCandidate(routing?.candidates);
+  if (winner) return toKaminoWinner(winner);
+  return toKaminoWinner(FALLBACK_KAMINO_WINNER);
+}
+
+export function selectAlchemixTacticalWinner(
+  routing?: AlchemixRoutingSnapshot | null,
+): AlchemixTacticalWinner {
+  const winner = routing?.winner ?? selectBestAlchemixCandidate(routing?.candidates);
+  if (winner) return toAlchemixWinner(winner);
+  return toAlchemixWinner(FALLBACK_ALCHEMIX_WINNER);
+}
+
+export function formatKaminoPlanInstruction(
+  winner: KaminoTacticalWinner,
+  sk: boolean,
+  routing?: KaminoRoutingSnapshot | null,
+  gasBufferLine?: string | null,
+): string {
+  const extra = gasBufferLine ? [gasBufferLine] : [];
+  const primary = buildKaminoPlanText(winner, sk, extra);
+  const runnerUp = selectBestKaminoCandidate(
+    (routing?.candidates ?? [FALLBACK_KAMINO_WINNER]).filter(
+      c => c.venueLabel !== winner.venueLabel || c.collateralToken !== winner.collateralToken,
+    ),
+  );
+  if (!runnerUp) return primary;
+  const compareLine = sk
+    ? `Porovnanie: ${winner.venueLabel} skóre ${winner.combinedScore.toFixed(1)} vs ${runnerUp.venueLabel} ${runnerUp.combinedScore.toFixed(1)}`
+    : `Compare: ${winner.venueLabel} score ${winner.combinedScore.toFixed(1)} vs ${runnerUp.venueLabel} ${runnerUp.combinedScore.toFixed(1)}`;
+  return `${primary}\n${compareLine}`;
+}
+
+export function formatAlchemixPlanInstruction(
+  winner: AlchemixTacticalWinner,
+  sk: boolean,
+  gasBufferLine?: string | null,
+): string {
+  const extra = gasBufferLine ? [gasBufferLine] : [];
+  return buildAlchemixPlanText(winner, sk, extra);
 }
 
 /** Pick best (token + protocol) from scored Arbitrum routing snapshot. */
@@ -171,6 +307,7 @@ export function buildEthLayerPlanState(input: {
   fearGreed: number | null | undefined;
   marketScore: number;
   arbitrumRouting?: ArbitrumRoutingSnapshot | null;
+  alchemixRouting?: AlchemixRoutingSnapshot | null;
 }): EthLayerPlanState {
   const layers = input.layers ?? [];
   const alchemixLayer = layers.find(l => l?.id?.includes('alchemix'));
@@ -188,6 +325,7 @@ export function buildEthLayerPlanState(input: {
     : layers;
 
   const arbitrumWinner = selectArbitrumTacticalWinner(input.arbitrumRouting);
+  const alchemixWinner = selectAlchemixTacticalWinner(input.alchemixRouting);
 
   return {
     effectiveLayers,
@@ -196,6 +334,21 @@ export function buildEthLayerPlanState(input: {
     bullish,
     arbitrumWinner,
     arbitrumRouting: input.arbitrumRouting ?? null,
+    alchemixWinner,
+    alchemixRouting: input.alchemixRouting ?? null,
+  };
+}
+
+export function buildSolLayerPlanState(input: {
+  layers: HcdLayerTarget[];
+  kaminoRouting?: KaminoRoutingSnapshot | null;
+}): SolLayerPlanState {
+  const layers = input.layers ?? [];
+  const kaminoWinner = selectKaminoTacticalWinner(input.kaminoRouting);
+  return {
+    layers,
+    kaminoWinner,
+    kaminoRouting: input.kaminoRouting ?? null,
   };
 }
 

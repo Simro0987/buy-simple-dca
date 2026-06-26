@@ -40,6 +40,7 @@ import {
   ALCHEMIX_FALLBACK_PLAN_EN,
   ALCHEMIX_FALLBACK_PLAN_SK,
   buildEthLayerPlanState,
+  buildSolLayerPlanState,
   capCopyDeltasToAvailable,
   computeCapitalFunnel,
   computeDeltaQty,
@@ -47,7 +48,10 @@ import {
   computeDeployedCoreQty,
   computeGasBuffer,
   computeTakeProfitUsdcDelta,
+  formatAlchemixPlanInstruction,
   formatArbitrumPlanInstruction,
+  formatGasBufferPlanLine,
+  formatKaminoPlanInstruction,
   getActionPlanLtvCaps,
   layerTargetQty,
   tacticalBorrowAtTargetLtv,
@@ -58,9 +62,12 @@ import {
   TAKE_PROFIT_PLAN_EN,
   TAKE_PROFIT_PLAN_SK,
   resolveSymbolEarnedProfit,
+  type AlchemixTacticalWinner,
   type ArbitrumTacticalWinner,
+  type KaminoTacticalWinner,
 } from '@/lib/hcdActionPlanLogic';
 import type { ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
+import type { KaminoRoutingSnapshot } from '@/lib/kaminoProtocolRouting';
 import { useStablesByNetwork } from '@/hooks/useStablesByNetwork';
 import { temperamentLabel } from '@/lib/hcdTemperament';
 import {
@@ -899,6 +906,9 @@ function TacticalLayerExecution({
   buildDecisionMeta,
   arbitrumWinner,
   arbitrumRouting,
+  kaminoWinner,
+  kaminoRouting,
+  totalPortfolioQty,
   copyQtyOverride,
 }: {
   symbol: HcdSymbol;
@@ -922,6 +932,9 @@ function TacticalLayerExecution({
   buildDecisionMeta: () => DecisionConfirmMeta;
   arbitrumWinner?: ArbitrumTacticalWinner;
   arbitrumRouting?: ArbitrumRoutingSnapshot | null;
+  kaminoWinner?: KaminoTacticalWinner;
+  kaminoRouting?: KaminoRoutingSnapshot | null;
+  totalPortfolioQty: number;
   copyQtyOverride?: number;
 }) {
   const sk = lang === 'sk';
@@ -929,7 +942,7 @@ function TacticalLayerExecution({
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH'
     ? (arbitrumWinner?.collateralToken ?? 'wETH')
-    : 'mSOL';
+    : (kaminoWinner?.collateralToken ?? 'mSOL');
   const layerPct = layer?.pctTarget ?? 0;
   const collateralQty = layerTargetQty(totalQty, layerPct);
   const deployedCollateralQty = sumTacticalDeployedQty(stakedEntries ?? [], symbol);
@@ -962,14 +975,19 @@ function TacticalLayerExecution({
     collateralDecimals,
   ]);
   const planConfirmed = isExecutionConfirmed(planKey);
+  const gasBufferLine = formatGasBufferPlanLine(symbol === 'ETH' ? 'ETH' : 'SOL', totalPortfolioQty, sk);
   const routing = symbol === 'ETH' && arbitrumWinner
     ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.protocolName }
     : symbol === 'ETH'
       ? { token: 'wETH', network: 'Arbitrum', protocol: 'Morpho' }
-      : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
+      : kaminoWinner
+        ? { token: kaminoWinner.collateralToken, network: kaminoWinner.network, protocol: kaminoWinner.protocolName }
+        : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
   const planSummary = symbol === 'ETH' && arbitrumWinner
     ? formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting)
-    : undefined;
+    : symbol === 'SOL' && kaminoWinner
+      ? formatKaminoPlanInstruction(kaminoWinner, sk, kaminoRouting, gasBufferLine)
+      : undefined;
 
   const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
     const update: PortfolioBalanceUpdate = {};
@@ -1042,22 +1060,26 @@ function AlchemixLayerExecution({
   lang,
   layer,
   totalEthQty,
+  totalPortfolioQty,
   ethPrice,
   rebalanceLocked,
   alchemixApyPct,
   buildDecisionMeta,
   alchemixLocked,
+  alchemixWinner,
   copyQtyOverride,
   stakedEntries,
 }: {
   lang: Lang;
   layer: HcdLayerTarget;
   totalEthQty: number;
+  totalPortfolioQty: number;
   ethPrice: number;
   rebalanceLocked: boolean;
   alchemixApyPct: number;
   buildDecisionMeta: () => DecisionConfirmMeta;
   alchemixLocked: boolean;
+  alchemixWinner?: AlchemixTacticalWinner;
   copyQtyOverride?: number;
   stakedEntries: StakedEntry[];
 }) {
@@ -1070,6 +1092,12 @@ function AlchemixLayerExecution({
   const planKey = planKeyForLayer(layer?.id ?? 'alchemix');
   const planConfirmed = isExecutionConfirmed(planKey);
   const fallbackText = sk ? ALCHEMIX_FALLBACK_PLAN_SK : ALCHEMIX_FALLBACK_PLAN_EN;
+  const gasBufferLine = formatGasBufferPlanLine('ETH', totalPortfolioQty, sk);
+  const planSummary = alchemixLocked
+    ? fallbackText
+    : alchemixWinner
+      ? formatAlchemixPlanInstruction(alchemixWinner, sk, gasBufferLine)
+      : undefined;
   const exitAlert = useMemo(() => {
     if (alchemixLocked) return null;
     try {
@@ -1120,14 +1148,18 @@ function AlchemixLayerExecution({
           terminalApys={{ usdcBorrow: 0, lbtcSupply: 0 }}
           lang={lang}
           collateralDecimals={4}
-          routing={{ token: 'ETH', network: 'Ethereum L1', protocol: 'Alchemix' }}
+          routing={{
+            token: 'ETH',
+            network: alchemixWinner?.network ?? 'Ethereum L1',
+            protocol: 'Alchemix',
+          }}
           exitAlert={exitAlert}
           planConfirmed={planConfirmed}
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked || alchemixLocked}
           showBorrowCommand={false}
-          planSummary={alchemixLocked ? fallbackText : undefined}
+          planSummary={planSummary}
           hideCopyBoxes={alchemixLocked}
           copyCollateralQty={alchemixLocked ? 0 : (copyQtyOverride ?? computeDeltaQty(targetQty, deployedAlchemixQty))}
         />
@@ -1163,6 +1195,9 @@ function AssetHcdCard({
   alchemixLocked,
   targetLtvPct,
   arbitrumRouting,
+  kaminoWinner,
+  kaminoRouting,
+  alchemixWinner,
   temperamentPct,
   usdcBalance,
   profitUsd,
@@ -1190,6 +1225,9 @@ function AssetHcdCard({
   alchemixLocked?: boolean;
   targetLtvPct: number;
   arbitrumRouting?: ArbitrumRoutingSnapshot | null;
+  kaminoWinner?: KaminoTacticalWinner;
+  kaminoRouting?: KaminoRoutingSnapshot | null;
+  alchemixWinner?: AlchemixTacticalWinner;
   temperamentPct: number;
   usdcBalance: number;
   profitUsd: number;
@@ -1345,6 +1383,9 @@ function AssetHcdCard({
                   buildDecisionMeta={buildDecisionMeta}
                   arbitrumWinner={symbol === 'ETH' ? arbitrumWinner : undefined}
                   arbitrumRouting={symbol === 'ETH' ? arbitrumRouting : undefined}
+                  kaminoWinner={symbol === 'SOL' ? kaminoWinner : undefined}
+                  kaminoRouting={symbol === 'SOL' ? kaminoRouting : undefined}
+                  totalPortfolioQty={totalPortfolioQty}
                   copyQtyOverride={layerCopyQtyById.get(layerId)}
                 />
               )}
@@ -1354,11 +1395,13 @@ function AssetHcdCard({
                   lang={lang}
                   layer={layer}
                   totalEthQty={workingCapitalQty}
+                  totalPortfolioQty={totalPortfolioQty}
                   ethPrice={price}
                   rebalanceLocked={rebalanceLocked}
                   alchemixApyPct={alchemixApyPct}
                   buildDecisionMeta={buildDecisionMeta}
                   alchemixLocked={Boolean(alchemixLocked)}
+                  alchemixWinner={alchemixWinner}
                   copyQtyOverride={layerCopyQtyById.get(layerId)}
                   stakedEntries={stakedEntries}
                 />
@@ -1506,8 +1549,17 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
       fearGreed: market?.fearGreed ?? null,
       marketScore: marketScore ?? 50,
       arbitrumRouting: borrowRates?.arbitrumRouting ?? null,
+      alchemixRouting: borrowRates?.alchemixRouting ?? null,
     }),
-    [ethLayers, alchemixApyPct, safeIndicators, market?.fearGreed, marketScore, borrowRates?.arbitrumRouting],
+    [ethLayers, alchemixApyPct, safeIndicators, market?.fearGreed, marketScore, borrowRates?.arbitrumRouting, borrowRates?.alchemixRouting],
+  );
+
+  const solLayerPlan = useMemo(
+    () => buildSolLayerPlanState({
+      layers: solLayers ?? [],
+      kaminoRouting: borrowRates?.kaminoRouting ?? null,
+    }),
+    [solLayers, borrowRates?.kaminoRouting],
   );
 
   const ethEffectiveLayers = ethLayerPlan.effectiveLayers;
@@ -1824,6 +1876,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         alchemixLocked={ethLayerPlan.alchemixLocked}
         targetLtvPct={targetLtvPct}
         arbitrumRouting={ethLayerPlan.arbitrumRouting}
+        alchemixWinner={ethLayerPlan.alchemixWinner}
         temperamentPct={temperamentPct}
         usdcBalance={usdcBalance}
         profitUsd={ethProfitUsd}
@@ -1834,7 +1887,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         lang={lang}
         totalPortfolioQty={solTotalQty}
         price={solPrice}
-        layers={solLayers ?? []}
+        layers={solLayerPlan.layers ?? []}
         rebalanceLocked={rebalanceLocked}
         ltvMax={ltvMax}
         ltvRestricted={ltvRestricted}
@@ -1849,6 +1902,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         stakedEntries={solStakedEntries ?? []}
         alchemixApyPct={alchemixApyPct}
         buildDecisionMeta={buildDecisionMeta}
+        kaminoWinner={solLayerPlan.kaminoWinner}
+        kaminoRouting={solLayerPlan.kaminoRouting}
         targetLtvPct={targetLtvPct}
         temperamentPct={temperamentPct}
         usdcBalance={usdcBalance}
