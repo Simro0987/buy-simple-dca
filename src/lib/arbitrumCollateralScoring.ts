@@ -35,6 +35,8 @@ export interface ArbitrumCollateralCandidate {
   baseYieldPct: number;
   usdcBorrowApyPct: number;
   combinedScore: number;
+  /** Morpho vault/curator name or Aave market label — where to click in the app. */
+  venueLabel?: string;
 }
 
 export function safePercent(value: number | null | undefined): number {
@@ -64,11 +66,13 @@ export function buildCollateralCandidate(input: {
   supplyApyPct?: number | null;
   baseYieldPct?: number | null;
   usdcBorrowApyPct?: number | null;
+  venueLabel?: string | null;
 }): ArbitrumCollateralCandidate {
   const maxLtvPct = safePercent(input.maxLtvPct);
   const supplyApyPct = safePercent(input.supplyApyPct);
   const baseYieldPct = safePercent(input.baseYieldPct);
   const usdcBorrowApyPct = safePercent(input.usdcBorrowApyPct);
+  const venueLabel = input.venueLabel?.trim() || undefined;
   return {
     protocolId: input.protocolId,
     protocolName: input.protocolName,
@@ -81,6 +85,7 @@ export function buildCollateralCandidate(input: {
     baseYieldPct,
     usdcBorrowApyPct,
     combinedScore: computeCollateralScore(maxLtvPct, baseYieldPct, supplyApyPct),
+    venueLabel,
   };
 }
 
@@ -149,9 +154,26 @@ export function formatCollateralRouteLine(
     : `Route: ETH -> ${target} | Protocol: ${winner.protocolName} (Arbitrum)`;
 }
 
+export function formatCollateralVenueLine(
+  winner: Pick<ArbitrumCollateralCandidate, 'protocolId' | 'venueLabel'>,
+  sk: boolean,
+): string | null {
+  const label = winner.venueLabel?.trim();
+  if (!label) return null;
+  if (winner.protocolId === 'aave') {
+    return sk ? `Market: ${label}` : `Market: ${label}`;
+  }
+  return sk ? `Vault / Kurátor: ${label}` : `Vault / Curator: ${label}`;
+}
+
 export function formatCollateralPlanInstruction(
   winner: ArbitrumCollateralCandidate,
   sk: boolean,
 ): string {
-  return `${formatCollateralRouteLine(winner, sk)} · ${formatCollateralDecisionReason(winner, sk)}`;
+  const lines = [
+    formatCollateralRouteLine(winner, sk),
+    formatCollateralVenueLine(winner, sk),
+    formatCollateralDecisionReason(winner, sk),
+  ].filter((line): line is string => Boolean(line));
+  return lines.join('\n');
 }

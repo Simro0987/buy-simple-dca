@@ -386,7 +386,7 @@ function CyborgActionPlan({
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
         {planSummary && (
-          <p className="text-foreground/90 font-medium">{planSummary}</p>
+          <p className="text-foreground/90 font-medium whitespace-pre-line">{planSummary}</p>
         )}
         <p>
           {sk ? 'Požadovaný kolaterál' : 'Required collateral'}:{' '}

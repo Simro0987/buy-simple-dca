@@ -7,9 +7,11 @@ import {
 } from '@/lib/arbitrumCollateralScoring';
 import type { ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
 import {
+  AAVE_ARBITRUM_MARKET_LABEL,
   AAVE_ARBITRUM_V3_URL,
   ARBITRUM_WEETH,
   ARBITRUM_WSTETH,
+  FALLBACK_MORPHO_VAULT_LABEL,
   MORPHO_ARBITRUM_VAULTS_URL,
 } from '@/lib/arbitrumProtocolRouting';
 import {
@@ -30,6 +32,7 @@ const FALLBACK_WINNER = buildCollateralCandidate({
   supplyApyPct: 2.4,
   baseYieldPct: 4.38,
   usdcBorrowApyPct: 3.3,
+  venueLabel: FALLBACK_MORPHO_VAULT_LABEL,
 });
 
 const FALLBACK_RUNNER_UP = buildCollateralCandidate({
@@ -42,6 +45,7 @@ const FALLBACK_RUNNER_UP = buildCollateralCandidate({
   supplyApyPct: 0,
   baseYieldPct: 3.4,
   usdcBorrowApyPct: 5.5,
+  venueLabel: AAVE_ARBITRUM_MARKET_LABEL,
 });
 
 export type ArbitrumTacticalWinner = ArbitrumCollateralCandidate & {
@@ -108,7 +112,7 @@ export function formatArbitrumPlanInstruction(
   const compareLine = sk
     ? `Porovnanie: ${winner.collateralToken}/${winner.protocolName} skóre ${winner.combinedScore.toFixed(1)} (LTV ${winner.maxLtvPct}%) vs ${runnerUp.collateralToken}/${runnerUp.protocolName} ${runnerUp.combinedScore.toFixed(1)} (LTV ${runnerUp.maxLtvPct}%)`
     : `Compare: ${winner.collateralToken}/${winner.protocolName} score ${winner.combinedScore.toFixed(1)} (LTV ${winner.maxLtvPct}%) vs ${runnerUp.collateralToken}/${runnerUp.protocolName} ${runnerUp.combinedScore.toFixed(1)} (LTV ${runnerUp.maxLtvPct}%)`;
-  return `${primary} · ${compareLine}`;
+  return `${primary}\n${compareLine}`;
 }
 
 export function isAlchemixLayerUnsuitable(

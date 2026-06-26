@@ -29,6 +29,11 @@ export const AAVE_ARBITRUM_V3_URL = 'https://app.aave.com/?marketName=proto_arbi
 export const ARBITRUM_CHAIN_ID = 42161;
 export const AAVE_ARBITRUM_MARKET_ID = 'proto_arbitrum_v3';
 export const AAVE_ARBITRUM_POOL = '0x794a61358D6845594F94dc1DB02A252b5b4814aD';
+export const AAVE_ARBITRUM_MARKET_LABEL = 'Aave V3 Core Market';
+
+/** Real Morpho Arbitrum USDC vault names used when live vault feed is unavailable. */
+export const FALLBACK_MORPHO_VAULT_LABEL = 'Gauntlet USDC Prime';
+export const FALLBACK_MORPHO_VAULT_ALT = 'kpk USDC Yield';
 
 /** Loan assets referenced in Morpho Arbitrum vault filter (42161). */
 export const MORPHO_ARBITRUM_USDC = '0xaf88d065e77c8cC2239327C5EDb3A432268e5831';
@@ -136,6 +141,12 @@ interface MorphoMarketRow {
   state: { borrowApy: number; supplyApy?: number };
 }
 
+interface MorphoVaultRow {
+  name: string;
+  address: string;
+  state: { totalAssetsUsd: number; netApy: number };
+}
+
 interface AaveReserveMetrics {
   maxLtvPct: number;
   supplyApyPct: number;
@@ -210,6 +221,39 @@ async function fetchAaveUsdcBorrowPct(): Promise<number> {
     }
   }`);
   return decimalToPercent(data?.usdc?.borrowInfo?.apy?.value) ?? 0;
+}
+
+async function fetchMorphoBestUsdcVault(): Promise<string | null> {
+  const data = await morphoGraphql<{
+    vaults: { items: MorphoVaultRow[] };
+  }>(`{
+    vaults(first: 100, where: {
+      chainId_in: [${ARBITRUM_CHAIN_ID}],
+      assetAddress_in: ["${MORPHO_ARBITRUM_USDC}"]
+    }) {
+      items {
+        name
+        address
+        state { totalAssetsUsd netApy }
+      }
+    }
+  }`);
+
+  const items = data?.vaults?.items ?? [];
+  let best: { name: string; tvl: number; apy: number } | null = null;
+
+  for (const vault of items) {
+    const name = vault?.name?.trim();
+    const tvl = vault?.state?.totalAssetsUsd ?? 0;
+    const apy = vault?.state?.netApy ?? 0;
+    if (!name || !Number.isFinite(tvl) || tvl < 1_000) continue;
+    if (!Number.isFinite(apy) || apy >= 1) continue;
+    if (!best || tvl > best.tvl || (tvl === best.tvl && apy > best.apy)) {
+      best = { name, tvl, apy };
+    }
+  }
+
+  return best?.name ?? null;
 }
 
 async function fetchAaveCollateralMetrics(): Promise<AaveMetricsByToken> {
@@ -307,6 +351,7 @@ function buildCandidates(input: {
   aaveMetrics: AaveMetricsByToken;
   morphoMetrics: MorphoMetricsByToken;
   aaveUsdcBorrowPct: number;
+  morphoVaultLabel: string;
 }): ArbitrumCollateralCandidate[] {
   const candidates: ArbitrumCollateralCandidate[] = [];
 
@@ -326,6 +371,7 @@ function buildCandidates(input: {
         supplyApyPct: aave.supplyApyPct,
         baseYieldPct,
         usdcBorrowApyPct: input.aaveUsdcBorrowPct,
+        venueLabel: AAVE_ARBITRUM_MARKET_LABEL,
       }));
     }
 
@@ -341,6 +387,7 @@ function buildCandidates(input: {
         supplyApyPct: morpho.supplyApyPct,
         baseYieldPct,
         usdcBorrowApyPct: morpho.usdcBorrowApyPct,
+        venueLabel: input.morphoVaultLabel,
       }));
     }
   }
@@ -350,13 +397,19 @@ function buildCandidates(input: {
 
 /** Live Morpho + Aave Arbitrum collateral scoring snapshot for Layer 3 routing. */
 export async function fetchArbitrumRoutingSnapshot(): Promise<ArbitrumRoutingSnapshot> {
-  const [baseYieldsSettled, aaveBorrowSettled, aaveMetricsSettled, morphoMetricsSettled] =
-    await Promise.allSettled([
-      fetchLstBaseYields(),
-      fetchAaveUsdcBorrowPct(),
-      fetchAaveCollateralMetrics(),
-      fetchMorphoCollateralMetrics(),
-    ]);
+  const [
+    baseYieldsSettled,
+    aaveBorrowSettled,
+    aaveMetricsSettled,
+    morphoMetricsSettled,
+    morphoVaultSettled,
+  ] = await Promise.allSettled([
+    fetchLstBaseYields(),
+    fetchAaveUsdcBorrowPct(),
+    fetchAaveCollateralMetrics(),
+    fetchMorphoCollateralMetrics(),
+    fetchMorphoBestUsdcVault(),
+  ]);
 
   const baseYields = baseYieldsSettled.status === 'fulfilled'
     ? baseYieldsSettled.value
@@ -370,12 +423,16 @@ export async function fetchArbitrumRoutingSnapshot(): Promise<ArbitrumRoutingSna
   const morphoMetrics = morphoMetricsSettled.status === 'fulfilled'
     ? morphoMetricsSettled.value
     : {};
+  const morphoVaultLabel = morphoVaultSettled.status === 'fulfilled' && morphoVaultSettled.value
+    ? morphoVaultSettled.value
+    : FALLBACK_MORPHO_VAULT_LABEL;
 
   const candidates = buildCandidates({
     baseYields,
     aaveMetrics,
     morphoMetrics,
     aaveUsdcBorrowPct,
+    morphoVaultLabel,
   });
   const winner = selectBestCollateralCandidate(candidates);
 
