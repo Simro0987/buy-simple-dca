@@ -4,6 +4,7 @@ import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { useDefiApys } from '@/hooks/useDefiApys';
+import { useCyborgEngine } from '@/stores/cyborgEngine';
 import {
   buildYieldApyRates,
   buildYieldPositionsFromEntries,
@@ -29,9 +30,21 @@ export function YieldDashboard({ lang, lbtcSupplyApyPct }: YieldDashboardProps) 
   const [period, setPeriod] = useState<YieldIncomePeriod>('day');
   const { breakdown, portfolioData } = usePortfolio();
   const { data: defiApys } = useDefiApys();
+  const engineRevision = useCyborgEngine(s => s.revision);
 
   const yieldResult = useMemo(() => {
     try {
+      const engineComputed = useCyborgEngine.getState().getComputed(
+        buildYieldApyRates(defiApys ?? null, { lbtcSupply: lbtcSupplyApyPct ?? 0 }),
+      );
+      if (Number(engineComputed.weightedApyPct ?? 0) > 0 || Number(engineComputed.dailyPassiveIncomeUsd ?? 0) > 0) {
+        return {
+          weightedApyPct: Number(engineComputed.weightedApyPct ?? 0),
+          dailyPassiveIncomeUsd: Number(engineComputed.dailyPassiveIncomeUsd ?? 0),
+          activePositionCount: Number(useCyborgEngine.getState().stakingPositions?.length ?? 0),
+          totalStakedUsd: Number(engineComputed.totalStakedUsd ?? 0),
+        };
+      }
       const prices = portfolioData?.prices ?? null;
       const entries = (breakdown ?? []).flatMap(asset => asset?.stakedEntries ?? []);
       const positions = buildYieldPositionsFromEntries(entries, prices);
@@ -42,7 +55,7 @@ export function YieldDashboard({ lang, lbtcSupplyApyPct }: YieldDashboardProps) 
     } catch {
       return calculateYield([], buildYieldApyRates(null));
     }
-  }, [breakdown, portfolioData?.prices, defiApys, lbtcSupplyApyPct]);
+  }, [breakdown, portfolioData?.prices, defiApys, lbtcSupplyApyPct, engineRevision]);
 
   const passiveIncomeUsd = projectPassiveIncomeUsd(yieldResult.dailyPassiveIncomeUsd, period);
   const displayApy = Number.isFinite(yieldResult.weightedApyPct)

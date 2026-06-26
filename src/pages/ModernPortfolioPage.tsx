@@ -15,6 +15,7 @@ import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
+import { useCyborgEngine } from '@/stores/cyborgEngine';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generateDailyRiskReport } from '@/lib/dailyRiskReport';
@@ -68,7 +69,14 @@ function ModernPortfolioInner({ lang }: Props) {
     metrics,
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, portfolioData,
+    totalValue,
   } = usePortfolio();
+  const engineRevision = useCyborgEngine(s => s.revision);
+  const engineTotalUsd = useMemo(() => {
+    const computed = useCyborgEngine.getState().getComputed();
+    return Number(computed.totalBalanceUsd ?? 0);
+  }, [engineRevision]);
+  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : Number(totalValue ?? 0);
 
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
   const [confirmKey, setConfirmKey] = useState(0);
@@ -247,7 +255,7 @@ function ModernPortfolioInner({ lang }: Props) {
       >
         <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
-          <Money size="hero" className="!text-4xl sm:!text-6xl break-words">{formatUsd(metrics.totalValue)}</Money>
+          <Money size="hero" className="!text-4xl sm:!text-6xl break-words">{formatUsd(displayTotalUsd)}</Money>
           <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
             <div className="flex items-center gap-1.5 justify-end">
               {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}

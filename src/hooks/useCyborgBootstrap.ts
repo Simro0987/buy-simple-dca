@@ -9,7 +9,7 @@ import {
 /**
  * Background-only HCD engine bootstrap. Never blocks Stake UI rendering.
  */
-export function useCyborgEngine() {
+export function useCyborgBootstrap() {
   const queryClient = useQueryClient();
   const mountedRef = useRef(false);
   const [restartToken, setRestartToken] = useState(0);
@@ -18,7 +18,7 @@ export function useCyborgEngine() {
     try {
       await initializeCyborgEngine(queryClient, { force });
     } catch (error) {
-      logCyborgDiagnostic('useCyborgEngine: init swallowed (UI unaffected)', error);
+      logCyborgDiagnostic('useCyborgBootstrap: init swallowed (UI unaffected)', error);
     }
   }, [queryClient]);
 

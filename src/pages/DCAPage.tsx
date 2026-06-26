@@ -32,6 +32,11 @@ import {
 } from '@/lib/mondayController';
 import { loadTuning, type TuningParams } from '@/lib/moneyMode';
 import { toast } from 'sonner';
+import {
+  adjustDcaInvestableForMarketMode,
+  useCyborgEngine,
+  type CyborgAsset,
+} from '@/stores/cyborgEngine';
 
 interface Props { lang: Lang; }
 
@@ -135,6 +140,32 @@ export function DCAPage({ lang: _lang }: Props) {
     () => buildPlan(inputs, prices, prevDeploymentPct, { ...tuning, maReclaimActive }),
     [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
+
+  const engineRevision = useCyborgEngine(s => s.revision);
+  const marketMode = useCyborgEngine(s => s.marketMode);
+  const engineComputed = useMemo(
+    () => useCyborgEngine.getState().getComputed(),
+    [engineRevision],
+  );
+  const adjustedInvestableUsd = useMemo(
+    () => adjustDcaInvestableForMarketMode(Number(plan.investableUsd ?? 0), marketMode),
+    [plan.investableUsd, marketMode],
+  );
+
+  useEffect(() => {
+    useCyborgEngine.getState().setDcaSchedule({
+      capital: Number(inputs.capital ?? 0),
+      investableUsd: Number(plan.investableUsd ?? 0),
+      finalAllocationPct: Number(plan.finalAllocationPct ?? 0),
+      regime: plan.regime,
+      perAsset: (plan.perAsset ?? []).map(asset => ({
+        symbol: String(asset.symbol ?? 'BTC').toUpperCase() as CyborgAsset,
+        marketUsd: Number(asset.marketUsd ?? 0),
+        limitUsd: Number(asset.limitUsd ?? 0),
+      })),
+      updatedAt: Date.now(),
+    });
+  }, [inputs.capital, plan]);
 
   // Engine is fully automatic — no manual factor/regime overrides.
   const effectiveScore = plan.factorScore;
@@ -387,7 +418,13 @@ export function DCAPage({ lang: _lang }: Props) {
       </div>
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
-      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
+      {engineComputed.dcaPaused && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-medium">{engineComputed.dcaPauseMessageSk}</p>
+        </div>
+      )}
+      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={adjustedInvestableUsd} />
 
 
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}

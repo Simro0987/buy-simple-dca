@@ -5,6 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ChainFilterProvider } from "@/hooks/useChainFilter";
 import { MarketProvider } from "@/contexts/MarketContext";
+import { CyborgEngineBridge } from "@/components/CyborgEngineBridge";
 import { WalletProvider } from "@/contexts/WalletContext";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
@@ -16,6 +17,7 @@ const App = () => (
     <WalletProvider>
       <ChainFilterProvider>
         <MarketProvider>
+          <CyborgEngineBridge />
           <TooltipProvider>
             <Toaster />
             <Sonner />

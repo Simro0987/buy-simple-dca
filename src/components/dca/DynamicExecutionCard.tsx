@@ -20,6 +20,7 @@ import {
 } from '@/lib/dynamicExecution';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
 import { useRegimeLimits } from '@/hooks/useRegimeLimits';
+import { useCyborgEngine, type CyborgAsset } from '@/stores/cyborgEngine';
 
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
@@ -97,6 +98,32 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const reservoir = useProfitReservoir();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
+  const engineRevision = useCyborgEngine(s => s.revision);
+  const engineComputed = useMemo(
+    () => useCyborgEngine.getState().getComputed(),
+    [engineRevision],
+  );
+  const dcaPaused = engineComputed.dcaPaused;
+
+  const guardDcaExecution = (amountUsd: number): boolean => {
+    if (dcaPaused) {
+      toast.error(engineComputed.dcaPauseMessageSk);
+      return false;
+    }
+    if (!useCyborgEngine.getState().canAffordDcaUsd(Number(amountUsd ?? 0))) {
+      toast.error('Nedostatok voľného zostatku v peňaženke pre DCA exekúciu');
+      return false;
+    }
+    return true;
+  };
+
+  const recordDcaPurchase = (coin: CoinKey, amountUsd: number, price: number) => {
+    const px = Number(price ?? 0);
+    if (px <= 0) return;
+    const symbol = coin.toUpperCase() as CyborgAsset;
+    const qty = Number(amountUsd ?? 0) / px;
+    useCyborgEngine.getState().applyDcaPurchase(symbol, qty);
+  };
 
   // ===== DECOUPLED activation state — Market and Dynamic run independently =====
   const [isMarketActive, setIsMarketActive] = useState<string | null>(null);
@@ -143,6 +170,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   // ============= INDEPENDENT ACTIVATIONS =============
   const activateMarket = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
     if (emergencyPaused) { toast.error('SYSTEM HALTED — exekúcia zablokovaná'); return; }
+    if (!guardDcaExecution(amount)) return;
     if (isMarketActive === coin) return;
     setIsMarketActive(coin);
     try {
@@ -150,6 +178,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         body: { coin, kind: 'market', amount_usd: amount, target_price: price },
       });
       if (error) throw error;
+      recordDcaPurchase(coin, amount, price);
       if (coin === 'btc' && fromReservoir > 0) {
         deductReservoir(fromReservoir, `BTC MARKET · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
       }
@@ -165,6 +194,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
   const activateLimitDynamic = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
     if (emergencyPaused) { toast.error('SYSTEM HALTED — Limit objednávky blokované'); return; }
+    if (!guardDcaExecution(amount)) return;
     if (isDynamicActive === coin) return;
     setIsDynamicActive(coin);
     try {
