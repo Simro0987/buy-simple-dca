@@ -13,8 +13,8 @@ export function normalizeTokenSymbol(symbol: string | null | undefined): string 
   return String(symbol ?? '').trim().toUpperCase();
 }
 
-/** Wallet token shown when required derivative is missing (e.g. wstETH → ETH). */
-export function resolveWalletTokenForRequirement(requiredToken: string | null | undefined): string {
+/** Funding token used only for swap routing — never shown as the held balance of the required token. */
+export function resolveSwapFundingToken(requiredToken: string | null | undefined): string {
   const token = normalizeTokenSymbol(requiredToken);
   if (['WSTETH', 'WEETH', 'RETH', 'WETH', 'STETH'].includes(token)) return 'ETH';
   if (['MSOL', 'JITOSOL', 'BSOL', 'JITO SOL'].includes(token)) return 'SOL';
@@ -23,6 +23,9 @@ export function resolveWalletTokenForRequirement(requiredToken: string | null | 
   if (token === 'ETH' || token === 'SOL' || token === 'BTC') return token;
   return String(requiredToken ?? 'ETH').trim() || 'ETH';
 }
+
+/** @deprecated Use resolveSwapFundingToken — kept for compatibility in tests */
+export const resolveWalletTokenForRequirement = resolveSwapFundingToken;
 
 function ledgerSymbolForToken(token: string): LedgerSymbol | null {
   const upper = normalizeTokenSymbol(token);
@@ -60,7 +63,7 @@ function sumLedgerByPatterns(
 }
 
 /**
- * Strict balance lookup — only PortfolioData fields and ledger entries. No targets or layer deltas.
+ * Strict balance lookup — only PortfolioData fields and ledger entries for the exact token identity.
  */
 export function getPortfolioTokenBalance(
   portfolio: PortfolioData | null | undefined,
@@ -94,31 +97,44 @@ export function getPortfolioTokenBalance(
 export interface TokenRequirementCheck {
   requiredToken: string;
   requiredAmount: number;
-  requiredTokenBalance: number;
-  walletToken: string;
-  walletBalance: number;
+  /** Real balance of the required token identity in PortfolioData (0 if not held). */
+  heldAmount: number;
   hasEnoughToken: boolean;
+  /** Token amount still missing — only this deficit should be swapped. */
+  swapDeficitAmount: number;
+  /** USD value of the deficit only (never the full wallet balance). */
+  swapDeficitUsd: number;
+  /** Source token for swap routing (e.g. ETH when required is wstETH). */
+  swapFromToken: string;
 }
 
 export function evaluateTokenRequirement(
   portfolio: PortfolioData | null | undefined,
   requiredToken: string | null | undefined,
   requiredAmount: number | null | undefined,
+  options?: { totalUsd?: number | null; unitPriceUsd?: number | null },
 ): TokenRequirementCheck {
   const reqToken = String(requiredToken ?? '').trim() || 'ETH';
   const required = safeBalance(requiredAmount);
-  const requiredTokenBalance = getPortfolioTokenBalance(portfolio, reqToken);
-  const walletToken = resolveWalletTokenForRequirement(reqToken);
-  const walletBalance = getPortfolioTokenBalance(portfolio, walletToken);
-  const hasEnoughToken = required <= 0 || requiredTokenBalance >= required;
+  const heldAmount = getPortfolioTokenBalance(portfolio, reqToken);
+  const hasEnoughToken = required <= 0 || heldAmount >= required;
+  const swapDeficitAmount = hasEnoughToken ? 0 : Math.max(0, required - heldAmount);
+  const swapFromToken = resolveSwapFundingToken(reqToken);
+
+  let unitPriceUsd = safeBalance(options?.unitPriceUsd);
+  if (unitPriceUsd <= 0 && required > 0) {
+    unitPriceUsd = safeBalance(options?.totalUsd) / required;
+  }
+  const swapDeficitUsd = swapDeficitAmount * unitPriceUsd;
 
   return {
     requiredToken: reqToken,
     requiredAmount: required,
-    requiredTokenBalance,
-    walletToken,
-    walletBalance,
+    heldAmount,
     hasEnoughToken,
+    swapDeficitAmount,
+    swapDeficitUsd: Number.isFinite(swapDeficitUsd) ? swapDeficitUsd : 0,
+    swapFromToken,
   };
 }
 
@@ -137,4 +153,25 @@ export function getPortfolioCollateralQty(
     return sumTacticalDeployedQty(safe.assets?.[symbol]?.stakedEntries ?? [], symbol);
   }
   return 0;
+}
+
+export function isNewCollateralPosition(collateralQty: number, debtUsd: number): boolean {
+  return safeBalance(collateralQty) <= 0 && safeBalance(debtUsd) <= 0;
+}
+
+export function shouldShowRetreatWarning(input: {
+  exitActive: boolean;
+  variant?: 'urgent' | 'warning' | 'opportunity';
+  collateralQty: number;
+  debtUsd: number;
+  ltvPct: number;
+}): boolean {
+  if (!input.exitActive) return false;
+  if (input.variant !== 'urgent') return true;
+
+  const collateral = safeBalance(input.collateralQty);
+  const debt = safeBalance(input.debtUsd);
+  const ltv = safeBalance(input.ltvPct);
+
+  return collateral > 0 && debt > 0 && ltv > 0;
 }

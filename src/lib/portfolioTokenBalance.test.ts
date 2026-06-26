@@ -3,8 +3,10 @@ import { ensurePortfolioData } from '@/lib/portfolioData';
 import {
   evaluateTokenRequirement,
   getPortfolioTokenBalance,
-  resolveWalletTokenForRequirement,
+  isNewCollateralPosition,
+  resolveSwapFundingToken,
   safeBalance,
+  shouldShowRetreatWarning,
 } from '@/lib/portfolioTokenBalance';
 
 function samplePortfolio() {
@@ -17,10 +19,10 @@ function samplePortfolio() {
       ETH: {
         symbol: 'ETH',
         holdings: 2,
-        liquidQty: 0.5,
+        liquidQty: 0.8521,
         stakedQty: 1.2,
         currentPrice: 3000,
-        liquidUsd: 1500,
+        liquidUsd: 2556.3,
         stakedUsd: 3600,
         totalUsd: 6000,
         stakedEntries: [
@@ -38,7 +40,7 @@ function samplePortfolio() {
     lbtc: { symbol: 'LBTC', qty: 0, usd: 0, role: 'motor' },
     totalAlchemixUsd: 600,
     totalMotorUsd: 900,
-    ethBaseline: { totalQty: 2, totalUsd: 6000, walletQty: 0.5, stakedQty: 1.2, motorQty: 0.3, alchemixQty: 0.2, otherStakedQty: 0.7 },
+    ethBaseline: { totalQty: 2, totalUsd: 6000, walletQty: 0.8521, stakedQty: 1.2, motorQty: 0.3, alchemixQty: 0.2, otherStakedQty: 0.7 },
     solBaseline: { totalQty: 10, totalUsd: 1500, walletQty: 4, stakedQty: 6, motorQty: 0, alchemixQty: 0, otherStakedQty: 6 },
     totalEthPortfolio: 2,
     totalSolPortfolio: 10,
@@ -52,28 +54,60 @@ describe('portfolioTokenBalance', () => {
     expect(safeBalance(-1)).toBe(0);
   });
 
-  it('returns ETH wallet balance only from PortfolioData liquidQty', () => {
+  it('returns exact token identity balance from PortfolioData', () => {
     const portfolio = samplePortfolio();
-    expect(getPortfolioTokenBalance(portfolio, 'ETH')).toBe(0.5);
+    expect(getPortfolioTokenBalance(portfolio, 'ETH')).toBe(0.8521);
     expect(getPortfolioTokenBalance(portfolio, 'wstETH')).toBe(0);
     expect(getPortfolioTokenBalance(portfolio, 'rETH')).toBe(0.3);
   });
 
-  it('maps derivative requirements to native wallet token', () => {
-    expect(resolveWalletTokenForRequirement('wstETH')).toBe('ETH');
-    expect(resolveWalletTokenForRequirement('mSOL')).toBe('SOL');
+  it('never conflates ETH wallet balance with wstETH held amount', () => {
+    const check = evaluateTokenRequirement(samplePortfolio(), 'wstETH', 0.1118, { totalUsd: 335.4 });
+    expect(check.hasEnoughToken).toBe(false);
+    expect(check.heldAmount).toBe(0);
+    expect(check.requiredToken).toBe('wstETH');
+    expect(check.swapDeficitAmount).toBeCloseTo(0.1118, 6);
+    expect(check.swapDeficitUsd).toBeCloseTo(335.4, 1);
+    expect(check.swapFromToken).toBe('ETH');
   });
 
-  it('flags insufficient token and exposes real wallet balance', () => {
-    const check = evaluateTokenRequirement(samplePortfolio(), 'wstETH', 0.8521);
-    expect(check.hasEnoughToken).toBe(false);
-    expect(check.requiredTokenBalance).toBe(0);
-    expect(check.walletToken).toBe('ETH');
-    expect(check.walletBalance).toBe(0.5);
+  it('swap deficit is partial not full wallet', () => {
+    const check = evaluateTokenRequirement(samplePortfolio(), 'wstETH', 0.1118, { totalUsd: 335.4 });
+    expect(check.swapDeficitUsd).toBeLessThan(0.8521 * 3000);
+  });
+
+  it('maps swap funding token without changing held display token', () => {
+    expect(resolveSwapFundingToken('wstETH')).toBe('ETH');
   });
 
   it('passes when required token balance is sufficient', () => {
     const check = evaluateTokenRequirement(samplePortfolio(), 'ETH', 0.4);
     expect(check.hasEnoughToken).toBe(true);
+    expect(check.heldAmount).toBe(0.8521);
+  });
+
+  it('hides retreat warning when LTV is zero and no debt', () => {
+    expect(shouldShowRetreatWarning({
+      exitActive: true,
+      variant: 'urgent',
+      collateralQty: 0,
+      debtUsd: 0,
+      ltvPct: 0,
+    })).toBe(false);
+  });
+
+  it('shows retreat warning only with active debt position', () => {
+    expect(shouldShowRetreatWarning({
+      exitActive: true,
+      variant: 'urgent',
+      collateralQty: 1,
+      debtUsd: 500,
+      ltvPct: 25,
+    })).toBe(true);
+  });
+
+  it('detects new collateral position', () => {
+    expect(isNewCollateralPosition(0, 0)).toBe(true);
+    expect(isNewCollateralPosition(0.5, 0)).toBe(false);
   });
 });

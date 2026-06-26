@@ -12,7 +12,7 @@ import { LTV_STATUS_CLASS } from '@/lib/collateralManagement';
 import { AtomicActionBlock } from '@/components/staking/AtomicActionBlock';
 import type { PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 import { usePortfolio } from '@/contexts/PortfolioContext';
-import { evaluateTokenRequirement } from '@/lib/portfolioTokenBalance';
+import { evaluateTokenRequirement, isNewCollateralPosition } from '@/lib/portfolioTokenBalance';
 
 export interface CollateralActionChecklistProps {
   lang: Lang;
@@ -63,8 +63,10 @@ export function CollateralActionChecklist({
   const { portfolioData } = usePortfolio();
 
   const depositCheck = useMemo(
-    () => evaluateTokenRequirement(portfolioData ?? null, collateralLabel, copyCollateralQty),
-    [portfolioData, collateralLabel, copyCollateralQty],
+    () => evaluateTokenRequirement(portfolioData ?? null, collateralLabel, copyCollateralQty, {
+      totalUsd: copyCollateralQty * (Number(snapshot?.targetUsd ?? 0) / Math.max(Number(snapshot?.targetQty ?? 0), 1e-9)),
+    }),
+    [portfolioData, collateralLabel, copyCollateralQty, snapshot?.targetUsd, snapshot?.targetQty],
   );
 
   const safeCollateral = Number(snapshot?.deployedQty ?? 0);
@@ -77,7 +79,8 @@ export function CollateralActionChecklist({
 
   const depositUsd = copyCollateralQty * (Number(snapshot?.targetUsd ?? 0) / Math.max(Number(snapshot?.targetQty ?? 0), 1e-9));
   const ltvClass = LTV_STATUS_CLASS[snapshot?.ltvStatus ?? 'safe'];
-  const includeBorrow = !supplyOnlyMode && safeBorrowUsdc > 0;
+  const isNewPosition = isNewCollateralPosition(safeCollateralQty, safeBorrowUsd);
+  const includeBorrow = !supplyOnlyMode && safeBorrowUsdc > 0 && !isNewPosition && safeCollateralQty > 0;
 
   const projectedLtv = Number(snapshot?.projectedLtvPct ?? 0);
   const currentLtv = Number(snapshot?.currentLtvPct ?? 0);

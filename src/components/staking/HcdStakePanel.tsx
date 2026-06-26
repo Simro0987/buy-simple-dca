@@ -13,7 +13,7 @@ import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { PositionOverviewPanel } from '@/components/staking/PositionOverviewPanel';
 import { YieldDashboard } from '@/components/staking/YieldDashboard';
 import { ActionTokenRequirementBanner } from '@/components/staking/ActionTokenRequirementBanner';
-import { evaluateTokenRequirement } from '@/lib/portfolioTokenBalance';
+import { evaluateTokenRequirement, isNewCollateralPosition, shouldShowRetreatWarning } from '@/lib/portfolioTokenBalance';
 import type { PositionOverviewMode } from '@/lib/positionOverview';
 import {
   CollateralActionChecklist,
@@ -412,18 +412,26 @@ function CyborgActionPlan({
   const collateralMode = Boolean(collateralSnapshot && collateralHandlers);
   const { portfolioData } = usePortfolio();
   const depositTokenCheck = useMemo(
-    () => evaluateTokenRequirement(portfolioData ?? null, collateralLabel, copyQty),
-    [portfolioData, collateralLabel, copyQty],
+    () => evaluateTokenRequirement(portfolioData ?? null, collateralLabel, copyQty, { totalUsd: collateralUsd }),
+    [portfolioData, collateralLabel, copyQty, collateralUsd],
   );
 
   const safeCollateral = Number(collateralSnapshot?.deployedQty ?? 0);
   const safeBorrow = Number(positionUsdcDebt ?? 0);
   const safeCollateralQty = Number.isFinite(safeCollateral) ? safeCollateral : 0;
   const safeBorrowUsd = Number.isFinite(safeBorrow) ? safeBorrow : 0;
-  const showRetreatWarning = Boolean(
-    exitAlert?.active
-    && (exitAlert.variant !== 'urgent' || (safeCollateralQty > 0 && safeBorrowUsd > 0)),
-  );
+  const ltvPct = safeCollateralQty === 0 && safeBorrowUsd === 0
+    ? 0
+    : Number(collateralSnapshot?.projectedLtvPct ?? 0) > 0
+      ? Number(collateralSnapshot?.projectedLtvPct ?? 0)
+      : Number(collateralSnapshot?.currentLtvPct ?? 0);
+  const showRetreatWarning = shouldShowRetreatWarning({
+    exitActive: Boolean(exitAlert?.active),
+    variant: exitAlert?.variant,
+    collateralQty: safeCollateralQty,
+    debtUsd: safeBorrowUsd,
+    ltvPct: Number.isFinite(ltvPct) ? ltvPct : 0,
+  });
 
   return (
     <div
@@ -477,7 +485,6 @@ function CyborgActionPlan({
           lang={lang}
           check={depositTokenCheck}
           decimals={collateralDecimals}
-          priceUsd={collateralUsd}
         />
       )}
 
@@ -856,8 +863,8 @@ function CoreCyborgActionPlan({
   const copyQty = copyStakeQty ?? stakeQty;
   const { portfolioData } = usePortfolio();
   const stakeTokenCheck = useMemo(
-    () => evaluateTokenRequirement(portfolioData ?? null, positionSymbol, copyQty),
-    [portfolioData, positionSymbol, copyQty],
+    () => evaluateTokenRequirement(portfolioData ?? null, positionSymbol, copyQty, { totalUsd: stakeUsd }),
+    [portfolioData, positionSymbol, copyQty, stakeUsd],
   );
 
   return (
@@ -907,7 +914,6 @@ function CoreCyborgActionPlan({
           lang={lang}
           check={stakeTokenCheck}
           decimals={stakeDecimals}
-          priceUsd={stakeUsd}
         />
       )}
 
@@ -1160,7 +1166,8 @@ function TacticalLayerExecution({
     collateralDecimals,
   ]);
   const planConfirmed = isExecutionConfirmed(planKey);
-  const borrowUsd = supplyOnlyMode ? 0 : safeBorrowUsdc;
+  const isNewPosition = isNewCollateralPosition(deployedCollateralQty, usdcDebt ?? 0);
+  const borrowUsd = supplyOnlyMode || isNewPosition ? 0 : safeBorrowUsdc;
   const gasAvailableEth = symbol === 'ETH' ? resolveGasAvailableEth(totalPortfolioQty) : 0;
   const protocolUrl = symbol === 'ETH' ? arbitrumWinner?.sourceUrl : kaminoWinner?.sourceUrl;
   const collateralContract = arbitrumWinner?.collateralAddress;

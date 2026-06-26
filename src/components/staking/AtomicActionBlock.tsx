@@ -145,7 +145,6 @@ export function AtomicActionBlock({
           lang={lang}
           check={tokenCheck}
           decimals={decimals}
-          priceUsd={safeUsd}
         />
       )}
     </div>
