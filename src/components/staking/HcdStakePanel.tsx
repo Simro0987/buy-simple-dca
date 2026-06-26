@@ -31,7 +31,7 @@ import { buildCollateralManagementSnapshot } from '@/lib/collateralManagement';
 import type { CollateralManagementSnapshot } from '@/lib/collateralManagement';
 import { buildGlobalYieldEnginePlan } from '@/lib/globalYieldEngine';
 import { useSupplyOnlyMode } from '@/hooks/useSupplyOnlyMode';
-import { ExecutionConfirmButton } from '@/components/staking/ExecutionConfirmButton';
+import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   computeHcdLayerTargets,
@@ -234,24 +234,29 @@ function ManualPlanConfirm({
 
   if (confirmed) {
     return (
-      <ExecutionConfirmButton
-        lang={lang}
-        confirmed
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={onRevert}
         disabled={disabled}
-        onConfirm={() => {}}
-        onRevert={onRevert}
-      />
+        className="h-8 text-[10px] font-semibold touch-manipulation border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20"
+      >
+        {sk ? 'Aktualizované' : 'Updated'}
+      </Button>
     );
   }
 
   return (
-    <ExecutionConfirmButton
-      lang={lang}
-      confirmed={false}
+    <Button
+      type="button"
+      size="sm"
+      onClick={onConfirm}
       disabled={disabled}
-      onConfirm={onConfirm}
-      confirmLabel={confirmLabel}
-    />
+      className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white"
+    >
+      {confirmLabel ?? (sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution')}
+    </Button>
   );
 }
 
@@ -376,7 +381,7 @@ function CyborgActionPlan({
     protocolUrl?: string;
     collateralContract?: string;
     isConfirmed: (id: CollateralActionId) => boolean;
-    onConfirm: (id: CollateralActionId) => void;
+    onConfirm: (id: CollateralActionId, update: PortfolioBalanceUpdate) => void;
     onRevert: (id: CollateralActionId) => void;
     onBatchConfirm: () => void;
   };
@@ -923,7 +928,7 @@ function CoreLayerExecution({
   copyQtyOverride?: number;
 }) {
   const sk = lang === 'sk';
-  const { executeAction, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const layerPct = layer?.pctTarget ?? 0;
   const stakeDecimals = symbol === 'SOL' ? 2 : 4;
   const stakeLabel = symbol === 'ETH' ? 'ETH' : 'SOL';
@@ -937,16 +942,14 @@ function CoreLayerExecution({
     ? { token: 'rETH', network: 'Ethereum L1', protocol: 'Rocket Pool' }
     : { token: 'mSOL', network: 'Solana', protocol: 'Marinade' };
 
+  const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => (
+    symbol === 'ETH' ? { rEthQty: stakeQty } : { mSolQty: stakeQty }
+  ), [symbol, stakeQty]);
+
   const handleConfirmPlan = useCallback(() => {
-    if (copyStakeQty <= 0) return;
-    executeAction(planKey, {
-      layer: 'core-stake',
-      actionType: 'stake',
-      amount: copyStakeQty,
-      symbol,
-    }, buildDecisionMeta());
+    confirmExecutionStep(planKey, buildPlanUpdate(), buildDecisionMeta());
     toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
-  }, [executeAction, planKey, copyStakeQty, symbol, buildDecisionMeta, sk]);
+  }, [confirmExecutionStep, planKey, buildPlanUpdate, buildDecisionMeta, sk]);
 
   const handleRevertPlan = useCallback(() => {
     revertExecutionStep(planKey);
@@ -1055,7 +1058,7 @@ function TacticalLayerExecution({
   onManageGlobalYield?: () => void;
 }) {
   const sk = lang === 'sk';
-  const { executeAction, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const collateralDecimals = symbol === 'SOL' ? 2 : 4;
   const motorLabel = symbol === 'ETH'
     ? (arbitrumWinner?.collateralToken ?? 'wETH')
@@ -1129,25 +1132,10 @@ function TacticalLayerExecution({
     [isExecutionConfirmed, planKey],
   );
 
-  const handleCollateralConfirm = useCallback((actionId: CollateralActionId) => {
-    const key = collateralActionKey(planKey, actionId);
-    if (actionId === 'deposit' && copyCollateralQty > 0) {
-      executeAction(key, {
-        layer: 'tactical-supply',
-        actionType: 'supply-collateral',
-        amount: copyCollateralQty,
-        symbol,
-      }, buildDecisionMeta());
-    } else if (actionId === 'borrow' && borrowUsd > 0) {
-      executeAction(key, {
-        layer: 'tactical-borrow',
-        actionType: 'borrow',
-        amount: borrowUsd,
-        symbol,
-      }, buildDecisionMeta());
-    }
+  const handleCollateralConfirm = useCallback((actionId: CollateralActionId, update: PortfolioBalanceUpdate) => {
+    confirmExecutionStep(collateralActionKey(planKey, actionId), update, buildDecisionMeta());
     toast.success(sk ? 'Kolaterálna akcia potvrdená' : 'Collateral action confirmed');
-  }, [executeAction, planKey, copyCollateralQty, borrowUsd, symbol, buildDecisionMeta, sk]);
+  }, [confirmExecutionStep, planKey, buildDecisionMeta, sk]);
 
   const handleCollateralRevert = useCallback((actionId: CollateralActionId) => {
     revertExecutionStep(collateralActionKey(planKey, actionId));
@@ -1159,33 +1147,19 @@ function TacticalLayerExecution({
   }, []);
 
   const handleCollateralBatchConfirm = useCallback(() => {
-    const steps: { id: CollateralActionId; url?: string }[] = [];
+    const steps: { id: CollateralActionId; update: PortfolioBalanceUpdate; url?: string }[] = [];
     if (copyCollateralQty > 0) {
-      steps.push({ id: 'deposit', url: protocolUrl });
+      steps.push({ id: 'deposit', update: { rEthQty: collateralQty }, url: protocolUrl });
     }
     if (!supplyOnlyMode && borrowUsd > 0) {
-      steps.push({ id: 'borrow', url: protocolUrl });
+      steps.push({ id: 'borrow', update: { usdcBorrowed: borrowUsd }, url: protocolUrl });
     }
     let confirmed = 0;
     for (const step of steps) {
       const key = collateralActionKey(planKey, step.id);
       if (isExecutionConfirmed(key)) continue;
       openActionUrl(step.url);
-      if (step.id === 'deposit') {
-        executeAction(key, {
-          layer: 'tactical-supply',
-          actionType: 'supply-collateral',
-          amount: copyCollateralQty,
-          symbol,
-        }, buildDecisionMeta());
-      } else {
-        executeAction(key, {
-          layer: 'tactical-borrow',
-          actionType: 'borrow',
-          amount: borrowUsd,
-          symbol,
-        }, buildDecisionMeta());
-      }
+      confirmExecutionStep(key, step.update, buildDecisionMeta());
       confirmed += 1;
     }
     if (confirmed > 0) {
@@ -1193,14 +1167,14 @@ function TacticalLayerExecution({
     }
   }, [
     copyCollateralQty,
+    collateralQty,
     borrowUsd,
     supplyOnlyMode,
     protocolUrl,
     planKey,
-    symbol,
     isExecutionConfirmed,
     openActionUrl,
-    executeAction,
+    confirmExecutionStep,
     buildDecisionMeta,
     sk,
   ]);
@@ -1227,25 +1201,21 @@ function TacticalLayerExecution({
       ? formatKaminoPlanInstruction(kaminoWinner, sk, kaminoRouting, gasBufferLine)
       : undefined;
 
+  const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
+    const update: PortfolioBalanceUpdate = {};
+    if (symbol === 'ETH') {
+      update.rEthQty = collateralQty;
+    } else {
+      update.mSolQty = collateralQty;
+    }
+    if (!supplyOnlyMode && safeBorrowUsdc > 0) update.usdcBorrowed = safeBorrowUsdc;
+    return update;
+  }, [symbol, collateralQty, safeBorrowUsdc, supplyOnlyMode]);
+
   const handleConfirmPlan = useCallback(() => {
-    if (copyCollateralQty > 0) {
-      executeAction(planKey, {
-        layer: 'tactical-supply',
-        actionType: 'supply-collateral',
-        amount: copyCollateralQty,
-        symbol,
-      }, buildDecisionMeta());
-    }
-    if (!supplyOnlyMode && safeBorrowUsdc > 0) {
-      executeAction(collateralActionKey(planKey, 'borrow'), {
-        layer: 'tactical-borrow',
-        actionType: 'borrow',
-        amount: safeBorrowUsdc,
-        symbol,
-      }, buildDecisionMeta());
-    }
+    confirmExecutionStep(planKey, buildPlanUpdate(), buildDecisionMeta());
     toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
-  }, [executeAction, planKey, copyCollateralQty, safeBorrowUsdc, supplyOnlyMode, symbol, buildDecisionMeta, sk]);
+  }, [confirmExecutionStep, planKey, buildPlanUpdate, buildDecisionMeta, sk]);
 
   const handleRevertPlan = useCallback(() => {
     revertExecutionStep(planKey);
@@ -1344,7 +1314,7 @@ function AlchemixLayerExecution({
   stakedEntries: StakedEntry[];
 }) {
   const sk = lang === 'sk';
-  const { executeAction, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
+  const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
   const layerPct = alchemixLocked ? 0 : (layer?.pctTarget ?? 0);
   const targetQty = alchemixLocked ? 0 : layerTargetQty(totalEthQty, layer?.pctTarget);
   const targetUsd = targetQty * (ethPrice ?? 0);
@@ -1367,20 +1337,10 @@ function AlchemixLayerExecution({
     }
   }, [alchemixApyPct, alchemixLocked]);
 
-  const copyAlchemixQty = alchemixLocked
-    ? 0
-    : (copyQtyOverride ?? computeDeltaQty(targetQty, deployedAlchemixQty));
-
   const handleConfirmPlan = useCallback(() => {
-    if (copyAlchemixQty <= 0) return;
-    executeAction(planKey, {
-      layer: 'alchemix-supply',
-      actionType: 'supply-collateral',
-      amount: copyAlchemixQty,
-      symbol: 'ETH',
-    }, buildDecisionMeta());
+    confirmExecutionStep(planKey, { alchemixEthQty: targetQty }, buildDecisionMeta());
     toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
-  }, [executeAction, planKey, copyAlchemixQty, buildDecisionMeta, sk]);
+  }, [confirmExecutionStep, planKey, targetQty, buildDecisionMeta, sk]);
 
   const handleRevertPlan = useCallback(() => {
     revertExecutionStep(planKey);
@@ -1431,7 +1391,7 @@ function AlchemixLayerExecution({
           showBorrowCommand={false}
           planSummary={planSummary}
           hideCopyBoxes={alchemixLocked}
-          copyCollateralQty={copyAlchemixQty}
+          copyCollateralQty={alchemixLocked ? 0 : (copyQtyOverride ?? computeDeltaQty(targetQty, deployedAlchemixQty))}
           positionMode="alchemix"
           positionSymbol="ETH"
           positionTokenLabel="ETH"

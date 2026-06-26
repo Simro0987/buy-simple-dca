@@ -40,7 +40,7 @@ export function PositionOverviewPanel({
   decimals,
 }: PositionOverviewPanelProps) {
   const sk = lang === 'sk';
-  const { portfolioData, cyborgUsdcDebt, cyborgUsdcWallet } = usePortfolio();
+  const { portfolioData, cyborgUsdcDebt } = usePortfolio();
   const stables = useStablesByNetwork();
 
   const overview = useMemo(() => {
@@ -52,7 +52,6 @@ export function PositionOverviewPanel({
         portfolio: portfolioData ?? null,
         usdcDebt: usdcDebt ?? cyborgUsdcDebt ?? 0,
         stablesTotalUsd: sumStables(stables),
-        usdcWalletBonus: cyborgUsdcWallet ?? 0,
         collateralQty,
         decimals,
       });
@@ -66,7 +65,6 @@ export function PositionOverviewPanel({
     portfolioData,
     usdcDebt,
     cyborgUsdcDebt,
-    cyborgUsdcWallet,
     stables,
     collateralQty,
     decimals,

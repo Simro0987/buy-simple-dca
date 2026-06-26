@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { formatAtomicCopyText } from '@/lib/atomicActionPlan';
-import { ExecutionConfirmButton } from '@/components/staking/ExecutionConfirmButton';
 
 export interface AtomicActionBlockProps {
   lang: Lang;
@@ -82,20 +81,34 @@ export function AtomicActionBlock({
             <p className="text-[11px] font-semibold text-foreground leading-snug">{title}</p>
             {confirmed && (
               <p className="text-[9px] font-medium text-emerald-400">
-                {sk ? 'Zaradené do portfólia' : 'Added to portfolio'}
+                {sk ? 'Hotovo' : 'Done'}
               </p>
             )}
           </div>
         </div>
-        <ExecutionConfirmButton
-          lang={lang}
-          confirmed={confirmed}
-          disabled={inactive || disabled}
-          onConfirm={handleConfirm}
-          onRevert={onRevert}
-          showExternalLink={Boolean(actionUrl)}
-          externalLinkIcon={actionUrl ? <ExternalLink className="w-3 h-3 ml-1 opacity-80" /> : undefined}
-        />
+        {confirmed ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={onRevert}
+            disabled={disabled}
+            className="h-8 text-[10px] font-semibold touch-manipulation border-emerald-500/50 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/20 shrink-0"
+          >
+            {sk ? 'Potvrdené' : 'Confirmed'}
+          </Button>
+        ) : (
+          <Button
+            type="button"
+            size="sm"
+            onClick={handleConfirm}
+            disabled={inactive || disabled}
+            className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white shrink-0"
+          >
+            {sk ? 'Potvrdiť exekúciu' : 'Confirm execution'}
+            {actionUrl && <ExternalLink className="w-3 h-3 ml-1 opacity-80" />}
+          </Button>
+        )}
       </div>
 
       <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">

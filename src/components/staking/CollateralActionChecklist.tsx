@@ -27,7 +27,7 @@ export interface CollateralActionChecklistProps {
   execDisabled?: boolean;
   planKey: string;
   isConfirmed: (id: CollateralActionId) => boolean;
-  onConfirm: (id: CollateralActionId) => void;
+  onConfirm: (id: CollateralActionId, update: PortfolioBalanceUpdate) => void;
   onRevert: (id: CollateralActionId) => void;
   onBatchConfirm: () => void;
   onManageGlobalYield?: () => void;
@@ -122,7 +122,7 @@ export function CollateralActionChecklist({
           contractHint={collateralContract ? `Contract: ${collateralContract}` : undefined}
           confirmed={isConfirmed('deposit')}
           disabled={execDisabled}
-          onConfirm={() => onConfirm('deposit')}
+          onConfirm={() => onConfirm('deposit', { rEthQty: collateralQty })}
           onRevert={() => onRevert('deposit')}
         />
       )}
@@ -139,7 +139,7 @@ export function CollateralActionChecklist({
           contractHint={snapshot.recommendedVenue}
           confirmed={isConfirmed('borrow')}
           disabled={execDisabled}
-          onConfirm={() => onConfirm('borrow')}
+          onConfirm={() => onConfirm('borrow', { usdcBorrowed: safeBorrowUsdc })}
           onRevert={() => onRevert('borrow')}
         />
       )}

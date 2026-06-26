@@ -11,24 +11,15 @@ import {
   applyPortfolioBalanceUpdate,
   applyAlchemixAutonomousRebalance,
   loadCyborgUsdcDebt,
-  loadCyborgUsdcWallet,
   loadConfirmedSteps,
   markStepConfirmed,
   revertPortfolioBalanceUpdate,
   unmarkStepConfirmed,
   type ConfirmedStepData,
   CYBORG_DEBT_EVENT,
-  CYBORG_WALLET_EVENT,
   CYBORG_CONFIRMED_EVENT,
   type PortfolioBalanceUpdate,
 } from '@/lib/cyborgPortfolio';
-import {
-  applyExecutionPayload,
-  buildExecutionPayload,
-  revertExecutionPayload,
-  type ExecuteActionInput,
-  type ExecutionPayload,
-} from '@/lib/portfolioExecution';
 import {
   appendDecisionLogEntry,
   removeDecisionLogEntry,
@@ -42,7 +33,7 @@ export interface DecisionConfirmMeta {
 }
 
 export type AssetFilter = 'BTC' | 'ETH' | 'SOL' | null;
-export type { ExecuteActionInput } from '@/lib/portfolioExecution';
+export type { PortfolioBalanceUpdate, DecisionConfirmMeta };
 
 interface AssetBreakdown {
   symbol: string;
@@ -69,10 +60,8 @@ interface PortfolioCtx {
   profitAvailable: number;
   profitBySymbol: Record<string, number>;
   cyborgUsdcDebt: number;
-  cyborgUsdcWallet: number;
   markProfitMoved: (usd: number) => void;
   confirmExecutionStep: (key: string, update: PortfolioBalanceUpdate, meta?: DecisionConfirmMeta) => void;
-  executeAction: (key: string, input: ExecuteActionInput, meta?: DecisionConfirmMeta) => void;
   executeAlchemixAutonomousRebalance: (
     input: Parameters<typeof applyAlchemixAutonomousRebalance>[0],
     meta?: DecisionConfirmMeta,
@@ -98,25 +87,19 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const [selected, setSelected] = useState<AssetFilter>(null);
   const [movedProfit, setMovedProfit] = useState<number>(loadMoved());
   const [cyborgUsdcDebt, setCyborgUsdcDebt] = useState<number>(() => loadCyborgUsdcDebt());
-  const [cyborgUsdcWallet, setCyborgUsdcWallet] = useState<number>(() => loadCyborgUsdcWallet());
   const [confirmedSteps, setConfirmedSteps] = useState<Record<string, ConfirmedStepData>>(() => loadConfirmedSteps());
 
   useEffect(() => {
     const syncDebt = () => setCyborgUsdcDebt(loadCyborgUsdcDebt());
-    const syncWallet = () => setCyborgUsdcWallet(loadCyborgUsdcWallet());
     const syncConfirmed = () => setConfirmedSteps(loadConfirmedSteps());
     window.addEventListener(CYBORG_DEBT_EVENT, syncDebt);
-    window.addEventListener(CYBORG_WALLET_EVENT, syncWallet);
     window.addEventListener(CYBORG_CONFIRMED_EVENT, syncConfirmed);
     window.addEventListener('storage', syncDebt);
-    window.addEventListener('storage', syncWallet);
     window.addEventListener('storage', syncConfirmed);
     return () => {
       window.removeEventListener(CYBORG_DEBT_EVENT, syncDebt);
-      window.removeEventListener(CYBORG_WALLET_EVENT, syncWallet);
       window.removeEventListener(CYBORG_CONFIRMED_EVENT, syncConfirmed);
       window.removeEventListener('storage', syncDebt);
-      window.removeEventListener('storage', syncWallet);
       window.removeEventListener('storage', syncConfirmed);
     };
   }, []);
@@ -124,28 +107,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const updatePortfolioBalances = useCallback((update: PortfolioBalanceUpdate) => {
     applyPortfolioBalanceUpdate(update);
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
-    setCyborgUsdcWallet(loadCyborgUsdcWallet());
   }, []);
-
-  const executeActionFn = useCallback((key: string, input: ExecuteActionInput, meta?: DecisionConfirmMeta) => {
-    const payload = buildExecutionPayload(input);
-    applyExecutionPayload(payload);
-    markStepConfirmed(key, payload.update, {
-      ethProtocol: payload.ethProtocol,
-      solProtocol: payload.solProtocol,
-    });
-    if (meta?.marketConditions) {
-      appendDecisionLogEntry({
-        stepKey: key,
-        portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
-        marketConditions: meta.marketConditions,
-        balanceSnapshot: meta.balanceSnapshot,
-      });
-    }
-    setConfirmedSteps(loadConfirmedSteps());
-    setCyborgUsdcDebt(loadCyborgUsdcDebt());
-    setCyborgUsdcWallet(loadCyborgUsdcWallet());
-  }, [metrics.totalValue]);
 
   const confirmExecutionStep = useCallback((key: string, update: PortfolioBalanceUpdate, meta?: DecisionConfirmMeta) => {
     applyPortfolioBalanceUpdate(update);
@@ -160,7 +122,6 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     }
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
-    setCyborgUsdcWallet(loadCyborgUsdcWallet());
   }, [metrics.totalValue]);
 
   const executeAlchemixAutonomousRebalanceFn = useCallback((
@@ -181,27 +142,16 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     }
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
-    setCyborgUsdcWallet(loadCyborgUsdcWallet());
   }, [metrics.totalValue]);
 
   const revertExecutionStep = useCallback((key: string) => {
-    const record = unmarkStepConfirmed(key);
-    if (record) {
-      const payload: ExecutionPayload = {
-        update: record.update,
-        ethProtocol: record.ethProtocol,
-        solProtocol: record.solProtocol,
-      };
-      if (record.ethProtocol || record.solProtocol) {
-        revertExecutionPayload(payload);
-      } else {
-        revertPortfolioBalanceUpdate(record.update);
-      }
+    const update = unmarkStepConfirmed(key);
+    if (update) {
+      revertPortfolioBalanceUpdate(update);
     }
     removeDecisionLogEntry(key);
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
-    setCyborgUsdcWallet(loadCyborgUsdcWallet());
   }, []);
 
   const isExecutionConfirmed = useCallback(
@@ -298,11 +248,9 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       profitAvailable,
       profitBySymbol,
       cyborgUsdcDebt,
-      cyborgUsdcWallet,
       markProfitMoved,
       updatePortfolioBalances,
       confirmExecutionStep,
-      executeAction: executeActionFn,
       executeAlchemixAutonomousRebalance: executeAlchemixAutonomousRebalanceFn,
       revertExecutionStep,
       isExecutionConfirmed,
@@ -310,7 +258,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setSelected,
       toggleSelected,
     };
-  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, cyborgUsdcWallet, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, executeActionFn, executeAlchemixAutonomousRebalanceFn, revertExecutionStep, isExecutionConfirmed]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, executeAlchemixAutonomousRebalanceFn, revertExecutionStep, isExecutionConfirmed]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

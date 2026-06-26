@@ -2,8 +2,6 @@ import { addStake, removeStake } from '@/lib/stakingLedger';
 
 const DEBT_KEY = 'cyborg-usdc-debt-v1';
 const DEBT_EVT = 'cyborg-usdc-debt-changed';
-const WALLET_KEY = 'cyborg-usdc-wallet-v1';
-const WALLET_EVT = 'cyborg-usdc-wallet-changed';
 const CONFIRMED_KEY = 'cyborg-confirmed-steps-v1';
 const CONFIRMED_EVT = 'cyborg-confirmed-steps-changed';
 
@@ -13,13 +11,10 @@ export interface PortfolioBalanceUpdate {
   alchemixEthQty?: number;
   lbtcQty?: number;
   usdcBorrowed?: number;
-  usdcWalletDelta?: number;
 }
 
 export interface ConfirmedStepData {
   update: PortfolioBalanceUpdate;
-  ethProtocol?: string;
-  solProtocol?: string;
 }
 
 export function loadConfirmedSteps(): Record<string, ConfirmedStepData> {
@@ -49,26 +44,19 @@ function persistConfirmedSteps(steps: Record<string, ConfirmedStepData>): void {
   } catch { /* ignore */ }
 }
 
-export function markStepConfirmed(
-  key: string,
-  update: PortfolioBalanceUpdate,
-  protocols?: { ethProtocol?: string; solProtocol?: string },
-): void {
-  const next = {
-    ...loadConfirmedSteps(),
-    [key]: { update, ethProtocol: protocols?.ethProtocol, solProtocol: protocols?.solProtocol },
-  };
+export function markStepConfirmed(key: string, update: PortfolioBalanceUpdate): void {
+  const next = { ...loadConfirmedSteps(), [key]: { update } };
   persistConfirmedSteps(next);
 }
 
-export function unmarkStepConfirmed(key: string): ConfirmedStepData | null {
+export function unmarkStepConfirmed(key: string): PortfolioBalanceUpdate | null {
   const steps = loadConfirmedSteps();
   const record = steps[key];
   if (!record) return null;
   const next = { ...steps };
   delete next[key];
   persistConfirmedSteps(next);
-  return record;
+  return record.update;
 }
 
 export function isStepConfirmed(key: string): boolean {
@@ -107,36 +95,6 @@ export function subtractCyborgUsdcDebt(delta: number): number {
 
 export const CYBORG_DEBT_EVENT = DEBT_EVT;
 
-export function loadCyborgUsdcWallet(): number {
-  try {
-    const n = Number(localStorage.getItem(WALLET_KEY) || '0');
-    return Number.isFinite(n) && n >= 0 ? n : 0;
-  } catch {
-    return 0;
-  }
-}
-
-function persistCyborgUsdcWallet(amount: number): void {
-  try {
-    localStorage.setItem(WALLET_KEY, String(amount));
-    window.dispatchEvent(new CustomEvent(WALLET_EVT));
-  } catch { /* ignore */ }
-}
-
-export function addCyborgUsdcWallet(delta: number): number {
-  const next = loadCyborgUsdcWallet() + Math.max(0, delta);
-  persistCyborgUsdcWallet(next);
-  return next;
-}
-
-export function subtractCyborgUsdcWallet(delta: number): number {
-  const next = Math.max(0, loadCyborgUsdcWallet() - Math.max(0, delta));
-  persistCyborgUsdcWallet(next);
-  return next;
-}
-
-export const CYBORG_WALLET_EVENT = WALLET_EVT;
-
 export function applyPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): void {
   if (update.rEthQty && update.rEthQty > 0) {
     addStake('ETH', 'Rocket Pool (rETH)', update.rEthQty);
@@ -152,9 +110,6 @@ export function applyPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): voi
   }
   if (update.usdcBorrowed && update.usdcBorrowed > 0) {
     addCyborgUsdcDebt(update.usdcBorrowed);
-  }
-  if (update.usdcWalletDelta && update.usdcWalletDelta > 0) {
-    addCyborgUsdcWallet(update.usdcWalletDelta);
   }
 }
 
@@ -173,9 +128,6 @@ export function revertPortfolioBalanceUpdate(update: PortfolioBalanceUpdate): vo
   }
   if (update.usdcBorrowed && update.usdcBorrowed > 0) {
     subtractCyborgUsdcDebt(update.usdcBorrowed);
-  }
-  if (update.usdcWalletDelta && update.usdcWalletDelta > 0) {
-    subtractCyborgUsdcWallet(update.usdcWalletDelta);
   }
 }
 
