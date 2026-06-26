@@ -5,6 +5,7 @@ import {
   type YieldEngineActionId,
 } from '@/lib/atomicActionPlan';
 import type { YieldEnginePlan, YieldEngineStrategy } from '@/lib/yieldEngine';
+import type { NetworkBorrowSlice } from '@/lib/globalYieldEngine';
 import { AtomicActionBlock } from '@/components/staking/AtomicActionBlock';
 import type { PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 
@@ -40,6 +41,12 @@ export interface YieldEngineChecklistProps {
   isConfirmed: (id: YieldEngineActionId) => boolean;
   onConfirm: (id: YieldEngineActionId, update: PortfolioBalanceUpdate) => void;
   onRevert: (id: YieldEngineActionId) => void;
+  titleSk?: string;
+  titleEn?: string;
+  showTotalBorrow?: boolean;
+  unifiedRecommendationSk?: string;
+  unifiedRecommendationEn?: string;
+  breakdown?: NetworkBorrowSlice[];
 }
 
 export function YieldEngineChecklist({
@@ -51,12 +58,23 @@ export function YieldEngineChecklist({
   isConfirmed,
   onConfirm,
   onRevert,
+  titleSk = 'Yield Engine',
+  titleEn = 'Yield Engine',
+  showTotalBorrow = false,
+  unifiedRecommendationSk,
+  unifiedRecommendationEn,
+  breakdown,
 }: YieldEngineChecklistProps) {
+  const sectionTitle = sk ? titleSk : titleEn;
+  const totalBorrow = 'totalBorrowedUsdcUsd' in plan
+    ? (plan as { totalBorrowedUsdcUsd?: number }).totalBorrowedUsdcUsd ?? plan.borrowedUsdcUsd
+    : plan.borrowedUsdcUsd;
+
   if (!plan.enabled) {
     return plan.blockReasonSk || plan.blockReasonEn ? (
       <div className="rounded-lg border border-border/50 bg-muted/15 p-2.5">
         <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
-          Yield Engine
+          {sectionTitle}
         </p>
         <p className="text-[10px] text-muted-foreground mt-1">
           {sk ? plan.blockReasonSk : plan.blockReasonEn}
@@ -75,8 +93,36 @@ export function YieldEngineChecklist({
   return (
     <div className="space-y-2 rounded-lg border border-emerald-500/25 bg-emerald-500/5 p-2.5">
       <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-200/90">
-        Yield Engine
+        {sectionTitle}
       </p>
+
+      {showTotalBorrow && (
+        <p className="text-[10px] text-foreground font-semibold tabular-nums">
+          {sk ? 'Celkový požičaný kapitál (všetky siete)' : 'Total borrowed capital (all networks)'}
+          {': '}
+          <span className="font-mono text-emerald-300">{totalBorrow.toFixed(2)} USDC</span>
+        </p>
+      )}
+
+      {breakdown && breakdown.length > 0 && (
+        <div className="space-y-0.5 text-[9px] text-muted-foreground">
+          {breakdown.map(slice => (
+            <p key={slice.network} className="tabular-nums">
+              {sk ? slice.labelSk : slice.labelEn}
+              {': '}
+              <span className="font-mono text-foreground">{slice.borrowedUsdcUsd.toFixed(2)} USDC</span>
+              {' · '}
+              Borrow {slice.borrowApyPct.toFixed(2)}%
+            </p>
+          ))}
+        </div>
+      )}
+
+      {(unifiedRecommendationSk || unifiedRecommendationEn) && (
+        <p className="text-[10px] text-foreground/90 font-medium whitespace-pre-line leading-snug">
+          {sk ? unifiedRecommendationSk : unifiedRecommendationEn}
+        </p>
+      )}
 
       {plan.negativeCarry && (
         <p className="text-[10px] text-red-300/90 font-medium leading-snug">
@@ -87,7 +133,10 @@ export function YieldEngineChecklist({
       )}
 
       <p className="text-[9px] text-muted-foreground tabular-nums">
-        {sk ? 'Požičané USDC' : 'Borrowed USDC'}: {plan.borrowedUsdcUsd.toFixed(2)}
+        {showTotalBorrow
+          ? (sk ? 'K deploy' : 'To deploy')
+          : (sk ? 'Požičané USDC' : 'Borrowed USDC')}
+        : {plan.borrowedUsdcUsd.toFixed(2)}
         {' · '}
         Borrow {plan.borrowApyPct.toFixed(2)}% vs Yield {plan.bestYieldApyPct.toFixed(2)}%
       </p>

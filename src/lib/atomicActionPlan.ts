@@ -6,6 +6,8 @@ export const BATCH_GAS_ETH_PER_TX = 0.002;
 export type CollateralActionId = 'deposit' | 'borrow';
 export type YieldEngineActionId = 'auto_stake' | 'stable_swap' | 'hold_cash';
 
+export const GLOBAL_YIELD_ENGINE_PLAN_KEY = 'hcd-global-yield-engine';
+
 /** @deprecated Use CollateralActionId / YieldEngineActionId */
 export type AtomicActionId = CollateralActionId | 'reserve' | 'yield' | 'growth' | YieldEngineActionId;
 

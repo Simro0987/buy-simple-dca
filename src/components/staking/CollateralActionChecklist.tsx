@@ -30,6 +30,8 @@ export interface CollateralActionChecklistProps {
   onConfirm: (id: CollateralActionId, update: PortfolioBalanceUpdate) => void;
   onRevert: (id: CollateralActionId) => void;
   onBatchConfirm: () => void;
+  onManageGlobalYield?: () => void;
+  showManageGlobalYield?: boolean;
 }
 
 export function CollateralActionChecklist({
@@ -50,6 +52,8 @@ export function CollateralActionChecklist({
   onConfirm,
   onRevert,
   onBatchConfirm,
+  onManageGlobalYield,
+  showManageGlobalYield = false,
 }: CollateralActionChecklistProps) {
   const depositUsd = copyCollateralQty * (snapshot.targetUsd / Math.max(snapshot.targetQty, 1e-9));
   const ltvClass = LTV_STATUS_CLASS[snapshot.ltvStatus];
@@ -157,6 +161,18 @@ export function CollateralActionChecklist({
             {sk ? `Potvrdiť všetko (${pendingCount})` : `Confirm all (${pendingCount})`}
           </Button>
         </div>
+      )}
+
+      {showManageGlobalYield && onManageGlobalYield && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onManageGlobalYield}
+          className="w-full h-8 text-[10px] font-medium text-emerald-300 hover:text-emerald-200 hover:bg-emerald-500/10"
+        >
+          {sk ? 'Manažovať v Global Yield Engine' : 'Manage in Global Yield Engine'}
+        </Button>
       )}
     </div>
   );

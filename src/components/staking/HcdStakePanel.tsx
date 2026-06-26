@@ -15,20 +15,19 @@ import {
   isCollateralPlanComplete,
 } from '@/components/staking/CollateralActionChecklist';
 import {
-  YieldEngineChecklist,
-  isYieldEnginePlanComplete,
-} from '@/components/staking/YieldEngineChecklist';
+  GlobalYieldEngine,
+  GLOBAL_YIELD_ENGINE_SECTION_ID,
+  globalYieldEngineActionKey,
+} from '@/components/staking/GlobalYieldEngine';
 import {
   collateralActionKey,
   resolveGasAvailableEth,
-  yieldEngineActionKey,
   type CollateralActionId,
   type YieldEngineActionId,
 } from '@/lib/atomicActionPlan';
 import { buildCollateralManagementSnapshot } from '@/lib/collateralManagement';
 import type { CollateralManagementSnapshot } from '@/lib/collateralManagement';
-import { buildYieldEnginePlan, formatYieldEnginePlanLine } from '@/lib/yieldEngine';
-import type { YieldEnginePlan } from '@/lib/yieldEngine';
+import { buildGlobalYieldEnginePlan } from '@/lib/globalYieldEngine';
 import { useSupplyOnlyMode } from '@/hooks/useSupplyOnlyMode';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -337,9 +336,9 @@ function CyborgActionPlan({
   collateralSnapshot,
   supplyOnlyMode = false,
   onSupplyOnlyModeChange,
-  yieldEnginePlan,
   collateralHandlers,
-  yieldHandlers,
+  onManageGlobalYield,
+  showManageGlobalYield = false,
 }: {
   sk: boolean;
   layerPct: number;
@@ -370,7 +369,6 @@ function CyborgActionPlan({
   collateralSnapshot?: CollateralManagementSnapshot | null;
   supplyOnlyMode?: boolean;
   onSupplyOnlyModeChange?: (enabled: boolean) => void;
-  yieldEnginePlan?: YieldEnginePlan | null;
   collateralHandlers?: {
     gasAvailableEth: number;
     protocolUrl?: string;
@@ -380,12 +378,8 @@ function CyborgActionPlan({
     onRevert: (id: CollateralActionId) => void;
     onBatchConfirm: () => void;
   };
-  yieldHandlers?: {
-    gasAvailableEth: number;
-    isConfirmed: (id: YieldEngineActionId) => boolean;
-    onConfirm: (id: YieldEngineActionId, update: PortfolioBalanceUpdate) => void;
-    onRevert: (id: YieldEngineActionId) => void;
-  };
+  onManageGlobalYield?: () => void;
+  showManageGlobalYield?: boolean;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -503,19 +497,8 @@ function CyborgActionPlan({
           onConfirm={collateralHandlers.onConfirm}
           onRevert={collateralHandlers.onRevert}
           onBatchConfirm={collateralHandlers.onBatchConfirm}
-        />
-      )}
-
-      {yieldEnginePlan && yieldHandlers && showBorrowFlow && (
-        <YieldEngineChecklist
-          lang={lang}
-          sk={sk}
-          plan={yieldEnginePlan}
-          gasAvailableEth={yieldHandlers.gasAvailableEth}
-          execDisabled={execDisabled}
-          isConfirmed={yieldHandlers.isConfirmed}
-          onConfirm={yieldHandlers.onConfirm}
-          onRevert={yieldHandlers.onRevert}
+          onManageGlobalYield={onManageGlobalYield}
+          showManageGlobalYield={showManageGlobalYield}
         />
       )}
 
@@ -999,6 +982,7 @@ function TacticalLayerExecution({
   maxLtvPct,
   lbtcQtyHeld,
   lbtcUsdHeld,
+  onManageGlobalYield,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -1030,6 +1014,7 @@ function TacticalLayerExecution({
   maxLtvPct: number;
   lbtcQtyHeld: number;
   lbtcUsdHeld: number;
+  onManageGlobalYield?: () => void;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -1072,34 +1057,6 @@ function TacticalLayerExecution({
     motorLabel,
   ]);
 
-  const yieldEnginePlan = useMemo(() => {
-    if (!useCollateralYieldUi) return null;
-    return buildYieldEnginePlan({
-      usdcDebtUsd: usdcDebt ?? 0,
-      proposedBorrowUsd: supplyOnlyMode ? 0 : safeBorrowUsdc,
-      collateralUsd: collateralQty * (assetPrice ?? 0),
-      maxLtvPct,
-      borrowApyPct: terminalApys?.usdcBorrow ?? 0,
-      usdcSupplyApyPct: arbitrumWinner?.supplyApyPct ?? terminalApys?.lbtcSupply,
-      volatilityHigh: indicators?.volatilityRegime === 'high',
-      supplyOnlyMode,
-      yieldVaultProtocol: arbitrumWinner?.protocolName,
-      yieldVaultLabel: arbitrumWinner?.venueLabel,
-      yieldVaultUrl: arbitrumWinner?.sourceUrl,
-    });
-  }, [
-    useCollateralYieldUi,
-    usdcDebt,
-    supplyOnlyMode,
-    safeBorrowUsdc,
-    collateralQty,
-    assetPrice,
-    maxLtvPct,
-    terminalApys,
-    arbitrumWinner,
-    indicators?.volatilityRegime,
-  ]);
-
   const exitAlert = useMemo(() => {
     try {
       return computeTacticalWithdrawAlert({
@@ -1134,11 +1091,6 @@ function TacticalLayerExecution({
     [isExecutionConfirmed, planKey],
   );
 
-  const isYieldConfirmed = useCallback(
-    (actionId: YieldEngineActionId) => isExecutionConfirmed(yieldEngineActionKey(planKey, actionId)),
-    [isExecutionConfirmed, planKey],
-  );
-
   const handleCollateralConfirm = useCallback((actionId: CollateralActionId, update: PortfolioBalanceUpdate) => {
     confirmExecutionStep(collateralActionKey(planKey, actionId), update, buildDecisionMeta());
     toast.success(sk ? 'Kolaterálna akcia potvrdená' : 'Collateral action confirmed');
@@ -1146,16 +1098,6 @@ function TacticalLayerExecution({
 
   const handleCollateralRevert = useCallback((actionId: CollateralActionId) => {
     revertExecutionStep(collateralActionKey(planKey, actionId));
-    toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
-  }, [revertExecutionStep, planKey, sk]);
-
-  const handleYieldConfirm = useCallback((actionId: YieldEngineActionId, update: PortfolioBalanceUpdate) => {
-    confirmExecutionStep(yieldEngineActionKey(planKey, actionId), update, buildDecisionMeta());
-    toast.success(sk ? 'Yield Engine akcia potvrdená' : 'Yield Engine action confirmed');
-  }, [confirmExecutionStep, planKey, buildDecisionMeta, sk]);
-
-  const handleYieldRevert = useCallback((actionId: YieldEngineActionId) => {
-    revertExecutionStep(yieldEngineActionKey(planKey, actionId));
     toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
   }, [revertExecutionStep, planKey, sk]);
 
@@ -1202,10 +1144,8 @@ function TacticalLayerExecution({
     supplyOnlyMode,
     isConfirmed: isCollateralConfirmed,
   });
-  const yieldComplete = isYieldEnginePlanComplete(yieldEnginePlan, isYieldConfirmed);
-  const displayPlanConfirmed = useCollateralYieldUi
-    ? collateralComplete && (supplyOnlyMode || !yieldEnginePlan?.enabled || yieldComplete)
-    : planConfirmed;
+  const displayPlanConfirmed = useCollateralYieldUi ? collateralComplete : planConfirmed;
+  const hasActiveBorrow = !supplyOnlyMode && ((usdcDebt ?? 0) > 0 || safeBorrowUsdc > 0);
   const gasBufferLine = formatGasBufferPlanLine(symbol === 'ETH' ? 'ETH' : 'SOL', totalPortfolioQty, sk);
   const routing = symbol === 'ETH' && arbitrumWinner
     ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.protocolName }
@@ -1215,10 +1155,7 @@ function TacticalLayerExecution({
         ? { token: kaminoWinner.collateralToken, network: kaminoWinner.network, protocol: kaminoWinner.protocolName }
         : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
   const planSummary = symbol === 'ETH' && arbitrumWinner
-    ? [
-        formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting),
-        yieldEnginePlan?.enabled ? formatYieldEnginePlanLine(yieldEnginePlan, sk) : '',
-      ].filter(Boolean).join('\n')
+    ? formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting)
     : symbol === 'SOL' && kaminoWinner
       ? formatKaminoPlanInstruction(kaminoWinner, sk, kaminoRouting, gasBufferLine)
       : undefined;
@@ -1286,7 +1223,6 @@ function TacticalLayerExecution({
           collateralSnapshot={useCollateralYieldUi ? collateralSnapshot : null}
           supplyOnlyMode={supplyOnlyMode}
           onSupplyOnlyModeChange={useCollateralYieldUi ? setSupplyOnlyMode : undefined}
-          yieldEnginePlan={useCollateralYieldUi ? yieldEnginePlan : null}
           collateralHandlers={useCollateralYieldUi ? {
             gasAvailableEth,
             protocolUrl,
@@ -1296,12 +1232,8 @@ function TacticalLayerExecution({
             onRevert: handleCollateralRevert,
             onBatchConfirm: handleCollateralBatchConfirm,
           } : undefined}
-          yieldHandlers={useCollateralYieldUi ? {
-            gasAvailableEth,
-            isConfirmed: isYieldConfirmed,
-            onConfirm: handleYieldConfirm,
-            onRevert: handleYieldRevert,
-          } : undefined}
+          onManageGlobalYield={onManageGlobalYield}
+          showManageGlobalYield={hasActiveBorrow && Boolean(onManageGlobalYield)}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1457,6 +1389,7 @@ function AssetHcdCard({
   maxLtvPct,
   lbtcQtyHeld,
   lbtcUsdHeld,
+  onManageGlobalYield,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -1491,6 +1424,7 @@ function AssetHcdCard({
   maxLtvPct: number;
   lbtcQtyHeld: number;
   lbtcUsdHeld: number;
+  onManageGlobalYield?: () => void;
 }) {
   const sk = lang === 'sk';
   const { isExecutionConfirmed } = usePortfolio();
@@ -1658,6 +1592,7 @@ function AssetHcdCard({
                   maxLtvPct={maxLtvPct}
                   lbtcQtyHeld={lbtcQtyHeld}
                   lbtcUsdHeld={lbtcUsdHeld}
+                  onManageGlobalYield={onManageGlobalYield}
                 />
               )}
 
@@ -1718,7 +1653,7 @@ function formatTimeSafe(d: Date | undefined | null): string {
 
 export function HcdStakePanel({ lang, marketScore }: Props) {
   const sk = lang === 'sk';
-  const { portfolioData: rawPortfolioData, isExecutionConfirmed, cyborgUsdcDebt, metrics } = usePortfolio();
+  const { portfolioData: rawPortfolioData, isExecutionConfirmed, confirmExecutionStep, revertExecutionStep, cyborgUsdcDebt, metrics } = usePortfolio();
   const portfolioData = ensurePortfolioData(rawPortfolioData);
   const { data: defiApys } = useDefiApys();
   const {
@@ -1922,6 +1857,69 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     usdcBorrow: terminalApys?.usdcBorrow ?? 0,
     lbtcSupply: terminalApys?.lbtcSupply ?? 0,
   };
+
+  const { supplyOnlyMode } = useSupplyOnlyMode();
+  const totalCollateralUsd = deployREth * ethPrice + deployMSol * solPrice;
+
+  const globalYieldEnginePlan = useMemo(
+    () => buildGlobalYieldEnginePlan({
+      ethBorrowUsdc,
+      solBorrowUsdc,
+      usdcDebtUsd: cyborgUsdcDebt ?? 0,
+      totalCollateralUsd,
+      maxLtvPct: ltvMax,
+      borrowApyPct: safeIndicators.borrowApyPct ?? terminalApysSafe.usdcBorrow,
+      ethBorrowApyPct: borrowRates?.arbitrumRouting?.winner?.usdcBorrowApyPct
+        ?? ethLayerPlan.arbitrumWinner?.usdcBorrowApyPct
+        ?? safeIndicators.borrowApyPct,
+      solBorrowApyPct: borrowRates?.kaminoRouting?.usdcBorrowApyPct
+        ?? solLayerPlan.kaminoWinner?.usdcBorrowApyPct
+        ?? safeIndicators.borrowApyPct,
+      usdcSupplyApyPct: ethLayerPlan.arbitrumWinner?.supplyApyPct ?? terminalApysSafe.lbtcSupply,
+      volatilityHigh: safeIndicators.volatilityRegime === 'high',
+      supplyOnlyMode,
+      yieldVaultProtocol: ethLayerPlan.arbitrumWinner?.protocolName,
+      yieldVaultLabel: ethLayerPlan.arbitrumWinner?.venueLabel,
+      yieldVaultUrl: ethLayerPlan.arbitrumWinner?.sourceUrl,
+    }),
+    [
+      ethBorrowUsdc,
+      solBorrowUsdc,
+      cyborgUsdcDebt,
+      totalCollateralUsd,
+      ltvMax,
+      safeIndicators.borrowApyPct,
+      safeIndicators.volatilityRegime,
+      borrowRates?.arbitrumRouting?.winner?.usdcBorrowApyPct,
+      borrowRates?.kaminoRouting?.usdcBorrowApyPct,
+      solLayerPlan.kaminoWinner?.usdcBorrowApyPct,
+      terminalApysSafe.usdcBorrow,
+      terminalApysSafe.lbtcSupply,
+      ethLayerPlan.arbitrumWinner,
+      supplyOnlyMode,
+    ],
+  );
+
+  const scrollToGlobalYieldEngine = useCallback(() => {
+    document.getElementById(GLOBAL_YIELD_ENGINE_SECTION_ID)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, []);
+
+  const isGlobalYieldConfirmed = useCallback(
+    (actionId: YieldEngineActionId) => isExecutionConfirmed(globalYieldEngineActionKey(actionId)),
+    [isExecutionConfirmed],
+  );
+
+  const handleGlobalYieldConfirm = useCallback((actionId: YieldEngineActionId, update: PortfolioBalanceUpdate) => {
+    confirmExecutionStep(globalYieldEngineActionKey(actionId), update, buildDecisionMeta());
+    toast.success(sk ? 'Global Yield Engine akcia potvrdená' : 'Global Yield Engine action confirmed');
+  }, [confirmExecutionStep, buildDecisionMeta, sk]);
+
+  const handleGlobalYieldRevert = useCallback((actionId: YieldEngineActionId) => {
+    revertExecutionStep(globalYieldEngineActionKey(actionId));
+    toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
+  }, [revertExecutionStep, sk]);
+
+  const globalYieldGasEth = resolveGasAvailableEth(ethTotalQty);
 
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/20 min-w-0 relative">
@@ -2157,6 +2155,7 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         maxLtvPct={ltvMax}
         lbtcQtyHeld={lbtcQtyHeld}
         lbtcUsdHeld={lbtcUsdHeld}
+        onManageGlobalYield={scrollToGlobalYieldEngine}
       />
 
       <AssetHcdCard
@@ -2189,12 +2188,24 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         maxLtvPct={ltvMax}
         lbtcQtyHeld={0}
         lbtcUsdHeld={0}
+        onManageGlobalYield={scrollToGlobalYieldEngine}
+      />
+
+      <GlobalYieldEngine
+        lang={lang}
+        sk={sk}
+        plan={globalYieldEnginePlan}
+        gasAvailableEth={globalYieldGasEth}
+        execDisabled={rebalanceLocked}
+        isConfirmed={isGlobalYieldConfirmed}
+        onConfirm={handleGlobalYieldConfirm}
+        onRevert={handleGlobalYieldRevert}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">
         {sk
-          ? 'HCD mozog riadi indikátory a limity LTV. Exekúcia (presné príkazy, borrow, Alchemix) je priamo vo Vrstve 3 a 4. Rebalans len v kvartálnych mesiacoch.'
-          : 'HCD brain drives indicators and LTV limits. Execution (exact commands, borrow, Alchemix) lives in Layers 3 and 4. Rebalance only in quarterly months.'}
+          ? 'HCD mozog riadi indikátory a limity LTV. Kolaterál a borrow exekúcia sú vo vrstvách ETH/SOL/Alchemix; optimalizácia výnosu požičaného kapitálu je v Global Yield Engine. Rebalans len v kvartálnych mesiacoch.'
+          : 'HCD brain drives indicators and LTV limits. Collateral and borrow execution live in ETH/SOL/Alchemix layers; borrowed-capital yield optimization is in Global Yield Engine. Rebalance only in quarterly months.'}
       </p>
     </div>
   );
