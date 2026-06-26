@@ -64,28 +64,36 @@ export function computeTacticalWithdrawAlert(input: {
   decimals: number;
 }): ExitStrategyAlert | null {
   if (!input.indicators) return null;
+
+  const deployedQty = Math.max(0, input.deployedCollateralQty ?? 0);
+  const debt = Math.max(0, input.usdcDebt ?? 0);
+
+  // No deployed collateral → cannot reduce what does not exist.
+  if (deployedQty <= 0) return null;
+
   const urgent = (input.indicators.borrowApyPct ?? 0) > EXIT_BORROW_URGENT_PCT
     || input.indicators.volatilityRegime === 'high';
   if (!urgent) return null;
 
-  const effectiveCollateralQty = Math.max(input.deployedCollateralQty, input.collateralQty);
-  const collateralUsd = effectiveCollateralQty * input.collateralPrice;
+  const collateralUsd = deployedQty * input.collateralPrice;
+  if (collateralUsd <= 0) return null;
+
   const { withdrawQty: ltvWithdraw, repayUsdc, currentLtvPct } = computeWithdrawToTargetLtv(
     collateralUsd,
     input.collateralPrice,
-    input.usdcDebt,
+    debt,
   );
 
   let withdrawQty = ltvWithdraw;
-  if (withdrawQty <= 0 && effectiveCollateralQty > 0) {
-    if (input.usdcDebt > 0 && currentLtvPct > EXIT_TARGET_LTV_PCT) {
-      withdrawQty = effectiveCollateralQty;
-    } else if (input.collateralQty > 0) {
-      withdrawQty = input.collateralQty;
+  if (withdrawQty <= 0 && deployedQty > 0) {
+    if (debt > 0 && currentLtvPct > EXIT_TARGET_LTV_PCT) {
+      withdrawQty = deployedQty;
     } else {
-      withdrawQty = effectiveCollateralQty;
+      withdrawQty = deployedQty;
     }
   }
+
+  if (withdrawQty <= 0 && repayUsdc <= 0) return null;
 
   return {
     active: true,
@@ -96,7 +104,7 @@ export function computeTacticalWithdrawAlert(input: {
     repayUsdc,
     tokenLabel: input.tokenLabel,
     decimals: input.decimals,
-    showLtvWithdrawLine: true,
+    showLtvWithdrawLine: withdrawQty > 0,
   };
 }
 

@@ -57,7 +57,8 @@ export function CollateralActionChecklist({
 }: CollateralActionChecklistProps) {
   const depositUsd = copyCollateralQty * (snapshot.targetUsd / Math.max(snapshot.targetQty, 1e-9));
   const ltvClass = LTV_STATUS_CLASS[snapshot.ltvStatus];
-  const includeBorrow = !supplyOnlyMode && safeBorrowUsdc > 0;
+  const hasDeployedCollateral = snapshot.deployedQty > 0;
+  const includeBorrow = hasDeployedCollateral && !supplyOnlyMode && safeBorrowUsdc > 0;
 
   const batchTxCount = countCollateralBatchTransactions({
     depositQty: copyCollateralQty,

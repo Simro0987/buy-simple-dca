@@ -17,6 +17,10 @@ export interface CollateralManagementSnapshot {
   recommendedUrl?: string;
 }
 
+export function hasActiveCollateralPosition(deployedQty: number, usdcDebt: number): boolean {
+  return Math.max(0, deployedQty ?? 0) > 0 || Math.max(0, usdcDebt ?? 0) > 0;
+}
+
 function resolveLtvStatus(currentLtvPct: number, maxLtvPct: number): LtvHealthStatus {
   if (currentLtvPct <= 0) return 'safe';
   if (currentLtvPct > maxLtvPct) return 'danger';
@@ -44,8 +48,14 @@ export function buildCollateralManagementSnapshot(input: {
   const maxLtvPct = Math.max(0, input.maxLtvPct ?? 33);
   const debt = Math.max(0, input.usdcDebt ?? 0);
   const borrow = Math.max(0, input.proposedBorrowUsd ?? 0);
-  const currentLtvPct = computePortfolioLtvPct(debt, deployedUsd || targetUsd);
-  const projectedLtvPct = computePortfolioLtvPct(debt + borrow, deployedUsd || targetUsd);
+  const hasActivePosition = hasActiveCollateralPosition(deployedQty, debt);
+
+  let currentLtvPct = 0;
+  let projectedLtvPct = 0;
+  if (hasActivePosition && deployedUsd > 0) {
+    currentLtvPct = computePortfolioLtvPct(debt, deployedUsd);
+    projectedLtvPct = computePortfolioLtvPct(debt + borrow, deployedUsd);
+  }
 
   return {
     deployedQty,
@@ -55,7 +65,9 @@ export function buildCollateralManagementSnapshot(input: {
     currentLtvPct,
     projectedLtvPct,
     maxLtvPct,
-    ltvStatus: resolveLtvStatus(projectedLtvPct || currentLtvPct, maxLtvPct),
+    ltvStatus: hasActivePosition && deployedUsd > 0
+      ? resolveLtvStatus(projectedLtvPct || currentLtvPct, maxLtvPct)
+      : 'safe',
     recommendedProtocol: input.recommendedProtocol?.trim() || 'Morpho',
     recommendedVenue: input.recommendedVenue?.trim() || 'Morpho / Aave (Arbitrum)',
     recommendedToken: input.recommendedToken?.trim() || 'wETH',
