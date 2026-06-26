@@ -9,8 +9,7 @@ import { usePortfolio, type DecisionConfirmMeta, type PortfolioBalanceUpdate } f
 import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
-import { ActionPlanHint } from '@/components/staking/ActionPlanHint';
-import { CyborgHealthMonitor } from '@/components/staking/CyborgHealthMonitor';
+import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -79,13 +78,6 @@ import {
   resolveCyborgState,
   type CyborgAction,
 } from '@/lib/cyborgTerminalEngine';
-import {
-  buildAlchemixPlanHint,
-  buildCorePlanHint,
-  buildCyborgHealthSnapshot,
-  buildTakeProfitPlanHint,
-  buildTacticalPlanHint,
-} from '@/lib/cyborgHealthMonitor';
 
 interface Props {
   lang: Lang;
@@ -317,7 +309,6 @@ function CyborgActionPlan({
   execDisabled,
   showBorrowCommand = true,
   planSummary,
-  planHint,
   copyCollateralQty,
   hideCopyBoxes = false,
 }: {
@@ -345,7 +336,6 @@ function CyborgActionPlan({
   execDisabled: boolean;
   showBorrowCommand?: boolean;
   planSummary?: string;
-  planHint?: string;
   copyCollateralQty?: number;
   hideCopyBoxes?: boolean;
 }) {
@@ -375,9 +365,8 @@ function CyborgActionPlan({
             : 'border-violet-500/30 bg-violet-500/5'
       }`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300 flex items-center gap-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
         {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
-        <ActionPlanHint text={planHint} />
         {planConfirmed && (
           <span className="ml-2 normal-case font-semibold text-emerald-400">
             · {sk ? 'Exekuované' : 'Executed'}
@@ -490,7 +479,6 @@ function TakeProfitCyborgActionPlan({
   onConfirmPlan,
   onRevertPlan,
   execDisabled,
-  planHint,
 }: {
   sk: boolean;
   lang: Lang;
@@ -506,7 +494,6 @@ function TakeProfitCyborgActionPlan({
   onConfirmPlan: () => void;
   onRevertPlan: () => void;
   execDisabled: boolean;
-  planHint?: string;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -538,9 +525,8 @@ function TakeProfitCyborgActionPlan({
             : 'border-violet-500/30 bg-violet-500/5'
       }`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300 flex items-center gap-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">
         {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
-        <ActionPlanHint text={planHint} />
         {planConfirmed && (
           <span className="ml-2 normal-case font-semibold text-emerald-400">
             · {sk ? 'Exekuované' : 'Executed'}
@@ -635,7 +621,6 @@ function TakeProfitLayerExecution({
   usdcBalance,
   rebalanceLocked,
   buildDecisionMeta,
-  temperamentPct,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -644,7 +629,6 @@ function TakeProfitLayerExecution({
   usdcBalance: number;
   rebalanceLocked: boolean;
   buildDecisionMeta: () => DecisionConfirmMeta;
-  temperamentPct: number;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -655,12 +639,6 @@ function TakeProfitLayerExecution({
     () => computeTakeProfitUsdcDelta(capitalFunnel?.takeProfitTargetUsdc, usdcBalance),
     [capitalFunnel?.takeProfitTargetUsdc, usdcBalance],
   );
-  const planHint = buildTakeProfitPlanHint({
-    sk,
-    takeProfitPercent: capitalFunnel?.takeProfitPercent ?? 0,
-    hasEarnedProfit: capitalFunnel?.hasEarnedProfit ?? false,
-    temperamentPct,
-  });
 
   const handleConfirmPlan = useCallback(() => {
     confirmExecutionStep(planKey, {}, buildDecisionMeta());
@@ -701,7 +679,6 @@ function TakeProfitLayerExecution({
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
-          planHint={planHint}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -723,7 +700,6 @@ function CoreCyborgActionPlan({
   onRevertPlan,
   execDisabled,
   copyStakeQty,
-  planHint,
 }: {
   sk: boolean;
   lang: Lang;
@@ -739,7 +715,6 @@ function CoreCyborgActionPlan({
   onRevertPlan: () => void;
   execDisabled: boolean;
   copyStakeQty?: number;
-  planHint?: string;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -767,9 +742,8 @@ function CoreCyborgActionPlan({
             : 'border-teal-500/30 bg-teal-500/5'
       }`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-teal-300 flex items-center gap-1.5">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-teal-300">
         {sk ? 'Cyborg Action Plan' : 'Cyborg Action Plan'}
-        <ActionPlanHint text={planHint} />
         {planConfirmed && (
           <span className="ml-2 normal-case font-semibold text-emerald-400">
             · {sk ? 'Exekuované' : 'Executed'}
@@ -860,11 +834,6 @@ function CoreLayerExecution({
   const routing = symbol === 'ETH'
     ? { token: 'rETH', network: 'Ethereum L1', protocol: 'Rocket Pool' }
     : { token: 'mSOL', network: 'Solana', protocol: 'Marinade' };
-  const planHint = buildCorePlanHint({
-    sk,
-    symbol: symbol === 'ETH' ? 'ETH' : 'SOL',
-    apyText,
-  });
 
   const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => (
     symbol === 'ETH' ? { rEthQty: stakeQty } : { mSolQty: stakeQty }
@@ -909,7 +878,6 @@ function CoreLayerExecution({
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
           copyStakeQty={copyStakeQty}
-          planHint={planHint}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1020,13 +988,6 @@ function TacticalLayerExecution({
     : symbol === 'SOL' && kaminoWinner
       ? formatKaminoPlanInstruction(kaminoWinner, sk, kaminoRouting, gasBufferLine)
       : undefined;
-  const planHint = buildTacticalPlanHint({
-    sk,
-    symbol: symbol === 'ETH' ? 'ETH' : 'SOL',
-    indicators,
-    decisionReasonSk: symbol === 'ETH' ? arbitrumWinner?.decisionReasonSk : kaminoWinner?.decisionReasonSk,
-    decisionReasonEn: symbol === 'ETH' ? arbitrumWinner?.decisionReasonEn : kaminoWinner?.decisionReasonEn,
-  });
 
   const buildPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
     const update: PortfolioBalanceUpdate = {};
@@ -1088,7 +1049,6 @@ function TacticalLayerExecution({
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
           planSummary={planSummary}
-          planHint={planHint}
           copyCollateralQty={copyCollateralQty}
         />
       </CollapsibleContent>
@@ -1138,12 +1098,6 @@ function AlchemixLayerExecution({
     : alchemixWinner
       ? formatAlchemixPlanInstruction(alchemixWinner, sk, gasBufferLine)
       : undefined;
-  const planHint = buildAlchemixPlanHint({
-    sk,
-    locked: alchemixLocked,
-    decisionReasonSk: alchemixWinner?.decisionReasonSk,
-    decisionReasonEn: alchemixWinner?.decisionReasonEn,
-  });
   const exitAlert = useMemo(() => {
     if (alchemixLocked) return null;
     try {
@@ -1206,7 +1160,6 @@ function AlchemixLayerExecution({
           execDisabled={rebalanceLocked || alchemixLocked}
           showBorrowCommand={false}
           planSummary={planSummary}
-          planHint={planHint}
           hideCopyBoxes={alchemixLocked}
           copyCollateralQty={alchemixLocked ? 0 : (copyQtyOverride ?? computeDeltaQty(targetQty, deployedAlchemixQty))}
         />
@@ -1404,7 +1357,6 @@ function AssetHcdCard({
                   usdcBalance={usdcBalance}
                   rebalanceLocked={rebalanceLocked}
                   buildDecisionMeta={buildDecisionMeta}
-                  temperamentPct={temperamentPct}
                 />
               )}
 
@@ -1698,83 +1650,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
     lbtcSupply: terminalApys?.lbtcSupply ?? 0,
   };
 
-  const takeProfitDeltaUsdc = useMemo(() => {
-    const ethDelta = computeTakeProfitUsdcDelta(ethCapitalFunnel.takeProfitTargetUsdc, usdcBalance).deltaUsdc;
-    const solDelta = computeTakeProfitUsdcDelta(solCapitalFunnel.takeProfitTargetUsdc, usdcBalance).deltaUsdc;
-    return Math.max(ethDelta, solDelta);
-  }, [ethCapitalFunnel.takeProfitTargetUsdc, solCapitalFunnel.takeProfitTargetUsdc, usdcBalance]);
-
-  const pendingLayerDeltaQty = useMemo(() => {
-    const sumForSymbol = (
-      assetSymbol: 'ETH' | 'SOL',
-      layers: HcdLayerTarget[],
-      workingQty: number,
-      entries: StakedEntry[],
-      locked?: boolean,
-    ) => {
-      let sum = 0;
-      for (const layer of layers ?? []) {
-        const layerId = layer?.id ?? '';
-        if (layerId.includes('gas')) continue;
-        const isTactical = layerId.includes('tactical');
-        const isAlchemix = layerId.includes('alchemix');
-        const isCore = layerId.includes('core');
-        if (!isTactical && !isAlchemix && !isCore) continue;
-        const pct = isAlchemix && locked ? 0 : (layer?.pctTarget ?? 0);
-        const target = layerTargetQty(workingQty, pct);
-        let deployed = 0;
-        if (isCore) deployed = computeDeployedCoreQty(entries, assetSymbol);
-        else if (isTactical) deployed = sumTacticalDeployedQty(entries, assetSymbol);
-        else if (isAlchemix) deployed = computeDeployedAlchemixQty(entries);
-        sum += computeDeltaQty(target, deployed);
-      }
-      return sum;
-    };
-    return sumForSymbol('ETH', ethEffectiveLayers ?? [], ethCapitalFunnel.workingCapitalQty, ethStakedEntries ?? [], ethLayerPlan.alchemixLocked)
-      + sumForSymbol('SOL', solLayerPlan.layers ?? [], solCapitalFunnel.workingCapitalQty, solStakedEntries ?? []);
-  }, [
-    ethEffectiveLayers,
-    ethCapitalFunnel.workingCapitalQty,
-    ethStakedEntries,
-    ethLayerPlan.alchemixLocked,
-    solLayerPlan.layers,
-    solCapitalFunnel.workingCapitalQty,
-    solStakedEntries,
-  ]);
-
-  const cyborgHealth = useMemo(
-    () => buildCyborgHealthSnapshot({
-      sk,
-      ethEntries: ethStakedEntries ?? [],
-      solEntries: solStakedEntries ?? [],
-      ethPrice,
-      solPrice,
-      ethTotalQty,
-      solTotalQty,
-      usdcDebt: cyborgUsdcDebt ?? 0,
-      maxLtvPct: ltvMax,
-      rebalanceLocked,
-      takeProfitDeltaUsdc,
-      pendingLayerDeltaQty,
-      cyborgAction: marketState?.action,
-    }),
-    [
-      sk,
-      ethStakedEntries,
-      solStakedEntries,
-      ethPrice,
-      solPrice,
-      ethTotalQty,
-      solTotalQty,
-      cyborgUsdcDebt,
-      ltvMax,
-      rebalanceLocked,
-      takeProfitDeltaUsdc,
-      pendingLayerDeltaQty,
-      marketState?.action,
-    ],
-  );
-
   return (
     <div className="glass-card p-3 sm:p-4 space-y-3 border border-violet-500/20 min-w-0 relative">
       {updating && (
@@ -1783,8 +1658,6 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
           {sk ? 'Aktualizujem…' : 'Updating…'}
         </div>
       )}
-
-      <CyborgHealthMonitor sk={sk} health={cyborgHealth} />
 
       {/* ── HCD Mozog (centrálny riadiaci panel) ── */}
       <div className="flex items-start justify-between gap-2">
