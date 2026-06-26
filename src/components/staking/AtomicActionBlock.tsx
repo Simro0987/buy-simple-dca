@@ -5,6 +5,8 @@ import { Button } from '@/components/ui/button';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { formatAtomicCopyText } from '@/lib/atomicActionPlan';
+import type { TokenRequirementCheck } from '@/lib/portfolioTokenBalance';
+import { ActionTokenRequirementBanner } from '@/components/staking/ActionTokenRequirementBanner';
 
 export interface AtomicActionBlockProps {
   lang: Lang;
@@ -19,6 +21,7 @@ export interface AtomicActionBlockProps {
   disabled?: boolean;
   onConfirm: () => void;
   onRevert: () => void;
+  tokenCheck?: TokenRequirementCheck | null;
 }
 
 export function AtomicActionBlock({
@@ -34,12 +37,14 @@ export function AtomicActionBlock({
   disabled,
   onConfirm,
   onRevert,
+  tokenCheck,
 }: AtomicActionBlockProps) {
   const sk = lang === 'sk';
   const [copied, setCopied] = useState(false);
   const safeAmount = Number.isFinite(tokenAmount) ? tokenAmount : 0;
   const safeUsd = Number.isFinite(usdAmount) ? usdAmount : 0;
-  const inactive = disabled || safeAmount <= 0;
+  const insufficientToken = Boolean(tokenCheck && !tokenCheck.hasEnoughToken);
+  const inactive = disabled || safeAmount <= 0 || insufficientToken;
 
   const handleCopy = useCallback(async () => {
     if (inactive) return;
@@ -134,6 +139,15 @@ export function AtomicActionBlock({
           </p>
         )}
       </div>
+
+      {insufficientToken && tokenCheck && (
+        <ActionTokenRequirementBanner
+          lang={lang}
+          check={tokenCheck}
+          decimals={decimals}
+          priceUsd={safeUsd}
+        />
+      )}
     </div>
   );
 }

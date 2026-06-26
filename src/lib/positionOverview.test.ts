@@ -48,12 +48,25 @@ describe('positionOverview', () => {
     expect(data.stakedQty).toBe(1.2);
   });
 
-  it('lending mode includes collateral and borrow', () => {
+  it('lending mode includes collateral and borrow from PortfolioData ledger', () => {
+    const portfolio = samplePortfolio();
+    const withTactical = ensurePortfolioData({
+      ...portfolio,
+      assets: {
+        ...portfolio.assets,
+        ETH: {
+          ...portfolio.assets.ETH,
+          stakedEntries: [
+            { symbol: 'ETH', protocol: 'Aave V3 Lending', amount: 0.6 },
+          ],
+        },
+      },
+    });
     const data = buildPositionOverview({
       mode: 'lending',
       symbol: 'ETH',
       tokenLabel: 'weETH',
-      portfolio: samplePortfolio(),
+      portfolio: withTactical,
       usdcDebt: 1200,
     });
     expect(data.showBorrow).toBe(true);

@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Lang } from '@/lib/i18n';
 import {
@@ -10,6 +11,8 @@ import type { CollateralManagementSnapshot } from '@/lib/collateralManagement';
 import { LTV_STATUS_CLASS } from '@/lib/collateralManagement';
 import { AtomicActionBlock } from '@/components/staking/AtomicActionBlock';
 import type { PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
+import { usePortfolio } from '@/contexts/PortfolioContext';
+import { evaluateTokenRequirement } from '@/lib/portfolioTokenBalance';
 
 export interface CollateralActionChecklistProps {
   lang: Lang;
@@ -57,6 +60,13 @@ export function CollateralActionChecklist({
   showManageGlobalYield = false,
   usdcDebt,
 }: CollateralActionChecklistProps) {
+  const { portfolioData } = usePortfolio();
+
+  const depositCheck = useMemo(
+    () => evaluateTokenRequirement(portfolioData ?? null, collateralLabel, copyCollateralQty),
+    [portfolioData, collateralLabel, copyCollateralQty],
+  );
+
   const safeCollateral = Number(snapshot?.deployedQty ?? 0);
   const safeBorrow = Number(usdcDebt ?? 0);
   const safeCollateralQty = Number.isFinite(safeCollateral) ? safeCollateral : 0;
@@ -140,6 +150,7 @@ export function CollateralActionChecklist({
           contractHint={collateralContract ? `Contract: ${collateralContract}` : undefined}
           confirmed={isConfirmed('deposit')}
           disabled={execDisabled}
+          tokenCheck={depositCheck}
           onConfirm={() => onConfirm('deposit', { rEthQty: collateralQty })}
           onRevert={() => onRevert('deposit')}
         />

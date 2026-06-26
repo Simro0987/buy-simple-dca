@@ -1,5 +1,6 @@
 import type { PortfolioData } from '@/lib/portfolioData';
 import { ensurePortfolioData } from '@/lib/portfolioData';
+import { getPortfolioCollateralQty } from '@/lib/portfolioTokenBalance';
 
 export type PositionOverviewMode = 'staking' | 'lending' | 'alchemix' | 'yield' | 'gas';
 
@@ -10,7 +11,6 @@ export interface PositionOverviewInput {
   portfolio?: PortfolioData | null;
   usdcDebt?: number;
   stablesTotalUsd?: number;
-  collateralQty?: number;
   decimals?: number;
 }
 
@@ -91,14 +91,12 @@ export function buildPositionOverview(input: PositionOverviewInput): PositionOve
     const walletQty = safeQty(asset?.liquidQty);
     const stakedQty = safeQty(asset?.stakedQty);
 
-    let collateralQty = safeQty(input.collateralQty);
-    if (collateralQty <= 0 && portfolio) {
+    let collateralQty = 0;
+    if (portfolio) {
       if (mode === 'lending') {
-        collateralQty = symbol === 'ETH'
-          ? safeQty(portfolio.activeMotor?.rEth?.qty)
-          : safeQty(portfolio.activeMotor?.mSol?.qty);
+        collateralQty = getPortfolioCollateralQty(portfolio, symbol, 'lending');
       } else if (mode === 'alchemix') {
-        collateralQty = safeQty(portfolio.alchemixReserve?.eth?.qty);
+        collateralQty = getPortfolioCollateralQty(portfolio, 'ETH', 'alchemix');
       }
     }
 

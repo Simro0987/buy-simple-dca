@@ -13,7 +13,6 @@ export interface PositionOverviewPanelProps {
   mode: PositionOverviewMode;
   symbol: 'ETH' | 'SOL';
   tokenLabel?: string;
-  collateralQty?: number;
   usdcDebt?: number;
   decimals?: number;
 }
@@ -35,7 +34,6 @@ export function PositionOverviewPanel({
   mode,
   symbol,
   tokenLabel,
-  collateralQty,
   usdcDebt,
   decimals,
 }: PositionOverviewPanelProps) {
@@ -52,7 +50,6 @@ export function PositionOverviewPanel({
         portfolio: portfolioData ?? null,
         usdcDebt: usdcDebt ?? cyborgUsdcDebt ?? 0,
         stablesTotalUsd: sumStables(stables),
-        collateralQty,
         decimals,
       });
     } catch {
@@ -66,7 +63,6 @@ export function PositionOverviewPanel({
     usdcDebt,
     cyborgUsdcDebt,
     stables,
-    collateralQty,
     decimals,
   ]);
 

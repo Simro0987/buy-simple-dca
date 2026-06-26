@@ -12,6 +12,8 @@ import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
 import { PositionOverviewPanel } from '@/components/staking/PositionOverviewPanel';
 import { YieldDashboard } from '@/components/staking/YieldDashboard';
+import { ActionTokenRequirementBanner } from '@/components/staking/ActionTokenRequirementBanner';
+import { evaluateTokenRequirement } from '@/lib/portfolioTokenBalance';
 import type { PositionOverviewMode } from '@/lib/positionOverview';
 import {
   CollateralActionChecklist,
@@ -345,7 +347,6 @@ function CyborgActionPlan({
   positionMode,
   positionSymbol,
   positionTokenLabel,
-  positionCollateralQty,
   positionUsdcDebt,
 }: {
   sk: boolean;
@@ -391,7 +392,6 @@ function CyborgActionPlan({
   positionMode?: PositionOverviewMode;
   positionSymbol?: 'ETH' | 'SOL';
   positionTokenLabel?: string;
-  positionCollateralQty?: number;
   positionUsdcDebt?: number;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
@@ -410,8 +410,13 @@ function CyborgActionPlan({
   const lineMuted = planConfirmed;
   const copyQty = copyCollateralQty ?? collateralQty;
   const collateralMode = Boolean(collateralSnapshot && collateralHandlers);
+  const { portfolioData } = usePortfolio();
+  const depositTokenCheck = useMemo(
+    () => evaluateTokenRequirement(portfolioData ?? null, collateralLabel, copyQty),
+    [portfolioData, collateralLabel, copyQty],
+  );
 
-  const safeCollateral = Number(positionCollateralQty ?? collateralSnapshot?.deployedQty ?? 0);
+  const safeCollateral = Number(collateralSnapshot?.deployedQty ?? 0);
   const safeBorrow = Number(positionUsdcDebt ?? 0);
   const safeCollateralQty = Number.isFinite(safeCollateral) ? safeCollateral : 0;
   const safeBorrowUsd = Number.isFinite(safeBorrow) ? safeBorrow : 0;
@@ -445,7 +450,6 @@ function CyborgActionPlan({
           mode={positionMode}
           symbol={positionSymbol}
           tokenLabel={positionTokenLabel ?? collateralLabel}
-          collateralQty={positionCollateralQty ?? collateralSnapshot?.deployedQty}
           usdcDebt={positionUsdcDebt}
           decimals={collateralDecimals}
         />
@@ -461,12 +465,21 @@ function CyborgActionPlan({
           <ManualPlanConfirm
             lang={lang}
             confirmed={planConfirmed}
-            disabled={execDisabled}
+            disabled={execDisabled || !depositTokenCheck.hasEnoughToken}
             onConfirm={onConfirmPlan}
             onRevert={onRevertPlan}
           />
         )}
       </div>
+
+      {!collateralMode && !depositTokenCheck.hasEnoughToken && copyQty > 0 && (
+        <ActionTokenRequirementBanner
+          lang={lang}
+          check={depositTokenCheck}
+          decimals={collateralDecimals}
+          priceUsd={collateralUsd}
+        />
+      )}
 
       {onSupplyOnlyModeChange && showBorrowFlow && (
         <label className="flex items-center justify-between gap-2 rounded-lg border border-border/50 bg-muted/20 px-2.5 py-2 cursor-pointer">
@@ -841,6 +854,11 @@ function CoreCyborgActionPlan({
 
   const lineMuted = planConfirmed;
   const copyQty = copyStakeQty ?? stakeQty;
+  const { portfolioData } = usePortfolio();
+  const stakeTokenCheck = useMemo(
+    () => evaluateTokenRequirement(portfolioData ?? null, positionSymbol, copyQty),
+    [portfolioData, positionSymbol, copyQty],
+  );
 
   return (
     <div
@@ -878,11 +896,20 @@ function CoreCyborgActionPlan({
         <ManualPlanConfirm
           lang={lang}
           confirmed={planConfirmed}
-          disabled={execDisabled}
+          disabled={execDisabled || !stakeTokenCheck.hasEnoughToken}
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
         />
       </div>
+
+      {!stakeTokenCheck.hasEnoughToken && copyQty > 0 && (
+        <ActionTokenRequirementBanner
+          lang={lang}
+          check={stakeTokenCheck}
+          decimals={stakeDecimals}
+          priceUsd={stakeUsd}
+        />
+      )}
 
       <div className="space-y-1 text-[10px] text-muted-foreground leading-snug">
         <p>
@@ -1289,7 +1316,6 @@ function TacticalLayerExecution({
           positionMode="lending"
           positionSymbol={symbol}
           positionTokenLabel={motorLabel}
-          positionCollateralQty={deployedCollateralQty}
           positionUsdcDebt={usdcDebt}
         />
       </CollapsibleContent>
@@ -1406,7 +1432,6 @@ function AlchemixLayerExecution({
           positionMode="alchemix"
           positionSymbol="ETH"
           positionTokenLabel="ETH"
-          positionCollateralQty={deployedAlchemixQty}
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}
