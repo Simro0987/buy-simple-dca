@@ -10,6 +10,15 @@ import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
+import {
+  AtomicTacticalPlanChecklist,
+  isAtomicTacticalPlanComplete,
+} from '@/components/staking/AtomicTacticalPlanChecklist';
+import {
+  atomicActionKey,
+  resolveGasAvailableEth,
+  type AtomicActionId,
+} from '@/lib/atomicActionPlan';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -320,6 +329,7 @@ function CyborgActionPlan({
   copyCollateralQty,
   hideCopyBoxes = false,
   usdcSplit,
+  atomicHandlers,
 }: {
   sk: boolean;
   layerPct: number;
@@ -348,6 +358,15 @@ function CyborgActionPlan({
   copyCollateralQty?: number;
   hideCopyBoxes?: boolean;
   usdcSplit?: BorrowedUsdcSplitPlan | null;
+  atomicHandlers?: {
+    gasAvailableEth: number;
+    protocolUrl?: string;
+    collateralContract?: string;
+    isConfirmed: (id: AtomicActionId) => boolean;
+    onConfirm: (id: AtomicActionId, update: PortfolioBalanceUpdate) => void;
+    onRevert: (id: AtomicActionId) => void;
+    onBatchConfirm: () => void;
+  };
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -364,6 +383,7 @@ function CyborgActionPlan({
 
   const lineMuted = planConfirmed;
   const copyQty = copyCollateralQty ?? collateralQty;
+  const atomicMode = Boolean(usdcSplit?.enabled && !usdcSplit?.blocked && atomicHandlers);
 
   return (
     <div
@@ -390,18 +410,15 @@ function CyborgActionPlan({
           network={routing.network}
           protocol={routing.protocol}
         />
-        <ManualPlanConfirm
-          lang={lang}
-          confirmed={planConfirmed}
-          disabled={execDisabled}
-          onConfirm={onConfirmPlan}
-          onRevert={onRevertPlan}
-          confirmLabel={
-            usdcSplit?.enabled && !usdcSplit.blocked
-              ? (sk ? '✅ Potvrdiť (multicall)' : '✅ Confirm (multicall)')
-              : undefined
-          }
-        />
+        {!atomicMode && (
+          <ManualPlanConfirm
+            lang={lang}
+            confirmed={planConfirmed}
+            disabled={execDisabled}
+            onConfirm={onConfirmPlan}
+            onRevert={onRevertPlan}
+          />
+        )}
       </div>
 
       {exitAlert?.active && <ExitStrategyBanner alert={exitAlert} sk={sk} />}
@@ -427,7 +444,7 @@ function CyborgActionPlan({
         </p>
       </div>
 
-      {!hideCopyBoxes && (
+      {!atomicMode && !hideCopyBoxes && (
         <CyborgCommandLine
           prefix={sk ? 'Vložte presne:' : 'Deposit exactly:'}
           amount={copyQty}
@@ -438,7 +455,7 @@ function CyborgActionPlan({
         />
       )}
 
-      {!hideCopyBoxes && showBorrowCommand && (
+      {!atomicMode && !hideCopyBoxes && showBorrowCommand && (
         <CyborgCommandLine
           prefix={sk ? 'Požičajte si max:' : 'Borrow max:'}
           amount={safeBorrowUsdc}
@@ -449,7 +466,29 @@ function CyborgActionPlan({
         />
       )}
 
-      {showBorrowFlow && combinedBorrowUsdc > 0 && !usdcSplit?.enabled && (
+      {atomicMode && atomicHandlers && usdcSplit && (
+        <AtomicTacticalPlanChecklist
+          lang={lang}
+          sk={sk}
+          usdcSplit={usdcSplit}
+          copyCollateralQty={copyQty}
+          collateralQty={collateralQty}
+          collateralLabel={collateralLabel}
+          collateralUsd={collateralUsd}
+          collateralDecimals={collateralDecimals}
+          safeBorrowUsdc={safeBorrowUsdc}
+          protocolUrl={atomicHandlers.protocolUrl}
+          collateralContract={atomicHandlers.collateralContract}
+          gasAvailableEth={atomicHandlers.gasAvailableEth}
+          execDisabled={execDisabled}
+          isConfirmed={atomicHandlers.isConfirmed}
+          onConfirm={atomicHandlers.onConfirm}
+          onRevert={atomicHandlers.onRevert}
+          onBatchConfirm={atomicHandlers.onBatchConfirm}
+        />
+      )}
+
+      {!atomicMode && showBorrowFlow && combinedBorrowUsdc > 0 && !usdcSplit?.enabled && (
         <>
           {!hideCopyBoxes && (
             <CyborgCommandLine
@@ -472,7 +511,7 @@ function CyborgActionPlan({
         </>
       )}
 
-      {showBorrowFlow && usdcSplit?.enabled && (
+      {!atomicMode && showBorrowFlow && usdcSplit?.enabled && (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5 space-y-2">
           <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90">
             {sk ? 'Rozdelenie požičaných USDC' : 'Borrowed USDC split'}
@@ -1116,6 +1155,85 @@ function TacticalLayerExecution({
     collateralDecimals,
   ]);
   const planConfirmed = isExecutionConfirmed(planKey);
+  const borrowUsd = usdcSplit?.enabled && !usdcSplit.blocked
+    ? (usdcSplit.totalBorrowUsd > 0 ? usdcSplit.totalBorrowUsd : safeBorrowUsdc)
+    : safeBorrowUsdc;
+  const gasAvailableEth = symbol === 'ETH' ? resolveGasAvailableEth(totalPortfolioQty) : 0;
+  const protocolUrl = arbitrumWinner?.sourceUrl;
+  const collateralContract = arbitrumWinner?.collateralAddress;
+
+  const isAtomicConfirmed = useCallback(
+    (actionId: AtomicActionId) => isExecutionConfirmed(atomicActionKey(planKey, actionId)),
+    [isExecutionConfirmed, planKey],
+  );
+
+  const handleAtomicConfirm = useCallback((actionId: AtomicActionId, update: PortfolioBalanceUpdate) => {
+    confirmExecutionStep(atomicActionKey(planKey, actionId), update, buildDecisionMeta());
+    toast.success(sk ? 'Akcia potvrdená' : 'Action confirmed');
+  }, [confirmExecutionStep, planKey, buildDecisionMeta, sk]);
+
+  const handleAtomicRevert = useCallback((actionId: AtomicActionId) => {
+    revertExecutionStep(atomicActionKey(planKey, actionId));
+    toast.success(sk ? 'Akcia vrátená späť' : 'Action reverted');
+  }, [revertExecutionStep, planKey, sk]);
+
+  const openActionUrl = useCallback((url?: string) => {
+    if (url) window.open(url, '_blank', 'noopener,noreferrer');
+  }, []);
+
+  const handleBatchConfirm = useCallback(() => {
+    if (!usdcSplit?.enabled || usdcSplit.blocked) return;
+    const steps: { id: AtomicActionId; update: PortfolioBalanceUpdate; url?: string }[] = [];
+    if (copyCollateralQty > 0) {
+      steps.push({ id: 'deposit', update: { rEthQty: collateralQty }, url: protocolUrl });
+    }
+    if (borrowUsd > 0) {
+      steps.push({ id: 'borrow', update: { usdcBorrowed: borrowUsd }, url: protocolUrl });
+    }
+    if (usdcSplit.reserveUsd > 0) {
+      steps.push({ id: 'reserve', update: {}, url: protocolUrl });
+    }
+    if (usdcSplit.yieldUsd > 0) {
+      steps.push({ id: 'yield', update: {}, url: usdcSplit.yieldVault.url });
+    }
+    if (usdcSplit.growthUsd > 0) {
+      steps.push({ id: 'growth', update: { lbtcQty: usdcSplit.lbtcQty }, url: usdcSplit.dex.url });
+    }
+
+    let confirmed = 0;
+    for (const step of steps) {
+      const key = atomicActionKey(planKey, step.id);
+      if (isExecutionConfirmed(key)) continue;
+      openActionUrl(step.url);
+      confirmExecutionStep(key, step.update, buildDecisionMeta());
+      confirmed += 1;
+    }
+    if (confirmed > 0) {
+      toast.success(sk ? `Batch: ${confirmed} akcií potvrdených` : `Batch: ${confirmed} actions confirmed`);
+    }
+  }, [
+    usdcSplit,
+    copyCollateralQty,
+    collateralQty,
+    borrowUsd,
+    protocolUrl,
+    planKey,
+    isExecutionConfirmed,
+    openActionUrl,
+    confirmExecutionStep,
+    buildDecisionMeta,
+    sk,
+  ]);
+
+  const atomicPlanComplete = isAtomicTacticalPlanComplete({
+    usdcSplit,
+    copyCollateralQty,
+    borrowUsd,
+    isConfirmed: isAtomicConfirmed,
+  });
+  const displayPlanConfirmed = usdcSplit?.enabled && !usdcSplit.blocked
+    ? atomicPlanComplete
+    : planConfirmed;
   const gasBufferLine = formatGasBufferPlanLine(symbol === 'ETH' ? 'ETH' : 'SOL', totalPortfolioQty, sk);
   const routing = symbol === 'ETH' && arbitrumWinner
     ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.protocolName }
@@ -1154,12 +1272,8 @@ function TacticalLayerExecution({
 
   const handleConfirmPlan = useCallback(() => {
     confirmExecutionStep(planKey, buildPlanUpdate(), buildDecisionMeta());
-    toast.success(
-      usdcSplit?.enabled && !usdcSplit.blocked
-        ? (sk ? 'Multicall potvrdený · Rezerva / Výnos / Rast' : 'Multicall confirmed · Reserve / Yield / Growth')
-        : (sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated'),
-    );
-  }, [confirmExecutionStep, planKey, buildPlanUpdate, buildDecisionMeta, sk, usdcSplit]);
+    toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
+  }, [confirmExecutionStep, planKey, buildPlanUpdate, buildDecisionMeta, sk]);
 
   const handleRevertPlan = useCallback(() => {
     revertExecutionStep(planKey);
@@ -1170,7 +1284,7 @@ function TacticalLayerExecution({
     <Collapsible
       defaultOpen
       className={`rounded-xl border transition-colors duration-500 ${
-        planConfirmed ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-violet-500/30 bg-violet-500/5'
+        displayPlanConfirmed ? 'border-emerald-500/50 bg-emerald-500/5' : 'border-violet-500/30 bg-violet-500/5'
       }`}
     >
       <CollapsibleTrigger className="flex w-full items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-violet-500/5 transition-colors">
@@ -1209,13 +1323,26 @@ function TacticalLayerExecution({
           collateralDecimals={collateralDecimals}
           routing={routing}
           exitAlert={exitAlert}
-          planConfirmed={planConfirmed}
+          planConfirmed={displayPlanConfirmed}
           onConfirmPlan={handleConfirmPlan}
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
           planSummary={planSummary}
           copyCollateralQty={copyCollateralQty}
           usdcSplit={usdcSplit}
+          atomicHandlers={
+            usdcSplit?.enabled && !usdcSplit.blocked
+              ? {
+                gasAvailableEth,
+                protocolUrl,
+                collateralContract,
+                isConfirmed: isAtomicConfirmed,
+                onConfirm: handleAtomicConfirm,
+                onRevert: handleAtomicRevert,
+                onBatchConfirm: handleBatchConfirm,
+              }
+              : undefined
+          }
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1760,7 +1887,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
 
   const ethTacticalPlanKey = ethTacticalLayer ? planKeyForLayer(ethTacticalLayer.id) : '';
   const isLbtcSupplied = ethTacticalPlanKey
-    ? isExecutionConfirmed(ethTacticalPlanKey)
+    ? (
+      isExecutionConfirmed(ethTacticalPlanKey)
+      || isExecutionConfirmed(atomicActionKey(ethTacticalPlanKey, 'growth'))
+    )
     : false;
   const lbtcQtyHeld = portfolioData.lbtc?.qty ?? 0;
   const lbtcUsdHeld = portfolioData.lbtc?.usd ?? 0;
