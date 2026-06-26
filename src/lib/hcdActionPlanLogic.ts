@@ -279,3 +279,54 @@ export function capCopyDeltasToAvailable(
   const scale = avail / sum;
   return safeDeltas.map(d => d * scale);
 }
+
+export interface CapitalFunnelResult {
+  availableQty: number;
+  takeProfitPercent: number;
+  takeProfitTargetQty: number;
+  workingCapitalQty: number;
+}
+
+/** Dynamic Take Profit % — conservative temperament secures more profit as USDC. */
+export function computeTakeProfitPercent(temperamentPct: number | null | undefined): number {
+  const t = safeQty(temperamentPct);
+  if (t > 70) return 0.05;
+  if (t >= 30) return 0.10;
+  return 0.20;
+}
+
+/** Available balance → Take Profit slice → working capital for layers 2–4. */
+export function computeCapitalFunnel(
+  availableQty: number | null | undefined,
+  temperamentPct: number | null | undefined,
+): CapitalFunnelResult {
+  const avail = safeQty(availableQty);
+  const takeProfitPercent = computeTakeProfitPercent(temperamentPct);
+  const takeProfitTargetQty = avail * takeProfitPercent;
+  const workingCapitalQty = Math.max(0, avail - takeProfitTargetQty);
+  return { availableQty: avail, takeProfitPercent, takeProfitTargetQty, workingCapitalQty };
+}
+
+export interface TakeProfitUsdcDelta {
+  targetUsdc: number;
+  deltaUsdc: number;
+  targetMet: boolean;
+}
+
+export function computeTakeProfitUsdcDelta(
+  takeProfitTargetQty: number | null | undefined,
+  nativePrice: number | null | undefined,
+  currentUsdcBalance: number | null | undefined,
+): TakeProfitUsdcDelta {
+  const targetUsdc = safeQty(takeProfitTargetQty) * safeQty(nativePrice);
+  const currentUsdc = safeQty(currentUsdcBalance);
+  if (currentUsdc >= targetUsdc) {
+    return { targetUsdc, deltaUsdc: 0, targetMet: true };
+  }
+  return { targetUsdc, deltaUsdc: Math.max(0, targetUsdc - currentUsdc), targetMet: false };
+}
+
+export const TAKE_PROFIT_PLAN_SK = 'Presun: Zabezpečenie zisku do USDC.';
+export const TAKE_PROFIT_PLAN_EN = 'Move: Secure profits into USDC.';
+export const TAKE_PROFIT_FULFILLED_SK = 'Take Profit cieľ splnený';
+export const TAKE_PROFIT_FULFILLED_EN = 'Take Profit target met';
