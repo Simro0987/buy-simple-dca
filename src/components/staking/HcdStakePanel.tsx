@@ -78,6 +78,11 @@ import {
   resolveCyborgState,
   type CyborgAction,
 } from '@/lib/cyborgTerminalEngine';
+import {
+  buildLbtcAccumulationPlan,
+  formatLbtcAccumulationPlanLine,
+  type LbtcAccumulationPlan,
+} from '@/lib/lbtcAccumulationStrategy';
 
 interface Props {
   lang: Lang;
@@ -155,6 +160,7 @@ function CyborgCommandLine({
   decimals = 2,
   muted,
   usdMode,
+  gray,
 }: {
   prefix: string;
   amount: number;
@@ -163,14 +169,16 @@ function CyborgCommandLine({
   decimals?: number;
   muted?: boolean;
   usdMode?: boolean;
+  gray?: boolean;
 }) {
   const safeAmount = Number.isFinite(amount) ? amount : 0;
+  const boxClass = gray
+    ? 'border-border/50 bg-muted/30'
+    : muted
+      ? 'border-border/40 bg-muted/25 opacity-80'
+      : 'border-violet-500/35 bg-violet-500/5';
   return (
-    <div
-      className={`rounded-lg border px-3 py-2.5 ${
-        muted ? 'border-border/40 bg-muted/25 opacity-80' : 'border-violet-500/35 bg-violet-500/5'
-      }`}
-    >
+    <div className={`rounded-lg border px-3 py-2.5 ${boxClass}`}>
       <p className="text-[11px] font-mono font-semibold text-foreground tabular-nums flex flex-wrap items-center gap-1.5">
         <span>{prefix}</span>
         {usdMode ? (
@@ -311,6 +319,11 @@ function CyborgActionPlan({
   planSummary,
   copyCollateralQty,
   hideCopyBoxes = false,
+  lbtcAccumulation,
+  lbtcPlanConfirmed = false,
+  onConfirmLbtc,
+  onRevertLbtc,
+  lbtcExecDisabled = false,
 }: {
   sk: boolean;
   layerPct: number;
@@ -338,6 +351,11 @@ function CyborgActionPlan({
   planSummary?: string;
   copyCollateralQty?: number;
   hideCopyBoxes?: boolean;
+  lbtcAccumulation?: LbtcAccumulationPlan | null;
+  lbtcPlanConfirmed?: boolean;
+  onConfirmLbtc?: () => void;
+  onRevertLbtc?: () => void;
+  lbtcExecDisabled?: boolean;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -434,7 +452,7 @@ function CyborgActionPlan({
         />
       )}
 
-      {showBorrowFlow && combinedBorrowUsdc > 0 && (
+      {showBorrowFlow && combinedBorrowUsdc > 0 && !lbtcAccumulation?.enabled && (
         <>
           {!hideCopyBoxes && (
             <CyborgCommandLine
@@ -455,6 +473,83 @@ function CyborgActionPlan({
             Morpho borrow: {apyLabel(terminalApys.usdcBorrow)} · {lbtcYieldText}
           </p>
         </>
+      )}
+
+      {showBorrowFlow && lbtcAccumulation?.enabled && (
+        <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5 space-y-2">
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90">
+              {sk ? 'LBTC akumulácia' : 'LBTC accumulation'}
+            </p>
+            {onConfirmLbtc && onRevertLbtc && (
+              <ManualPlanConfirm
+                lang={lang}
+                confirmed={lbtcPlanConfirmed}
+                disabled={lbtcExecDisabled || lbtcAccumulation.blocked || lbtcAccumulation.targetUsd <= 0}
+                onConfirm={onConfirmLbtc}
+                onRevert={onRevertLbtc}
+                confirmLabel={sk ? 'Potvrdiť nákup LBTC' : 'Confirm LBTC buy'}
+              />
+            )}
+          </div>
+
+          {lbtcAccumulation.blocked ? (
+            <p className="text-[10px] text-red-300/90 leading-snug">
+              {sk ? lbtcAccumulation.blockReasonSk : lbtcAccumulation.blockReasonEn}
+            </p>
+          ) : (
+            <>
+              <p className="text-[10px] text-foreground/90 leading-snug">
+                {sk
+                  ? `Cieľový nákup: ${formatUsd(lbtcAccumulation.targetUsd)} · ${lbtcAccumulation.allocationPct.toFixed(1)} % z úveru`
+                  : `Target buy: ${formatUsd(lbtcAccumulation.targetUsd)} · ${lbtcAccumulation.allocationPct.toFixed(1)} % of borrow`}
+              </p>
+              <p className="text-[10px] text-muted-foreground leading-snug">
+                {sk ? 'DEX / Pool' : 'DEX / Pool'}:{' '}
+                <span className="text-foreground font-medium">{lbtcAccumulation.dex.poolLabel}</span>
+                {' · '}
+                <a
+                  href={lbtcAccumulation.dex.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-violet-300 hover:underline"
+                >
+                  {lbtcAccumulation.dex.name}
+                </a>
+              </p>
+              <p className="text-[9px] text-muted-foreground">
+                {sk ? lbtcAccumulation.dex.reasonSk : lbtcAccumulation.dex.reasonEn}
+              </p>
+              <p className="text-[9px] text-muted-foreground tabular-nums">
+                {sk ? 'Dostupný borrowing power' : 'Available borrowing power'}:{' '}
+                {lbtcAccumulation.availableBorrowingPowerUsd.toFixed(2)} USDC
+                {' · '}
+                {sk ? 'Projektované LTV' : 'Projected LTV'}: {lbtcAccumulation.projectedLtvPct.toFixed(1)}%
+              </p>
+              {!hideCopyBoxes && lbtcAccumulation.targetUsd > 0 && (
+                <CyborgCommandLine
+                  prefix={sk ? 'Vložte/Swapnite:' : 'Deposit/Swap:'}
+                  amount={lbtcAccumulation.targetUsd}
+                  suffix="USDC → LBTC"
+                  lang={lang}
+                  decimals={2}
+                  gray
+                  muted={lbtcPlanConfirmed}
+                />
+              )}
+              {lbtcAccumulation.lbtcQty > 0 && (
+                <p className="text-[9px] text-muted-foreground tabular-nums">
+                  ≈ {lbtcAccumulation.lbtcQty.toFixed(6)} LBTC
+                  {' · '}
+                  {sk ? 'USDC rezerva' : 'USDC reserve'}: {lbtcAccumulation.stableReserveUsd.toFixed(2)}
+                </p>
+              )}
+              <p className="text-[9px] text-muted-foreground" title={lbtcYieldText}>
+                Morpho borrow: {apyLabel(terminalApys.usdcBorrow)} · {lbtcYieldText}
+              </p>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
@@ -910,6 +1005,11 @@ function TacticalLayerExecution({
   kaminoRouting,
   totalPortfolioQty,
   copyQtyOverride,
+  temperamentPct,
+  btcPrice,
+  maxLtvPct,
+  lbtcQtyHeld,
+  lbtcUsdHeld,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -936,6 +1036,11 @@ function TacticalLayerExecution({
   kaminoRouting?: KaminoRoutingSnapshot | null;
   totalPortfolioQty: number;
   copyQtyOverride?: number;
+  temperamentPct: number;
+  btcPrice: number;
+  maxLtvPct: number;
+  lbtcQtyHeld: number;
+  lbtcUsdHeld: number;
 }) {
   const sk = lang === 'sk';
   const { confirmExecutionStep, revertExecutionStep, isExecutionConfirmed } = usePortfolio();
@@ -950,6 +1055,29 @@ function TacticalLayerExecution({
   const collateralUsd = collateralQty * (assetPrice ?? 0);
   const safeBorrowUsdc = tacticalBorrowAtTargetLtv(copyCollateralQty, assetPrice, targetLtvPct);
   const planKey = planKeyForLayer(layer?.id ?? 'tactical');
+  const lbtcPlanKey = `${planKey}-lbtc`;
+
+  const lbtcAccumulation = useMemo(() => {
+    if (symbol !== 'ETH' || !showBorrowFlow) return null;
+    return buildLbtcAccumulationPlan({
+      temperamentPct,
+      collateralUsd: collateralQty * (assetPrice ?? 0),
+      currentDebtUsd: usdcDebt ?? 0,
+      proposedBorrowUsd: safeBorrowUsdc,
+      maxLtvPct,
+      btcPrice: btcPrice ?? 0,
+    });
+  }, [
+    symbol,
+    showBorrowFlow,
+    temperamentPct,
+    collateralQty,
+    assetPrice,
+    usdcDebt,
+    safeBorrowUsdc,
+    maxLtvPct,
+    btcPrice,
+  ]);
 
   const exitAlert = useMemo(() => {
     try {
@@ -984,7 +1112,10 @@ function TacticalLayerExecution({
         ? { token: kaminoWinner.collateralToken, network: kaminoWinner.network, protocol: kaminoWinner.protocolName }
         : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };
   const planSummary = symbol === 'ETH' && arbitrumWinner
-    ? formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting)
+    ? [
+        formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting),
+        lbtcAccumulation?.enabled ? formatLbtcAccumulationPlanLine(lbtcAccumulation, sk) : '',
+      ].filter(Boolean).join('\n')
     : symbol === 'SOL' && kaminoWinner
       ? formatKaminoPlanInstruction(kaminoWinner, sk, kaminoRouting, gasBufferLine)
       : undefined;
@@ -993,13 +1124,22 @@ function TacticalLayerExecution({
     const update: PortfolioBalanceUpdate = {};
     if (symbol === 'ETH') {
       update.rEthQty = collateralQty;
-      if (showBorrowFlow && projectedLbtcQty > 0) update.lbtcQty = projectedLbtcQty;
+      if (showBorrowFlow && !lbtcAccumulation?.enabled && projectedLbtcQty > 0) {
+        update.lbtcQty = projectedLbtcQty;
+      }
     } else {
       update.mSolQty = collateralQty;
     }
     if (safeBorrowUsdc > 0) update.usdcBorrowed = safeBorrowUsdc;
     return update;
-  }, [symbol, collateralQty, safeBorrowUsdc, showBorrowFlow, projectedLbtcQty]);
+  }, [symbol, collateralQty, safeBorrowUsdc, showBorrowFlow, projectedLbtcQty, lbtcAccumulation?.enabled]);
+
+  const buildLbtcPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
+    if (!lbtcAccumulation?.enabled || lbtcAccumulation.blocked || lbtcAccumulation.lbtcQty <= 0) {
+      return {};
+    }
+    return { lbtcQty: lbtcAccumulation.lbtcQty };
+  }, [lbtcAccumulation]);
 
   const handleConfirmPlan = useCallback(() => {
     confirmExecutionStep(planKey, buildPlanUpdate(), buildDecisionMeta());
@@ -1010,6 +1150,20 @@ function TacticalLayerExecution({
     revertExecutionStep(planKey);
     toast.success(sk ? 'Exekúcia vrátená späť' : 'Execution reverted');
   }, [revertExecutionStep, planKey, sk]);
+
+  const lbtcPlanConfirmed = isExecutionConfirmed(lbtcPlanKey);
+
+  const handleConfirmLbtc = useCallback(() => {
+    const update = buildLbtcPlanUpdate();
+    if (!update.lbtcQty) return;
+    confirmExecutionStep(lbtcPlanKey, update, buildDecisionMeta());
+    toast.success(sk ? 'Nákup LBTC potvrdený' : 'LBTC purchase confirmed');
+  }, [buildLbtcPlanUpdate, confirmExecutionStep, lbtcPlanKey, buildDecisionMeta, sk]);
+
+  const handleRevertLbtc = useCallback(() => {
+    revertExecutionStep(lbtcPlanKey);
+    toast.success(sk ? 'Nákup LBTC vrátený späť' : 'LBTC purchase reverted');
+  }, [revertExecutionStep, lbtcPlanKey, sk]);
 
   return (
     <Collapsible
@@ -1025,6 +1179,16 @@ function TacticalLayerExecution({
         <ChevronDown className="w-4 h-4 text-muted-foreground shrink-0 transition-transform [[data-state=open]_&]:rotate-180" />
       </CollapsibleTrigger>
       <CollapsibleContent className="px-3 pb-3">
+        {symbol === 'ETH' && (lbtcQtyHeld ?? 0) > 0 && (
+          <p className="text-[10px] text-muted-foreground mb-2 tabular-nums">
+            {sk ? 'LBTC expozícia' : 'LBTC exposure'}:{' '}
+            <span className="font-mono font-semibold text-amber-200/90">
+              {(lbtcQtyHeld ?? 0).toFixed(6)} LBTC
+            </span>
+            {' · '}
+            {formatUsd(lbtcUsdHeld ?? 0)}
+          </p>
+        )}
         <CyborgActionPlan
           sk={sk}
           layerPct={layerPct}
@@ -1050,6 +1214,11 @@ function TacticalLayerExecution({
           execDisabled={rebalanceLocked}
           planSummary={planSummary}
           copyCollateralQty={copyCollateralQty}
+          lbtcAccumulation={lbtcAccumulation}
+          lbtcPlanConfirmed={lbtcPlanConfirmed}
+          onConfirmLbtc={symbol === 'ETH' ? handleConfirmLbtc : undefined}
+          onRevertLbtc={symbol === 'ETH' ? handleRevertLbtc : undefined}
+          lbtcExecDisabled={rebalanceLocked}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1201,6 +1370,10 @@ function AssetHcdCard({
   temperamentPct,
   usdcBalance,
   profitUsd,
+  btcPrice,
+  maxLtvPct,
+  lbtcQtyHeld,
+  lbtcUsdHeld,
 }: {
   symbol: HcdSymbol;
   lang: Lang;
@@ -1231,6 +1404,10 @@ function AssetHcdCard({
   temperamentPct: number;
   usdcBalance: number;
   profitUsd: number;
+  btcPrice: number;
+  maxLtvPct: number;
+  lbtcQtyHeld: number;
+  lbtcUsdHeld: number;
 }) {
   const sk = lang === 'sk';
   const { isExecutionConfirmed } = usePortfolio();
@@ -1332,6 +1509,11 @@ function AssetHcdCard({
                     {layer?.borrow && ` → Borrow: ${layer.borrow}`}
                     {apy && ` · APY ${apy}`}
                   </p>
+                  {isTactical && symbol === 'ETH' && (lbtcQtyHeld ?? 0) > 0 && (
+                    <p className="text-[9px] text-amber-200/80 mt-0.5 font-mono tabular-nums">
+                      LBTC: {(lbtcQtyHeld ?? 0).toFixed(6)} · {formatUsd(lbtcUsdHeld ?? 0)}
+                    </p>
+                  )}
                   {(layer?.noteSk || layer?.noteEn) && (
                     <p className="text-[9px] text-emerald-400/80 mt-0.5">
                       {sk ? (layer?.noteSk ?? '') : (layer?.noteEn ?? '')}
@@ -1387,6 +1569,11 @@ function AssetHcdCard({
                   kaminoRouting={symbol === 'SOL' ? kaminoRouting : undefined}
                   totalPortfolioQty={totalPortfolioQty}
                   copyQtyOverride={layerCopyQtyById.get(layerId)}
+                  temperamentPct={temperamentPct}
+                  btcPrice={btcPrice}
+                  maxLtvPct={maxLtvPct}
+                  lbtcQtyHeld={lbtcQtyHeld}
+                  lbtcUsdHeld={lbtcUsdHeld}
                 />
               )}
 
@@ -1575,9 +1762,12 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const projectedLbtcUsd = projectedLbtcQty * btcPrice;
 
   const ethTacticalPlanKey = ethTacticalLayer ? planKeyForLayer(ethTacticalLayer.id) : '';
+  const ethLbtcPlanKey = ethTacticalPlanKey ? `${ethTacticalPlanKey}-lbtc` : '';
   const isLbtcSupplied = ethTacticalPlanKey
-    ? isExecutionConfirmed(ethTacticalPlanKey)
+    ? isExecutionConfirmed(ethTacticalPlanKey) || (ethLbtcPlanKey ? isExecutionConfirmed(ethLbtcPlanKey) : false)
     : false;
+  const lbtcQtyHeld = portfolioData.lbtc?.qty ?? 0;
+  const lbtcUsdHeld = portfolioData.lbtc?.usd ?? 0;
   const totalLbtcApy = computeTotalLbtcApy(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0);
   const netYield = computeNetYield(totalLbtcApy, terminalApys?.usdcBorrow ?? 0);
   const lbtcYieldText = formatLbtcYieldLabel(isLbtcSupplied, terminalApys?.lbtcSupply ?? 0, sk) || '';
@@ -1880,6 +2070,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         temperamentPct={temperamentPct}
         usdcBalance={usdcBalance}
         profitUsd={ethProfitUsd}
+        btcPrice={btcPrice}
+        maxLtvPct={ltvMax}
+        lbtcQtyHeld={lbtcQtyHeld}
+        lbtcUsdHeld={lbtcUsdHeld}
       />
 
       <AssetHcdCard
@@ -1908,6 +2102,10 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
         temperamentPct={temperamentPct}
         usdcBalance={usdcBalance}
         profitUsd={solProfitUsd}
+        btcPrice={btcPrice}
+        maxLtvPct={ltvMax}
+        lbtcQtyHeld={0}
+        lbtcUsdHeld={0}
       />
 
       <p className="text-[10px] text-muted-foreground leading-snug">
