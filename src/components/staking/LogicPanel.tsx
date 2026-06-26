@@ -1,20 +1,54 @@
-import { useMemo } from 'react';
 import { BrainCircuit } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
-import { useCyborgEngine, type CyborgReasonAction } from '@/stores/cyborgEngine';
+import {
+  getDynamicReason,
+  resolveActionSymbol,
+  resolveActionType,
+  type CyborgActionType,
+  type CyborgReasonAction,
+} from '@/lib/cyborgReasoning';
+import { useCyborgEngine } from '@/stores/cyborgEngine';
 
 export interface LogicPanelProps {
-  action: CyborgReasonAction;
+  /** Coarse action family — preferred when set explicitly. */
+  actionType?: CyborgActionType;
+  /** Granular action key from execution component — mapped to actionType when needed. */
+  action?: CyborgReasonAction;
+  /** Optional asset override (e.g. ETH, BTC). */
+  symbol?: string;
   lang: Lang;
   className?: string;
 }
 
-export function LogicPanel({ action, lang, className = '' }: LogicPanelProps) {
+export function LogicPanel({
+  actionType,
+  action,
+  symbol,
+  lang,
+  className = '',
+}: LogicPanelProps) {
+  const marketScore = useCyborgEngine(s => Number(s.reasoningContext?.marketScore ?? 0));
+  const fearGreed = useCyborgEngine(s => Number(s.reasoningContext?.fearGreed ?? 0));
+  const marketMode = useCyborgEngine(s => s.marketMode);
+  const weightedApyPct = useCyborgEngine(s => Number(s.reasoningContext?.weightedApyPct ?? 0));
+  const stakedRatio = useCyborgEngine(s => Number(s.reasoningContext?.stakedRatio ?? 0));
   const revision = useCyborgEngine(s => s.revision);
-  const text = useMemo(
-    () => useCyborgEngine.getState().getReason(action, lang),
-    [action, lang, revision],
-  );
+
+  const resolvedType = actionType ?? (action ? resolveActionType(action) : 'STAKE');
+  const resolvedSymbol = symbol ?? (action ? resolveActionSymbol(action) : undefined);
+
+  const text = getDynamicReason(resolvedType, marketScore, {
+    lang,
+    symbol: resolvedSymbol,
+    coin: resolvedSymbol,
+    fearGreed,
+    marketMode,
+    weightedApyPct,
+    stakedRatio,
+  });
+
+  // revision keeps the panel subscribed to engine mutations (score sync, portfolio sync)
+  void revision;
 
   if (!text) return null;
 

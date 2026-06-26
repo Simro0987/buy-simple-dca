@@ -6,6 +6,17 @@ function safeNum(value: unknown): number {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 }
 
+/** Coarse action families used by LogicPanel / getDynamicReason. */
+export type CyborgActionType =
+  | 'STAKE'
+  | 'DCA'
+  | 'COLLATERAL'
+  | 'SWAP'
+  | 'TAKE_PROFIT'
+  | 'YIELD'
+  | 'REBALANCE';
+
+/** Granular action keys passed from execution components. */
 export type CyborgReasonAction =
   | 'stake_eth'
   | 'stake_sol'
@@ -39,6 +50,16 @@ export interface ReasoningContext {
 
 export type MarketTrend = 'bear' | 'bull' | 'neutral';
 
+export interface DynamicReasonOptions {
+  lang?: Lang;
+  symbol?: string;
+  coin?: string;
+  fearGreed?: number;
+  marketMode?: MarketMode | 'UNKNOWN';
+  weightedApyPct?: number;
+  stakedRatio?: number;
+}
+
 export function marketTrendFromScore(score: number): MarketTrend {
   const s = safeNum(score);
   if (s <= 40) return 'bear';
@@ -46,148 +67,187 @@ export function marketTrendFromScore(score: number): MarketTrend {
   return 'neutral';
 }
 
-function trendLabel(trend: MarketTrend, sk: boolean): string {
-  if (trend === 'bear') return sk ? 'Medvedí trend' : 'Bear trend';
-  if (trend === 'bull') return sk ? 'Býčí trend' : 'Bull trend';
-  return sk ? 'Neutrálny trh' : 'Neutral market';
+function trendTag(trend: MarketTrend): string {
+  if (trend === 'bear') return 'BEAR';
+  if (trend === 'bull') return 'BULL';
+  return 'NEUTRAL';
 }
 
-function modeHint(mode: MarketMode | 'UNKNOWN', sk: boolean): string {
-  switch (mode) {
-    case 'ACCUMULATION':
-      return sk ? 'režim akumulácie' : 'accumulation mode';
-    case 'CAUTIOUS_ACCUMULATION':
-      return sk ? 'opatrná akumulácia' : 'cautious accumulation';
-    case 'BALANCED':
-      return sk ? 'vyvážený režim' : 'balanced mode';
-    case 'DISTRIBUTION':
-      return sk ? 'distribučný režim' : 'distribution mode';
-    case 'DEFENSIVE':
-      return sk ? 'defenzívny režim' : 'defensive mode';
+export function resolveActionType(action: CyborgReasonAction): CyborgActionType {
+  switch (action) {
+    case 'stake_eth':
+    case 'stake_sol':
+    case 'stake_btc':
+    case 'stake_split':
+      return 'STAKE';
+    case 'dca_buy':
+    case 'dca_buy_btc':
+    case 'dca_buy_eth':
+    case 'dca_buy_sol':
+    case 'dca_limit':
+    case 'dca_sell':
+      return 'DCA';
+    case 'collateral':
+    case 'collateral_deposit':
+    case 'collateral_borrow':
+      return 'COLLATERAL';
+    case 'swap':
+      return 'SWAP';
+    case 'take_profit':
+      return 'TAKE_PROFIT';
+    case 'yield_auto_stake':
+    case 'yield_stable_swap':
+    case 'yield_hold_cash':
+      return 'YIELD';
+    case 'rebalance':
+      return 'REBALANCE';
     default:
-      return sk ? 'neznámy režim' : 'unknown mode';
+      return 'STAKE';
   }
 }
 
-function dcaActionKey(action: CyborgReasonAction): 'btc' | 'eth' | 'sol' | null {
-  if (action === 'dca_buy_btc') return 'btc';
-  if (action === 'dca_buy_eth') return 'eth';
-  if (action === 'dca_buy_sol') return 'sol';
-  return null;
+export function resolveActionSymbol(action: CyborgReasonAction): string | undefined {
+  switch (action) {
+    case 'stake_eth':
+      return 'ETH';
+    case 'stake_sol':
+      return 'SOL';
+    case 'stake_btc':
+      return 'BTC';
+    case 'dca_buy_btc':
+      return 'BTC';
+    case 'dca_buy_eth':
+      return 'ETH';
+    case 'dca_buy_sol':
+      return 'SOL';
+    default:
+      return undefined;
+  }
 }
 
+function coinSuffix(coin: string | undefined, sk: boolean): string {
+  if (!coin) return '';
+  return sk ? ` ${coin}` : ` ${coin}`;
+}
+
+/**
+ * Returns a unique, score-aware reason string for the given action family.
+ * No static copy — every branch embeds live marketScore and trend context.
+ */
+export function getDynamicReason(
+  actionType: CyborgActionType,
+  marketScore: number,
+  opts: DynamicReasonOptions = {},
+): string {
+  const sk = (opts.lang ?? 'sk') === 'sk';
+  const score = Math.round(safeNum(marketScore));
+  const fg = Math.round(safeNum(opts.fearGreed ?? 50));
+  const trend = marketTrendFromScore(score);
+  const tag = trendTag(trend);
+  const sym = opts.symbol ?? 'ETH';
+  const coin = opts.coin ?? opts.symbol;
+  const apy = safeNum(opts.weightedApyPct).toFixed(1);
+  const stakedPct = Math.round(safeNum(opts.stakedRatio) * 100);
+  const mode = opts.marketMode ?? 'UNKNOWN';
+
+  switch (actionType) {
+    case 'STAKE':
+      if (trend === 'bear') {
+        return sk
+          ? `Staking ${sym} pri skóre ${score}/100: generovanie výnosu v aktuálnom ${tag} trende.`
+          : `Staking ${sym} at score ${score}/100: generating yield in the current ${tag} trend.`;
+      }
+      if (trend === 'bull') {
+        return sk
+          ? `Staking ${sym} pri skóre ${score}/100: fixácia ziskov v ${tag} trende (portfólio ~${apy}% APY, ${stakedPct}% staked).`
+          : `Staking ${sym} at score ${score}/100: locking gains in ${tag} trend (portfolio ~${apy}% APY, ${stakedPct}% staked).`;
+      }
+      return sk
+        ? `Staking ${sym} pri skóre ${score}/100: vyváženie výnosu a volatility v ${tag} pásme (režim ${mode}).`
+        : `Staking ${sym} at score ${score}/100: balancing yield and volatility in ${tag} band (mode ${mode}).`;
+
+    case 'DCA':
+      if (actionType === 'DCA' && score < 30) {
+        return sk
+          ? `DCA akumulácia${coinSuffix(coin, sk)}: Skóre ${score} je v zóne lacného nákupu (pod 30).`
+          : `DCA accumulation${coinSuffix(coin, sk)}: Score ${score} is in the cheap-buy zone (below 30).`;
+      }
+      if (score >= 75) {
+        return sk
+          ? `DCA redukcia${coinSuffix(coin, sk)}: Skóre ${score}/100 signalizuje prehriaty trh — alokácia je utlmená.`
+          : `DCA reduction${coinSuffix(coin, sk)}: Score ${score}/100 signals overheated market — allocation is dampened.`;
+      }
+      if (score >= 50) {
+        return sk
+          ? `DCA disciplína${coinSuffix(coin, sk)}: Skóre ${score}/100 v neutrálnom pásme — postupná akumulácia bez spěchu.`
+          : `DCA discipline${coinSuffix(coin, sk)}: Score ${score}/100 in neutral band — gradual accumulation without rush.`;
+      }
+      return sk
+        ? `DCA akumulácia${coinSuffix(coin, sk)}: Skóre ${score}/100 pod priemerom — výhodné pásmo pre týždenný nákup.`
+        : `DCA accumulation${coinSuffix(coin, sk)}: Score ${score}/100 below average — favorable band for weekly buying.`;
+
+    case 'COLLATERAL':
+      if (trend === 'bear') {
+        return sk
+          ? `Optimalizácia kolaterálu pri skóre ${score}/100: zabezpečenie likvidity pre riadenie dlhu v ${tag} trende (F&G ${fg}).`
+          : `Collateral optimization at score ${score}/100: securing liquidity for debt management in ${tag} trend (F&G ${fg}).`;
+      }
+      if (trend === 'bull') {
+        return sk
+          ? `Optimalizácia kolaterálu: Skóre ${score}/100 v ${tag} trende — LTV buffer pred expanziou borrow.`
+          : `Collateral optimization: Score ${score}/100 in ${tag} trend — LTV buffer before borrow expansion.`;
+      }
+      return sk
+        ? `Optimalizácia kolaterálu: Zabezpečenie likvidity pre riadenie dlhu pri skóre ${score}/100.`
+        : `Collateral optimization: Securing liquidity for debt management at score ${score}/100.`;
+
+    case 'SWAP':
+      return sk
+        ? `Swap pri skóre ${score}/100 (${tag}): rebalans tokenov bez trhového prehnania.`
+        : `Swap at score ${score}/100 (${tag}): rebalancing tokens without market overexposure.`;
+
+    case 'TAKE_PROFIT':
+      return sk
+        ? `Take profit pri skóre ${score}/100: realizácia zisku do USDC pred ${tag} reverziou.`
+        : `Take profit at score ${score}/100: realizing gains into USDC before ${tag} reversal.`;
+
+    case 'YIELD':
+      if (score <= 35) {
+        return sk
+          ? `Yield deploy pri skóre ${score}/100: maximalizácia pasívneho príjmu v ${tag} akumulačnom pásme.`
+          : `Yield deploy at score ${score}/100: maximizing passive income in ${tag} accumulation band.`;
+      }
+      return sk
+        ? `Yield deploy pri skóre ${score}/100: USDC → vyšší APY pri zachovaní ${stakedPct}% staked podielu.`
+        : `Yield deploy at score ${score}/100: USDC → higher APY while keeping ${stakedPct}% staked ratio.`;
+
+    case 'REBALANCE':
+      return sk
+        ? `Rebalans pri skóre ${score}/100: návrat k cieľovej alokácii v ${tag} režime ${mode}.`
+        : `Rebalance at score ${score}/100: returning to target allocation in ${tag} mode ${mode}.`;
+
+    default:
+      return sk
+        ? `Cyborg optimalizuje túto pozíciu pre maximálnu efektivitu portfólia (skóre ${score}/100, ${tag}).`
+        : `Cyborg optimizes this position for maximum portfolio efficiency (score ${score}/100, ${tag}).`;
+  }
+}
+
+/** Resolves granular action + live context into a dynamic reason string. */
 export function buildCyborgReason(
   action: CyborgReasonAction,
   ctx: ReasoningContext,
   lang: Lang = 'sk',
 ): string {
-  const sk = lang === 'sk';
-  const score = Math.round(safeNum(ctx.marketScore));
-  const fg = Math.round(safeNum(ctx.fearGreed));
-  const trend = marketTrendFromScore(score);
-  const trendText = trendLabel(trend, sk);
-  const modeText = modeHint(ctx.marketMode ?? 'UNKNOWN', sk);
-  const stakedPct = Math.round(safeNum(ctx.stakedRatio) * 100);
-  const apy = safeNum(ctx.weightedApyPct).toFixed(1);
-  const prefix = sk ? 'Prečo:' : 'Why:';
-
-  switch (action) {
-    case 'stake_eth':
-      if (trend === 'bear') {
-        return `${prefix} ${trendText} (${score}/100) – staking ETH generuje pasívny príjem (~${apy}% APY) a znižuje volatilitu portfólia.`;
-      }
-      if (trend === 'bull') {
-        return `${prefix} ${trendText} (${score}/100) – časť ETH do stakingu chráni zisky a udržiava ${stakedPct}% staked podiel.`;
-      }
-      return `${prefix} ${trendText} (${score}/100) – staking ETH vyrovnáva riziko pri ${modeText} a posilňuje výnos portfólia.`;
-
-    case 'stake_sol':
-      if (trend === 'bear') {
-        return `${prefix} ${trendText} (${score}/100) – SOL staking prináša yield pri nízkom sentimente (F&G ${fg}).`;
-      }
-      return `${prefix} ${trendText} (${score}/100) – Marinade/Kamino yield dopĺňa satelitnú alokáciu pri ${modeText}.`;
-
-    case 'stake_btc':
-      return `${prefix} ${trendText} (${score}/100) – BTC core pozícia cez LBTC/rETH znižuje drawdown pri ${modeText}.`;
-
-    case 'stake_split':
-      return `${prefix} ${trendText} (${score}/100) – dynamický split rozkladá riziko medzi protokoly podľa aktuálneho skóre.`;
-
-    case 'dca_buy':
-    case 'dca_buy_btc':
-    case 'dca_buy_eth':
-    case 'dca_buy_sol': {
-      const coin = dcaActionKey(action);
-      const coinLabel = coin ? coin.toUpperCase() : 'BTC/ETH/SOL';
-      if (score <= 35) {
-        return sk
-          ? `${prefix} Aktuálne skóre ${score}/100 naznačuje prepredaný trh, ideálny čas na akumuláciu ${coinLabel}.`
-          : `${prefix} Current score ${score}/100 suggests an oversold market — ideal time to accumulate ${coinLabel}.`;
-      }
-      if (score >= 70) {
-        return sk
-          ? `${prefix} Skóre ${score}/100 signalizuje drahší trh — DCA ${coinLabel} je znížené podľa ${modeText}.`
-          : `${prefix} Score ${score}/100 signals an expensive market — DCA ${coinLabel} is reduced per ${modeText}.`;
-      }
-      return sk
-        ? `${prefix} Skóre ${score}/100 a ${modeText} podporujú disciplinovanú akumuláciu ${coinLabel}.`
-        : `${prefix} Score ${score}/100 and ${modeText} support disciplined ${coinLabel} accumulation.`;
-    }
-
-    case 'dca_limit':
-      return sk
-        ? `${prefix} Limit objednávka pri skóre ${score}/100 využíva discount pásmo bez trhového spěchu.`
-        : `${prefix} Limit order at score ${score}/100 uses the discount band without market urgency.`;
-
-    case 'collateral':
-    case 'collateral_deposit':
-      return sk
-        ? `${prefix} Zabezpečenie likvidity na Arbitrum s nízkym rizikom pri aktuálnom sentimente (F&G ${fg}, ${score}/100).`
-        : `${prefix} Securing liquidity on Arbitrum with low risk at current sentiment (F&G ${fg}, ${score}/100).`;
-
-    case 'collateral_borrow':
-      return sk
-        ? `${prefix} Borrow USDC pri LTV limite a ${trendText.toLowerCase()} (${score}/100) — len ak yield > borrow cost.`
-        : `${prefix} Borrow USDC at LTV cap and ${trendText.toLowerCase()} (${score}/100) — only if yield > borrow cost.`;
-
-    case 'swap':
-      return sk
-        ? `${prefix} Swap optimalizuje alokáciu pri skóre ${score}/100 bez zbytočného trhového rizika.`
-        : `${prefix} Swap optimizes allocation at score ${score}/100 without unnecessary market risk.`;
-
-    case 'take_profit':
-      return sk
-        ? `${prefix} Take profit pri ${trendText.toLowerCase()} (${score}/100) — realizácia zisku do USDC pred ďalšou volatilitou.`
-        : `${prefix} Take profit in ${trendText.toLowerCase()} (${score}/100) — realize gains into USDC before further volatility.`;
-
-    case 'dca_sell':
-      return sk
-        ? `${prefix} Odpredaj pri skóre ${score}/100 presúva kapitál do Profit Reservoir pred prehriatím trhu.`
-        : `${prefix} Sell at score ${score}/100 moves capital to Profit Reservoir before market overheating.`;
-
-    case 'yield_auto_stake':
-      return sk
-        ? `${prefix} Auto-staking USDC yield pri ${modeText} maximalizuje pasívny príjem bez manuálnej exekúcie.`
-        : `${prefix} Auto-staking USDC yield in ${modeText} maximizes passive income without manual execution.`;
-
-    case 'yield_stable_swap':
-      return sk
-        ? `${prefix} Stable swap do vyššieho APY pri skóre ${score}/100 — nízke riziko, stabilný carry.`
-        : `${prefix} Stable swap to higher APY at score ${score}/100 — low risk, stable carry.`;
-
-    case 'yield_hold_cash':
-      return sk
-        ? `${prefix} Držanie hotovosti pri ${trendText.toLowerCase()} (${score}/100) chráni kapitál pred negatívnym carry.`
-        : `${prefix} Holding cash in ${trendText.toLowerCase()} (${score}/100) protects capital from negative carry.`;
-
-    case 'rebalance':
-      return sk
-        ? `${prefix} Rebalans pri skóre ${score}/100 udržiava cieľovú alokáciu a ${stakedPct}% staked pomer.`
-        : `${prefix} Rebalance at score ${score}/100 maintains target allocation and ${stakedPct}% staked ratio.`;
-
-    default:
-      return sk
-        ? `${prefix} Cyborg engine odporúča akciu podľa skóre ${score}/100 a ${modeText}.`
-        : `${prefix} Cyborg engine recommends this action based on score ${score}/100 and ${modeText}.`;
-  }
+  const actionType = resolveActionType(action);
+  const symbol = resolveActionSymbol(action);
+  return getDynamicReason(actionType, ctx.marketScore, {
+    lang,
+    symbol,
+    coin: symbol,
+    fearGreed: ctx.fearGreed,
+    marketMode: ctx.marketMode,
+    weightedApyPct: ctx.weightedApyPct,
+    stakedRatio: ctx.stakedRatio,
+  });
 }

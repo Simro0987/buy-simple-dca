@@ -10,7 +10,10 @@ import {
 } from '@/lib/yieldAggregator';
 import {
   buildCyborgReason,
+  getDynamicReason,
+  resolveActionType,
   type CyborgReasonAction,
+  type CyborgActionType,
   type ReasoningContext,
 } from '@/lib/cyborgReasoning';
 import type { Lang } from '@/lib/i18n';
@@ -123,8 +126,8 @@ function buildReasoningSnapshot(state: MasterState): ReasoningContext {
   };
 }
 
-export type { CyborgReasonAction, ReasoningContext };
-export { buildCyborgReason } from '@/lib/cyborgReasoning';
+export type { CyborgReasonAction, CyborgActionType, ReasoningContext };
+export { buildCyborgReason, getDynamicReason, resolveActionType } from '@/lib/cyborgReasoning';
 
 function loadHoldings(): Record<string, number> {
   try {
@@ -249,6 +252,7 @@ export function adjustDcaInvestableForMarketMode(
 interface CyborgEngineStore extends MasterState {
   getComputed: (apyRates?: ReturnType<typeof buildYieldApyRates>) => CyborgComputed;
   getReason: (action: CyborgReasonAction, lang?: Lang) => string;
+  getDynamicReason: (actionType: CyborgActionType, lang?: Lang) => string;
   syncFromSources: (input?: {
     holdings?: Record<string, number>;
     entries?: StakedEntry[];
@@ -271,6 +275,17 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
   getComputed: (apyRates) => computeCyborgMetrics(get(), apyRates),
 
   getReason: (action, lang = 'sk') => buildCyborgReason(action, buildReasoningSnapshot(get()), lang),
+
+  getDynamicReason: (actionType, lang = 'sk') => {
+    const snapshot = buildReasoningSnapshot(get());
+    return getDynamicReason(actionType, snapshot.marketScore, {
+      lang,
+      fearGreed: snapshot.fearGreed,
+      marketMode: snapshot.marketMode,
+      weightedApyPct: snapshot.weightedApyPct,
+      stakedRatio: snapshot.stakedRatio,
+    });
+  },
 
   syncFromSources: (input) => {
     const holdings = input?.holdings ?? loadHoldings();

@@ -99,10 +99,20 @@ describe('cyborgEngine store', () => {
     expect(useCyborgEngine.getState().canAffordDcaUsd(100)).toBe(true);
   });
 
-  it('getReason returns contextual explanation', () => {
+  it('getReason returns dynamic score-aware explanation', () => {
     useCyborgEngine.getState().setReasoningContext({ marketScore: 19, fearGreed: 19 });
     const reason = useCyborgEngine.getState().getReason('stake_eth', 'sk');
-    expect(reason).toContain('Prečo:');
-    expect(reason).toContain('19/100');
+    expect(reason).toContain('Staking ETH pri skóre 19/100');
+    expect(reason).toContain('BEAR');
+  });
+
+  it('getDynamicReason on store reads live marketScore', () => {
+    useCyborgEngine.getState().setReasoningContext({ marketScore: 25 });
+    const reason = useCyborgEngine.getState().getDynamicReason('DCA', 'sk');
+    expect(reason).toContain('25');
+    useCyborgEngine.getState().setReasoningContext({ marketScore: 80 });
+    const hot = useCyborgEngine.getState().getDynamicReason('DCA', 'sk');
+    expect(hot).toContain('80');
+    expect(hot).not.toBe(reason);
   });
 });
