@@ -32,6 +32,7 @@ export function LogicPanel({
   const marketMode = useCyborgEngine(s => s.marketMode);
   const weightedApyPct = useCyborgEngine(s => Number(s.reasoningContext?.weightedApyPct ?? 0));
   const stakedRatio = useCyborgEngine(s => Number(s.reasoningContext?.stakedRatio ?? 0));
+  const marketData = useCyborgEngine(s => s.marketData);
   const revision = useCyborgEngine(s => s.revision);
 
   const resolvedType = actionType ?? (action ? resolveActionType(action) : 'STAKE');
@@ -45,9 +46,9 @@ export function LogicPanel({
     marketMode,
     weightedApyPct,
     stakedRatio,
+    marketData,
   });
 
-  // revision keeps the panel subscribed to engine mutations (score sync, portfolio sync)
   void revision;
 
   if (!text) return null;

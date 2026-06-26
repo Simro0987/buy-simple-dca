@@ -1,5 +1,6 @@
 import type { Lang } from '@/lib/i18n';
 import type { MarketMode } from '@/lib/coreSatelliteEngine';
+import type { CyborgMarketData } from '@/lib/cyborgMarketDataFeed';
 
 function safeNum(value: unknown): number {
   const n = Number(value ?? 0);
@@ -58,6 +59,22 @@ export interface DynamicReasonOptions {
   marketMode?: MarketMode | 'UNKNOWN';
   weightedApyPct?: number;
   stakedRatio?: number;
+  marketData?: CyborgMarketData | null;
+}
+
+function formatUsdPrice(value: number): string {
+  const n = safeNum(value);
+  if (n <= 0) return '—';
+  if (n >= 1000) return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return n.toFixed(2);
+}
+
+function fearGreedMood(fg: number, sk: boolean): string {
+  if (fg <= 25) return sk ? 'extrémny strach' : 'extreme fear';
+  if (fg <= 45) return sk ? 'strach' : 'fear';
+  if (fg <= 55) return sk ? 'neutrál' : 'neutral';
+  if (fg <= 75) return sk ? 'chamtivosť' : 'greed';
+  return sk ? 'extrémna chamtivosť' : 'extreme greed';
 }
 
 export function marketTrendFromScore(score: number): MarketTrend {
@@ -149,9 +166,20 @@ export function getDynamicReason(
   const apy = safeNum(opts.weightedApyPct).toFixed(1);
   const stakedPct = Math.round(safeNum(opts.stakedRatio) * 100);
   const mode = opts.marketMode ?? 'UNKNOWN';
+  const md = opts.marketData ?? null;
+  const liveFg = Math.round(safeNum(md?.fearGreedIndex ?? fg));
+  const liveApy = safeNum(md?.protocolAPY ?? Number(apy));
+  const ethPrice = safeNum(md?.ethPrice);
+  const apy12m = safeNum(md?.protocolAPY12mAvg) || 3.2;
+  const apyAboveAvg = liveApy > apy12m;
 
   switch (actionType) {
     case 'STAKE':
+      if (liveApy > 0 && ethPrice > 0) {
+        return sk
+          ? `Staking ${sym}: Aktuálne APY ${liveApy.toFixed(1)}% ${apyAboveAvg ? 'je nad' : 'je pri'} 12-mesačným priemerom (${apy12m.toFixed(1)}%) pri cene ETH $${formatUsdPrice(ethPrice)}.`
+          : `Staking ${sym}: Current APY ${liveApy.toFixed(1)}% is ${apyAboveAvg ? 'above' : 'near'} the 12-month average (${apy12m.toFixed(1)}%) with ETH at $${formatUsdPrice(ethPrice)}.`;
+      }
       if (trend === 'bear') {
         return sk
           ? `Staking ${sym} pri skóre ${score}/100: generovanie výnosu v aktuálnom ${tag} trende.`
@@ -167,6 +195,16 @@ export function getDynamicReason(
         : `Staking ${sym} at score ${score}/100: balancing yield and volatility in ${tag} band (mode ${mode}).`;
 
     case 'DCA':
+      if (liveFg <= 45) {
+        return sk
+          ? `DCA Nákup${coinSuffix(coin, sk)}: Fear&Greed Index je ${liveFg} (${fearGreedMood(liveFg, sk)}), čo je historicky výhodná zóna na akumuláciu.`
+          : `DCA Buy${coinSuffix(coin, sk)}: Fear & Greed Index is ${liveFg} (${fearGreedMood(liveFg, sk)}) — a historically favorable accumulation zone.`;
+      }
+      if (safeNum(md?.btcPrice) > 0 && coin === 'BTC') {
+        return sk
+          ? `DCA BTC: Bitcoin $${formatUsdPrice(md!.btcPrice)} pri F&G ${liveFg} — skóre ${score}/100 podporuje týždennú akumuláciu.`
+          : `DCA BTC: Bitcoin $${formatUsdPrice(md!.btcPrice)} at F&G ${liveFg} — score ${score}/100 supports weekly accumulation.`;
+      }
       if (actionType === 'DCA' && score < 30) {
         return sk
           ? `DCA akumulácia${coinSuffix(coin, sk)}: Skóre ${score} je v zóne lacného nákupu (pod 30).`
@@ -187,6 +225,11 @@ export function getDynamicReason(
         : `DCA accumulation${coinSuffix(coin, sk)}: Score ${score}/100 below average — favorable band for weekly buying.`;
 
     case 'COLLATERAL':
+      if (liveApy > 0 && ethPrice > 0) {
+        return sk
+          ? `Optimalizácia kolaterálu: ETH $${formatUsdPrice(ethPrice)}, borrow spread vs protocol APY ${liveApy.toFixed(1)}% pri F&G ${liveFg}.`
+          : `Collateral optimization: ETH $${formatUsdPrice(ethPrice)}, borrow spread vs protocol APY ${liveApy.toFixed(1)}% at F&G ${liveFg}.`;
+      }
       if (trend === 'bear') {
         return sk
           ? `Optimalizácia kolaterálu pri skóre ${score}/100: zabezpečenie likvidity pre riadenie dlhu v ${tag} trende (F&G ${fg}).`
@@ -212,6 +255,11 @@ export function getDynamicReason(
         : `Take profit at score ${score}/100: realizing gains into USDC before ${tag} reversal.`;
 
     case 'YIELD':
+      if (liveApy > 0) {
+        return sk
+          ? `Yield deploy: Protokolové APY ${liveApy.toFixed(1)}% ${apyAboveAvg ? 'prekračuje' : 'kopíruje'} 12M priemer pri skóre ${score}/100.`
+          : `Yield deploy: Protocol APY ${liveApy.toFixed(1)}% ${apyAboveAvg ? 'exceeds' : 'tracks'} 12M average at score ${score}/100.`;
+      }
       if (score <= 35) {
         return sk
           ? `Yield deploy pri skóre ${score}/100: maximalizácia pasívneho príjmu v ${tag} akumulačnom pásme.`
@@ -238,6 +286,7 @@ export function buildCyborgReason(
   action: CyborgReasonAction,
   ctx: ReasoningContext,
   lang: Lang = 'sk',
+  marketData?: CyborgMarketData | null,
 ): string {
   const actionType = resolveActionType(action);
   const symbol = resolveActionSymbol(action);
@@ -249,5 +298,6 @@ export function buildCyborgReason(
     marketMode: ctx.marketMode,
     weightedApyPct: ctx.weightedApyPct,
     stakedRatio: ctx.stakedRatio,
+    marketData,
   });
 }

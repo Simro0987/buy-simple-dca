@@ -6,6 +6,7 @@ import {
   resolveActionType,
 } from '@/lib/cyborgReasoning';
 import type { ReasoningContext } from '@/lib/cyborgReasoning';
+import type { CyborgMarketData } from '@/lib/cyborgMarketDataFeed';
 
 const baseCtx = (): ReasoningContext => ({
   marketScore: 19,
@@ -15,6 +16,16 @@ const baseCtx = (): ReasoningContext => ({
   stakedRatio: 0.35,
   totalBalanceUsd: 50_000,
   weightedApyPct: 4.2,
+});
+
+const liveMarket = (): CyborgMarketData => ({
+  btcPrice: 98_000,
+  ethPrice: 3_450,
+  fearGreedIndex: 19,
+  protocolAPY: 3.8,
+  protocolAPY12mAvg: 3.2,
+  lastUpdatedAt: Date.now(),
+  source: 'live',
 });
 
 describe('cyborgReasoning', () => {
@@ -30,42 +41,53 @@ describe('cyborgReasoning', () => {
     expect(resolveActionType('collateral_deposit')).toBe('COLLATERAL');
   });
 
-  it('getDynamicReason returns score-embedded STAKE copy for bear trend', () => {
-    const text = getDynamicReason('STAKE', 19, { lang: 'sk', symbol: 'ETH' });
-    expect(text).toContain('Staking ETH pri skóre 19/100');
-    expect(text).toContain('BEAR');
+  it('getDynamicReason uses live market data for STAKE', () => {
+    const text = getDynamicReason('STAKE', 19, {
+      lang: 'sk',
+      symbol: 'ETH',
+      marketData: liveMarket(),
+    });
+    expect(text).toContain('Staking ETH');
+    expect(text).toContain('APY 3.8%');
+    expect(text).toContain('ETH $3,450');
   });
 
-  it('getDynamicReason returns cheap-buy DCA copy below score 30', () => {
-    const text = getDynamicReason('DCA', 19, { lang: 'sk', coin: 'BTC' });
-    expect(text).toContain('DCA akumulácia BTC');
-    expect(text).toContain('Skóre 19');
-    expect(text).toContain('pod 30');
+  it('getDynamicReason uses Fear&Greed for DCA in fear zone', () => {
+    const text = getDynamicReason('DCA', 19, {
+      lang: 'sk',
+      marketData: liveMarket(),
+    });
+    expect(text).toContain('DCA Nákup');
+    expect(text).toContain('Fear&Greed Index je 19');
+    expect(text).toContain('strach');
   });
 
-  it('getDynamicReason varies DCA text above score 50', () => {
-    const cheap = getDynamicReason('DCA', 19, { lang: 'sk' });
-    const neutral = getDynamicReason('DCA', 55, { lang: 'sk' });
-    const hot = getDynamicReason('DCA', 80, { lang: 'sk' });
-    expect(cheap).not.toBe(neutral);
-    expect(neutral).not.toBe(hot);
-    expect(hot).toContain('80');
+  it('getDynamicReason varies DCA text when F&G is elevated', () => {
+    const fear = getDynamicReason('DCA', 19, { lang: 'sk', marketData: liveMarket() });
+    const greed = getDynamicReason('DCA', 70, {
+      lang: 'sk',
+      marketData: { ...liveMarket(), fearGreedIndex: 78 },
+    });
+    expect(fear).not.toBe(greed);
   });
 
-  it('getDynamicReason returns collateral copy with live score', () => {
-    const text = getDynamicReason('COLLATERAL', 19, { lang: 'sk', fearGreed: 19 });
+  it('getDynamicReason returns collateral copy with ETH price feed', () => {
+    const text = getDynamicReason('COLLATERAL', 19, {
+      lang: 'sk',
+      marketData: liveMarket(),
+    });
     expect(text).toContain('kolaterálu');
-    expect(text).toContain('19');
+    expect(text).toContain('3,450');
   });
 
-  it('buildCyborgReason delegates to getDynamicReason via action mapping', () => {
-    const text = buildCyborgReason('stake_eth', baseCtx(), 'sk');
-    expect(text).toContain('Staking ETH pri skóre 19/100');
+  it('buildCyborgReason passes market data through', () => {
+    const text = buildCyborgReason('stake_eth', baseCtx(), 'sk', liveMarket());
+    expect(text).toContain('APY 3.8%');
   });
 
   it('returns English copy when lang is en', () => {
-    const text = getDynamicReason('DCA', 19, { lang: 'en', coin: 'BTC' });
-    expect(text).toContain('DCA accumulation BTC');
-    expect(text).toContain('below 30');
+    const text = getDynamicReason('DCA', 19, { lang: 'en', marketData: liveMarket() });
+    expect(text).toContain('Fear & Greed Index');
+    expect(text).toContain('fear');
   });
 });

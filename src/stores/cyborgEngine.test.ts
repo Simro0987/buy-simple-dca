@@ -25,6 +25,15 @@ const baseState = (): MasterState => ({
     totalBalanceUsd: 0,
     weightedApyPct: 0,
   },
+  marketData: {
+    btcPrice: 0,
+    ethPrice: 0,
+    fearGreedIndex: 50,
+    protocolAPY: 3.1,
+    protocolAPY12mAvg: 3.2,
+    lastUpdatedAt: 0,
+    source: 'cache',
+  },
   revision: 0,
 });
 
@@ -101,9 +110,15 @@ describe('cyborgEngine store', () => {
 
   it('getReason returns dynamic score-aware explanation', () => {
     useCyborgEngine.getState().setReasoningContext({ marketScore: 19, fearGreed: 19 });
+    useCyborgEngine.getState().setMarketData({
+      ethPrice: 3400,
+      protocolAPY: 3.6,
+      protocolAPY12mAvg: 3.2,
+      fearGreedIndex: 19,
+    });
     const reason = useCyborgEngine.getState().getReason('stake_eth', 'sk');
-    expect(reason).toContain('Staking ETH pri skóre 19/100');
-    expect(reason).toContain('BEAR');
+    expect(reason).toContain('Staking ETH');
+    expect(reason).toContain('APY 3.6%');
   });
 
   it('getDynamicReason on store reads live marketScore', () => {

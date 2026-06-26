@@ -17,6 +17,13 @@ import {
   type ReasoningContext,
 } from '@/lib/cyborgReasoning';
 import type { Lang } from '@/lib/i18n';
+import {
+  DEFAULT_MARKET_DATA,
+  fetchCyborgMarketData,
+  loadCachedMarketData,
+  mergeMarketData,
+  type CyborgMarketData,
+} from '@/lib/cyborgMarketDataFeed';
 
 export type CyborgAsset = 'BTC' | 'ETH' | 'SOL';
 
@@ -64,6 +71,7 @@ export interface MasterState {
   dcaSchedules: DcaScheduleSnapshot | null;
   marketMode: MarketMode | 'UNKNOWN';
   prices: { btc: number; eth: number; sol: number };
+  marketData: CyborgMarketData;
   actionLock: ActionLockState;
   reasoningContext: ReasoningContext;
   revision: number;
@@ -95,6 +103,7 @@ const INITIAL_STATE: MasterState = {
   dcaSchedules: null,
   marketMode: 'UNKNOWN',
   prices: { btc: 0, eth: 0, sol: 0 },
+  marketData: loadCachedMarketData(),
   actionLock: {
     active: false,
     source: null,
@@ -127,6 +136,7 @@ function buildReasoningSnapshot(state: MasterState): ReasoningContext {
 }
 
 export type { CyborgReasonAction, CyborgActionType, ReasoningContext };
+export type { CyborgMarketData } from '@/lib/cyborgMarketDataFeed';
 export { buildCyborgReason, getDynamicReason, resolveActionType } from '@/lib/cyborgReasoning';
 
 function loadHoldings(): Record<string, number> {
@@ -262,6 +272,8 @@ interface CyborgEngineStore extends MasterState {
   setDcaSchedule: (schedule: DcaScheduleSnapshot | null) => void;
   setPrices: (prices: { btc?: number; eth?: number; sol?: number }) => void;
   setReasoningContext: (patch: Partial<ReasoningContext>) => void;
+  setMarketData: (patch: Partial<CyborgMarketData>) => void;
+  refreshMarketData: (fearGreedIndex?: number) => Promise<void>;
   beginStakeExecution: () => void;
   endStakeExecution: () => void;
   applyStakeExecution: (update: PortfolioBalanceUpdate, protocolHint?: string) => void;
@@ -274,7 +286,12 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
 
   getComputed: (apyRates) => computeCyborgMetrics(get(), apyRates),
 
-  getReason: (action, lang = 'sk') => buildCyborgReason(action, buildReasoningSnapshot(get()), lang),
+  getReason: (action, lang = 'sk') => buildCyborgReason(
+    action,
+    buildReasoningSnapshot(get()),
+    lang,
+    get().marketData,
+  ),
 
   getDynamicReason: (actionType, lang = 'sk') => {
     const snapshot = buildReasoningSnapshot(get());
@@ -284,6 +301,7 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
       marketMode: snapshot.marketMode,
       weightedApyPct: snapshot.weightedApyPct,
       stakedRatio: snapshot.stakedRatio,
+      marketData: get().marketData,
     });
   },
 
@@ -321,6 +339,33 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
     },
     revision: get().revision + 1,
   }),
+
+  setMarketData: (patch) => {
+    const next = mergeMarketData(get().marketData ?? DEFAULT_MARKET_DATA, patch);
+    set({
+      marketData: next,
+      prices: {
+        btc: next.btcPrice > 0 ? next.btcPrice : get().prices.btc,
+        eth: next.ethPrice > 0 ? next.ethPrice : get().prices.eth,
+        sol: get().prices.sol,
+      },
+      revision: get().revision + 1,
+    });
+  },
+
+  refreshMarketData: async (fearGreedIndex) => {
+    const fg = fearGreedIndex ?? get().marketData.fearGreedIndex ?? get().reasoningContext.fearGreed;
+    try {
+      const live = await fetchCyborgMarketData(fg);
+      get().setMarketData(live);
+    } catch {
+      const cached = loadCachedMarketData();
+      get().setMarketData(mergeMarketData(cached, {
+        fearGreedIndex: safeNum(fg),
+        source: 'cache',
+      }));
+    }
+  },
 
   setMarketMode: (mode) => set({
     marketMode: mode ?? 'UNKNOWN',
