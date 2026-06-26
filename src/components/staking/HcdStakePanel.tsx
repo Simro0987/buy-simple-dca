@@ -79,10 +79,10 @@ import {
   type CyborgAction,
 } from '@/lib/cyborgTerminalEngine';
 import {
-  buildLbtcAccumulationPlan,
-  formatLbtcAccumulationPlanLine,
-  type LbtcAccumulationPlan,
-} from '@/lib/lbtcAccumulationStrategy';
+  buildBorrowedUsdcSplitPlan,
+  formatBorrowedUsdcSplitPlanLine,
+  type BorrowedUsdcSplitPlan,
+} from '@/lib/borrowedUsdcCapitalSplit';
 
 interface Props {
   lang: Lang;
@@ -319,11 +319,7 @@ function CyborgActionPlan({
   planSummary,
   copyCollateralQty,
   hideCopyBoxes = false,
-  lbtcAccumulation,
-  lbtcPlanConfirmed = false,
-  onConfirmLbtc,
-  onRevertLbtc,
-  lbtcExecDisabled = false,
+  usdcSplit,
 }: {
   sk: boolean;
   layerPct: number;
@@ -351,11 +347,7 @@ function CyborgActionPlan({
   planSummary?: string;
   copyCollateralQty?: number;
   hideCopyBoxes?: boolean;
-  lbtcAccumulation?: LbtcAccumulationPlan | null;
-  lbtcPlanConfirmed?: boolean;
-  onConfirmLbtc?: () => void;
-  onRevertLbtc?: () => void;
-  lbtcExecDisabled?: boolean;
+  usdcSplit?: BorrowedUsdcSplitPlan | null;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -404,6 +396,11 @@ function CyborgActionPlan({
           disabled={execDisabled}
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
+          confirmLabel={
+            usdcSplit?.enabled && !usdcSplit.blocked
+              ? (sk ? '✅ Potvrdiť (multicall)' : '✅ Confirm (multicall)')
+              : undefined
+          }
         />
       </div>
 
@@ -452,7 +449,7 @@ function CyborgActionPlan({
         />
       )}
 
-      {showBorrowFlow && combinedBorrowUsdc > 0 && !lbtcAccumulation?.enabled && (
+      {showBorrowFlow && combinedBorrowUsdc > 0 && !usdcSplit?.enabled && (
         <>
           {!hideCopyBoxes && (
             <CyborgCommandLine
@@ -475,73 +472,84 @@ function CyborgActionPlan({
         </>
       )}
 
-      {showBorrowFlow && lbtcAccumulation?.enabled && (
+      {showBorrowFlow && usdcSplit?.enabled && (
         <div className="rounded-lg border border-amber-500/25 bg-amber-500/5 p-2.5 space-y-2">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90">
-              {sk ? 'LBTC akumulácia' : 'LBTC accumulation'}
-            </p>
-            {onConfirmLbtc && onRevertLbtc && (
-              <ManualPlanConfirm
-                lang={lang}
-                confirmed={lbtcPlanConfirmed}
-                disabled={lbtcExecDisabled || lbtcAccumulation.blocked || lbtcAccumulation.targetUsd <= 0}
-                onConfirm={onConfirmLbtc}
-                onRevert={onRevertLbtc}
-                confirmLabel={sk ? 'Potvrdiť nákup LBTC' : 'Confirm LBTC buy'}
-              />
-            )}
-          </div>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-amber-200/90">
+            {sk ? 'Rozdelenie požičaných USDC' : 'Borrowed USDC split'}
+          </p>
 
-          {lbtcAccumulation.blocked ? (
+          {usdcSplit.blocked ? (
             <p className="text-[10px] text-red-300/90 leading-snug">
-              {sk ? lbtcAccumulation.blockReasonSk : lbtcAccumulation.blockReasonEn}
+              {sk ? usdcSplit.blockReasonSk : usdcSplit.blockReasonEn}
             </p>
           ) : (
             <>
-              <p className="text-[10px] text-foreground/90 leading-snug">
-                {sk
-                  ? `Cieľový nákup: ${formatUsd(lbtcAccumulation.targetUsd)} · ${lbtcAccumulation.allocationPct.toFixed(1)} % z úveru`
-                  : `Target buy: ${formatUsd(lbtcAccumulation.targetUsd)} · ${lbtcAccumulation.allocationPct.toFixed(1)} % of borrow`}
-              </p>
-              <p className="text-[10px] text-muted-foreground leading-snug">
-                {sk ? 'DEX / Pool' : 'DEX / Pool'}:{' '}
-                <span className="text-foreground font-medium">{lbtcAccumulation.dex.poolLabel}</span>
-                {' · '}
-                <a
-                  href={lbtcAccumulation.dex.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-violet-300 hover:underline"
-                >
-                  {lbtcAccumulation.dex.name}
-                </a>
-              </p>
-              <p className="text-[9px] text-muted-foreground">
-                {sk ? lbtcAccumulation.dex.reasonSk : lbtcAccumulation.dex.reasonEn}
-              </p>
+              {usdcSplit.safetyMode && (
+                <p className="text-[10px] text-amber-200/90 leading-snug">
+                  {sk
+                    ? 'LTV blízko max limitu — Yield a Rast vynulované, celý úver ide do Rezervy na zníženie dlhu.'
+                    : 'LTV near max cap — Yield and Growth zeroed; full borrow kept as Reserve for debt safety.'}
+                </p>
+              )}
               <p className="text-[9px] text-muted-foreground tabular-nums">
-                {sk ? 'Dostupný borrowing power' : 'Available borrowing power'}:{' '}
-                {lbtcAccumulation.availableBorrowingPowerUsd.toFixed(2)} USDC
+                {sk ? 'Pomer' : 'Split'}: {usdcSplit.ratios.reservePct.toFixed(1)}% / {usdcSplit.ratios.yieldPct.toFixed(1)}% / {usdcSplit.ratios.growthPct.toFixed(1)}%
                 {' · '}
-                {sk ? 'Projektované LTV' : 'Projected LTV'}: {lbtcAccumulation.projectedLtvPct.toFixed(1)}%
+                {sk ? 'Projektované LTV' : 'Projected LTV'}: {usdcSplit.projectedLtvPct.toFixed(1)}%
               </p>
-              {!hideCopyBoxes && lbtcAccumulation.targetUsd > 0 && (
+              {!hideCopyBoxes && usdcSplit.reserveUsd > 0 && (
                 <CyborgCommandLine
-                  prefix={sk ? 'Vložte/Swapnite:' : 'Deposit/Swap:'}
-                  amount={lbtcAccumulation.targetUsd}
-                  suffix="USDC → LBTC"
+                  prefix={sk ? 'Ponechať v USDC (Rezerva):' : 'Keep in USDC (Reserve):'}
+                  amount={usdcSplit.reserveUsd}
+                  suffix="USDC"
                   lang={lang}
                   decimals={2}
                   gray
-                  muted={lbtcPlanConfirmed}
+                  muted={lineMuted}
                 />
               )}
-              {lbtcAccumulation.lbtcQty > 0 && (
-                <p className="text-[9px] text-muted-foreground tabular-nums">
-                  ≈ {lbtcAccumulation.lbtcQty.toFixed(6)} LBTC
+              {!hideCopyBoxes && usdcSplit.yieldUsd > 0 && (
+                <CyborgCommandLine
+                  prefix={sk ? 'Vložiť do Vaultu (Výnos):' : 'Deposit to Vault (Yield):'}
+                  amount={usdcSplit.yieldUsd}
+                  suffix="USDC"
+                  lang={lang}
+                  decimals={2}
+                  gray
+                  muted={lineMuted}
+                />
+              )}
+              {!hideCopyBoxes && usdcSplit.growthUsd > 0 && (
+                <CyborgCommandLine
+                  prefix={sk ? 'Swapnúť na LBTC (Rast):' : 'Swap to LBTC (Growth):'}
+                  amount={usdcSplit.growthUsd}
+                  suffix="USDC"
+                  lang={lang}
+                  decimals={2}
+                  gray
+                  muted={lineMuted}
+                />
+              )}
+              {usdcSplit.yieldUsd > 0 && (
+                <p className="text-[9px] text-muted-foreground">
+                  {sk ? 'Yield vault' : 'Yield vault'}:{' '}
+                  <span className="text-foreground font-medium">{usdcSplit.yieldVault.venueLabel}</span>
                   {' · '}
-                  {sk ? 'USDC rezerva' : 'USDC reserve'}: {lbtcAccumulation.stableReserveUsd.toFixed(2)}
+                  <a
+                    href={usdcSplit.yieldVault.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-violet-300 hover:underline"
+                  >
+                    {usdcSplit.yieldVault.protocol}
+                  </a>
+                </p>
+              )}
+              {usdcSplit.growthUsd > 0 && (
+                <p className="text-[9px] text-muted-foreground">
+                  {sk ? 'LBTC DEX' : 'LBTC DEX'}:{' '}
+                  <span className="text-foreground font-medium">{usdcSplit.dex.poolLabel}</span>
+                  {' · '}
+                  ≈ {usdcSplit.lbtcQty.toFixed(6)} LBTC
                 </p>
               )}
               <p className="text-[9px] text-muted-foreground" title={lbtcYieldText}>
@@ -1055,17 +1063,19 @@ function TacticalLayerExecution({
   const collateralUsd = collateralQty * (assetPrice ?? 0);
   const safeBorrowUsdc = tacticalBorrowAtTargetLtv(copyCollateralQty, assetPrice, targetLtvPct);
   const planKey = planKeyForLayer(layer?.id ?? 'tactical');
-  const lbtcPlanKey = `${planKey}-lbtc`;
 
-  const lbtcAccumulation = useMemo(() => {
+  const usdcSplit = useMemo(() => {
     if (symbol !== 'ETH' || !showBorrowFlow) return null;
-    return buildLbtcAccumulationPlan({
+    return buildBorrowedUsdcSplitPlan({
       temperamentPct,
       collateralUsd: collateralQty * (assetPrice ?? 0),
       currentDebtUsd: usdcDebt ?? 0,
       proposedBorrowUsd: safeBorrowUsdc,
       maxLtvPct,
       btcPrice: btcPrice ?? 0,
+      yieldVaultProtocol: arbitrumWinner?.protocolName,
+      yieldVaultLabel: arbitrumWinner?.venueLabel,
+      yieldVaultUrl: arbitrumWinner?.sourceUrl,
     });
   }, [
     symbol,
@@ -1077,6 +1087,9 @@ function TacticalLayerExecution({
     safeBorrowUsdc,
     maxLtvPct,
     btcPrice,
+    arbitrumWinner?.protocolName,
+    arbitrumWinner?.venueLabel,
+    arbitrumWinner?.sourceUrl,
   ]);
 
   const exitAlert = useMemo(() => {
@@ -1114,7 +1127,7 @@ function TacticalLayerExecution({
   const planSummary = symbol === 'ETH' && arbitrumWinner
     ? [
         formatArbitrumPlanInstruction(arbitrumWinner, sk, arbitrumRouting),
-        lbtcAccumulation?.enabled ? formatLbtcAccumulationPlanLine(lbtcAccumulation, sk) : '',
+        usdcSplit?.enabled ? formatBorrowedUsdcSplitPlanLine(usdcSplit, sk) : '',
       ].filter(Boolean).join('\n')
     : symbol === 'SOL' && kaminoWinner
       ? formatKaminoPlanInstruction(kaminoWinner, sk, kaminoRouting, gasBufferLine)
@@ -1124,46 +1137,34 @@ function TacticalLayerExecution({
     const update: PortfolioBalanceUpdate = {};
     if (symbol === 'ETH') {
       update.rEthQty = collateralQty;
-      if (showBorrowFlow && !lbtcAccumulation?.enabled && projectedLbtcQty > 0) {
+      if (showBorrowFlow && usdcSplit?.enabled && !usdcSplit.blocked && usdcSplit.lbtcQty > 0) {
+        update.lbtcQty = usdcSplit.lbtcQty;
+      } else if (showBorrowFlow && !usdcSplit?.enabled && projectedLbtcQty > 0) {
         update.lbtcQty = projectedLbtcQty;
       }
     } else {
       update.mSolQty = collateralQty;
     }
-    if (safeBorrowUsdc > 0) update.usdcBorrowed = safeBorrowUsdc;
+    const borrowUsd = usdcSplit?.enabled && !usdcSplit.blocked
+      ? usdcSplit.totalBorrowUsd
+      : safeBorrowUsdc;
+    if (borrowUsd > 0) update.usdcBorrowed = borrowUsd;
     return update;
-  }, [symbol, collateralQty, safeBorrowUsdc, showBorrowFlow, projectedLbtcQty, lbtcAccumulation?.enabled]);
-
-  const buildLbtcPlanUpdate = useCallback((): PortfolioBalanceUpdate => {
-    if (!lbtcAccumulation?.enabled || lbtcAccumulation.blocked || lbtcAccumulation.lbtcQty <= 0) {
-      return {};
-    }
-    return { lbtcQty: lbtcAccumulation.lbtcQty };
-  }, [lbtcAccumulation]);
+  }, [symbol, collateralQty, safeBorrowUsdc, showBorrowFlow, projectedLbtcQty, usdcSplit]);
 
   const handleConfirmPlan = useCallback(() => {
     confirmExecutionStep(planKey, buildPlanUpdate(), buildDecisionMeta());
-    toast.success(sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated');
-  }, [confirmExecutionStep, planKey, buildPlanUpdate, buildDecisionMeta, sk]);
+    toast.success(
+      usdcSplit?.enabled && !usdcSplit.blocked
+        ? (sk ? 'Multicall potvrdený · Rezerva / Výnos / Rast' : 'Multicall confirmed · Reserve / Yield / Growth')
+        : (sk ? 'Exekúcia potvrdená · baseline aktualizovaný' : 'Execution confirmed · baseline updated'),
+    );
+  }, [confirmExecutionStep, planKey, buildPlanUpdate, buildDecisionMeta, sk, usdcSplit]);
 
   const handleRevertPlan = useCallback(() => {
     revertExecutionStep(planKey);
     toast.success(sk ? 'Exekúcia vrátená späť' : 'Execution reverted');
   }, [revertExecutionStep, planKey, sk]);
-
-  const lbtcPlanConfirmed = isExecutionConfirmed(lbtcPlanKey);
-
-  const handleConfirmLbtc = useCallback(() => {
-    const update = buildLbtcPlanUpdate();
-    if (!update.lbtcQty) return;
-    confirmExecutionStep(lbtcPlanKey, update, buildDecisionMeta());
-    toast.success(sk ? 'Nákup LBTC potvrdený' : 'LBTC purchase confirmed');
-  }, [buildLbtcPlanUpdate, confirmExecutionStep, lbtcPlanKey, buildDecisionMeta, sk]);
-
-  const handleRevertLbtc = useCallback(() => {
-    revertExecutionStep(lbtcPlanKey);
-    toast.success(sk ? 'Nákup LBTC vrátený späť' : 'LBTC purchase reverted');
-  }, [revertExecutionStep, lbtcPlanKey, sk]);
 
   return (
     <Collapsible
@@ -1214,11 +1215,7 @@ function TacticalLayerExecution({
           execDisabled={rebalanceLocked}
           planSummary={planSummary}
           copyCollateralQty={copyCollateralQty}
-          lbtcAccumulation={lbtcAccumulation}
-          lbtcPlanConfirmed={lbtcPlanConfirmed}
-          onConfirmLbtc={symbol === 'ETH' ? handleConfirmLbtc : undefined}
-          onRevertLbtc={symbol === 'ETH' ? handleRevertLbtc : undefined}
-          lbtcExecDisabled={rebalanceLocked}
+          usdcSplit={usdcSplit}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1762,9 +1759,8 @@ export function HcdStakePanel({ lang, marketScore }: Props) {
   const projectedLbtcUsd = projectedLbtcQty * btcPrice;
 
   const ethTacticalPlanKey = ethTacticalLayer ? planKeyForLayer(ethTacticalLayer.id) : '';
-  const ethLbtcPlanKey = ethTacticalPlanKey ? `${ethTacticalPlanKey}-lbtc` : '';
   const isLbtcSupplied = ethTacticalPlanKey
-    ? isExecutionConfirmed(ethTacticalPlanKey) || (ethLbtcPlanKey ? isExecutionConfirmed(ethLbtcPlanKey) : false)
+    ? isExecutionConfirmed(ethTacticalPlanKey)
     : false;
   const lbtcQtyHeld = portfolioData.lbtc?.qty ?? 0;
   const lbtcUsdHeld = portfolioData.lbtc?.usd ?? 0;
