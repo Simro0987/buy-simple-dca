@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowUpDown, ExternalLink, Info, Search, Sparkles, Zap, Clock, Ban, Pause, Play,
   ShieldAlert, ShieldCheck, AlertTriangle, Lock, Copy, Check, Wallet, EyeOff,
@@ -18,13 +18,33 @@ import {
 import { usePrices } from '@/hooks/usePrices';
 import { RefreshCw } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
-import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap } from '@/lib/pendingActions';
+import { getPendingRebalance, clearPendingRebalance, getPendingSwap, clearPendingSwap, type SwapAsset } from '@/lib/pendingActions';
 import { useCockpitMode } from '@/lib/cockpitMode';
 import { useStablesByNetwork, type StableChain } from '@/hooks/useStablesByNetwork';
 import { loadTrackedAddresses } from '@/contexts/WalletContext';
 import { Plane } from 'lucide-react';
 
 interface Props { lang: Lang; }
+
+function swapAssetTokenMeta(asset: SwapAsset, leg: 'from' | 'to'): TokenMeta | undefined {
+  const chainByAsset: Record<SwapAsset, ChainId> = {
+    BTC: 'bitcoin',
+    ETH: leg === 'from' ? 'ethereum' : 'arbitrum',
+    SOL: 'solana',
+    USDC: 'arbitrum',
+    USDT: 'arbitrum',
+  };
+  const symbolByAsset: Record<SwapAsset, string> = {
+    BTC: 'BTC',
+    ETH: 'ETH',
+    SOL: 'SOL',
+    USDC: 'USDC',
+    USDT: 'USDT',
+  };
+  const chain = chainByAsset[asset];
+  const symbol = symbolByAsset[asset];
+  return TOKENS.find(t => t.chain === chain && t.symbol === symbol);
+}
 
 function PendingRebalanceBanner({ lang }: { lang: Lang }) {
   const sk = lang === 'sk';
@@ -342,6 +362,32 @@ export function SwapPage({ lang }: Props) {
   const [copied, setCopied] = useState(false);
   const [cockpit, setCockpit] = useCockpitMode();
   const stables = useStablesByNetwork();
+  const lastAppliedSwapTs = useRef(0);
+
+  const applyPendingSwap = useCallback(() => {
+    const pending = getPendingSwap();
+    if (!pending || pending.amountUsd <= 0 || pending.ts <= lastAppliedSwapTs.current) return;
+    const fromToken = swapAssetTokenMeta(pending.from, 'from');
+    const toToken = swapAssetTokenMeta(pending.to, 'to');
+    if (!fromToken || !toToken) return;
+    lastAppliedSwapTs.current = pending.ts;
+    setFrom(fromToken);
+    setTo(toToken);
+    setOrderType('market');
+    const unitUsd = tokenUsdPrice(fromToken, prices);
+    if (unitUsd > 0) {
+      const qty = pending.amountUsd / unitUsd;
+      const precision = fromToken.decimals > 6 ? 8 : fromToken.decimals > 2 ? 6 : 4;
+      setAmountStr(qty.toFixed(precision));
+    }
+  }, [prices]);
+
+  useEffect(() => {
+    applyPendingSwap();
+    const onPendingSwap = () => applyPendingSwap();
+    window.addEventListener('pending-swap-updated', onPendingSwap);
+    return () => window.removeEventListener('pending-swap-updated', onPendingSwap);
+  }, [applyPendingSwap]);
 
   // Filters
   const [filters, setFilters] = useState<QuoteFilters>({});

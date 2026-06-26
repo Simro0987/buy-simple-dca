@@ -188,6 +188,7 @@ export function YieldEngineChecklist({
         contractHint={sk ? plan.holdCash.reasonSk : plan.holdCash.reasonEn}
         confirmed={isConfirmed('hold_cash')}
         disabled={execDisabled || !batchGasOk}
+        balanceCheck={false}
         onConfirm={() => onConfirm('hold_cash', {})}
         onRevert={() => onRevert('hold_cash')}
       />

@@ -5,6 +5,11 @@ import { Button } from '@/components/ui/button';
 import { Lang } from '@/lib/i18n';
 import { formatUsd } from '@/lib/crypto';
 import { formatAtomicCopyText } from '@/lib/atomicActionPlan';
+import { useSmartActionValidation } from '@/hooks/useSmartActionValidation';
+import {
+  PortfolioBalanceStatusRow,
+  SmartValidationSolution,
+} from '@/components/staking/SmartValidationLayer';
 
 export interface AtomicActionBlockProps {
   lang: Lang;
@@ -19,6 +24,8 @@ export interface AtomicActionBlockProps {
   disabled?: boolean;
   onConfirm: () => void;
   onRevert: () => void;
+  /** When false, skips spend-balance validation (e.g. borrow actions). */
+  balanceCheck?: boolean;
 }
 
 export function AtomicActionBlock({
@@ -34,15 +41,21 @@ export function AtomicActionBlock({
   disabled,
   onConfirm,
   onRevert,
+  balanceCheck = true,
 }: AtomicActionBlockProps) {
   const sk = lang === 'sk';
   const [copied, setCopied] = useState(false);
   const safeAmount = Number.isFinite(tokenAmount) ? tokenAmount : 0;
   const safeUsd = Number.isFinite(usdAmount) ? usdAmount : 0;
-  const inactive = disabled || safeAmount <= 0;
+  const validation = useSmartActionValidation(tokenSymbol, safeAmount, {
+    skip: !balanceCheck || confirmed,
+    usdAmount: safeUsd,
+  });
+  const insufficient = balanceCheck && !validation.sufficient && safeAmount > 0;
+  const inactive = disabled || safeAmount <= 0 || insufficient;
 
   const handleCopy = useCallback(async () => {
-    if (inactive) return;
+    if (safeAmount <= 0) return;
     const text = formatAtomicCopyText(safeAmount, tokenSymbol, safeUsd, decimals);
     try {
       await navigator.clipboard.writeText(text);
@@ -52,7 +65,7 @@ export function AtomicActionBlock({
     } catch {
       toast.error(sk ? 'Kopírovanie zlyhalo' : 'Copy failed');
     }
-  }, [inactive, safeAmount, tokenSymbol, safeUsd, decimals, sk]);
+  }, [safeAmount, tokenSymbol, safeUsd, decimals, sk]);
 
   const handleConfirm = useCallback(() => {
     if (inactive || confirmed) return;
@@ -67,9 +80,19 @@ export function AtomicActionBlock({
       className={`rounded-lg border p-2.5 space-y-2 transition-colors ${
         confirmed
           ? 'border-emerald-500/50 bg-emerald-500/5'
+          : insufficient
+            ? 'border-orange-500/40 bg-orange-500/5'
           : 'border-border/50 bg-muted/20'
       }`}
     >
+      <PortfolioBalanceStatusRow
+        lang={lang}
+        tokenSymbol={tokenSymbol}
+        validation={validation}
+        decimals={decimals}
+        skip={!balanceCheck}
+      />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 min-w-0">
           {confirmed ? (
@@ -97,7 +120,7 @@ export function AtomicActionBlock({
           >
             {sk ? 'Potvrdené' : 'Confirmed'}
           </Button>
-        ) : (
+        ) : insufficient ? null : (
           <Button
             type="button"
             size="sm"
@@ -111,13 +134,22 @@ export function AtomicActionBlock({
         )}
       </div>
 
+      {insufficient && !confirmed && (
+        <SmartValidationSolution
+          lang={lang}
+          tokenSymbol={tokenSymbol}
+          validation={validation}
+          decimals={decimals}
+        />
+      )}
+
       <div className="rounded-lg border border-border/50 bg-muted/30 px-3 py-2.5">
         <div className="flex flex-wrap items-center gap-2 text-[11px] font-mono font-semibold tabular-nums text-foreground">
           <span>{safeAmount.toFixed(decimals)} {tokenSymbol}</span>
           <span className="text-muted-foreground font-normal">· {formatUsd(safeUsd)}</span>
           <button
             type="button"
-            disabled={inactive}
+            disabled={safeAmount <= 0}
             onClick={() => void handleCopy()}
             title={copied ? (sk ? 'Skopírované!' : 'Copied!') : (sk ? 'Kopírovať sumu' : 'Copy amount')}
             className={`inline-flex items-center justify-center rounded p-0.5 transition-colors touch-manipulation disabled:opacity-40 ${

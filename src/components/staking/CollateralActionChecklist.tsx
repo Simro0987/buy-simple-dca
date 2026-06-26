@@ -139,6 +139,7 @@ export function CollateralActionChecklist({
           contractHint={snapshot.recommendedVenue}
           confirmed={isConfirmed('borrow')}
           disabled={execDisabled}
+          balanceCheck={false}
           onConfirm={() => onConfirm('borrow', { usdcBorrowed: safeBorrowUsdc })}
           onRevert={() => onRevert('borrow')}
         />

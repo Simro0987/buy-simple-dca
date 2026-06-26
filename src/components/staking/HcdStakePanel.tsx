@@ -9,7 +9,11 @@ import { usePortfolio, type DecisionConfirmMeta, type PortfolioBalanceUpdate } f
 import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
-import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
+import {
+  PortfolioBalanceStatusRow,
+  SmartValidationSolution,
+} from '@/components/staking/SmartValidationLayer';
+import { useSmartActionValidation } from '@/hooks/useSmartActionValidation';
 import {
   CollateralActionChecklist,
   isCollateralPlanComplete,
@@ -220,6 +224,11 @@ function ManualPlanConfirm({
   onConfirm,
   onRevert,
   confirmLabel,
+  tokenSymbol,
+  requiredAmount = 0,
+  usdAmount,
+  decimals = 4,
+  balanceCheck = false,
 }: {
   lang: Lang;
   confirmed: boolean;
@@ -227,8 +236,19 @@ function ManualPlanConfirm({
   onConfirm: () => void;
   onRevert: () => void;
   confirmLabel?: string;
+  tokenSymbol?: string;
+  requiredAmount?: number;
+  usdAmount?: number;
+  decimals?: number;
+  balanceCheck?: boolean;
 }) {
   const sk = lang === 'sk';
+  const validation = useSmartActionValidation(tokenSymbol ?? 'ETH', requiredAmount, {
+    skip: !balanceCheck || confirmed || !tokenSymbol,
+    usdAmount,
+  });
+  const insufficient = balanceCheck && Boolean(tokenSymbol) && !validation.sufficient && requiredAmount > 0;
+  const confirmDisabled = disabled || insufficient;
 
   if (confirmed) {
     return (
@@ -246,15 +266,34 @@ function ManualPlanConfirm({
   }
 
   return (
-    <Button
-      type="button"
-      size="sm"
-      onClick={onConfirm}
-      disabled={disabled}
-      className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white"
-    >
-      {confirmLabel ?? (sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution')}
-    </Button>
+    <div className="flex flex-col items-stretch gap-2 shrink-0 min-w-[140px]">
+      {balanceCheck && tokenSymbol && requiredAmount > 0 && (
+        <PortfolioBalanceStatusRow
+          lang={lang}
+          tokenSymbol={tokenSymbol}
+          validation={validation}
+          decimals={decimals}
+        />
+      )}
+      {insufficient && tokenSymbol ? (
+        <SmartValidationSolution
+          lang={lang}
+          tokenSymbol={tokenSymbol}
+          validation={validation}
+          decimals={decimals}
+        />
+      ) : (
+        <Button
+          type="button"
+          size="sm"
+          onClick={onConfirm}
+          disabled={confirmDisabled}
+          className="h-8 text-[10px] font-semibold touch-manipulation bg-violet-600 hover:bg-violet-500 text-white"
+        >
+          {confirmLabel ?? (sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution')}
+        </Button>
+      )}
+    </div>
   );
 }
 
@@ -430,6 +469,11 @@ function CyborgActionPlan({
             disabled={execDisabled}
             onConfirm={onConfirmPlan}
             onRevert={onRevertPlan}
+            tokenSymbol={collateralLabel}
+            requiredAmount={copyQty}
+            usdAmount={copyQty * (collateralUsd / Math.max(collateralQty, 1e-9))}
+            decimals={collateralDecimals}
+            balanceCheck={!supplyOnlyMode && copyQty > 0}
           />
         )}
       </div>
@@ -830,6 +874,11 @@ function CoreCyborgActionPlan({
           disabled={execDisabled}
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
+          tokenSymbol={stakeLabel}
+          requiredAmount={copyQty}
+          usdAmount={copyQty * (stakeUsd / Math.max(stakeQty, 1e-9))}
+          decimals={stakeDecimals}
+          balanceCheck={copyQty > 0}
         />
       </div>
 

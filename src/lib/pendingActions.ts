@@ -15,12 +15,15 @@ export type PendingSwap = {
   from: SwapAsset;
   to: SwapAsset;
   amountUsd: number;
-  source: 'analysis' | 'rebalance' | 'manual' | 'unstake';
+  source: 'analysis' | 'rebalance' | 'manual' | 'unstake' | 'action-plan';
   reason?: string;
 };
 
 export function setPendingSwap(p: PendingSwap): void {
-  try { sessionStorage.setItem(SWAP_KEY, JSON.stringify({ ...p, ts: Date.now() })); } catch { /* ignore */ }
+  try {
+    sessionStorage.setItem(SWAP_KEY, JSON.stringify({ ...p, ts: Date.now() }));
+    window.dispatchEvent(new CustomEvent('pending-swap-updated'));
+  } catch { /* ignore */ }
 }
 
 export function getPendingSwap(): (PendingSwap & { ts: number }) | null {
