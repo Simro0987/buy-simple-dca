@@ -9,6 +9,7 @@ import {
 import type { PortfolioBalanceUpdate } from '@/contexts/PortfolioContext';
 import type { YieldEngineActionId } from '@/lib/atomicActionPlan';
 import { yieldEngineActionKey } from '@/lib/atomicActionPlan';
+import { PositionOverviewPanel } from '@/components/staking/PositionOverviewPanel';
 
 export const GLOBAL_YIELD_ENGINE_SECTION_ID = 'global-yield-engine';
 
@@ -59,6 +60,7 @@ export function GlobalYieldEngine({
       <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-200">
         {sk ? 'Globálna optimalizácia borrow kapitálu' : 'Cross-network borrowed capital optimization'}
       </p>
+      <PositionOverviewPanel lang={lang} mode="yield" symbol="ETH" />
       <YieldEngineChecklist {...checklistProps} />
     </section>
   );

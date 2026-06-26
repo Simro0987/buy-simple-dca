@@ -10,6 +10,8 @@ import { useStakingSplitApys } from '@/contexts/StakingApyContext';
 import { useHcdIndicators } from '@/hooks/useHcdIndicators';
 import { useCyborgMarketData } from '@/hooks/useCyborgTerminalData';
 import { CopyAmountButton } from '@/components/staking/CopyAmountButton';
+import { PositionOverviewPanel } from '@/components/staking/PositionOverviewPanel';
+import type { PositionOverviewMode } from '@/lib/positionOverview';
 import {
   CollateralActionChecklist,
   isCollateralPlanComplete,
@@ -339,6 +341,11 @@ function CyborgActionPlan({
   collateralHandlers,
   onManageGlobalYield,
   showManageGlobalYield = false,
+  positionMode,
+  positionSymbol,
+  positionTokenLabel,
+  positionCollateralQty,
+  positionUsdcDebt,
 }: {
   sk: boolean;
   layerPct: number;
@@ -380,6 +387,11 @@ function CyborgActionPlan({
   };
   onManageGlobalYield?: () => void;
   showManageGlobalYield?: boolean;
+  positionMode?: PositionOverviewMode;
+  positionSymbol?: 'ETH' | 'SOL';
+  positionTokenLabel?: string;
+  positionCollateralQty?: number;
+  positionUsdcDebt?: number;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -416,6 +428,18 @@ function CyborgActionPlan({
           </span>
         )}
       </p>
+
+      {positionMode && positionSymbol && (
+        <PositionOverviewPanel
+          lang={lang}
+          mode={positionMode}
+          symbol={positionSymbol}
+          tokenLabel={positionTokenLabel ?? collateralLabel}
+          collateralQty={positionCollateralQty ?? collateralSnapshot?.deployedQty}
+          usdcDebt={positionUsdcDebt}
+          decimals={collateralDecimals}
+        />
+      )}
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CyborgRoutingMeta
@@ -601,6 +625,12 @@ function TakeProfitCyborgActionPlan({
         )}
       </p>
 
+      <PositionOverviewPanel
+        lang={lang}
+        mode="gas"
+        symbol={symbol}
+      />
+
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CyborgRoutingMeta
           token="USDC"
@@ -767,6 +797,7 @@ function CoreCyborgActionPlan({
   onRevertPlan,
   execDisabled,
   copyStakeQty,
+  positionSymbol,
 }: {
   sk: boolean;
   lang: Lang;
@@ -782,6 +813,7 @@ function CoreCyborgActionPlan({
   onRevertPlan: () => void;
   execDisabled: boolean;
   copyStakeQty?: number;
+  positionSymbol: 'ETH' | 'SOL';
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -817,6 +849,14 @@ function CoreCyborgActionPlan({
           </span>
         )}
       </p>
+
+      <PositionOverviewPanel
+        lang={lang}
+        mode="staking"
+        symbol={positionSymbol}
+        tokenLabel={stakeLabel}
+        decimals={stakeDecimals}
+      />
 
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <CyborgRoutingMeta
@@ -945,6 +985,7 @@ function CoreLayerExecution({
           onRevertPlan={handleRevertPlan}
           execDisabled={rebalanceLocked}
           copyStakeQty={copyStakeQty}
+          positionSymbol={symbol}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1234,6 +1275,11 @@ function TacticalLayerExecution({
           } : undefined}
           onManageGlobalYield={onManageGlobalYield}
           showManageGlobalYield={hasActiveBorrow && Boolean(onManageGlobalYield)}
+          positionMode="lending"
+          positionSymbol={symbol}
+          positionTokenLabel={motorLabel}
+          positionCollateralQty={deployedCollateralQty}
+          positionUsdcDebt={usdcDebt}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1346,6 +1392,10 @@ function AlchemixLayerExecution({
           planSummary={planSummary}
           hideCopyBoxes={alchemixLocked}
           copyCollateralQty={alchemixLocked ? 0 : (copyQtyOverride ?? computeDeltaQty(targetQty, deployedAlchemixQty))}
+          positionMode="alchemix"
+          positionSymbol="ETH"
+          positionTokenLabel="ETH"
+          positionCollateralQty={deployedAlchemixQty}
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}
