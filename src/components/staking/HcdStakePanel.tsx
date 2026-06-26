@@ -963,7 +963,7 @@ function TacticalLayerExecution({
   ]);
   const planConfirmed = isExecutionConfirmed(planKey);
   const routing = symbol === 'ETH' && arbitrumWinner
-    ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.name }
+    ? { token: arbitrumWinner.collateralToken, network: arbitrumWinner.network, protocol: arbitrumWinner.protocolName }
     : symbol === 'ETH'
       ? { token: 'wETH', network: 'Arbitrum', protocol: 'Morpho' }
       : { token: 'mSOL', network: 'Solana', protocol: 'Kamino' };

@@ -65,8 +65,12 @@ export async function fetchHcdIndicators(): Promise<HcdBorrowRates> {
 
   if (routingSettled.status === 'fulfilled') {
     arbitrumRouting = routingSettled.value;
-    if (!arbitrumRouting.morpho) unavailable.push('Morpho (Arbitrum)');
-    if (!arbitrumRouting.aave) unavailable.push('Aave V3 (Arbitrum)');
+    if (!arbitrumRouting.winner && (arbitrumRouting.candidates?.length ?? 0) === 0) {
+      unavailable.push('Morpho (Arbitrum)', 'Aave V3 (Arbitrum)');
+    } else {
+      if (!arbitrumRouting.morpho) unavailable.push('Morpho (Arbitrum)');
+      if (!arbitrumRouting.aave) unavailable.push('Aave V3 (Arbitrum)');
+    }
   } else {
     unavailable.push('Morpho (Arbitrum)', 'Aave V3 (Arbitrum)');
   }

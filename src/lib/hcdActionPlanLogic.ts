@@ -1,4 +1,17 @@
-import type { ArbitrumProtocolQuote, ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
+import {
+  buildCollateralCandidate,
+  formatCollateralDecisionReason,
+  formatCollateralPlanInstruction,
+  selectBestCollateralCandidate,
+  type ArbitrumCollateralCandidate,
+} from '@/lib/arbitrumCollateralScoring';
+import type { ArbitrumRoutingSnapshot } from '@/lib/arbitrumProtocolRouting';
+import {
+  AAVE_ARBITRUM_V3_URL,
+  ARBITRUM_WEETH,
+  ARBITRUM_WSTETH,
+  MORPHO_ARBITRUM_VAULTS_URL,
+} from '@/lib/arbitrumProtocolRouting';
 import {
   getHcdLtvMax,
   type HcdIndicators,
@@ -7,30 +20,35 @@ import {
 import { EXIT_ALCHEMIX_APY_FLOOR } from '@/lib/hcdExitStrategy';
 import type { StakedEntry } from '@/lib/stakingLedger';
 
-/** Fallback caps when live Morpho/Aave feeds are unavailable. */
-const FALLBACK_AAVE_QUOTE: ArbitrumProtocolQuote = {
-  id: 'aave',
-  name: 'Aave V3',
-  sourceUrl: 'https://app.aave.com/?marketName=proto_arbitrum_v3',
+const FALLBACK_WINNER = buildCollateralCandidate({
+  protocolId: 'morpho',
+  protocolName: 'Morpho',
+  sourceUrl: MORPHO_ARBITRUM_VAULTS_URL,
+  collateralToken: 'weETH',
+  collateralAddress: ARBITRUM_WEETH,
+  maxLtvPct: 86,
+  supplyApyPct: 2.4,
+  baseYieldPct: 4.38,
+  usdcBorrowApyPct: 3.3,
+});
+
+const FALLBACK_RUNNER_UP = buildCollateralCandidate({
+  protocolId: 'aave',
+  protocolName: 'Aave V3',
+  sourceUrl: AAVE_ARBITRUM_V3_URL,
   collateralToken: 'wstETH',
-  collateralAddress: '0x5979D7b546E38E414F7E9822514be443A4800529',
-  loanSymbol: 'USDC',
+  collateralAddress: ARBITRUM_WSTETH,
+  maxLtvPct: 75,
+  supplyApyPct: 0,
+  baseYieldPct: 3.4,
   usdcBorrowApyPct: 5.5,
-  maxCollateralLtvPct: 75,
-};
+});
 
-const FALLBACK_MORPHO_QUOTE: ArbitrumProtocolQuote = {
-  id: 'morpho',
-  name: 'Morpho',
-  sourceUrl: 'https://app.morpho.org/vaults?chains=42161',
-  collateralToken: 'wETH',
-  collateralAddress: '0x82aF49447D8a07e3bd95BD0d56f35241523fBab1',
-  loanSymbol: 'USDC',
-  usdcBorrowApyPct: 5.0,
-  maxCollateralLtvPct: 86,
+export type ArbitrumTacticalWinner = ArbitrumCollateralCandidate & {
+  network: 'Arbitrum';
+  decisionReasonSk: string;
+  decisionReasonEn: string;
 };
-
-export type ArbitrumTacticalWinner = ArbitrumProtocolQuote & { network: 'Arbitrum' };
 
 export interface ActionPlanLtvCaps {
   targetLtvPct: number;
@@ -56,33 +74,22 @@ export function getActionPlanLtvCaps(
   return { targetLtvPct, maxLtvPct };
 }
 
-function scoreArbitrumOption(borrowApyPct: number, maxLtvPct: number): number {
-  // Lower USDC borrow APY wins; tie-break with higher collateral LTV.
-  return -borrowApyPct + maxLtvPct / 100;
-}
-
-function toWinner(quote: ArbitrumProtocolQuote): ArbitrumTacticalWinner {
-  return { ...quote, network: 'Arbitrum' };
-}
-
-function resolveArbitrumQuotes(snapshot?: ArbitrumRoutingSnapshot | null): {
-  aave: ArbitrumProtocolQuote;
-  morpho: ArbitrumProtocolQuote;
-} {
+function toTacticalWinner(candidate: ArbitrumCollateralCandidate): ArbitrumTacticalWinner {
   return {
-    aave: snapshot?.aave ?? FALLBACK_AAVE_QUOTE,
-    morpho: snapshot?.morpho ?? FALLBACK_MORPHO_QUOTE,
+    ...candidate,
+    network: 'Arbitrum',
+    decisionReasonSk: formatCollateralDecisionReason(candidate, true),
+    decisionReasonEn: formatCollateralDecisionReason(candidate, false),
   };
 }
 
-/** Pick Aave V3 vs Morpho on Arbitrum — lowest USDC borrow APY, tie-break higher collateral LTV. */
+/** Pick best (token + protocol) from scored Arbitrum routing snapshot. */
 export function selectArbitrumTacticalWinner(
   routing?: ArbitrumRoutingSnapshot | null,
 ): ArbitrumTacticalWinner {
-  const { aave, morpho } = resolveArbitrumQuotes(routing);
-  const aaveScore = scoreArbitrumOption(aave.usdcBorrowApyPct, aave.maxCollateralLtvPct);
-  const morphoScore = scoreArbitrumOption(morpho.usdcBorrowApyPct, morpho.maxCollateralLtvPct);
-  return toWinner(morphoScore >= aaveScore ? morpho : aave);
+  const winner = routing?.winner ?? selectBestCollateralCandidate(routing?.candidates);
+  if (winner) return toTacticalWinner(winner);
+  return toTacticalWinner(FALLBACK_WINNER);
 }
 
 export function formatArbitrumPlanInstruction(
@@ -90,15 +97,18 @@ export function formatArbitrumPlanInstruction(
   sk: boolean,
   routing?: ArbitrumRoutingSnapshot | null,
 ): string {
-  const { aave, morpho } = resolveArbitrumQuotes(routing);
-  const loser = winner.id === 'morpho' ? aave : morpho;
-  const routeLine = sk
-    ? `Presun: ETH -> ${winner.collateralToken} | Protokol: ${winner.name} (Arbitrum) | Borrow: USDC`
-    : `Route: ETH -> ${winner.collateralToken} | Protocol: ${winner.name} (Arbitrum) | Borrow: USDC`;
+  const primary = formatCollateralPlanInstruction(winner, sk);
+  const runnerUp = selectBestCollateralCandidate(
+    (routing?.candidates ?? [FALLBACK_WINNER, FALLBACK_RUNNER_UP]).filter(
+      c => !(c.protocolId === winner.protocolId && c.collateralToken === winner.collateralToken),
+    ),
+  );
+  if (!runnerUp) return primary;
+
   const compareLine = sk
-    ? `Porovnanie: ${winner.name} ${winner.usdcBorrowApyPct.toFixed(2)}% / LTV ${winner.maxCollateralLtvPct}% vs ${loser.name} ${loser.usdcBorrowApyPct.toFixed(2)}% / LTV ${loser.maxCollateralLtvPct}%`
-    : `Compare: ${winner.name} ${winner.usdcBorrowApyPct.toFixed(2)}% / LTV ${winner.maxCollateralLtvPct}% vs ${loser.name} ${loser.usdcBorrowApyPct.toFixed(2)}% / LTV ${loser.maxCollateralLtvPct}%`;
-  return `${routeLine} · ${compareLine}`;
+    ? `Porovnanie: ${winner.collateralToken}/${winner.protocolName} skóre ${winner.combinedScore.toFixed(1)} (LTV ${winner.maxLtvPct}%) vs ${runnerUp.collateralToken}/${runnerUp.protocolName} ${runnerUp.combinedScore.toFixed(1)} (LTV ${runnerUp.maxLtvPct}%)`
+    : `Compare: ${winner.collateralToken}/${winner.protocolName} score ${winner.combinedScore.toFixed(1)} (LTV ${winner.maxLtvPct}%) vs ${runnerUp.collateralToken}/${runnerUp.protocolName} ${runnerUp.combinedScore.toFixed(1)} (LTV ${runnerUp.maxLtvPct}%)`;
+  return `${primary} · ${compareLine}`;
 }
 
 export function isAlchemixLayerUnsuitable(
