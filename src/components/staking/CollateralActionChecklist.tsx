@@ -37,6 +37,7 @@ export interface CollateralActionChecklistProps {
   onManageGlobalYield?: () => void;
   showManageGlobalYield?: boolean;
   usdcDebt?: number;
+  tokenSymbol?: string;
 }
 
 export function CollateralActionChecklist({
@@ -60,6 +61,7 @@ export function CollateralActionChecklist({
   onManageGlobalYield,
   showManageGlobalYield = false,
   usdcDebt,
+  tokenSymbol,
 }: CollateralActionChecklistProps) {
   const { portfolioData } = usePortfolio();
 
@@ -195,7 +197,7 @@ export function CollateralActionChecklist({
           >
             {sk ? `Potvrdiť všetko (${pendingCount})` : `Confirm all (${pendingCount})`}
           </Button>
-          <LogicPanel action="collateral" lang={lang} />
+          <LogicPanel action="collateral" tokenSymbol={tokenSymbol ?? collateralLabel} lang={lang} />
         </div>
       )}
 

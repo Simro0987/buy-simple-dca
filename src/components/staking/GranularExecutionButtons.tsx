@@ -14,10 +14,11 @@ interface Props {
   onConfirm: () => void;
   onRevert?: () => void;
   reasonAction?: CyborgReasonAction;
+  tokenSymbol?: string;
 }
 
 export function GranularExecutionButtons({
-  lang, value, decimals, confirmed, disabled, onConfirm, onRevert, reasonAction = 'stake_split',
+  lang, value, decimals, confirmed, disabled, onConfirm, onRevert, reasonAction = 'stake_split', tokenSymbol,
 }: Props) {
   const sk = lang === 'sk';
 
@@ -57,7 +58,7 @@ export function GranularExecutionButtons({
         )}
       </div>
       {!confirmed && reasonAction && (
-        <LogicPanel action={reasonAction} lang={lang} className="w-[min(100%,220px)]" />
+        <LogicPanel action={reasonAction} tokenSymbol={tokenSymbol} lang={lang} className="w-[min(100%,220px)]" />
       )}
     </div>
   );

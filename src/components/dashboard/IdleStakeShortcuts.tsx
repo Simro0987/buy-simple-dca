@@ -482,6 +482,7 @@ function DynamicSplitPanel({
                       confirmed={confirmed}
                       disabled={locked || subQty <= 0}
                       reasonAction={symbol === 'ETH' ? 'stake_eth' : symbol === 'SOL' ? 'stake_sol' : 'stake_btc'}
+                      tokenSymbol={symbol}
                       onConfirm={() => {
                         confirmExecutionStep(stepKey, buildUpdate(t, subQty));
                         toast.success(sk ? 'Portfólio aktualizované!' : 'Portfolio updated!');

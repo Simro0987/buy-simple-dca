@@ -228,6 +228,7 @@ function ManualPlanConfirm({
   onRevert,
   confirmLabel,
   reasonAction,
+  tokenSymbol,
 }: {
   lang: Lang;
   confirmed: boolean;
@@ -236,6 +237,7 @@ function ManualPlanConfirm({
   onRevert: () => void;
   confirmLabel?: string;
   reasonAction?: CyborgReasonAction;
+  tokenSymbol?: string;
 }) {
   const sk = lang === 'sk';
 
@@ -265,7 +267,9 @@ function ManualPlanConfirm({
       >
         {confirmLabel ?? (sk ? '✅ Potvrdiť exekúciu' : '✅ Confirm execution')}
       </Button>
-      {reasonAction && <LogicPanel action={reasonAction} lang={lang} className="w-full" />}
+      {reasonAction && (
+        <LogicPanel action={reasonAction} tokenSymbol={tokenSymbol} lang={lang} className="w-full" />
+      )}
     </div>
   );
 }
@@ -356,6 +360,7 @@ function CyborgActionPlan({
   positionTokenLabel,
   positionUsdcDebt,
   reasonAction = 'collateral',
+  tokenSymbol,
 }: {
   sk: boolean;
   layerPct: number;
@@ -402,6 +407,7 @@ function CyborgActionPlan({
   positionTokenLabel?: string;
   positionUsdcDebt?: number;
   reasonAction?: CyborgReasonAction;
+  tokenSymbol?: string;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -486,6 +492,7 @@ function CyborgActionPlan({
             onConfirm={onConfirmPlan}
             onRevert={onRevertPlan}
             reasonAction={reasonAction}
+            tokenSymbol={tokenSymbol ?? positionSymbol ?? collateralLabel}
           />
         )}
       </div>
@@ -564,6 +571,7 @@ function CyborgActionPlan({
           onManageGlobalYield={onManageGlobalYield}
           showManageGlobalYield={showManageGlobalYield}
           usdcDebt={positionUsdcDebt}
+          tokenSymbol={tokenSymbol ?? positionSymbol ?? collateralLabel}
         />
       )}
 
@@ -686,6 +694,7 @@ function TakeProfitCyborgActionPlan({
           onRevert={onRevertPlan}
           confirmLabel={confirmLabel}
           reasonAction="take_profit"
+          tokenSymbol={symbol}
         />
       </div>
 
@@ -841,6 +850,7 @@ function CoreCyborgActionPlan({
   copyStakeQty,
   positionSymbol,
   reasonAction,
+  tokenSymbol,
 }: {
   sk: boolean;
   lang: Lang;
@@ -858,6 +868,7 @@ function CoreCyborgActionPlan({
   copyStakeQty?: number;
   positionSymbol: 'ETH' | 'SOL';
   reasonAction: CyborgReasonAction;
+  tokenSymbol: string;
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -920,6 +931,7 @@ function CoreCyborgActionPlan({
           onConfirm={onConfirmPlan}
           onRevert={onRevertPlan}
           reasonAction={reasonAction}
+          tokenSymbol={tokenSymbol}
         />
       </div>
 
@@ -1045,6 +1057,7 @@ function CoreLayerExecution({
           copyStakeQty={copyStakeQty}
           positionSymbol={symbol}
           reasonAction={symbol === 'ETH' ? 'stake_eth' : 'stake_sol'}
+          tokenSymbol={symbol}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1340,6 +1353,7 @@ function TacticalLayerExecution({
           positionTokenLabel={motorLabel}
           positionUsdcDebt={usdcDebt}
           reasonAction="collateral"
+          tokenSymbol={symbol}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1456,6 +1470,7 @@ function AlchemixLayerExecution({
           positionSymbol="ETH"
           positionTokenLabel="ETH"
           reasonAction="stake_eth"
+          tokenSymbol="ETH"
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}

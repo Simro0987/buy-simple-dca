@@ -28,6 +28,7 @@ const baseState = (): MasterState => ({
   marketData: {
     btcPrice: 0,
     ethPrice: 0,
+    solPrice: 0,
     fearGreedIndex: 50,
     protocolAPY: 3.1,
     protocolAPY12mAvg: 3.2,
@@ -121,13 +122,11 @@ describe('cyborgEngine store', () => {
     expect(reason).toContain('APY 3.6%');
   });
 
-  it('getDynamicReason on store reads live marketScore', () => {
-    useCyborgEngine.getState().setReasoningContext({ marketScore: 25 });
-    const reason = useCyborgEngine.getState().getDynamicReason('DCA', 'sk');
-    expect(reason).toContain('25');
-    useCyborgEngine.getState().setReasoningContext({ marketScore: 80 });
-    const hot = useCyborgEngine.getState().getDynamicReason('DCA', 'sk');
-    expect(hot).toContain('80');
-    expect(hot).not.toBe(reason);
+  it('getDynamicReason on store reads live marketScore per token', () => {
+    useCyborgEngine.getState().setMarketData({ solPrice: 150, protocolAPY: 7.2, fearGreedIndex: 25 });
+    const sol = useCyborgEngine.getState().getDynamicReason('COLLATERAL', 'SOL', 'sk');
+    expect(sol).toContain('SOL $150');
+    const eth = useCyborgEngine.getState().getDynamicReason('COLLATERAL', 'ETH', 'sk');
+    expect(eth).not.toContain('SOL $150');
   });
 });

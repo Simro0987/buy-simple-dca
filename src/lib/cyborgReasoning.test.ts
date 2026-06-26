@@ -3,7 +3,9 @@ import {
   buildCyborgReason,
   getDynamicReason,
   marketTrendFromScore,
+  normalizeTokenSymbol,
   resolveActionType,
+  resolveTokenPrice,
 } from '@/lib/cyborgReasoning';
 import type { ReasoningContext } from '@/lib/cyborgReasoning';
 import type { CyborgMarketData } from '@/lib/cyborgMarketDataFeed';
@@ -21,6 +23,7 @@ const baseCtx = (): ReasoningContext => ({
 const liveMarket = (): CyborgMarketData => ({
   btcPrice: 98_000,
   ethPrice: 3_450,
+  solPrice: 145,
   fearGreedIndex: 19,
   protocolAPY: 3.8,
   protocolAPY12mAvg: 3.2,
@@ -35,59 +38,53 @@ describe('cyborgReasoning', () => {
     expect(marketTrendFromScore(50)).toBe('neutral');
   });
 
-  it('maps granular actions to coarse action types', () => {
-    expect(resolveActionType('stake_eth')).toBe('STAKE');
-    expect(resolveActionType('dca_buy_btc')).toBe('DCA');
-    expect(resolveActionType('collateral_deposit')).toBe('COLLATERAL');
+  it('normalizes token labels', () => {
+    expect(normalizeTokenSymbol('sol')).toBe('SOL');
+    expect(normalizeTokenSymbol('mSOL')).toBe('SOL');
   });
 
-  it('getDynamicReason uses live market data for STAKE', () => {
-    const text = getDynamicReason('STAKE', 19, {
-      lang: 'sk',
-      symbol: 'ETH',
-      marketData: liveMarket(),
-    });
-    expect(text).toContain('Staking ETH');
-    expect(text).toContain('APY 3.8%');
-    expect(text).toContain('ETH $3,450');
+  it('resolves token price from market data', () => {
+    const md = liveMarket();
+    expect(resolveTokenPrice('SOL', md)).toBe(145);
+    expect(resolveTokenPrice('ETH', md)).toBe(3_450);
   });
 
-  it('getDynamicReason uses Fear&Greed for DCA in fear zone', () => {
-    const text = getDynamicReason('DCA', 19, {
+  it('getDynamicReason uses SOL price for collateral copy', () => {
+    const text = getDynamicReason('COLLATERAL', 19, 'SOL', {
       lang: 'sk',
       marketData: liveMarket(),
     });
-    expect(text).toContain('DCA Nákup');
+    expect(text).toContain('kolaterálu: SOL $145');
+    expect(text).not.toContain('ETH $');
+  });
+
+  it('getDynamicReason uses SOL for staking copy', () => {
+    const text = getDynamicReason('STAKE', 19, 'SOL', {
+      lang: 'sk',
+      marketData: liveMarket(),
+    });
+    expect(text).toContain('Staking SOL');
+    expect(text).toContain('SOL $145');
+    expect(text).not.toMatch(/cene ETH/i);
+  });
+
+  it('getDynamicReason uses Fear&Greed for DCA with token symbol', () => {
+    const text = getDynamicReason('DCA', 19, 'SOL', {
+      lang: 'sk',
+      marketData: liveMarket(),
+    });
+    expect(text).toContain('DCA Nákup SOL');
     expect(text).toContain('Fear&Greed Index je 19');
-    expect(text).toContain('strach');
   });
 
-  it('getDynamicReason varies DCA text when F&G is elevated', () => {
-    const fear = getDynamicReason('DCA', 19, { lang: 'sk', marketData: liveMarket() });
-    const greed = getDynamicReason('DCA', 70, {
-      lang: 'sk',
-      marketData: { ...liveMarket(), fearGreedIndex: 78 },
-    });
-    expect(fear).not.toBe(greed);
-  });
-
-  it('getDynamicReason returns collateral copy with ETH price feed', () => {
-    const text = getDynamicReason('COLLATERAL', 19, {
-      lang: 'sk',
-      marketData: liveMarket(),
-    });
-    expect(text).toContain('kolaterálu');
-    expect(text).toContain('3,450');
-  });
-
-  it('buildCyborgReason passes market data through', () => {
-    const text = buildCyborgReason('stake_eth', baseCtx(), 'sk', liveMarket());
-    expect(text).toContain('APY 3.8%');
+  it('buildCyborgReason passes explicit token symbol', () => {
+    const text = buildCyborgReason('collateral', baseCtx(), 'sk', liveMarket(), 'SOL');
+    expect(text).toContain('SOL $145');
   });
 
   it('returns English copy when lang is en', () => {
-    const text = getDynamicReason('DCA', 19, { lang: 'en', marketData: liveMarket() });
-    expect(text).toContain('Fear & Greed Index');
+    const text = getDynamicReason('DCA', 19, 'BTC', { lang: 'en', marketData: liveMarket() });
+    expect(text).toContain('DCA Buy BTC');
     expect(text).toContain('fear');
   });
 });

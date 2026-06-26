@@ -2,6 +2,7 @@ import { BrainCircuit } from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import {
   getDynamicReason,
+  normalizeTokenSymbol,
   resolveActionSymbol,
   resolveActionType,
   type CyborgActionType,
@@ -10,11 +11,11 @@ import {
 import { useCyborgEngine } from '@/stores/cyborgEngine';
 
 export interface LogicPanelProps {
-  /** Coarse action family — preferred when set explicitly. */
   actionType?: CyborgActionType;
-  /** Granular action key from execution component — mapped to actionType when needed. */
   action?: CyborgReasonAction;
-  /** Optional asset override (e.g. ETH, BTC). */
+  /** Active token symbol — e.g. SOL, ETH, BTC (required for token-aware copy). */
+  tokenSymbol?: string;
+  /** @deprecated use tokenSymbol */
   symbol?: string;
   lang: Lang;
   className?: string;
@@ -23,6 +24,7 @@ export interface LogicPanelProps {
 export function LogicPanel({
   actionType,
   action,
+  tokenSymbol,
   symbol,
   lang,
   className = '',
@@ -36,12 +38,13 @@ export function LogicPanel({
   const revision = useCyborgEngine(s => s.revision);
 
   const resolvedType = actionType ?? (action ? resolveActionType(action) : 'STAKE');
-  const resolvedSymbol = symbol ?? (action ? resolveActionSymbol(action) : undefined);
+  const resolvedToken = normalizeTokenSymbol(
+    tokenSymbol ?? symbol ?? resolveActionSymbol(action),
+  );
 
-  const text = getDynamicReason(resolvedType, marketScore, {
+  const text = getDynamicReason(resolvedType, marketScore, resolvedToken, {
     lang,
-    symbol: resolvedSymbol,
-    coin: resolvedSymbol,
+    coin: resolvedToken,
     fearGreed,
     marketMode,
     weightedApyPct,

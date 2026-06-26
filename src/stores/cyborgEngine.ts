@@ -12,6 +12,7 @@ import {
   buildCyborgReason,
   getDynamicReason,
   resolveActionType,
+  resolveActionSymbol,
   type CyborgReasonAction,
   type CyborgActionType,
   type ReasoningContext,
@@ -262,7 +263,7 @@ export function adjustDcaInvestableForMarketMode(
 interface CyborgEngineStore extends MasterState {
   getComputed: (apyRates?: ReturnType<typeof buildYieldApyRates>) => CyborgComputed;
   getReason: (action: CyborgReasonAction, lang?: Lang) => string;
-  getDynamicReason: (actionType: CyborgActionType, lang?: Lang) => string;
+  getDynamicReason: (actionType: CyborgActionType, tokenSymbol: string, lang?: Lang) => string;
   syncFromSources: (input?: {
     holdings?: Record<string, number>;
     entries?: StakedEntry[];
@@ -291,12 +292,14 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
     buildReasoningSnapshot(get()),
     lang,
     get().marketData,
+    resolveActionSymbol(action),
   ),
 
-  getDynamicReason: (actionType, lang = 'sk') => {
+  getDynamicReason: (actionType, tokenSymbol, lang = 'sk') => {
     const snapshot = buildReasoningSnapshot(get());
-    return getDynamicReason(actionType, snapshot.marketScore, {
+    return getDynamicReason(actionType, snapshot.marketScore, tokenSymbol, {
       lang,
+      coin: tokenSymbol,
       fearGreed: snapshot.fearGreed,
       marketMode: snapshot.marketMode,
       weightedApyPct: snapshot.weightedApyPct,
@@ -347,7 +350,7 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
       prices: {
         btc: next.btcPrice > 0 ? next.btcPrice : get().prices.btc,
         eth: next.ethPrice > 0 ? next.ethPrice : get().prices.eth,
-        sol: get().prices.sol,
+        sol: next.solPrice > 0 ? next.solPrice : get().prices.sol,
       },
       revision: get().revision + 1,
     });

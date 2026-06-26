@@ -542,7 +542,7 @@ function ModernPortfolioInner({ lang }: Props) {
                         <Lock className="w-4 h-4" />
                         Potvrdiť odpredaj → Profit Reservoir
                       </button>
-                      <LogicPanel action="dca_sell" lang={lang} />
+                      <LogicPanel action="dca_sell" tokenSymbol={t.sym} lang={lang} />
                     </div>
                   )}
 

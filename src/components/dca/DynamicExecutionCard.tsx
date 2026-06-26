@@ -839,6 +839,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd, lang = 'sk'
                           {!card.isFilled && !card.isPending && !cardBusy && (
                             <LogicPanel
                               action={dcaReasonForCoin(c, card.mode)}
+                              tokenSymbol={symU}
                               lang={lang}
                               className="mt-1.5"
                             />

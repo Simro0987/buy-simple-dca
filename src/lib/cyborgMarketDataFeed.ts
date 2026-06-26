@@ -4,6 +4,7 @@ import { fetchLlamaPools, normalizeApyPercent } from '@/lib/defiLlamaAggregator'
 export interface CyborgMarketData {
   btcPrice: number;
   ethPrice: number;
+  solPrice: number;
   fearGreedIndex: number;
   protocolAPY: number;
   /** Rolling 12-month ETH staking APY baseline for comparison copy. */
@@ -18,6 +19,7 @@ const ETH_STAKING_12M_AVG = 3.2;
 export const DEFAULT_MARKET_DATA: CyborgMarketData = {
   btcPrice: 0,
   ethPrice: 0,
+  solPrice: 0,
   fearGreedIndex: 50,
   protocolAPY: 3.1,
   protocolAPY12mAvg: ETH_STAKING_12M_AVG,
@@ -56,6 +58,7 @@ export function mergeMarketData(
   return {
     btcPrice: safeNum(patch.btcPrice ?? base.btcPrice),
     ethPrice: safeNum(patch.ethPrice ?? base.ethPrice),
+    solPrice: safeNum(patch.solPrice ?? base.solPrice),
     fearGreedIndex: safeNum(patch.fearGreedIndex ?? base.fearGreedIndex),
     protocolAPY: safeNum(patch.protocolAPY ?? base.protocolAPY),
     protocolAPY12mAvg: safeNum(patch.protocolAPY12mAvg ?? base.protocolAPY12mAvg) || ETH_STAKING_12M_AVG,
@@ -64,17 +67,18 @@ export function mergeMarketData(
   };
 }
 
-async function fetchCoinGeckoPrices(): Promise<{ btc: number; eth: number }> {
+async function fetchCoinGeckoPrices(): Promise<{ btc: number; eth: number; sol: number }> {
   const res = await cgFetch('/simple/price', {
-    ids: 'bitcoin,ethereum',
+    ids: 'bitcoin,ethereum,solana',
     vs_currencies: 'usd',
   });
   if (!res.ok) throw new Error(`CoinGecko ${res.status}`);
   const json = await res.json() as Record<string, { usd?: number }>;
   const btc = safeNum(json.bitcoin?.usd);
   const eth = safeNum(json.ethereum?.usd);
+  const sol = safeNum(json.solana?.usd);
   if (btc <= 0 || eth <= 0) throw new Error('CoinGecko empty prices');
-  return { btc, eth };
+  return { btc, eth, sol };
 }
 
 /** Primary ETH staking APY from DeFiLlama yields index (Rocket Pool rETH). */
@@ -117,6 +121,7 @@ export async function fetchCyborgMarketData(
     const live: CyborgMarketData = {
       btcPrice: prices.btc,
       ethPrice: prices.eth,
+      solPrice: prices.sol,
       fearGreedIndex: fg,
       protocolAPY,
       protocolAPY12mAvg: cached.protocolAPY12mAvg > 0 ? cached.protocolAPY12mAvg : ETH_STAKING_12M_AVG,
@@ -130,7 +135,7 @@ export async function fetchCyborgMarketData(
       fearGreedIndex: fg,
       source: 'cache',
     });
-    if (fallback.btcPrice > 0 || fallback.ethPrice > 0) {
+    if (fallback.btcPrice > 0 || fallback.ethPrice > 0 || fallback.solPrice > 0) {
       return fallback;
     }
     return mergeMarketData(DEFAULT_MARKET_DATA, { fearGreedIndex: fg, source: 'cache' });

@@ -27,9 +27,10 @@ describe('cyborgMarketDataFeed', () => {
   });
 
   it('mergeMarketData preserves cached values on partial patch', () => {
-    const merged = mergeMarketData(DEFAULT_MARKET_DATA, { btcPrice: 100_000, ethPrice: 3_500 });
+    const merged = mergeMarketData(DEFAULT_MARKET_DATA, { btcPrice: 100_000, ethPrice: 3_500, solPrice: 140 });
     expect(merged.btcPrice).toBe(100_000);
     expect(merged.ethPrice).toBe(3_500);
+    expect(merged.solPrice).toBe(140);
     expect(merged.protocolAPY).toBe(DEFAULT_MARKET_DATA.protocolAPY);
   });
 
@@ -38,6 +39,7 @@ describe('cyborgMarketDataFeed', () => {
       ...DEFAULT_MARKET_DATA,
       btcPrice: 95_000,
       ethPrice: 3_200,
+      solPrice: 130,
       protocolAPY: 3.5,
       fearGreedIndex: 22,
       lastUpdatedAt: Date.now(),

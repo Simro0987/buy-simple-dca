@@ -118,7 +118,14 @@ export function AtomicActionBlock({
               {sk ? 'Potvrdiť exekúciu' : 'Confirm execution'}
               {actionUrl && <ExternalLink className="w-3 h-3 ml-1 opacity-80" />}
             </Button>
-            {reasonAction && <LogicPanel action={reasonAction} lang={lang} className="w-full sm:min-w-[220px]" />}
+            {reasonAction && (
+              <LogicPanel
+                action={reasonAction}
+                tokenSymbol={tokenSymbol}
+                lang={lang}
+                className="w-full sm:min-w-[220px]"
+              />
+            )}
           </div>
         )}
       </div>

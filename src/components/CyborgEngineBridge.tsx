@@ -28,6 +28,7 @@ export function CyborgEngineBridge() {
     useCyborgEngine.getState().setMarketData({
       btcPrice: Number(prices.bitcoin?.usd ?? 0),
       ethPrice: Number(prices.ethereum?.usd ?? 0),
+      solPrice: Number(prices.solana?.usd ?? 0),
     });
   }, [prices]);
 

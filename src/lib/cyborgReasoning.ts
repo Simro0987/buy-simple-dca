@@ -53,13 +53,30 @@ export type MarketTrend = 'bear' | 'bull' | 'neutral';
 
 export interface DynamicReasonOptions {
   lang?: Lang;
-  symbol?: string;
   coin?: string;
   fearGreed?: number;
   marketMode?: MarketMode | 'UNKNOWN';
   weightedApyPct?: number;
   stakedRatio?: number;
   marketData?: CyborgMarketData | null;
+}
+
+export function normalizeTokenSymbol(value: string | undefined | null): string {
+  const sym = String(value ?? '').trim().toUpperCase();
+  if (sym === 'BTC' || sym === 'ETH' || sym === 'SOL') return sym;
+  if (/^W?ETH|RETH|STETH/i.test(sym)) return 'ETH';
+  if (/^MSOL|SOL/i.test(sym)) return 'SOL';
+  if (/^LBTC|BTC/i.test(sym)) return 'BTC';
+  return sym || 'ASSET';
+}
+
+export function resolveTokenPrice(tokenSymbol: string, marketData?: CyborgMarketData | null): number {
+  const sym = normalizeTokenSymbol(tokenSymbol);
+  const md = marketData ?? null;
+  if (sym === 'BTC') return safeNum(md?.btcPrice);
+  if (sym === 'SOL') return safeNum(md?.solPrice);
+  if (sym === 'ETH') return safeNum(md?.ethPrice);
+  return safeNum(md?.ethPrice) || safeNum(md?.solPrice) || safeNum(md?.btcPrice);
 }
 
 function formatUsdPrice(value: number): string {
@@ -154,6 +171,7 @@ function coinSuffix(coin: string | undefined, sk: boolean): string {
 export function getDynamicReason(
   actionType: CyborgActionType,
   marketScore: number,
+  tokenSymbol: string,
   opts: DynamicReasonOptions = {},
 ): string {
   const sk = (opts.lang ?? 'sk') === 'sk';
@@ -161,24 +179,24 @@ export function getDynamicReason(
   const fg = Math.round(safeNum(opts.fearGreed ?? 50));
   const trend = marketTrendFromScore(score);
   const tag = trendTag(trend);
-  const sym = opts.symbol ?? 'ETH';
-  const coin = opts.coin ?? opts.symbol;
+  const sym = normalizeTokenSymbol(tokenSymbol);
+  const coin = normalizeTokenSymbol(opts.coin ?? tokenSymbol);
   const apy = safeNum(opts.weightedApyPct).toFixed(1);
   const stakedPct = Math.round(safeNum(opts.stakedRatio) * 100);
   const mode = opts.marketMode ?? 'UNKNOWN';
   const md = opts.marketData ?? null;
   const liveFg = Math.round(safeNum(md?.fearGreedIndex ?? fg));
   const liveApy = safeNum(md?.protocolAPY ?? Number(apy));
-  const ethPrice = safeNum(md?.ethPrice);
+  const tokenPrice = resolveTokenPrice(sym, md);
   const apy12m = safeNum(md?.protocolAPY12mAvg) || 3.2;
   const apyAboveAvg = liveApy > apy12m;
 
   switch (actionType) {
     case 'STAKE':
-      if (liveApy > 0 && ethPrice > 0) {
+      if (liveApy > 0 && tokenPrice > 0) {
         return sk
-          ? `Staking ${sym}: Aktuálne APY ${liveApy.toFixed(1)}% ${apyAboveAvg ? 'je nad' : 'je pri'} 12-mesačným priemerom (${apy12m.toFixed(1)}%) pri cene ETH $${formatUsdPrice(ethPrice)}.`
-          : `Staking ${sym}: Current APY ${liveApy.toFixed(1)}% is ${apyAboveAvg ? 'above' : 'near'} the 12-month average (${apy12m.toFixed(1)}%) with ETH at $${formatUsdPrice(ethPrice)}.`;
+          ? `Staking ${sym}: Aktuálne APY ${liveApy.toFixed(1)}% ${apyAboveAvg ? 'je nad' : 'je pri'} 12-mesačným priemerom (${apy12m.toFixed(1)}%) pri cene ${sym} $${formatUsdPrice(tokenPrice)}.`
+          : `Staking ${sym}: Current APY ${liveApy.toFixed(1)}% is ${apyAboveAvg ? 'above' : 'near'} the 12-month average (${apy12m.toFixed(1)}%) with ${sym} at $${formatUsdPrice(tokenPrice)}.`;
       }
       if (trend === 'bear') {
         return sk
@@ -197,13 +215,18 @@ export function getDynamicReason(
     case 'DCA':
       if (liveFg <= 45) {
         return sk
-          ? `DCA Nákup${coinSuffix(coin, sk)}: Fear&Greed Index je ${liveFg} (${fearGreedMood(liveFg, sk)}), čo je historicky výhodná zóna na akumuláciu.`
-          : `DCA Buy${coinSuffix(coin, sk)}: Fear & Greed Index is ${liveFg} (${fearGreedMood(liveFg, sk)}) — a historically favorable accumulation zone.`;
+          ? `DCA Nákup ${sym}: Fear&Greed Index je ${liveFg} (${fearGreedMood(liveFg, sk)}), čo je historicky výhodná zóna na akumuláciu.`
+          : `DCA Buy ${sym}: Fear & Greed Index is ${liveFg} (${fearGreedMood(liveFg, sk)}) — a historically favorable accumulation zone.`;
       }
       if (safeNum(md?.btcPrice) > 0 && coin === 'BTC') {
         return sk
-          ? `DCA BTC: Bitcoin $${formatUsdPrice(md!.btcPrice)} pri F&G ${liveFg} — skóre ${score}/100 podporuje týždennú akumuláciu.`
-          : `DCA BTC: Bitcoin $${formatUsdPrice(md!.btcPrice)} at F&G ${liveFg} — score ${score}/100 supports weekly accumulation.`;
+          ? `DCA BTC: ${sym} $${formatUsdPrice(md!.btcPrice)} pri F&G ${liveFg} — skóre ${score}/100 podporuje týždennú akumuláciu.`
+          : `DCA BTC: ${sym} $${formatUsdPrice(md!.btcPrice)} at F&G ${liveFg} — score ${score}/100 supports weekly accumulation.`;
+      }
+      if (tokenPrice > 0 && coin !== 'BTC') {
+        return sk
+          ? `DCA Nákup ${sym}: ${sym} $${formatUsdPrice(tokenPrice)} pri F&G ${liveFg} (${fearGreedMood(liveFg, sk)}) — výhodná akumulačná zóna.`
+          : `DCA Buy ${sym}: ${sym} $${formatUsdPrice(tokenPrice)} at F&G ${liveFg} (${fearGreedMood(liveFg, sk)}) — favorable accumulation zone.`;
       }
       if (actionType === 'DCA' && score < 30) {
         return sk
@@ -225,10 +248,10 @@ export function getDynamicReason(
         : `DCA accumulation${coinSuffix(coin, sk)}: Score ${score}/100 below average — favorable band for weekly buying.`;
 
     case 'COLLATERAL':
-      if (liveApy > 0 && ethPrice > 0) {
+      if (liveApy > 0 && tokenPrice > 0) {
         return sk
-          ? `Optimalizácia kolaterálu: ETH $${formatUsdPrice(ethPrice)}, borrow spread vs protocol APY ${liveApy.toFixed(1)}% pri F&G ${liveFg}.`
-          : `Collateral optimization: ETH $${formatUsdPrice(ethPrice)}, borrow spread vs protocol APY ${liveApy.toFixed(1)}% at F&G ${liveFg}.`;
+          ? `Optimalizácia kolaterálu: ${sym} $${formatUsdPrice(tokenPrice)}, borrow spread vs protokol APY ${liveApy.toFixed(1)}% pri F&G ${liveFg}.`
+          : `Collateral optimization: ${sym} $${formatUsdPrice(tokenPrice)}, borrow spread vs protocol APY ${liveApy.toFixed(1)}% at F&G ${liveFg}.`;
       }
       if (trend === 'bear') {
         return sk
@@ -287,12 +310,12 @@ export function buildCyborgReason(
   ctx: ReasoningContext,
   lang: Lang = 'sk',
   marketData?: CyborgMarketData | null,
+  tokenSymbol?: string,
 ): string {
   const actionType = resolveActionType(action);
-  const symbol = resolveActionSymbol(action);
-  return getDynamicReason(actionType, ctx.marketScore, {
+  const symbol = normalizeTokenSymbol(tokenSymbol ?? resolveActionSymbol(action));
+  return getDynamicReason(actionType, ctx.marketScore, symbol, {
     lang,
-    symbol,
     coin: symbol,
     fearGreed: ctx.fearGreed,
     marketMode: ctx.marketMode,
