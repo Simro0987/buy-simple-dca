@@ -45,6 +45,7 @@ export interface OverviewNewsItem {
 export const NEWS_INITIAL_VISIBLE = 8;
 export const NEWS_LOAD_MORE_COUNT = 6;
 export const NEWS_FETCH_LIMIT = 50;
+export const NEWS_AUTO_REFRESH_MS = 180_000;
 
 const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
 
@@ -545,6 +546,15 @@ export async function fetchAggregatedNews(): Promise<AggregatedNewsResult> {
 export async function fetchOverviewNews(): Promise<OverviewNewsItem[]> {
   const { items } = await fetchAggregatedNews();
   return items;
+}
+
+export function formatLastUpdated(timestampMs: number, sk: boolean): string {
+  if (!Number.isFinite(timestampMs) || timestampMs <= 0) return '';
+  return new Intl.DateTimeFormat(sk ? 'sk-SK' : 'en-GB', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  }).format(new Date(timestampMs));
 }
 
 export function formatNewsTimeAgo(dateStr: string, sk: boolean): string {

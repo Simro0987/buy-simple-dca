@@ -16,9 +16,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteScrollSentinel } from '@/hooks/useInfiniteScrollSentinel';
 import { getOverviewNewsItems, useOverviewNews } from '@/hooks/useOverviewNews';
 import {
+  NEWS_AUTO_REFRESH_MS,
   NEWS_INITIAL_VISIBLE,
   NEWS_LOAD_MORE_COUNT,
   filterNewsByTab,
+  formatLastUpdated,
   formatNewsTimeAgo,
   splitTopStory,
   type NewsAsset,
@@ -312,7 +314,16 @@ export function OverviewPage({ lang }: Props) {
     isError,
     refetch,
     isFetching,
+    dataUpdatedAt,
   } = useOverviewNews(lang);
+
+  useEffect(() => {
+    const intervalId = setInterval(() => {
+      void refetch();
+    }, NEWS_AUTO_REFRESH_MS);
+
+    return () => clearInterval(intervalId);
+  }, [refetch]);
 
   const allNews = useMemo(() => getOverviewNewsItems(data), [data]);
 
@@ -397,33 +408,55 @@ export function OverviewPage({ lang }: Props) {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
-        <Filter className="w-3 h-3 text-muted-foreground/40 shrink-0" />
-        {FILTERS.map(f => {
-          const cfg = f.id === 'ALL' ? null : ASSET_CFG[f.id as NewsAsset];
-          const isActive = filter === f.id;
-          return (
-            <button
-              key={f.id}
-              type="button"
-              onClick={() => setFilter(f.id)}
-              className="px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap transition-all shrink-0"
-              style={{
-                background: isActive
-                  ? (cfg ? `${cfg.color}22` : 'rgba(34,197,94,0.15)')
-                  : 'rgba(255,255,255,0.04)',
-                border: isActive
-                  ? `1px solid ${cfg ? cfg.color + '50' : 'rgba(34,197,94,0.4)'}`
-                  : '1px solid rgba(255,255,255,0.07)',
-                color: isActive
-                  ? (cfg ? cfg.color : 'hsl(142 62% 40%)')
-                  : 'rgba(255,255,255,0.45)',
-              }}
-            >
-              {f.label}
-            </button>
-          );
-        })}
+      <div className="space-y-1">
+        <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide pb-0.5">
+          <Filter className="w-3 h-3 text-muted-foreground/40 shrink-0" />
+          {FILTERS.map(f => {
+            const cfg = f.id === 'ALL' ? null : ASSET_CFG[f.id as NewsAsset];
+            const isActive = filter === f.id;
+            return (
+              <button
+                key={f.id}
+                type="button"
+                onClick={() => setFilter(f.id)}
+                className="px-2.5 py-1 rounded-full text-[10px] font-semibold whitespace-nowrap transition-all shrink-0"
+                style={{
+                  background: isActive
+                    ? (cfg ? `${cfg.color}22` : 'rgba(34,197,94,0.15)')
+                    : 'rgba(255,255,255,0.04)',
+                  border: isActive
+                    ? `1px solid ${cfg ? cfg.color + '50' : 'rgba(34,197,94,0.4)'}`
+                    : '1px solid rgba(255,255,255,0.07)',
+                  color: isActive
+                    ? (cfg ? cfg.color : 'hsl(142 62% 40%)')
+                    : 'rgba(255,255,255,0.45)',
+                }}
+              >
+                {f.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {dataUpdatedAt > 0 && (
+          <p className="text-[9px] text-muted-foreground/45 pl-4 flex items-center gap-1.5">
+            <span
+              className={`inline-block w-1.5 h-1.5 rounded-full ${
+                isFetching && !isFeedLoading ? 'bg-green-400 animate-pulse' : 'bg-green-500/70'
+              }`}
+              aria-hidden
+            />
+            <span>
+              {sk ? 'Posledná aktualizácia:' : 'Last updated:'}{' '}
+              <span className="tabular-nums">{formatLastUpdated(dataUpdatedAt, sk)}</span>
+            </span>
+            {isFetching && !isFeedLoading && (
+              <span className="text-muted-foreground/35">
+                · {sk ? 'na pozadí' : 'background'}
+              </span>
+            )}
+          </p>
+        )}
       </div>
 
       {isFeedLoading && (
