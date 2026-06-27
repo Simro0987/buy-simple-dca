@@ -19,6 +19,7 @@ import {
   useProgressiveNewsTranslation,
 } from '@/hooks/useProgressiveNewsTranslation';
 import { getOverviewNewsItems, useOverviewNews } from '@/hooks/useOverviewNews';
+import { buildPollinationsImageUrl, getSourceFaviconUrl } from '@/lib/newsMedia';
 import {
   NEWS_AUTO_REFRESH_MS,
   NEWS_INITIAL_VISIBLE,
@@ -75,6 +76,104 @@ function SentimentBadge({ sentiment, sk }: { sentiment?: NewsSentiment; sk: bool
   );
 }
 
+function SourceLine({ source, articleUrl }: { source: string; articleUrl?: string }) {
+  const faviconUrl = articleUrl ? getSourceFaviconUrl(articleUrl) : null;
+  const [faviconVisible, setFaviconVisible] = useState(Boolean(faviconUrl));
+
+  return (
+    <span className="inline-flex items-center gap-1.5 min-w-0">
+      {faviconUrl && faviconVisible ? (
+        <img
+          src={faviconUrl}
+          alt=""
+          width={14}
+          height={14}
+          className="rounded-sm shrink-0 opacity-80 ring-1 ring-white/10"
+          onError={() => setFaviconVisible(false)}
+        />
+      ) : (
+        <span className="w-1 h-1 rounded-full bg-muted-foreground/30 inline-block shrink-0" />
+      )}
+      <span className="truncate">{source}</span>
+      {articleUrl && <ExternalLink className="w-2.5 h-2.5 shrink-0 opacity-50" />}
+    </span>
+  );
+}
+
+type ImageMode = 'primary' | 'ai' | 'gradient';
+
+function ArticleHeroImage({
+  title,
+  imageUrl,
+  assetColor,
+  tall = true,
+}: {
+  title: string;
+  imageUrl?: string;
+  assetColor: string;
+  tall?: boolean;
+}) {
+  const primaryUrl = String(imageUrl ?? '').trim() || null;
+  const [mode, setMode] = useState<ImageMode>(primaryUrl ? 'primary' : 'ai');
+  const [loading, setLoading] = useState(true);
+
+  const aiUrl = useMemo(
+    () => buildPollinationsImageUrl(title, tall ? 600 : 400, tall ? 275 : 250),
+    [title, tall],
+  );
+
+  const activeSrc = mode === 'primary' ? primaryUrl : mode === 'ai' ? aiUrl : null;
+
+  const handleError = useCallback(() => {
+    setLoading(true);
+    setMode(current => {
+      if (current === 'primary') return 'ai';
+      if (current === 'ai') return 'gradient';
+      return current;
+    });
+  }, []);
+
+  useEffect(() => {
+    setMode(primaryUrl ? 'primary' : 'ai');
+    setLoading(true);
+  }, [primaryUrl, title]);
+
+  if (mode === 'gradient' || !activeSrc) {
+    return (
+      <div
+        className={`relative overflow-hidden ${tall ? 'h-36 sm:h-44' : 'h-24 sm:h-28'}`}
+        style={{ background: `linear-gradient(135deg, ${assetColor}22 0%, rgba(12,16,28,0.9) 70%)` }}
+      >
+        <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,16,28,0.9)] to-transparent" />
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative overflow-hidden ${tall ? 'h-36 sm:h-44' : 'h-24 sm:h-28'}`}>
+      {loading && (
+        <Skeleton className="absolute inset-0 rounded-none animate-pulse bg-white/[0.06]" />
+      )}
+      <img
+        key={activeSrc}
+        src={activeSrc}
+        alt=""
+        className={`w-full h-full object-cover transition-opacity duration-500 ${
+          loading ? 'opacity-0' : 'opacity-90'
+        }`}
+        onLoad={() => setLoading(false)}
+        onError={handleError}
+      />
+      <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,16,28,0.95)] via-[rgba(12,16,28,0.35)] to-transparent pointer-events-none" />
+      {mode === 'ai' && !loading && (
+        <span className="absolute bottom-2 right-2 text-[7px] font-medium px-1.5 py-0.5 rounded-full bg-black/50 text-white/50 border border-white/10">
+          AI
+        </span>
+      )}
+    </div>
+  );
+}
+
 function TopStoryHeroSkeleton() {
   return (
     <div className="glass-card p-0 overflow-hidden">
@@ -122,24 +221,11 @@ function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
         background: 'linear-gradient(145deg, rgba(22,28,42,0.98) 0%, rgba(15,20,32,0.95) 55%, rgba(12,16,28,0.98) 100%)',
       }}
     >
-      {item.imageUrl ? (
-        <div className="relative h-36 sm:h-44 overflow-hidden">
-          <img
-            src={item.imageUrl}
-            alt=""
-            className="w-full h-full object-cover opacity-90"
-            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,16,28,0.95)] via-[rgba(12,16,28,0.35)] to-transparent" />
-        </div>
-      ) : (
-        <div
-          className="h-24 sm:h-28 relative overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${assetCfg.color}22 0%, rgba(12,16,28,0.9) 70%)` }}
-        >
-          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,16,28,0.9)] to-transparent" />
-        </div>
-      )}
+      <ArticleHeroImage
+        title={item.title}
+        imageUrl={item.imageUrl}
+        assetColor={assetCfg.color}
+      />
 
       <div className="p-4 -mt-6 relative">
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
@@ -179,10 +265,8 @@ function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
           </p>
         )}
 
-        <p className="text-[9px] text-muted-foreground/50 mt-2.5 flex items-center gap-1">
-          <span className="w-1 h-1 rounded-full bg-orange-400/60 inline-block" />
-          {item.source}
-          {item.articleUrl && <ExternalLink className="w-2.5 h-2.5 ml-1 opacity-50" />}
+        <p className="text-[9px] text-muted-foreground/50 mt-2.5">
+          <SourceLine source={item.source} articleUrl={item.articleUrl} />
         </p>
       </div>
     </div>
@@ -278,12 +362,8 @@ function NewsCard({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
             <p className="text-[9px] text-muted-foreground mt-1 leading-relaxed line-clamp-2 transition-opacity duration-300">{item.detail}</p>
           )}
 
-          <p className="text-[8px] text-muted-foreground/40 mt-1.5 flex items-center gap-1">
-            <span className="w-1 h-1 rounded-full bg-muted-foreground/30 inline-block" />
-            {item.source}
-            {item.articleUrl && (
-              <ExternalLink className="w-2.5 h-2.5 ml-1 opacity-50" />
-            )}
+          <p className="text-[8px] text-muted-foreground/40 mt-1.5">
+            <SourceLine source={item.source} articleUrl={item.articleUrl} />
           </p>
         </div>
 
