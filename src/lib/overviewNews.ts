@@ -14,6 +14,56 @@ export interface OverviewNewsItem {
   publishedAt: string;
   imageUrl?: string;
   articleUrl: string;
+  upvotes?: number;
+  comments?: number;
+  impact?: 'high' | 'medium' | 'low';
+}
+
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
+export function getNewsEngagement(item: OverviewNewsItem): number {
+  return (item.upvotes ?? 0) + (item.comments ?? 0);
+}
+
+/** Pick the day's headline: highest 24h engagement → first breaking → newest. */
+export function pickTopStory(articles: OverviewNewsItem[]): OverviewNewsItem | null {
+  if (articles.length === 0) return null;
+
+  const now = Date.now();
+  const recent = articles.filter(item => {
+    const ts = Date.parse(item.publishedAt);
+    return Number.isFinite(ts) && now - ts <= TWENTY_FOUR_HOURS_MS;
+  });
+  const pool = recent.length > 0 ? recent : [...articles];
+
+  const byEngagement = [...pool]
+    .filter(item => getNewsEngagement(item) > 0)
+    .sort((a, b) => {
+      const diff = getNewsEngagement(b) - getNewsEngagement(a);
+      if (diff !== 0) return diff;
+      return Date.parse(b.publishedAt) - Date.parse(a.publishedAt);
+    });
+  if (byEngagement.length > 0) return byEngagement[0];
+
+  const breaking = pool.find(item => item.isFlashAlert);
+  if (breaking) return breaking;
+
+  return [...pool].sort(
+    (a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt),
+  )[0];
+}
+
+export function splitTopStory(articles: OverviewNewsItem[]): {
+  topStory: OverviewNewsItem | null;
+  remainingArticles: OverviewNewsItem[];
+} {
+  const topStory = pickTopStory(articles);
+  if (!topStory) return { topStory: null, remainingArticles: articles };
+
+  return {
+    topStory,
+    remainingArticles: articles.filter(item => item.id !== topStory.id),
+  };
 }
 
 const FLASH_TITLE_KEYWORDS = /\b(breaking|alert|flash|urgent|just in)\b/i;
@@ -126,6 +176,8 @@ async function fetchCryptoCompareNews(): Promise<OverviewNewsItem[]> {
         body: row.body,
       });
 
+      const upvotes = Number(row.upvotes ?? 0) || 0;
+
       return {
         id: String(row.id ?? row.guid ?? `cc-${index}`),
         asset,
@@ -137,6 +189,7 @@ async function fetchCryptoCompareNews(): Promise<OverviewNewsItem[]> {
         publishedAt: normalizePublishedAt(row.published_on),
         imageUrl: String(row.imageurl ?? '').trim() || undefined,
         articleUrl,
+        upvotes,
       };
     })
     .filter((item): item is OverviewNewsItem => item !== null);
@@ -224,6 +277,10 @@ async function fetchSupabaseNewsFallback(lang: string): Promise<OverviewNewsItem
     const asset = tokenAsset ?? resolvePrimaryAsset(blob);
     const flash = row.flash === true || isFlashAlert({ title, body: row.summary });
 
+    const impact = row.impact === 'high' || row.impact === 'medium' || row.impact === 'low'
+      ? row.impact
+      : undefined;
+
     return {
       id: String(row.id ?? `fb-${index}`),
       asset,
@@ -234,6 +291,7 @@ async function fetchSupabaseNewsFallback(lang: string): Promise<OverviewNewsItem
       source: String(row.source ?? 'RSS').trim(),
       publishedAt: normalizePublishedAt(row.publishedAt),
       articleUrl: String(row.url ?? '').trim(),
+      impact,
     };
   }).filter(item => item.title && item.articleUrl);
 }

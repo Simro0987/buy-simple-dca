@@ -5,6 +5,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useOverviewNews } from '@/hooks/useOverviewNews';
 import {
   formatNewsTimeAgo,
+  splitTopStory,
   type NewsAsset,
   type OverviewNewsItem,
 } from '@/lib/overviewNews';
@@ -35,6 +36,23 @@ const FILTERS: { id: FilterVal; label: string }[] = [
   { id: 'SOL',   label: 'SOL'    },
 ];
 
+function TopStoryHeroSkeleton() {
+  return (
+    <div className="glass-card p-0 overflow-hidden">
+      <Skeleton className="w-full h-36 rounded-none" />
+      <div className="p-4 space-y-2.5">
+        <div className="flex gap-2">
+          <Skeleton className="h-5 w-36 rounded-full" />
+          <Skeleton className="h-5 w-12 rounded-full" />
+        </div>
+        <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-5/6" />
+        <Skeleton className="h-3 w-32" />
+      </div>
+    </div>
+  );
+}
+
 function NewsCardSkeleton() {
   return (
     <div className="glass-card p-3 space-y-2">
@@ -52,6 +70,92 @@ function NewsCardSkeleton() {
       </div>
     </div>
   );
+}
+
+function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
+  const assetCfg = ASSET_CFG[item.asset];
+  const catTag = CAT_TAG[item.asset];
+
+  const inner = (
+    <div
+      className="glass-card p-0 overflow-hidden ring-1 ring-white/10 border border-white/[0.08] shadow-[0_0_40px_-12px_rgba(251,146,60,0.35)]"
+      style={{
+        background: 'linear-gradient(145deg, rgba(22,28,42,0.98) 0%, rgba(15,20,32,0.95) 55%, rgba(12,16,28,0.98) 100%)',
+      }}
+    >
+      {item.imageUrl ? (
+        <div className="relative h-36 sm:h-40 overflow-hidden">
+          <img
+            src={item.imageUrl}
+            alt=""
+            className="w-full h-full object-cover opacity-90"
+            onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,16,28,0.95)] via-[rgba(12,16,28,0.35)] to-transparent" />
+        </div>
+      ) : (
+        <div
+          className="h-24 sm:h-28 relative overflow-hidden"
+          style={{ background: `linear-gradient(135deg, ${assetCfg.color}22 0%, rgba(12,16,28,0.9) 70%)` }}
+        >
+          <div className="absolute inset-0 bg-gradient-to-t from-[rgba(12,16,28,0.9)] to-transparent" />
+        </div>
+      )}
+
+      <div className="p-4 -mt-6 relative">
+        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+          <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/15 border border-orange-400/35 text-orange-300 uppercase tracking-wide">
+            <span aria-hidden>🔥</span>
+            {sk ? 'Dnešná Top Správa' : 'Top Story of the Day'}
+          </span>
+
+          <span
+            className="text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide"
+            style={{ background: catTag.bg, color: catTag.text }}
+          >
+            {catTag.label}
+          </span>
+
+          <span
+            className="text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide"
+            style={{ background: `${assetCfg.color}18`, color: assetCfg.color }}
+          >
+            {item.asset}
+          </span>
+
+          <span className="text-[9px] text-muted-foreground/60 ml-auto tabular-nums">
+            {formatNewsTimeAgo(item.publishedAt, sk)}
+          </span>
+        </div>
+
+        <h2 className="text-[15px] sm:text-base font-bold leading-snug text-foreground tracking-tight">
+          {item.title}
+        </h2>
+
+        {item.detail && (
+          <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed line-clamp-3">
+            {item.detail}
+          </p>
+        )}
+
+        <p className="text-[9px] text-muted-foreground/50 mt-2.5 flex items-center gap-1">
+          <span className="w-1 h-1 rounded-full bg-orange-400/60 inline-block" />
+          {item.source}
+          {item.articleUrl && <ExternalLink className="w-2.5 h-2.5 ml-1 opacity-50" />}
+        </p>
+      </div>
+    </div>
+  );
+
+  if (item.articleUrl) {
+    return (
+      <a href={item.articleUrl} target="_blank" rel="noopener noreferrer" className="block hover:opacity-95 transition-opacity">
+        {inner}
+      </a>
+    );
+  }
+
+  return inner;
 }
 
 function NewsCard({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
@@ -165,15 +269,19 @@ export function OverviewPage({ lang }: Props) {
   const [filter, setFilter] = useState<FilterVal>('ALL');
   const { data: news, isLoading, isError, refetch, isFetching } = useOverviewNews(lang);
 
-  const displayed = useMemo(() => {
-    const list = (news ?? []).filter(n => filter === 'ALL' || n.asset === filter);
-    return [...list].sort((a, b) => {
+  const { topStory, remainingArticles } = useMemo(() => {
+    const filtered = (news ?? []).filter(n => filter === 'ALL' || n.asset === filter);
+    const { topStory: hero, remainingArticles: rest } = splitTopStory(filtered);
+
+    const sortedRest = [...rest].sort((a, b) => {
       if (a.isFlashAlert !== b.isFlashAlert) return a.isFlashAlert ? -1 : 1;
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
     });
+
+    return { topStory: hero, remainingArticles: sortedRest };
   }, [news, filter]);
 
-  const flashCount = displayed.filter(n => n.isFlashAlert).length;
+  const flashCount = remainingArticles.filter(n => n.isFlashAlert).length;
 
   return (
     <div className="space-y-3">
@@ -236,10 +344,13 @@ export function OverviewPage({ lang }: Props) {
       </div>
 
       {isLoading && (
-        <div className="space-y-1.5">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <NewsCardSkeleton key={i} />
-          ))}
+        <div className="space-y-2">
+          <TopStoryHeroSkeleton />
+          <div className="space-y-1.5">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <NewsCardSkeleton key={i} />
+            ))}
+          </div>
         </div>
       )}
 
@@ -262,12 +373,18 @@ export function OverviewPage({ lang }: Props) {
       )}
 
       {!isLoading && !isError && (
-        <div className="space-y-1.5">
-          {displayed.map(item => (
-            <NewsCard key={item.id} item={item} sk={sk} />
-          ))}
+        <div className="space-y-2">
+          {topStory && <TopStoryHero item={topStory} sk={sk} />}
 
-          {displayed.length === 0 && (
+          {remainingArticles.length > 0 && (
+            <div className="space-y-1.5">
+              {remainingArticles.map(item => (
+                <NewsCard key={item.id} item={item} sk={sk} />
+              ))}
+            </div>
+          )}
+
+          {!topStory && remainingArticles.length === 0 && (
             <div className="glass-card p-6 text-center">
               <p className="text-sm text-muted-foreground">
                 {sk ? 'Žiadne správy pre tento filter.' : 'No articles for this filter.'}
