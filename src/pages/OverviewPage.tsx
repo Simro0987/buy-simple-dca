@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Zap,
   Radio,
@@ -14,10 +14,11 @@ import {
 import { Lang } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteScrollSentinel } from '@/hooks/useInfiniteScrollSentinel';
-import { flattenOverviewNewsPages, useOverviewNews } from '@/hooks/useOverviewNews';
+import { getOverviewNewsItems, useOverviewNews } from '@/hooks/useOverviewNews';
 import {
   NEWS_INITIAL_VISIBLE,
   NEWS_LOAD_MORE_COUNT,
+  filterNewsByTab,
   formatNewsTimeAgo,
   splitTopStory,
   type NewsAsset,
@@ -304,7 +305,6 @@ export function OverviewPage({ lang }: Props) {
   const sk = lang === 'sk';
   const [filter, setFilter] = useState<NewsFilter>('ALL');
   const [visibleCount, setVisibleCount] = useState(NEWS_INITIAL_VISIBLE);
-  const wasFetchingNextPage = useRef(false);
 
   const {
     data,
@@ -312,16 +312,27 @@ export function OverviewPage({ lang }: Props) {
     isError,
     refetch,
     isFetching,
-    fetchNextPage,
-    hasNextPage,
-    isFetchingNextPage,
-  } = useOverviewNews(lang, filter);
+  } = useOverviewNews(lang);
 
-  const allNews = useMemo(() => flattenOverviewNewsPages(data?.pages), [data?.pages]);
-  const isFilterLoading = isLoading || (isFetching && !isFetchingNextPage);
+  const allNews = useMemo(() => getOverviewNewsItems(data), [data]);
+
+  const filteredNews = useMemo(
+    () => filterNewsByTab(allNews, filter),
+    [allNews, filter],
+  );
+
+  useEffect(() => {
+    if (data) {
+      console.log('[Noviny] Aggregated news payload:', data);
+    }
+  }, [data]);
+
+  useEffect(() => {
+    console.log('[Noviny] Filtered articles:', { activeTab: filter, count: filteredNews.length, items: filteredNews });
+  }, [filter, filteredNews]);
 
   const { topStory, remainingArticles, totalRemaining } = useMemo(() => {
-    const { topStory: hero, remainingArticles: rest } = splitTopStory(allNews);
+    const { topStory: hero, remainingArticles: rest } = splitTopStory(filteredNews);
 
     const sortedRest = [...rest].sort((a, b) => {
       if (a.isFlashAlert !== b.isFlashAlert) return a.isFlashAlert ? -1 : 1;
@@ -333,38 +344,27 @@ export function OverviewPage({ lang }: Props) {
       remainingArticles: sortedRest.slice(0, visibleCount),
       totalRemaining: sortedRest.length,
     };
-  }, [allNews, visibleCount]);
+  }, [filteredNews, visibleCount]);
 
   useEffect(() => {
     setVisibleCount(NEWS_INITIAL_VISIBLE);
   }, [filter]);
 
-  useEffect(() => {
-    if (wasFetchingNextPage.current && !isFetchingNextPage) {
-      setVisibleCount(count => count + NEWS_LOAD_MORE_COUNT);
-    }
-    wasFetchingNextPage.current = isFetchingNextPage;
-  }, [isFetchingNextPage]);
-
   const canRevealMore = visibleCount < totalRemaining;
-  const canFetchMore = Boolean(hasNextPage);
 
   const handleLoadMore = useCallback(() => {
     if (canRevealMore) {
       setVisibleCount(count => count + NEWS_LOAD_MORE_COUNT);
-      return;
     }
-    if (canFetchMore && !isFetchingNextPage) {
-      void fetchNextPage();
-    }
-  }, [canRevealMore, canFetchMore, fetchNextPage, isFetchingNextPage]);
+  }, [canRevealMore]);
 
   const sentinelRef = useInfiniteScrollSentinel({
-    enabled: !isFilterLoading && !isError && (canRevealMore || canFetchMore),
+    enabled: !isLoading && !isError && canRevealMore,
     onIntersect: handleLoadMore,
   });
 
   const flashCount = remainingArticles.filter(n => n.isFlashAlert).length;
+  const isFeedLoading = isLoading || (isFetching && !data);
 
   return (
     <div className="space-y-3">
@@ -426,7 +426,7 @@ export function OverviewPage({ lang }: Props) {
         })}
       </div>
 
-      {isFilterLoading && (
+      {isFeedLoading && (
         <div className="space-y-2">
           <TopStoryHeroSkeleton />
           <div className="space-y-1.5">
@@ -437,7 +437,7 @@ export function OverviewPage({ lang }: Props) {
         </div>
       )}
 
-      {isError && !isFilterLoading && (
+      {isError && !isFeedLoading && (
         <div className="glass-card p-6 text-center space-y-3">
           <AlertTriangle className="w-5 h-5 text-amber-400 mx-auto" />
           <p className="text-sm text-muted-foreground">
@@ -455,7 +455,7 @@ export function OverviewPage({ lang }: Props) {
         </div>
       )}
 
-      {!isFilterLoading && !isError && (
+      {!isFeedLoading && !isError && (
         <div className="space-y-2">
           {topStory && <TopStoryHero item={topStory} sk={sk} />}
 
@@ -475,23 +475,16 @@ export function OverviewPage({ lang }: Props) {
             </div>
           )}
 
-          {(canRevealMore || canFetchMore) && (
+          {canRevealMore && (
             <div ref={sentinelRef} className="space-y-1.5 pt-1">
-              {isFetchingNextPage && (
-                <>
-                  <NewsCardSkeleton />
-                  <NewsCardSkeleton />
-                </>
-              )}
-              {!isFetchingNextPage && canRevealMore && (
-                <p className="text-[9px] text-muted-foreground/40 text-center py-1">
-                  {sk ? 'Načítavam ďalšie správy…' : 'Loading more stories…'}
-                </p>
-              )}
+              <NewsCardSkeleton />
+              <p className="text-[9px] text-muted-foreground/40 text-center py-1">
+                {sk ? 'Načítavam ďalšie správy…' : 'Loading more stories…'}
+              </p>
             </div>
           )}
 
-          {!canRevealMore && !canFetchMore && totalRemaining > NEWS_INITIAL_VISIBLE && (
+          {!canRevealMore && totalRemaining > NEWS_INITIAL_VISIBLE && (
             <p className="text-[9px] text-muted-foreground/30 text-center py-2">
               {sk ? 'Koniec feedu' : 'End of feed'}
             </p>
@@ -501,8 +494,8 @@ export function OverviewPage({ lang }: Props) {
 
       <p className="text-[9px] text-muted-foreground/30 text-center pb-2">
         {sk
-          ? 'Zdroje: CryptoCompare · CoinGecko · RSS (CoinDesk, Cointelegraph, The Block…)'
-          : 'Sources: CryptoCompare · CoinGecko · RSS (CoinDesk, Cointelegraph, The Block…)'}
+          ? 'Zdroje: CryptoCompare · CoinGecko (agregované)'
+          : 'Sources: CryptoCompare · CoinGecko (aggregated)'}
       </p>
     </div>
   );

@@ -1,13 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import {
+  dedupeUnifiedArticles,
   filterNewsByTab,
   formatNewsTimeAgo,
   inferSentiment,
   isFlashAlert,
-  newsFilterToCryptoCompareCategories,
+  normalizeCoinGeckoArticles,
+  normalizeCryptoCompareArticles,
   pickTopStory,
   splitTopStory,
   type OverviewNewsItem,
+  type UnifiedArticle,
 } from '@/lib/overviewNews';
 
 function article(overrides: Partial<OverviewNewsItem> & Pick<OverviewNewsItem, 'id' | 'title'>): OverviewNewsItem {
@@ -73,21 +76,47 @@ describe('overviewNews', () => {
     expect(remainingArticles.map(i => i.id)).toEqual(['1', '3']);
   });
 
-  it('filterNewsByTab filters by asset', () => {
+  it('filterNewsByTab filters locally by keywords', () => {
     const items = [
-      article({ id: '1', title: 'BTC', asset: 'BTC' }),
-      article({ id: '2', title: 'ETH', asset: 'ETH' }),
+      article({ id: '1', title: 'Bitcoin hits new high', detail: 'BTC rally continues' }),
+      article({ id: '2', title: 'Ethereum upgrade', detail: 'ETH network change' }),
+      article({ id: '3', title: 'SEC reviews ETF', detail: 'Regulation update' }),
     ];
     expect(filterNewsByTab(items, 'BTC')).toHaveLength(1);
-    expect(filterNewsByTab(items, 'ALL')).toHaveLength(2);
+    expect(filterNewsByTab(items, 'ETH')).toHaveLength(1);
+    expect(filterNewsByTab(items, 'MAKRO')).toHaveLength(1);
+    expect(filterNewsByTab(items, 'ALL')).toHaveLength(3);
   });
 
-  it('newsFilterToCryptoCompareCategories maps tabs to API categories', () => {
-    expect(newsFilterToCryptoCompareCategories('ALL')).toBeUndefined();
-    expect(newsFilterToCryptoCompareCategories('BTC')).toBe('BTC');
-    expect(newsFilterToCryptoCompareCategories('ETH')).toBe('ETH');
-    expect(newsFilterToCryptoCompareCategories('SOL')).toBe('SOL');
-    expect(newsFilterToCryptoCompareCategories('MAKRO')).toBe('Market,Regulation,Fiat');
+  it('dedupeUnifiedArticles removes duplicate titles and urls', () => {
+    const rows: UnifiedArticle[] = [
+      { id: '1', title: 'Same Story', url: 'https://a.com/1', sourceName: 'A', publishedAt: new Date().toISOString(), provider: 'cryptocompare' },
+      { id: '2', title: 'Same Story', url: 'https://b.com/2', sourceName: 'B', publishedAt: new Date().toISOString(), provider: 'coingecko' },
+      { id: '3', title: 'Other', url: 'https://a.com/1', sourceName: 'A', publishedAt: new Date().toISOString(), provider: 'coingecko' },
+    ];
+    expect(dedupeUnifiedArticles(rows)).toHaveLength(1);
+  });
+
+  it('normalizes CryptoCompare and CoinGecko payloads', () => {
+    const cc = normalizeCryptoCompareArticles([{
+      id: 1,
+      title: 'BTC News',
+      url: 'https://example.com/btc',
+      body: 'Bitcoin update',
+      published_on: 1_700_000_000,
+      source_info: { name: 'CoinDesk' },
+    }]);
+    expect(cc[0]?.sourceName).toBe('CoinDesk');
+
+    const cg = normalizeCoinGeckoArticles([{
+      id: 'x',
+      title: 'ETH News',
+      url: 'https://example.com/eth',
+      description: 'Ethereum update',
+      published_at: '2024-01-01T00:00:00Z',
+      news_site: 'Decrypt',
+    }]);
+    expect(cg[0]?.sourceName).toBe('Decrypt');
   });
 
   it('inferSentiment classifies bullish and bearish headlines', () => {
