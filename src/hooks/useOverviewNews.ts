@@ -4,7 +4,7 @@ import { fetchAggregatedNews, type OverviewNewsItem } from '@/lib/overviewNews';
 export function useOverviewNews(lang = 'sk') {
   return useQuery({
     queryKey: ['overview-news-aggregated', lang],
-    queryFn: () => fetchAggregatedNews(lang),
+    queryFn: () => fetchAggregatedNews(),
     staleTime: 10 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     refetchOnWindowFocus: true,

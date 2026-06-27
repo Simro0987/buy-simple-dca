@@ -1,9 +1,15 @@
 import { cgFetch } from '@/lib/coingecko';
-import { supabase } from '@/integrations/supabase/client';
 
 export type NewsAsset = 'BTC' | 'ETH' | 'SOL' | 'MAKRO';
 export type NewsFilter = 'ALL' | NewsAsset;
 export type NewsSentiment = 'bullish' | 'bearish' | 'neutral';
+
+export type NewsProvider =
+  | 'cointelegraph'
+  | 'coindesk'
+  | 'theblock'
+  | 'cryptocompare'
+  | 'coingecko';
 
 /** Normalized article shape from any news API adapter. */
 export interface UnifiedArticle {
@@ -16,7 +22,7 @@ export interface UnifiedArticle {
   body?: string;
   upvotes?: number;
   categories?: string;
-  provider: 'cryptocompare' | 'coingecko' | 'rss';
+  provider: NewsProvider;
 }
 
 export interface OverviewNewsItem {
@@ -55,6 +61,24 @@ const TAB_MATCHERS: Record<Exclude<NewsFilter, 'ALL'>, RegExp> = {
   MAKRO: /\b(market|regulation|etf|sec|fed|rate|macro|economy)\b/i,
 };
 
+const RSS2JSON_FEEDS: Array<{ provider: NewsProvider; sourceName: string; rssUrl: string }> = [
+  {
+    provider: 'cointelegraph',
+    sourceName: 'Cointelegraph',
+    rssUrl: 'https://cointelegraph.com/rss',
+  },
+  {
+    provider: 'coindesk',
+    sourceName: 'CoinDesk',
+    rssUrl: 'https://www.coindesk.com/arc/outboundfeeds/rss/',
+  },
+  {
+    provider: 'theblock',
+    sourceName: 'The Block',
+    rssUrl: 'https://www.theblock.co/rss.xml',
+  },
+];
+
 export function inferSentiment(text: string): NewsSentiment {
   const bull = BULLISH_KEYWORDS.test(text);
   const bear = BEARISH_KEYWORDS.test(text);
@@ -71,7 +95,7 @@ export function articleSearchBlob(item: Pick<OverviewNewsItem, 'title' | 'detail
   return `${item.title} ${item.detail ?? ''}`;
 }
 
-/** Local keyword filter — never relies on API category params. */
+/** Local keyword filter — tabs never depend on API query params. */
 export function filterNewsByTab(items: OverviewNewsItem[], filter: NewsFilter): OverviewNewsItem[] {
   if (filter === 'ALL') return items;
   const pattern = TAB_MATCHERS[filter];
@@ -160,6 +184,7 @@ function flashTagFromText(title: string, categories?: string): string | undefine
   }
   if (/\bflash\b/i.test(title)) return 'Flash';
   if (/\balert\b/i.test(title)) return 'Alert';
+  if (/\bjust in\b/i.test(title)) return 'Just In';
   if (/\betf\b/i.test(title)) return 'ETF';
   if (/\bsec\b/i.test(title)) return 'SEC';
   if (/\bfed\b/i.test(title)) return 'Fed';
@@ -176,40 +201,35 @@ function normalizePublishedAt(value: unknown): string {
   return new Date().toISOString();
 }
 
-function normalizeUrlKey(url: string): string {
-  try {
-    const parsed = new URL(url);
-    return `${parsed.hostname.replace(/^www\./i, '')}${parsed.pathname.replace(/\/$/, '')}`.toLowerCase();
-  } catch {
-    return url.trim().toLowerCase();
-  }
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+function sortUnifiedByRecency(articles: UnifiedArticle[]): UnifiedArticle[] {
+  return [...articles].sort(
+    (a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt),
+  );
+}
+
+/** Deduplicate by normalized title — keeps the newest occurrence (array must be pre-sorted desc). */
 export function dedupeUnifiedArticles(articles: UnifiedArticle[]): UnifiedArticle[] {
   const seenTitles = new Set<string>();
-  const seenUrls = new Set<string>();
 
   return articles.filter(article => {
     const titleKey = article.title.trim().toLowerCase();
-    const urlKey = normalizeUrlKey(article.url);
-    if (!titleKey || !urlKey) return false;
-    if (seenTitles.has(titleKey) || seenUrls.has(urlKey)) return false;
+    if (!titleKey) return false;
+    if (seenTitles.has(titleKey)) return false;
     seenTitles.add(titleKey);
-    seenUrls.add(urlKey);
     return true;
   });
 }
 
 export function dedupeNews(items: OverviewNewsItem[]): OverviewNewsItem[] {
   const seenTitles = new Set<string>();
-  const seenUrls = new Set<string>();
-
   return items.filter(item => {
     const titleKey = item.title.trim().toLowerCase();
-    const urlKey = normalizeUrlKey(item.articleUrl);
-    if (seenTitles.has(titleKey) || seenUrls.has(urlKey)) return false;
+    if (seenTitles.has(titleKey)) return false;
     seenTitles.add(titleKey);
-    seenUrls.add(urlKey);
     return true;
   });
 }
@@ -252,7 +272,90 @@ function sortByRecency(items: OverviewNewsItem[]): OverviewNewsItem[] {
   );
 }
 
-// ─── API adapters ────────────────────────────────────────────────────────────
+// ─── RSS2JSON adapters (Cointelegraph, CoinDesk, The Block) ─────────────────
+
+interface Rss2JsonItem {
+  title?: string;
+  pubDate?: string;
+  link?: string;
+  description?: string;
+  thumbnail?: string;
+  enclosure?: { link?: string };
+  guid?: string;
+}
+
+interface Rss2JsonResponse {
+  status?: string;
+  message?: string;
+  items?: Rss2JsonItem[];
+}
+
+function extractRssImage(item: Rss2JsonItem): string | undefined {
+  const thumb = String(item.thumbnail ?? '').trim();
+  if (thumb) return thumb;
+
+  const enclosure = String(item.enclosure?.link ?? '').trim();
+  if (enclosure && /\.(jpg|jpeg|png|webp|gif)(\?|$)/i.test(enclosure)) return enclosure;
+
+  const html = String(item.description ?? '');
+  const match = html.match(/<img[^>]+src=["']([^"']+)["']/i);
+  return match?.[1]?.trim() || undefined;
+}
+
+export function normalizeRss2JsonArticles(
+  rows: Rss2JsonItem[],
+  provider: NewsProvider,
+  sourceName: string,
+): UnifiedArticle[] {
+  return rows
+    .map((row, index): UnifiedArticle | null => {
+      const title = stripHtml(String(row.title ?? '')).trim();
+      const url = String(row.link ?? '').trim();
+      if (!title || !url) return null;
+
+      const description = stripHtml(String(row.description ?? '')).trim();
+
+      return {
+        id: `${provider}-${row.guid ?? index}`,
+        title,
+        url,
+        imageUrl: extractRssImage(row),
+        sourceName,
+        publishedAt: normalizePublishedAt(row.pubDate),
+        body: description || undefined,
+        provider,
+      };
+    })
+    .filter((item): item is UnifiedArticle => item !== null);
+}
+
+function buildRss2JsonUrl(rssUrl: string): string {
+  const url = new URL('https://api.rss2json.com/v1/api.json');
+  url.searchParams.set('rss_url', rssUrl);
+  const apiKey = import.meta.env.VITE_RSS2JSON_API_KEY as string | undefined;
+  if (apiKey) url.searchParams.set('api_key', apiKey);
+  return url.toString();
+}
+
+async function fetchRss2JsonPayload(
+  provider: NewsProvider,
+  sourceName: string,
+  rssUrl: string,
+): Promise<UnifiedArticle[]> {
+  const res = await fetch(buildRss2JsonUrl(rssUrl), { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`${sourceName} RSS2JSON HTTP ${res.status}`);
+
+  const json = await res.json() as Rss2JsonResponse;
+  if (json.status && json.status !== 'ok') {
+    throw new Error(json.message || `${sourceName} RSS2JSON error`);
+  }
+
+  const rows = Array.isArray(json.items) ? json.items : [];
+  if (rows.length === 0) throw new Error(`${sourceName} RSS2JSON returned empty feed`);
+  return normalizeRss2JsonArticles(rows, provider, sourceName);
+}
+
+// ─── CryptoCompare adapter ───────────────────────────────────────────────────
 
 interface CryptoCompareArticle {
   id?: string | number;
@@ -292,6 +395,26 @@ export function normalizeCryptoCompareArticles(rows: CryptoCompareArticle[]): Un
     .filter((item): item is UnifiedArticle => item !== null);
 }
 
+async function fetchCryptoComparePayload(): Promise<UnifiedArticle[]> {
+  const apiKey = import.meta.env.VITE_CRYPTOCOMPARE_API_KEY as string | undefined;
+  const url = new URL('https://min-api.cryptocompare.com/data/v2/news/');
+  url.searchParams.set('lang', 'EN');
+  url.searchParams.set('limit', String(NEWS_FETCH_LIMIT));
+  if (apiKey) url.searchParams.set('api_key', apiKey);
+
+  const res = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`CryptoCompare HTTP ${res.status}`);
+
+  const json = await res.json() as { Data?: CryptoCompareArticle[]; Err?: { message?: string } };
+  if (json.Err?.message) throw new Error(json.Err.message);
+
+  const rows = Array.isArray(json.Data) ? json.Data : [];
+  if (rows.length === 0) throw new Error('CryptoCompare returned empty feed');
+  return normalizeCryptoCompareArticles(rows);
+}
+
+// ─── CoinGecko adapter ───────────────────────────────────────────────────────
+
 interface CoinGeckoNewsRow {
   id?: string | number;
   title?: string;
@@ -325,24 +448,6 @@ export function normalizeCoinGeckoArticles(rows: CoinGeckoNewsRow[]): UnifiedArt
     .filter((item): item is UnifiedArticle => item !== null);
 }
 
-async function fetchCryptoComparePayload(): Promise<UnifiedArticle[]> {
-  const apiKey = import.meta.env.VITE_CRYPTOCOMPARE_API_KEY as string | undefined;
-  const url = new URL('https://min-api.cryptocompare.com/data/v2/news/');
-  url.searchParams.set('lang', 'EN');
-  url.searchParams.set('limit', String(NEWS_FETCH_LIMIT));
-  if (apiKey) url.searchParams.set('api_key', apiKey);
-
-  const res = await fetch(url.toString(), { headers: { Accept: 'application/json' } });
-  if (!res.ok) throw new Error(`CryptoCompare HTTP ${res.status}`);
-
-  const json = await res.json() as { Data?: CryptoCompareArticle[]; Err?: { message?: string } };
-  if (json.Err?.message) throw new Error(json.Err.message);
-
-  const rows = Array.isArray(json.Data) ? json.Data : [];
-  if (rows.length === 0) throw new Error('CryptoCompare returned empty feed');
-  return normalizeCryptoCompareArticles(rows);
-}
-
 async function fetchCoinGeckoPayload(): Promise<UnifiedArticle[]> {
   const res = await cgFetch('/news');
   if (!res.ok) throw new Error(`CoinGecko HTTP ${res.status}`);
@@ -355,94 +460,67 @@ async function fetchCoinGeckoPayload(): Promise<UnifiedArticle[]> {
   return normalizeCoinGeckoArticles(rows);
 }
 
-interface FallbackNewsRow {
-  id: number | string;
-  title: string;
-  summary?: string;
-  url: string;
-  source: string;
-  publishedAt: string;
-  sentiment?: string;
-}
-
-async function fetchSupabaseFallbackPayload(lang: string): Promise<UnifiedArticle[]> {
-  const { data, error } = await supabase.functions.invoke('crypto-news', {
-    body: { currencies: 'BTC,ETH,SOL', kind: 'news', lang, t: Date.now() },
-  });
-  if (error) throw new Error(error.message);
-  if (!data?.success) throw new Error(data?.error || 'RSS fallback failed');
-
-  const rows = (data.data ?? []) as FallbackNewsRow[];
-  return rows
-    .map((row, index): UnifiedArticle | null => {
-      const title = String(row.title ?? '').trim();
-      const url = String(row.url ?? '').trim();
-      if (!title || !url) return null;
-      return {
-        id: `rss-${row.id ?? index}`,
-        title,
-        url,
-        sourceName: String(row.source ?? 'RSS').trim(),
-        publishedAt: normalizePublishedAt(row.publishedAt),
-        body: String(row.summary ?? '').trim() || undefined,
-        provider: 'rss',
-      };
-    })
-    .filter((item): item is UnifiedArticle => item !== null);
-}
-
 export interface AggregatedNewsResult {
   items: OverviewNewsItem[];
   meta: {
+    cointelegraphCount: number;
+    coindeskCount: number;
+    theBlockCount: number;
     cryptoCompareCount: number;
     coinGeckoCount: number;
-    rssCount: number;
     mergedCount: number;
     errors: string[];
   };
 }
 
 /**
- * Concurrent multi-API fetch — CryptoCompare + CoinGecko via Promise.allSettled.
- * RSS fallback only when both primary sources return nothing.
+ * Fetch from 5 premium sources concurrently via Promise.allSettled.
+ * Cointelegraph · CoinDesk · The Block · CryptoCompare · CoinGecko
  */
-export async function fetchAggregatedNews(lang = 'sk'): Promise<AggregatedNewsResult> {
-  const [ccResult, cgResult] = await Promise.allSettled([
+export async function fetchAggregatedNews(): Promise<AggregatedNewsResult> {
+  const results = await Promise.allSettled([
+    fetchRss2JsonPayload('cointelegraph', 'Cointelegraph', RSS2JSON_FEEDS[0].rssUrl),
+    fetchRss2JsonPayload('coindesk', 'CoinDesk', RSS2JSON_FEEDS[1].rssUrl),
+    fetchRss2JsonPayload('theblock', 'The Block', RSS2JSON_FEEDS[2].rssUrl),
     fetchCryptoComparePayload(),
     fetchCoinGeckoPayload(),
   ]);
 
+  const sourceLabels = [
+    'Cointelegraph',
+    'CoinDesk',
+    'The Block',
+    'CryptoCompare',
+    'CoinGecko',
+  ] as const;
+
   const errors: string[] = [];
   const unified: UnifiedArticle[] = [];
-  let cryptoCompareCount = 0;
-  let coinGeckoCount = 0;
-  let rssCount = 0;
+  const counts = {
+    cointelegraphCount: 0,
+    coindeskCount: 0,
+    theBlockCount: 0,
+    cryptoCompareCount: 0,
+    coinGeckoCount: 0,
+  };
 
-  if (ccResult.status === 'fulfilled') {
-    cryptoCompareCount = ccResult.value.length;
-    unified.push(...ccResult.value);
-  } else {
-    errors.push(`CryptoCompare: ${ccResult.reason instanceof Error ? ccResult.reason.message : String(ccResult.reason)}`);
-  }
-
-  if (cgResult.status === 'fulfilled') {
-    coinGeckoCount = cgResult.value.length;
-    unified.push(...cgResult.value);
-  } else {
-    errors.push(`CoinGecko: ${cgResult.reason instanceof Error ? cgResult.reason.message : String(cgResult.reason)}`);
-  }
-
-  if (unified.length === 0) {
-    try {
-      const rss = await fetchSupabaseFallbackPayload(lang);
-      rssCount = rss.length;
-      unified.push(...rss);
-    } catch (err) {
-      errors.push(`RSS: ${err instanceof Error ? err.message : String(err)}`);
+  results.forEach((result, index) => {
+    const label = sourceLabels[index];
+    if (result.status === 'fulfilled') {
+      const batch = result.value;
+      unified.push(...batch);
+      if (index === 0) counts.cointelegraphCount = batch.length;
+      if (index === 1) counts.coindeskCount = batch.length;
+      if (index === 2) counts.theBlockCount = batch.length;
+      if (index === 3) counts.cryptoCompareCount = batch.length;
+      if (index === 4) counts.coinGeckoCount = batch.length;
+    } else {
+      const reason = result.reason instanceof Error ? result.reason.message : String(result.reason);
+      errors.push(`${label}: ${reason}`);
     }
-  }
+  });
 
-  const deduped = dedupeUnifiedArticles(unified);
+  const deduped = dedupeUnifiedArticles(sortUnifiedByRecency(unified));
   const items = sortByRecency(
     deduped
       .map(enrichToOverviewItem)
@@ -456,9 +534,7 @@ export async function fetchAggregatedNews(lang = 'sk'): Promise<AggregatedNewsRe
   return {
     items,
     meta: {
-      cryptoCompareCount,
-      coinGeckoCount,
-      rssCount,
+      ...counts,
       mergedCount: items.length,
       errors,
     },
@@ -466,8 +542,8 @@ export async function fetchAggregatedNews(lang = 'sk'): Promise<AggregatedNewsRe
 }
 
 /** Back-compat wrapper used by the news hook. */
-export async function fetchOverviewNews(lang = 'sk'): Promise<OverviewNewsItem[]> {
-  const { items } = await fetchAggregatedNews(lang);
+export async function fetchOverviewNews(): Promise<OverviewNewsItem[]> {
+  const { items } = await fetchAggregatedNews();
   return items;
 }
 

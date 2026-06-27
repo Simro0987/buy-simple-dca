@@ -494,8 +494,8 @@ export function OverviewPage({ lang }: Props) {
 
       <p className="text-[9px] text-muted-foreground/30 text-center pb-2">
         {sk
-          ? 'Zdroje: CryptoCompare · CoinGecko (agregované)'
-          : 'Sources: CryptoCompare · CoinGecko (aggregated)'}
+          ? 'Zdroje: Cointelegraph · CoinDesk · The Block · CryptoCompare · CoinGecko'
+          : 'Sources: Cointelegraph · CoinDesk · The Block · CryptoCompare · CoinGecko'}
       </p>
     </div>
   );

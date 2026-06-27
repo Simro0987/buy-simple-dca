@@ -7,6 +7,7 @@ import {
   isFlashAlert,
   normalizeCoinGeckoArticles,
   normalizeCryptoCompareArticles,
+  normalizeRss2JsonArticles,
   pickTopStory,
   splitTopStory,
   type OverviewNewsItem,
@@ -88,16 +89,28 @@ describe('overviewNews', () => {
     expect(filterNewsByTab(items, 'ALL')).toHaveLength(3);
   });
 
-  it('dedupeUnifiedArticles removes duplicate titles and urls', () => {
+  it('dedupeUnifiedArticles removes duplicate titles keeping newest first', () => {
     const rows: UnifiedArticle[] = [
-      { id: '1', title: 'Same Story', url: 'https://a.com/1', sourceName: 'A', publishedAt: new Date().toISOString(), provider: 'cryptocompare' },
-      { id: '2', title: 'Same Story', url: 'https://b.com/2', sourceName: 'B', publishedAt: new Date().toISOString(), provider: 'coingecko' },
-      { id: '3', title: 'Other', url: 'https://a.com/1', sourceName: 'A', publishedAt: new Date().toISOString(), provider: 'coingecko' },
+      { id: '1', title: 'Same Story', url: 'https://a.com/1', sourceName: 'A', publishedAt: '2024-06-02T00:00:00Z', provider: 'cryptocompare' },
+      { id: '2', title: 'Same Story', url: 'https://b.com/2', sourceName: 'B', publishedAt: '2024-06-01T00:00:00Z', provider: 'coingecko' },
+      { id: '3', title: 'Other', url: 'https://a.com/1', sourceName: 'A', publishedAt: '2024-06-03T00:00:00Z', provider: 'coingecko' },
     ];
-    expect(dedupeUnifiedArticles(rows)).toHaveLength(1);
+    const sorted = [...rows].sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    expect(dedupeUnifiedArticles(sorted)).toHaveLength(2);
+    expect(dedupeUnifiedArticles(sorted)[0]?.title).toBe('Other');
   });
 
-  it('normalizes CryptoCompare and CoinGecko payloads', () => {
+  it('normalizes RSS2JSON, CryptoCompare and CoinGecko payloads', () => {
+    const rss = normalizeRss2JsonArticles([{
+      title: 'BTC headline',
+      link: 'https://cointelegraph.com/news/btc',
+      pubDate: 'Mon, 01 Jan 2024 00:00:00 GMT',
+      description: '<p>Bitcoin rally</p>',
+      thumbnail: 'https://images.ct.com/btc.jpg',
+    }], 'cointelegraph', 'Cointelegraph');
+    expect(rss[0]?.sourceName).toBe('Cointelegraph');
+    expect(rss[0]?.imageUrl).toBe('https://images.ct.com/btc.jpg');
+
     const cc = normalizeCryptoCompareArticles([{
       id: 1,
       title: 'BTC News',
