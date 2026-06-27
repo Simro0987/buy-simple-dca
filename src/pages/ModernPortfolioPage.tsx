@@ -8,20 +8,29 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, RefreshCw, Copy, Check, Lock, RotateCcw,
   TrendingUp, TrendingDown, Target,
-  AlertTriangle, Sparkles, Send,
+  AlertTriangle, Sparkles, Sparkle,
 } from 'lucide-react';
 import { TOKENS, formatUsd, formatPrice } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
+import { usePortfolioLivePrices, PORTFOLIO_PRICE_REFRESH_MS } from '@/hooks/usePortfolioLivePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
-import { generateDailyRiskReport } from '@/lib/dailyRiskReport';
-import { sendDailyRiskReportToTelegram } from '@/lib/telegramService';
+import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
+import { buildMockLiveMetrics, type LiveHoldingMetric } from '@/lib/mockPortfolioHoldings';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
+import { FlashMoney } from '@/components/modern-portfolio/FlashMoney';
+import { ModernAllocationDonut } from '@/components/modern-portfolio/ModernAllocationDonut';
+import { FearGreedSlider } from '@/components/modern-portfolio/FearGreedSlider';
+import {
+  PortfolioHeroSkeleton,
+  PortfolioStatSkeleton,
+  PortfolioPositionSkeleton,
+} from '@/components/modern-portfolio/PortfolioSkeletons';
 import {
   type DcaToken,
   DCA_TOKEN_COLORS,
@@ -48,8 +57,33 @@ const GOAL_BTC = 1;
 const LAST_HALVING = new Date('2024-04-19');
 const NEXT_HALVING = new Date('2028-04-19');
 const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
-const DAILY_REPORT_KEY = 'daily-risk-report-last';
-const DAILY_REPORT_SENT_IDS_KEY = 'telegram_sent_news_ids';
+const DAILY_REPORT_KEY = 'portfolio-risk-insight-last';
+
+function recomputeLiveMetrics(
+  assets: LiveHoldingMetric[],
+): {
+  assets: LiveHoldingMetric[];
+  totalValue: number;
+  totalInvested: number;
+  totalPnl: number;
+  totalPnlPct: number;
+} {
+  const nextAssets = assets.map(a => {
+    const value = a.holdings * a.currentPrice;
+    const pnl = value - a.invested;
+    const pnlPct = a.invested > 0 ? (pnl / a.invested) * 100 : 0;
+    return { ...a, value, pnl, pnlPct };
+  });
+  const totalValue = nextAssets.reduce((s, a) => s + a.value, 0);
+  const totalInvested = nextAssets.reduce((s, a) => s + a.invested, 0);
+  const totalPnl = totalValue - totalInvested;
+  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+  for (const asset of nextAssets) {
+    asset.actualPct = totalValue > 0 ? asset.value / totalValue : 0;
+    asset.deviationPct = (asset.actualPct - asset.targetPct) * 100;
+  }
+  return { assets: nextAssets, totalValue, totalInvested, totalPnl, totalPnlPct };
+}
 
 export function ModernPortfolioPage({ lang }: Props) {
   return (
@@ -62,34 +96,73 @@ export function ModernPortfolioPage({ lang }: Props) {
 function ModernPortfolioInner({ lang }: Props) {
   const sk = lang === 'sk';
   const { data: prices, isFetching } = usePrices();
-  const { data: fg } = useFearGreed();
+  const {
+    data: liveSpot,
+    isLoading: liveSpotLoading,
+    isFetching: liveSpotFetching,
+    dataUpdatedAt: liveSpotUpdatedAt,
+  } = usePortfolioLivePrices();
+  const { data: fg, isLoading: fgLoading } = useFearGreed();
   const { data: settings } = useAppSettings();
   const reservoir = useProfitReservoir();
   const {
     metrics,
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, portfolioData,
-    totalValue,
   } = usePortfolio();
   const engineTotalUsd = useCyborgTotalUsd();
-  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : Number(totalValue ?? 0) || 0;
-  const displayPnl = Number(metrics.totalPnl ?? 0) || 0;
-  const displayPnlPct = Number(metrics.totalPnlPct ?? 0) || 0;
+
+  const livePriceMap = useMemo(() => ({
+    bitcoin: liveSpot?.bitcoin ?? prices?.bitcoin?.usd ?? 0,
+    ethereum: liveSpot?.ethereum ?? prices?.ethereum?.usd ?? 0,
+    solana: liveSpot?.solana ?? prices?.solana?.usd ?? 0,
+  }), [liveSpot, prices]);
+
+  const useMockHoldings = metrics.totalInvested <= 0 && metrics.totalValue <= 0 && engineTotalUsd <= 0;
+
+  const dashboard = useMemo(() => {
+    if (useMockHoldings) {
+      return buildMockLiveMetrics(livePriceMap);
+    }
+    const baseAssets: LiveHoldingMetric[] = metrics.assets.map(a => ({
+      symbol: a.symbol,
+      coingeckoId: a.coingeckoId,
+      holdings: a.holdings,
+      avgBuyPrice: a.holdings > 0 ? a.invested / a.holdings : 0,
+      invested: a.invested,
+      currentPrice: Number(livePriceMap[a.coingeckoId as keyof typeof livePriceMap] ?? a.currentPrice) || 0,
+      value: 0,
+      pnl: 0,
+      pnlPct: 0,
+      actualPct: 0,
+      targetPct: a.targetPct,
+      deviationPct: 0,
+    }));
+    return recomputeLiveMetrics(baseAssets);
+  }, [useMockHoldings, metrics.assets, livePriceMap]);
+
+  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : dashboard.totalValue;
+  const displayPnl = dashboard.totalPnl;
+  const displayPnlPct = dashboard.totalPnlPct;
+  const displayInvested = dashboard.totalInvested;
   const isGain = displayPnl >= 0;
+  const pricesInitialLoading = liveSpotLoading && !liveSpot && !prices;
+  const liveAssets = dashboard.assets;
 
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
   const [confirmKey, setConfirmKey] = useState(0);
   const [expandedRadar, setExpandedRadar] = useState<DcaToken | null>('BTC');
   const [copied, setCopied] = useState<string | null>(null);
   const [busyTp, setBusyTp] = useState<string | null>(null);
-  const [reportSending, setReportSending] = useState(false);
-  const [dailyReport, setDailyReport] = useState<string>(() =>
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [riskInsight, setRiskInsight] = useState<string>(() =>
     localStorage.getItem(DAILY_REPORT_KEY) || (lang === 'sk'
-      ? 'Denný report ešte nebol vygenerovaný.'
-      : 'Daily report has not been generated yet.'),
+      ? 'Kliknite na „Generuj Report“ pre živú analýzu portfólia.'
+      : 'Click “Generate Report” for a live portfolio analysis.'),
   );
 
   const fgValue = fg?.value ?? 50;
+  const fgLabel = fg?.classification ?? (fgValue <= 44 ? 'Fear' : fgValue >= 56 ? 'Greed' : 'Neutral');
   const weeklyCapital = Number(settings?.default_amount ?? 0);
   const freeCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
   const warnings = useMemo(() => computeConcentrationWarnings(prices), [prices]);
@@ -106,10 +179,10 @@ function ModernPortfolioInner({ lang }: Props) {
   );
 
   const livePrices = useMemo<Record<DcaToken, number>>(() => ({
-    BTC: prices?.[DCA_CG_ID.BTC]?.usd ?? 0,
-    ETH: prices?.[DCA_CG_ID.ETH]?.usd ?? 0,
-    SOL: prices?.[DCA_CG_ID.SOL]?.usd ?? 0,
-  }), [prices]);
+    BTC: livePriceMap.bitcoin || (prices?.[DCA_CG_ID.BTC]?.usd ?? 0),
+    ETH: livePriceMap.ethereum || (prices?.[DCA_CG_ID.ETH]?.usd ?? 0),
+    SOL: livePriceMap.solana || (prices?.[DCA_CG_ID.SOL]?.usd ?? 0),
+  }), [livePriceMap, prices]);
 
   const updateDcaPrice = useCallback((sym: DcaToken, v: number) => {
     setDcaPrices(prev => { const n = { ...prev, [sym]: v }; saveDcaPrices(n); return n; });
@@ -182,64 +255,29 @@ function ModernPortfolioInner({ lang }: Props) {
     () => takeProfitRows.filter(r => r.eligible),
     [takeProfitRows],
   );
-  const pnl24hUsd = useMemo(() => {
-    return metrics.assets.reduce((sum, asset) => {
-      const tokenMeta = TOKENS.find(t => t.symbol === asset.symbol);
-      if (!tokenMeta) return sum;
-      const changePct = prices?.[tokenMeta.coingeckoId]?.usd_24h_change ?? 0;
-      return sum + (asset.value * changePct) / 100;
-    }, 0);
-  }, [metrics.assets, prices]);
 
-  const buildDailyReport = useCallback(() => {
-    return generateDailyRiskReport({
-      totalPortfolioValueUsd: metrics.totalValue,
-      cleanLiquidityUsd: freeCash + reservoir.stable,
-      pnl24hUsd,
-      cumulativePnlUsd: metrics.totalPnl,
-      globalRiskScore: maxRisk,
-      assets: metrics.assets.map((asset) => ({
-        symbol: asset.symbol,
-        allocationPct: asset.actualPct * 100,
-        spotPrice: asset.currentPrice,
-        holdings: asset.holdings,
-        investedUsd: asset.invested,
-      })),
-    });
-  }, [freeCash, maxRisk, metrics, pnl24hUsd, reservoir.stable]);
-
-  const handleManualReport = useCallback(async () => {
-    setReportSending(true);
+  const handleGenerateReport = useCallback(() => {
+    setReportGenerating(true);
     try {
-      const report = buildDailyReport();
-      setDailyReport(report);
-      localStorage.setItem(DAILY_REPORT_KEY, report);
-
-      const chatId = localStorage.getItem('telegram_chat_id')?.trim();
-      const sendResult = await sendDailyRiskReportToTelegram(report, chatId);
-      if (!sendResult.success) {
-        throw new Error(sendResult.error || (sk ? 'Odoslanie reportu zlyhalo' : 'Report delivery failed'));
-      }
-
-      // localStorage hardening for sent ids history
-      let sentIds: string[] = [];
-      try {
-        sentIds = JSON.parse(localStorage.getItem(DAILY_REPORT_SENT_IDS_KEY) || '[]');
-      } catch {
-        sentIds = [];
-      }
-      const reportId = `daily-risk-report:${new Date().toISOString().slice(0, 10)}`;
-      if (!sentIds.includes(reportId)) {
-        sentIds = [...sentIds, reportId].slice(-200);
-      }
-      localStorage.setItem(DAILY_REPORT_SENT_IDS_KEY, JSON.stringify(sentIds));
-      toast.success(sk ? 'Denný report odoslaný na Telegram' : 'Daily report sent to Telegram');
+      const insight = generatePortfolioRiskInsight({
+        fearGreedValue: fgValue,
+        fearGreedLabel: fgLabel,
+        totalPnlPct: displayPnlPct,
+        lang: sk ? 'sk' : 'en',
+      });
+      setRiskInsight(insight);
+      localStorage.setItem(DAILY_REPORT_KEY, insight);
+      toast.success(sk ? 'Report vygenerovaný' : 'Report generated');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : (sk ? 'Report sa nepodarilo odoslať' : 'Failed to send report'));
+      toast.error(e instanceof Error ? e.message : (sk ? 'Report sa nepodarilo vygenerovať' : 'Failed to generate report'));
     } finally {
-      setReportSending(false);
+      setReportGenerating(false);
     }
-  }, [buildDailyReport, sk]);
+  }, [displayPnlPct, fgLabel, fgValue, sk]);
+
+  const lastLiveUpdate = liveSpotUpdatedAt
+    ? new Date(liveSpotUpdatedAt).toLocaleTimeString(sk ? 'sk-SK' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <div className="relative space-y-4 sm:space-y-5 pb-8 min-w-0 overflow-x-hidden">
@@ -251,83 +289,126 @@ function ModernPortfolioInner({ lang }: Props) {
         transition={{ duration: 0.45 }}
         className="pt-2 pb-1"
       >
-        <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
-        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
-          <Money size="hero" className="!text-4xl sm:!text-6xl break-words">{formatUsd(displayTotalUsd)}</Money>
-          <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
-            <div className="flex items-center gap-1.5 justify-end">
-              {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
-              <Money size="md" positive={isGain} negative={!isGain}>
-                {isGain ? '+' : ''}{formatUsd(displayPnl)}
-              </Money>
+        {pricesInitialLoading ? (
+          <PortfolioHeroSkeleton />
+        ) : (
+          <>
+            <div className="flex items-center justify-between gap-2">
+              <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+              <Chip color={liveSpotFetching ? 'amber' : 'green'}>
+                {liveSpotFetching ? 'SYNC' : 'LIVE'}
+                {lastLiveUpdate ? ` · ${lastLiveUpdate}` : ''}
+              </Chip>
             </div>
-            <p className={`font-mono text-sm mt-1 ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}>
-              {isGain ? '+' : ''}{displayPnlPct.toFixed(2)}%
-            </p>
-          </div>
-        </div>
+            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
+              <FlashMoney price={displayTotalUsd} size="hero" className="!text-4xl sm:!text-6xl break-words">
+                {formatUsd(displayTotalUsd)}
+              </FlashMoney>
+              <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
+                <div className="flex items-center gap-1.5 justify-end">
+                  {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
+                  <FlashMoney price={displayPnl} size="md" positive={isGain} negative={!isGain}>
+                    {isGain ? '+' : ''}{formatUsd(displayPnl)}
+                  </FlashMoney>
+                </div>
+                <FlashMoney
+                  price={displayPnlPct}
+                  size="sm"
+                  className={`font-mono text-sm mt-1 block ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}
+                >
+                  {isGain ? '+' : ''}{displayPnlPct.toFixed(2)}%
+                </FlashMoney>
+              </div>
+            </div>
 
-        <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
-          <Chip color="green">
-            <Sparkles className="w-3 h-3 inline mr-1" />
-            Profit {formatUsd(profitAvailable)}
-          </Chip>
-          <Chip color="default">Stake {formatUsd(totalStakedValue)} · {blendedApy.toFixed(1)}%</Chip>
-          {TOKENS.map(t => (
-            <button
-              key={t.symbol}
-              onClick={() => toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL')}
-              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all shrink-0 ${
-                selected === t.symbol
-                  ? 'bg-white text-black border-white'
-                  : 'border-white/15 text-white/45 hover:text-white/80'
-              }`}
-            >
-              {t.symbol}
-            </button>
-          ))}
-          {selected && (
-            <button onClick={() => setSelected(null)} className="text-white/30 text-xs px-2">✕</button>
-          )}
-        </div>
+            <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
+              <Chip color="green">
+                <Sparkles className="w-3 h-3 inline mr-1" />
+                Profit {formatUsd(profitAvailable)}
+              </Chip>
+              <Chip color="default">Stake {formatUsd(totalStakedValue)} · {blendedApy.toFixed(1)}%</Chip>
+              {useMockHoldings && (
+                <Chip color="purple">{sk ? 'Demo držby' : 'Demo holdings'}</Chip>
+              )}
+              {TOKENS.map(t => (
+                <button
+                  key={t.symbol}
+                  onClick={() => toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL')}
+                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all shrink-0 ${
+                    selected === t.symbol
+                      ? 'bg-white text-black border-white'
+                      : 'border-white/15 text-white/45 hover:text-white/80'
+                  }`}
+                >
+                  {t.symbol}
+                </button>
+              ))}
+              {selected && (
+                <button onClick={() => setSelected(null)} className="text-white/30 text-xs px-2">✕</button>
+              )}
+            </div>
+          </>
+        )}
       </motion.section>
+
+      {/* ═══ LIVE ALLOCATION + F&G ══════════════════════════════════════════ */}
+      <div className="grid md:grid-cols-2 gap-2 sm:gap-3 min-w-0">
+        <ModernAllocationDonut
+          assets={liveAssets}
+          totalValue={displayTotalUsd}
+          selected={selected}
+          onSelect={toggleSelected}
+          loading={pricesInitialLoading}
+        />
+        <Bento delay={0.08} className="p-4 sm:p-5 min-w-0 flex flex-col justify-center">
+          <FearGreedSlider value={fgValue} label={fgLabel} loading={fgLoading && !fg} />
+        </Bento>
+      </div>
 
       {/* ═══ STAT BENTO ═════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
-        {[
-          { l: sk ? 'Investované' : 'Invested', v: formatUsd(metrics.totalInvested), d: 0.04 },
-          { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(displayPnl)}`, d: 0.08, pos: isGain },
-          { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: formatUsd(weeklyCapital), d: 0.12 },
-          { l: sk ? 'Voľný cash' : 'Free cash', v: formatUsd(freeCash + reservoir.stable), d: 0.16 },
-        ].map(s => (
-          <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
-            <Label className="truncate">{s.l}</Label>
-            <Money size="md" className="mt-2 block truncate !text-lg sm:!text-2xl" positive={s.pos} negative={s.pos === false}>
-              {s.v}
-            </Money>
-          </Bento>
-        ))}
+        {pricesInitialLoading ? (
+          [0, 1, 2, 3].map(i => <PortfolioStatSkeleton key={i} />)
+        ) : (
+          [
+            { l: sk ? 'Investované' : 'Invested', v: formatUsd(displayInvested), d: 0.04 },
+            { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(displayPnl)}`, d: 0.08, pos: isGain },
+            { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: formatUsd(weeklyCapital), d: 0.12 },
+            { l: sk ? 'Voľný cash' : 'Free cash', v: formatUsd(freeCash + reservoir.stable), d: 0.16 },
+          ].map(s => (
+            <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
+              <Label className="truncate">{s.l}</Label>
+              <Money size="md" className="mt-2 block truncate !text-lg sm:!text-2xl" positive={s.pos} negative={s.pos === false}>
+                {s.v}
+              </Money>
+            </Bento>
+          ))
+        )}
       </div>
 
       {/* ═══ DAILY RISK REPORT ═══════════════════════════════════════════════ */}
       <Bento delay={0.18} className="bg-[#0A0A0A] border border-white/10 p-4 sm:p-5 min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
           <div className="min-w-0">
-            <Label>Daily Risk Report</Label>
-            <p className="text-[11px] text-white/35 font-mono mt-1 break-words">Portfolio + WACB + LiveRiskScore + concentration risk</p>
+            <Label>{sk ? 'Denný risk report' : 'Daily Risk Report'}</Label>
+            <p className="text-[11px] text-white/35 font-mono mt-1 break-words">
+              {sk ? 'Simulovaná AI analýza z live PnL % a Fear & Greed indexu' : 'Simulated AI analysis from live PnL % and Fear & Greed'}
+            </p>
           </div>
           <button
-            onClick={() => void handleManualReport()}
-            disabled={reportSending}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60 shrink-0 w-full sm:w-auto"
+            onClick={handleGenerateReport}
+            disabled={reportGenerating}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60 shrink-0 w-full sm:w-auto hover:border-[#14F195]/30 hover:text-white transition-colors"
           >
-            <Send className="w-3.5 h-3.5" />
-            {reportSending ? 'Sending…' : 'Generate & Send'}
+            <Sparkle className="w-3.5 h-3.5" />
+            {reportGenerating
+              ? (sk ? 'Generujem…' : 'Generating…')
+              : (sk ? 'Generuj Report' : 'Generate Report')}
           </button>
         </div>
-        <pre className="mt-4 text-[11px] leading-relaxed text-white/75 whitespace-pre-wrap break-words font-mono">
-          {dailyReport}
-        </pre>
+        <p className="mt-4 text-sm leading-relaxed text-white/80 whitespace-pre-wrap break-words">
+          {riskInsight.replace(/\*\*(.*?)\*\*/g, '$1')}
+        </p>
       </Bento>
 
       {/* ═══ DCA-OUT RADAR — VIZUÁLNA DOMINANTA ═══════════════════════════ */}
@@ -366,10 +447,7 @@ function ModernPortfolioInner({ lang }: Props) {
               </p>
             </div>
             <div className="text-left sm:text-right shrink-0 flex sm:block items-center justify-between gap-3">
-              <Label>F&G Index</Label>
-              <Money size="lg" className="mt-1 block" positive={fgValue < 35} negative={fgValue > 70}>
-                {fgValue}
-              </Money>
+              <FearGreedSlider value={fgValue} label={fgLabel} loading={fgLoading && !fg} />
               {sellSignals > 0 && (
                 <Chip color="red" >
                   <Zap className="w-3 h-3 inline mr-0.5" />
@@ -556,7 +634,7 @@ function ModernPortfolioInner({ lang }: Props) {
           </AnimatePresence>
 
           <p className="text-[10px] text-white/25 text-center font-mono">
-            CoinGecko 30s · Binance RSI 10min · alternative.me F&G
+            CoinGecko {PORTFOLIO_PRICE_REFRESH_MS / 1000}s · Binance RSI 10min · alternative.me F&G
           </p>
         </div>
       </Bento>
@@ -565,27 +643,41 @@ function ModernPortfolioInner({ lang }: Props) {
       <div className="grid md:grid-cols-2 gap-2 sm:gap-3 min-w-0">
         <Bento delay={0.28} className="p-4 sm:p-5 space-y-4 min-w-0">
           <Label>{sk ? 'Alokácia · USD' : 'Allocation · USD'}</Label>
-          {metrics.assets.map(a => {
+          {liveAssets.map(a => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
             return (
               <div key={a.symbol} className={dim ? 'opacity-30' : ''}>
                 <div className="flex justify-between items-baseline gap-2 mb-1.5 min-w-0">
                   <span className="text-sm font-bold shrink-0" style={{ color: token.color }}>{a.symbol}</span>
-                  <Money size="md" className="!text-lg sm:!text-2xl truncate">{formatUsd(a.value)}</Money>
+                  <FlashMoney price={a.value} size="md" className="!text-lg sm:!text-2xl truncate">
+                    {formatUsd(a.value)}
+                  </FlashMoney>
                 </div>
                 <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all"
+                    className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${a.actualPct * 100}%`, backgroundColor: token.color }}
                   />
                 </div>
                 <div className="flex justify-between mt-1 text-[10px] font-mono text-white/35">
-                  <span>{(a.actualPct * 100).toFixed(1)}% aktuálne</span>
-                  <span>{(a.targetPct * 100).toFixed(0)}% cieľ</span>
+                  <span>{(a.actualPct * 100).toFixed(1)}% {sk ? 'aktuálne' : 'current'}</span>
+                  <span>{(a.targetPct * 100).toFixed(0)}% {sk ? 'cieľ' : 'target'}</span>
                   <span className={a.deviationPct > 3 ? 'text-orange-400' : ''}>
                     {a.deviationPct >= 0 ? '+' : ''}{a.deviationPct.toFixed(1)}pp
                   </span>
+                </div>
+                <div className="flex justify-between mt-1 text-[10px] font-mono">
+                  <FlashMoney price={a.currentPrice} size="sm" className="!text-[10px] text-white/45">
+                    {formatPrice(a.currentPrice)}
+                  </FlashMoney>
+                  <FlashMoney
+                    price={a.pnlPct}
+                    size="sm"
+                    className={`!text-[10px] ${a.pnl >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}
+                  >
+                    {a.pnl >= 0 ? '+' : ''}{formatUsd(a.pnl)} · {a.pnlPct >= 0 ? '+' : ''}{a.pnlPct.toFixed(1)}%
+                  </FlashMoney>
                 </div>
               </div>
             );
@@ -622,19 +714,15 @@ function ModernPortfolioInner({ lang }: Props) {
       {/* ═══ POZÍCIE ═══════════════════════════════════════════════════════ */}
       <div className="space-y-3 min-w-0">
         <Label>{sk ? 'Pozície' : 'Positions'}</Label>
-        {portfolioData.loading ? (
-          <Bento className="p-5 space-y-3">
-            <p className="text-sm text-white/40 flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              {sk ? 'Načítavam portfólio…' : 'Loading portfolio…'}
-            </p>
-          </Bento>
+        {portfolioData.loading || pricesInitialLoading ? (
+          <div className="grid gap-3">
+            {[0, 1, 2].map(i => <PortfolioPositionSkeleton key={i} />)}
+          </div>
         ) : (
         <div className="grid gap-3">
-          {metrics.assets.map((a, i) => {
+          {liveAssets.map((a, i) => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
-            const avgCost = a.holdings > 0 ? a.invested / a.holdings : 0;
             const slice = portfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
             const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
             return (
@@ -648,23 +736,32 @@ function ModernPortfolioInner({ lang }: Props) {
                       {a.symbol}
                     </div>
                     <div className="min-w-0">
-                      <Money size="lg" className="!text-2xl sm:!text-3xl truncate">{formatUsd(a.value)}</Money>
+                      <FlashMoney price={a.value} size="lg" className="!text-2xl sm:!text-3xl truncate">
+                        {formatUsd(a.value)}
+                      </FlashMoney>
                       <p className="font-mono text-xs text-white/35 mt-1 break-words">
                         {a.holdings > 0
                           ? `${a.symbol === 'BTC' ? a.holdings.toFixed(6) : a.holdings.toFixed(4)} ${a.symbol}`
                           : '—'}
-                        {' · '}{formatPrice(a.currentPrice)}
+                        {' · '}
+                        <FlashMoney price={a.currentPrice} size="sm" className="!text-xs inline">
+                          {formatPrice(a.currentPrice)}
+                        </FlashMoney>
                       </p>
                     </div>
                   </div>
                   <div className="text-left sm:text-right shrink-0">
-                    <Money size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-xl sm:!text-2xl">
+                    <FlashMoney price={a.pnl} size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-xl sm:!text-2xl">
                       {a.pnl >= 0 ? '+' : ''}{formatUsd(a.pnl)}
-                    </Money>
-                    <p className={`font-mono text-sm ${a.pnlPct >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>
+                    </FlashMoney>
+                    <FlashMoney
+                      price={a.pnlPct}
+                      size="sm"
+                      className={`font-mono text-sm block ${a.pnlPct >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}
+                    >
                       {a.pnlPct >= 0 ? '+' : ''}{a.pnlPct.toFixed(2)}%
-                    </p>
-                    <p className="text-[10px] text-white/30 font-mono mt-1">avg {formatUsd(avgCost)}</p>
+                    </FlashMoney>
+                    <p className="text-[10px] text-white/30 font-mono mt-1">avg {formatUsd(a.avgBuyPrice)}</p>
                   </div>
                 </div>
                 {slice && (slice.liquidQty > 0 || slice.stakedQty > 0) && (
@@ -768,7 +865,9 @@ function ModernPortfolioInner({ lang }: Props) {
 
       {/* Footer meta */}
       <p className="text-center text-[10px] text-white/20 font-mono pt-2">
-        Všetky sumy v USD · PnL = hodnota − investované (DCA + počiatočná nákupná cena)
+        {sk
+          ? 'Všetky sumy v USD · Live ceny každých 60s · PnL = hodnota − investované'
+          : 'All amounts in USD · Live prices every 60s · PnL = value − invested'}
       </p>
     </div>
   );
