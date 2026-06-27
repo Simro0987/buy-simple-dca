@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  filterNewsByTab,
+  formatNewsTimeAgo,
+  inferSentiment,
   isFlashAlert,
   pickTopStory,
   splitTopStory,
@@ -67,5 +70,26 @@ describe('overviewNews', () => {
     const { topStory, remainingArticles } = splitTopStory(items);
     expect(topStory?.id).toBe('2');
     expect(remainingArticles.map(i => i.id)).toEqual(['1', '3']);
+  });
+
+  it('filterNewsByTab filters by asset', () => {
+    const items = [
+      article({ id: '1', title: 'BTC', asset: 'BTC' }),
+      article({ id: '2', title: 'ETH', asset: 'ETH' }),
+    ];
+    expect(filterNewsByTab(items, 'BTC')).toHaveLength(1);
+    expect(filterNewsByTab(items, 'ALL')).toHaveLength(2);
+  });
+
+  it('inferSentiment classifies bullish and bearish headlines', () => {
+    expect(inferSentiment('Bitcoin surges to new ATH')).toBe('bullish');
+    expect(inferSentiment('Market crash after major hack')).toBe('bearish');
+    expect(inferSentiment('Weekly market recap')).toBe('neutral');
+  });
+
+  it('formatNewsTimeAgo returns readable relative time', () => {
+    const fiveMinsAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    expect(formatNewsTimeAgo(fiveMinsAgo, false)).toBe('5 mins ago');
+    expect(formatNewsTimeAgo(fiveMinsAgo, true)).toBe('pred 5 min');
   });
 });

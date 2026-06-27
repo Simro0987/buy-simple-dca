@@ -1,12 +1,29 @@
-import { useMemo, useState } from 'react';
-import { Zap, Radio, Globe, Filter, AlertTriangle, RefreshCw, ExternalLink } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  Zap,
+  Radio,
+  Globe,
+  Filter,
+  AlertTriangle,
+  RefreshCw,
+  ExternalLink,
+  TrendingUp,
+  TrendingDown,
+  Minus,
+} from 'lucide-react';
 import { Lang } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
-import { useOverviewNews } from '@/hooks/useOverviewNews';
+import { useInfiniteScrollSentinel } from '@/hooks/useInfiniteScrollSentinel';
+import { flattenOverviewNewsPages, useOverviewNews } from '@/hooks/useOverviewNews';
 import {
+  NEWS_INITIAL_VISIBLE,
+  NEWS_LOAD_MORE_COUNT,
   formatNewsTimeAgo,
+  filterNewsByTab,
   splitTopStory,
   type NewsAsset,
+  type NewsFilter,
+  type NewsSentiment,
   type OverviewNewsItem,
 } from '@/lib/overviewNews';
 
@@ -26,15 +43,31 @@ const CAT_TAG: Record<NewsAsset, { bg: string; text: string; label: string }> = 
   MAKRO: { bg: 'rgba(20,184,166,0.14)',  text: '#14b8a6', label: 'Makro'  },
 };
 
-type FilterVal = 'ALL' | NewsAsset;
-
-const FILTERS: { id: FilterVal; label: string }[] = [
+const FILTERS: { id: NewsFilter; label: string }[] = [
   { id: 'ALL',   label: 'Všetko' },
   { id: 'MAKRO', label: 'Makro'  },
   { id: 'BTC',   label: 'BTC'    },
   { id: 'ETH',   label: 'ETH'    },
   { id: 'SOL',   label: 'SOL'    },
 ];
+
+function SentimentBadge({ sentiment, sk }: { sentiment?: NewsSentiment; sk: boolean }) {
+  if (!sentiment) return null;
+
+  const config = {
+    bullish: { label: 'Bullish', icon: TrendingUp, className: 'text-green-400 bg-green-500/10 border border-green-500/25' },
+    bearish: { label: 'Bearish', icon: TrendingDown, className: 'text-red-400 bg-red-500/10 border border-red-500/25' },
+    neutral: { label: sk ? 'Neutrálne' : 'Neutral', icon: Minus, className: 'text-muted-foreground bg-white/[0.04] border border-white/[0.08]' },
+  }[sentiment];
+
+  const Icon = config.icon;
+  return (
+    <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wide inline-flex items-center gap-0.5 ${config.className}`}>
+      <Icon className="w-2 h-2" />
+      {config.label}
+    </span>
+  );
+}
 
 function TopStoryHeroSkeleton() {
   return (
@@ -84,7 +117,7 @@ function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
       }}
     >
       {item.imageUrl ? (
-        <div className="relative h-36 sm:h-40 overflow-hidden">
+        <div className="relative h-36 sm:h-44 overflow-hidden">
           <img
             src={item.imageUrl}
             alt=""
@@ -106,7 +139,7 @@ function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
           <span className="flex items-center gap-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-gradient-to-r from-orange-500/20 to-amber-500/15 border border-orange-400/35 text-orange-300 uppercase tracking-wide">
             <span aria-hidden>🔥</span>
-            {sk ? 'Dnešná Top Správa' : 'Top Story of the Day'}
+            {sk ? 'Dnešná Top Správa' : 'Top Story'}
           </span>
 
           <span
@@ -123,12 +156,14 @@ function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
             {item.asset}
           </span>
 
+          <SentimentBadge sentiment={item.sentiment} sk={sk} />
+
           <span className="text-[9px] text-muted-foreground/60 ml-auto tabular-nums">
             {formatNewsTimeAgo(item.publishedAt, sk)}
           </span>
         </div>
 
-        <h2 className="text-[15px] sm:text-base font-bold leading-snug text-foreground tracking-tight">
+        <h2 className="text-[15px] sm:text-lg font-bold leading-snug text-foreground tracking-tight">
           {item.title}
         </h2>
 
@@ -215,6 +250,8 @@ function NewsCard({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
               {item.asset}
             </span>
 
+            <SentimentBadge sentiment={item.sentiment} sk={sk} />
+
             {isFlash && (
               <span className="flex items-center gap-0.5 text-[8px] font-bold px-1.5 py-0.5 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-400 uppercase tracking-wide animate-pulse">
                 <Zap className="w-2 h-2" />
@@ -266,11 +303,25 @@ function NewsCard({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
 
 export function OverviewPage({ lang }: Props) {
   const sk = lang === 'sk';
-  const [filter, setFilter] = useState<FilterVal>('ALL');
-  const { data: news, isLoading, isError, refetch, isFetching } = useOverviewNews(lang);
+  const [filter, setFilter] = useState<NewsFilter>('ALL');
+  const [visibleCount, setVisibleCount] = useState(NEWS_INITIAL_VISIBLE);
+  const wasFetchingNextPage = useRef(false);
 
-  const { topStory, remainingArticles } = useMemo(() => {
-    const filtered = (news ?? []).filter(n => filter === 'ALL' || n.asset === filter);
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+    isFetching,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useOverviewNews(lang);
+
+  const allNews = useMemo(() => flattenOverviewNewsPages(data?.pages), [data?.pages]);
+
+  const { topStory, remainingArticles, totalRemaining } = useMemo(() => {
+    const filtered = filterNewsByTab(allNews, filter);
     const { topStory: hero, remainingArticles: rest } = splitTopStory(filtered);
 
     const sortedRest = [...rest].sort((a, b) => {
@@ -278,8 +329,41 @@ export function OverviewPage({ lang }: Props) {
       return new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime();
     });
 
-    return { topStory: hero, remainingArticles: sortedRest };
-  }, [news, filter]);
+    return {
+      topStory: hero,
+      remainingArticles: sortedRest.slice(0, visibleCount),
+      totalRemaining: sortedRest.length,
+    };
+  }, [allNews, filter, visibleCount]);
+
+  useEffect(() => {
+    setVisibleCount(NEWS_INITIAL_VISIBLE);
+  }, [filter]);
+
+  useEffect(() => {
+    if (wasFetchingNextPage.current && !isFetchingNextPage) {
+      setVisibleCount(count => count + NEWS_LOAD_MORE_COUNT);
+    }
+    wasFetchingNextPage.current = isFetchingNextPage;
+  }, [isFetchingNextPage]);
+
+  const canRevealMore = visibleCount < totalRemaining;
+  const canFetchMore = Boolean(hasNextPage);
+
+  const handleLoadMore = useCallback(() => {
+    if (canRevealMore) {
+      setVisibleCount(count => count + NEWS_LOAD_MORE_COUNT);
+      return;
+    }
+    if (canFetchMore && !isFetchingNextPage) {
+      void fetchNextPage();
+    }
+  }, [canRevealMore, canFetchMore, fetchNextPage, isFetchingNextPage]);
+
+  const sentinelRef = useInfiniteScrollSentinel({
+    enabled: !isLoading && !isError && (canRevealMore || canFetchMore),
+    onIntersect: handleLoadMore,
+  });
 
   const flashCount = remainingArticles.filter(n => n.isFlashAlert).length;
 
@@ -390,6 +474,28 @@ export function OverviewPage({ lang }: Props) {
                 {sk ? 'Žiadne správy pre tento filter.' : 'No articles for this filter.'}
               </p>
             </div>
+          )}
+
+          {(canRevealMore || canFetchMore) && (
+            <div ref={sentinelRef} className="space-y-1.5 pt-1">
+              {isFetchingNextPage && (
+                <>
+                  <NewsCardSkeleton />
+                  <NewsCardSkeleton />
+                </>
+              )}
+              {!isFetchingNextPage && canRevealMore && (
+                <p className="text-[9px] text-muted-foreground/40 text-center py-1">
+                  {sk ? 'Načítavam ďalšie správy…' : 'Loading more stories…'}
+                </p>
+              )}
+            </div>
+          )}
+
+          {!canRevealMore && !canFetchMore && totalRemaining > NEWS_INITIAL_VISIBLE && (
+            <p className="text-[9px] text-muted-foreground/30 text-center py-2">
+              {sk ? 'Koniec feedu' : 'End of feed'}
+            </p>
           )}
         </div>
       )}
