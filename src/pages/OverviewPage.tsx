@@ -14,6 +14,10 @@ import {
 import { Lang } from '@/lib/i18n';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useInfiniteScrollSentinel } from '@/hooks/useInfiniteScrollSentinel';
+import {
+  applyArticleTranslation,
+  useProgressiveNewsTranslation,
+} from '@/hooks/useProgressiveNewsTranslation';
 import { getOverviewNewsItems, useOverviewNews } from '@/hooks/useOverviewNews';
 import {
   NEWS_AUTO_REFRESH_MS,
@@ -165,12 +169,12 @@ function TopStoryHero({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
           </span>
         </div>
 
-        <h2 className="text-[15px] sm:text-lg font-bold leading-snug text-foreground tracking-tight">
+        <h2 className="text-[15px] sm:text-lg font-bold leading-snug text-foreground tracking-tight transition-opacity duration-300">
           {item.title}
         </h2>
 
         {item.detail && (
-          <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed line-clamp-3">
+          <p className="text-[11px] text-muted-foreground mt-2 leading-relaxed line-clamp-3 transition-opacity duration-300">
             {item.detail}
           </p>
         )}
@@ -266,12 +270,12 @@ function NewsCard({ item, sk }: { item: OverviewNewsItem; sk: boolean }) {
             </span>
           </div>
 
-          <p className={`text-[11px] font-semibold leading-snug ${isFlash ? 'text-amber-50' : 'text-foreground'}`}>
+          <p className={`text-[11px] font-semibold leading-snug transition-opacity duration-300 ${isFlash ? 'text-amber-50' : 'text-foreground'}`}>
             {item.title}
           </p>
 
           {item.detail && (
-            <p className="text-[9px] text-muted-foreground mt-1 leading-relaxed line-clamp-2">{item.detail}</p>
+            <p className="text-[9px] text-muted-foreground mt-1 leading-relaxed line-clamp-2 transition-opacity duration-300">{item.detail}</p>
           )}
 
           <p className="text-[8px] text-muted-foreground/40 mt-1.5 flex items-center gap-1">
@@ -376,6 +380,34 @@ export function OverviewPage({ lang }: Props) {
 
   const flashCount = remainingArticles.filter(n => n.isFlashAlert).length;
   const isFeedLoading = isLoading || (isFetching && !data);
+
+  const priorityArticles = useMemo(() => {
+    const items: OverviewNewsItem[] = [];
+    if (topStory) items.push(topStory);
+    items.push(...remainingArticles);
+    return items;
+  }, [topStory, remainingArticles]);
+
+  const backgroundArticles = useMemo(() => {
+    const visibleIds = new Set(priorityArticles.map(a => a.id));
+    return filteredNews.filter(a => !visibleIds.has(a.id));
+  }, [filteredNews, priorityArticles]);
+
+  const translations = useProgressiveNewsTranslation(
+    sk,
+    priorityArticles,
+    backgroundArticles,
+  );
+
+  const displayTopStory = useMemo(
+    () => (topStory ? applyArticleTranslation(topStory, translations) : null),
+    [topStory, translations],
+  );
+
+  const displayRemaining = useMemo(
+    () => remainingArticles.map(item => applyArticleTranslation(item, translations)),
+    [remainingArticles, translations],
+  );
 
   return (
     <div className="space-y-3">
@@ -490,17 +522,17 @@ export function OverviewPage({ lang }: Props) {
 
       {!isFeedLoading && !isError && (
         <div className="space-y-2">
-          {topStory && <TopStoryHero item={topStory} sk={sk} />}
+          {displayTopStory && <TopStoryHero item={displayTopStory} sk={sk} />}
 
-          {remainingArticles.length > 0 && (
+          {displayRemaining.length > 0 && (
             <div className="space-y-1.5">
-              {remainingArticles.map(item => (
+              {displayRemaining.map(item => (
                 <NewsCard key={item.id} item={item} sk={sk} />
               ))}
             </div>
           )}
 
-          {!topStory && remainingArticles.length === 0 && (
+          {!displayTopStory && displayRemaining.length === 0 && (
             <div className="glass-card p-6 text-center">
               <p className="text-sm text-muted-foreground">
                 {sk ? 'Žiadne správy pre tento filter.' : 'No articles for this filter.'}
