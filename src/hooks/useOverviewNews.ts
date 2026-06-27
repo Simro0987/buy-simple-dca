@@ -1,10 +1,15 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { dedupeNews, fetchOverviewNewsPage, type OverviewNewsItem } from '@/lib/overviewNews';
+import {
+  dedupeNews,
+  fetchOverviewNewsPage,
+  type NewsFilter,
+  type OverviewNewsItem,
+} from '@/lib/overviewNews';
 
-export function useOverviewNews(lang = 'sk') {
+export function useOverviewNews(lang = 'sk', filter: NewsFilter = 'ALL') {
   return useInfiniteQuery({
-    queryKey: ['overview-news', lang],
-    queryFn: ({ pageParam }) => fetchOverviewNewsPage(lang, pageParam as number | undefined),
+    queryKey: ['overview-news', lang, filter],
+    queryFn: ({ pageParam }) => fetchOverviewNewsPage(lang, filter, pageParam as number | undefined),
     initialPageParam: undefined as number | undefined,
     getNextPageParam: lastPage => lastPage.nextCursor,
     staleTime: 10 * 60 * 1000,

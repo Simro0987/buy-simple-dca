@@ -19,7 +19,6 @@ import {
   NEWS_INITIAL_VISIBLE,
   NEWS_LOAD_MORE_COUNT,
   formatNewsTimeAgo,
-  filterNewsByTab,
   splitTopStory,
   type NewsAsset,
   type NewsFilter,
@@ -316,13 +315,13 @@ export function OverviewPage({ lang }: Props) {
     fetchNextPage,
     hasNextPage,
     isFetchingNextPage,
-  } = useOverviewNews(lang);
+  } = useOverviewNews(lang, filter);
 
   const allNews = useMemo(() => flattenOverviewNewsPages(data?.pages), [data?.pages]);
+  const isFilterLoading = isLoading || (isFetching && !isFetchingNextPage);
 
   const { topStory, remainingArticles, totalRemaining } = useMemo(() => {
-    const filtered = filterNewsByTab(allNews, filter);
-    const { topStory: hero, remainingArticles: rest } = splitTopStory(filtered);
+    const { topStory: hero, remainingArticles: rest } = splitTopStory(allNews);
 
     const sortedRest = [...rest].sort((a, b) => {
       if (a.isFlashAlert !== b.isFlashAlert) return a.isFlashAlert ? -1 : 1;
@@ -334,7 +333,7 @@ export function OverviewPage({ lang }: Props) {
       remainingArticles: sortedRest.slice(0, visibleCount),
       totalRemaining: sortedRest.length,
     };
-  }, [allNews, filter, visibleCount]);
+  }, [allNews, visibleCount]);
 
   useEffect(() => {
     setVisibleCount(NEWS_INITIAL_VISIBLE);
@@ -361,7 +360,7 @@ export function OverviewPage({ lang }: Props) {
   }, [canRevealMore, canFetchMore, fetchNextPage, isFetchingNextPage]);
 
   const sentinelRef = useInfiniteScrollSentinel({
-    enabled: !isLoading && !isError && (canRevealMore || canFetchMore),
+    enabled: !isFilterLoading && !isError && (canRevealMore || canFetchMore),
     onIntersect: handleLoadMore,
   });
 
@@ -427,7 +426,7 @@ export function OverviewPage({ lang }: Props) {
         })}
       </div>
 
-      {isLoading && (
+      {isFilterLoading && (
         <div className="space-y-2">
           <TopStoryHeroSkeleton />
           <div className="space-y-1.5">
@@ -438,7 +437,7 @@ export function OverviewPage({ lang }: Props) {
         </div>
       )}
 
-      {isError && !isLoading && (
+      {isError && !isFilterLoading && (
         <div className="glass-card p-6 text-center space-y-3">
           <AlertTriangle className="w-5 h-5 text-amber-400 mx-auto" />
           <p className="text-sm text-muted-foreground">
@@ -456,7 +455,7 @@ export function OverviewPage({ lang }: Props) {
         </div>
       )}
 
-      {!isLoading && !isError && (
+      {!isFilterLoading && !isError && (
         <div className="space-y-2">
           {topStory && <TopStoryHero item={topStory} sk={sk} />}
 

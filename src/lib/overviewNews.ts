@@ -53,6 +53,20 @@ export function filterNewsByTab(items: OverviewNewsItem[], filter: NewsFilter): 
   return items.filter(item => item.asset === filter);
 }
 
+/** CryptoCompare `categories` query param for each Noviny tab. */
+export function newsFilterToCryptoCompareCategories(filter: NewsFilter): string | undefined {
+  if (filter === 'ALL') return undefined;
+  if (filter === 'MAKRO') return 'Market,Regulation,Fiat';
+  return filter;
+}
+
+function assetForFetchedFilter(filter: NewsFilter | undefined, blob: string): NewsAsset {
+  if (filter === 'BTC' || filter === 'ETH' || filter === 'SOL' || filter === 'MAKRO') {
+    return filter;
+  }
+  return resolvePrimaryAsset(blob);
+}
+
 /** Pick the day's headline: highest 24h engagement → first breaking → newest. */
 export function pickTopStory(articles: OverviewNewsItem[]): OverviewNewsItem | null {
   if (articles.length === 0) return null;
@@ -193,12 +207,18 @@ interface CryptoCompareArticle {
 async function fetchCryptoCompareNews(options?: {
   lTs?: number;
   limit?: number;
+  filter?: NewsFilter;
 }): Promise<OverviewNewsItem[]> {
   const apiKey = import.meta.env.VITE_CRYPTOCOMPARE_API_KEY as string | undefined;
   const limit = options?.limit ?? NEWS_CC_PAGE_SIZE;
+  const categories = options?.filter
+    ? newsFilterToCryptoCompareCategories(options.filter)
+    : undefined;
+
   const url = new URL('https://min-api.cryptocompare.com/data/v2/news/');
   url.searchParams.set('lang', 'EN');
   url.searchParams.set('limit', String(limit));
+  if (categories) url.searchParams.set('categories', categories);
   if (options?.lTs) url.searchParams.set('lTs', String(options.lTs));
   if (apiKey) url.searchParams.set('api_key', apiKey);
 
@@ -218,7 +238,7 @@ async function fetchCryptoCompareNews(options?: {
 
       const body = String(row.body ?? '').trim();
       const blob = `${title} ${body} ${row.categories ?? ''} ${row.tags ?? ''}`;
-      const asset = resolvePrimaryAsset(blob);
+      const asset = assetForFetchedFilter(options?.filter, blob);
       const upvotes = Number(row.upvotes ?? 0) || 0;
       const flash = isFlashAlert({
         title,
@@ -382,11 +402,16 @@ export function dedupeNews(items: OverviewNewsItem[]): OverviewNewsItem[] {
 
 export async function fetchOverviewNewsPage(
   lang = 'sk',
+  filter: NewsFilter = 'ALL',
   cursor?: number,
 ): Promise<OverviewNewsPage> {
   if (cursor !== undefined) {
     try {
-      const items = await fetchCryptoCompareNews({ lTs: cursor, limit: NEWS_CC_PAGE_SIZE });
+      const items = await fetchCryptoCompareNews({
+        lTs: cursor,
+        limit: NEWS_CC_PAGE_SIZE,
+        filter,
+      });
       return {
         items: prioritizePortfolioNews(items),
         nextCursor: nextCryptoCompareCursor(items, NEWS_CC_PAGE_SIZE),
@@ -400,17 +425,17 @@ export async function fetchOverviewNewsPage(
 
   for (const attempt of [
     async () => {
-      const items = await fetchCryptoCompareNews({ limit: NEWS_CC_PAGE_SIZE });
+      const items = await fetchCryptoCompareNews({ limit: NEWS_CC_PAGE_SIZE, filter });
       return {
         items: prioritizePortfolioNews(items),
         nextCursor: nextCryptoCompareCursor(items, NEWS_CC_PAGE_SIZE),
       };
     },
     async () => ({
-      items: prioritizePortfolioNews(await fetchCoinGeckoNews()),
+      items: prioritizePortfolioNews(filterNewsByTab(await fetchCoinGeckoNews(), filter)),
     }),
     async () => ({
-      items: prioritizePortfolioNews(await fetchSupabaseNewsFallback(lang)),
+      items: prioritizePortfolioNews(filterNewsByTab(await fetchSupabaseNewsFallback(lang), filter)),
     }),
   ]) {
     try {
@@ -425,8 +450,8 @@ export async function fetchOverviewNewsPage(
 }
 
 /** @deprecated Use fetchOverviewNewsPage for pagination support */
-export async function fetchOverviewNews(lang = 'sk'): Promise<OverviewNewsItem[]> {
-  const page = await fetchOverviewNewsPage(lang);
+export async function fetchOverviewNews(lang = 'sk', filter: NewsFilter = 'ALL'): Promise<OverviewNewsItem[]> {
+  const page = await fetchOverviewNewsPage(lang, filter);
   return dedupeNews(page.items);
 }
 

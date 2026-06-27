@@ -4,6 +4,7 @@ import {
   formatNewsTimeAgo,
   inferSentiment,
   isFlashAlert,
+  newsFilterToCryptoCompareCategories,
   pickTopStory,
   splitTopStory,
   type OverviewNewsItem,
@@ -79,6 +80,14 @@ describe('overviewNews', () => {
     ];
     expect(filterNewsByTab(items, 'BTC')).toHaveLength(1);
     expect(filterNewsByTab(items, 'ALL')).toHaveLength(2);
+  });
+
+  it('newsFilterToCryptoCompareCategories maps tabs to API categories', () => {
+    expect(newsFilterToCryptoCompareCategories('ALL')).toBeUndefined();
+    expect(newsFilterToCryptoCompareCategories('BTC')).toBe('BTC');
+    expect(newsFilterToCryptoCompareCategories('ETH')).toBe('ETH');
+    expect(newsFilterToCryptoCompareCategories('SOL')).toBe('SOL');
+    expect(newsFilterToCryptoCompareCategories('MAKRO')).toBe('Market,Regulation,Fiat');
   });
 
   it('inferSentiment classifies bullish and bearish headlines', () => {
