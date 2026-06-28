@@ -31,13 +31,7 @@ import { FlashMoney } from '@/components/modern-portfolio/FlashMoney';
 import { ModernAllocationDonut } from '@/components/modern-portfolio/ModernAllocationDonut';
 import { FearGreedSlider } from '@/components/modern-portfolio/FearGreedSlider';
 import { PortfolioPerformanceChart } from '@/components/modern-portfolio/PortfolioPerformanceChart';
-import {
-  PortfolioHeroSkeleton,
-  PortfolioStatSkeleton,
-  PortfolioPositionSkeleton,
-} from '@/components/modern-portfolio/PortfolioSkeletons';
 import { EditHoldingsModal, EditHoldingsTrigger } from '@/components/modern-portfolio/EditHoldingsModal';
-import { PortfolioErrorBoundary } from '@/components/modern-portfolio/PortfolioErrorBoundary';
 import { ensurePortfolioData } from '@/lib/portfolioData';
 import {
   type DcaToken,
@@ -68,30 +62,16 @@ const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
 const DAILY_REPORT_KEY = 'portfolio-risk-insight-last';
 
 export function ModernPortfolioPage({ lang }: Props) {
-  const sk = lang === 'sk';
-  const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
-
   return (
     <PortfolioProvider>
       <div className="min-w-0 text-white">
-        <PortfolioErrorBoundary sk={sk} onEditHoldings={() => setHoldingsModalOpen(true)}>
-          <ModernPortfolioInner
-            lang={lang}
-            holdingsModalOpen={holdingsModalOpen}
-            setHoldingsModalOpen={setHoldingsModalOpen}
-          />
-        </PortfolioErrorBoundary>
+        <ModernPortfolioInner lang={lang} />
       </div>
     </PortfolioProvider>
   );
 }
 
-interface InnerProps extends Props {
-  holdingsModalOpen: boolean;
-  setHoldingsModalOpen: (open: boolean) => void;
-}
-
-function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }: InnerProps) {
+function ModernPortfolioInner({ lang }: Props) {
   const sk = lang === 'sk';
   const { data: prices, isFetching } = usePrices();
   const {
@@ -127,9 +107,10 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
   const displayPnlPct = Number(dashboard?.totalPnlPct ?? 0) || 0;
   const displayInvested = Number(dashboard?.totalInvested ?? 0) || 0;
   const isGain = displayPnl >= 0;
-  const pricesInitialLoading = liveSpotLoading && !liveSpot && !prices;
   const liveAssets = dashboard?.assets ?? [];
-  const isZeroPortfolio = displayTotalUsd <= 0 && displayInvested <= 0;
+  const safeBlendedApy = Number(blendedApy ?? 0) || 0;
+  const safeProfitAvailable = Number(profitAvailable ?? 0) || 0;
+  const safeTotalStaked = Number(totalStakedValue ?? 0) || 0;
 
   const chartHoldings = useMemo(() => ({
     bitcoin: Number(userHoldings?.BTC?.tokenAmount ?? 0) || 0,
@@ -138,6 +119,7 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
   }), [userHoldings]);
 
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
+  const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
   const [confirmKey, setConfirmKey] = useState(0);
   const [expandedRadar, setExpandedRadar] = useState<DcaToken | null>('BTC');
@@ -283,88 +265,73 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
         transition={{ duration: 0.45 }}
         className="pt-2 pb-1"
       >
-        {pricesInitialLoading ? (
-          <PortfolioHeroSkeleton />
-        ) : (
-          <>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2 min-w-0">
-                <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
-                <EditHoldingsTrigger onClick={() => setHoldingsModalOpen(true)} sk={sk} />
-                <button
-                  type="button"
-                  onClick={() => setIsBalanceVisible(v => !v)}
-                  aria-label={isBalanceVisible
-                    ? (sk ? 'Skryť zostatky' : 'Hide balances')
-                    : (sk ? 'Zobraziť zostatky' : 'Show balances')}
-                  className="p-1.5 rounded-lg border border-white/10 text-white/45 hover:text-white hover:border-white/20 transition-colors shrink-0"
-                >
-                  {isBalanceVisible
-                    ? <Eye className="w-3.5 h-3.5" />
-                    : <EyeOff className="w-3.5 h-3.5" />}
-                </button>
-              </div>
-              <Chip color={liveSpotFetching ? 'amber' : 'green'}>
-                {liveSpotFetching ? 'SYNC' : 'LIVE'}
-                {lastLiveUpdate ? ` · ${lastLiveUpdate}` : ''}
-              </Chip>
-            </div>
-            <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
-              <FlashMoney price={displayTotalUsd} size="hero" className="!text-4xl sm:!text-6xl break-words">
-                {maskUsd(displayTotalUsd, isBalanceVisible)}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+            <EditHoldingsTrigger onClick={() => setHoldingsModalOpen(true)} sk={sk} />
+            <button
+              type="button"
+              onClick={() => setIsBalanceVisible(v => !v)}
+              aria-label={isBalanceVisible
+                ? (sk ? 'Skryť zostatky' : 'Hide balances')
+                : (sk ? 'Zobraziť zostatky' : 'Show balances')}
+              className="p-1.5 rounded-lg border border-white/10 text-white/45 hover:text-white hover:border-white/20 transition-colors shrink-0"
+            >
+              {isBalanceVisible
+                ? <Eye className="w-3.5 h-3.5" />
+                : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          <Chip color={liveSpotFetching ? 'amber' : 'green'}>
+            {liveSpotFetching ? 'SYNC' : 'LIVE'}
+            {lastLiveUpdate ? ` · ${lastLiveUpdate}` : ''}
+          </Chip>
+        </div>
+        <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
+          <FlashMoney price={displayTotalUsd} size="hero" className="!text-4xl sm:!text-6xl break-words">
+            {maskUsd(displayTotalUsd, isBalanceVisible)}
+          </FlashMoney>
+          <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
+            <div className="flex items-center gap-1.5 justify-end">
+              {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
+              <FlashMoney price={displayPnl} size="md" positive={isGain} negative={!isGain}>
+                {maskSignedUsd(displayPnl, isBalanceVisible)}
               </FlashMoney>
-              <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
-                <div className="flex items-center gap-1.5 justify-end">
-                  {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
-                  <FlashMoney price={displayPnl} size="md" positive={isGain} negative={!isGain}>
-                    {maskSignedUsd(displayPnl, isBalanceVisible)}
-                  </FlashMoney>
-                </div>
-                <FlashMoney
-                  price={displayPnlPct}
-                  size="sm"
-                  className={`font-mono text-sm mt-1 block ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}
-                >
-                  {maskPct(displayPnlPct, isBalanceVisible, true)}
-                </FlashMoney>
-              </div>
             </div>
-
-            {isZeroPortfolio && !pricesInitialLoading && (
-              <p className="mt-3 text-sm text-white/45 leading-relaxed">
-                {sk
-                  ? 'Portfólio je prázdne. Kliknite na ⚙️ a zadajte svoje reálne držby BTC, ETH a SOL.'
-                  : 'Portfolio is empty. Click ⚙️ to enter your real BTC, ETH, and SOL holdings.'}
-              </p>
-            )}
-
-            <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
-              <Chip color="green">
-                <Sparkles className="w-3 h-3 inline mr-1" />
-                Profit {maskUsd(profitAvailable, isBalanceVisible)}
-              </Chip>
-              <Chip color="default">
-                Stake {maskUsd(totalStakedValue, isBalanceVisible)} · {blendedApy.toFixed(1)}%
-              </Chip>
-              {TOKENS.map(t => (
-                <button
-                  key={t.symbol}
-                  onClick={() => toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL')}
-                  className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all shrink-0 ${
-                    selected === t.symbol
-                      ? 'bg-white text-black border-white'
-                      : 'border-white/15 text-white/45 hover:text-white/80'
-                  }`}
-                >
-                  {t.symbol}
-                </button>
-              ))}
-              {selected && (
-                <button onClick={() => setSelected(null)} className="text-white/30 text-xs px-2">✕</button>
-              )}
-            </div>
-          </>
-        )}
+            <FlashMoney
+              price={displayPnlPct}
+              size="sm"
+              className={`font-mono text-sm mt-1 block ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}
+            >
+              {maskPct(displayPnlPct, isBalanceVisible, true)}
+            </FlashMoney>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
+          <Chip color="green">
+            <Sparkles className="w-3 h-3 inline mr-1" />
+            Profit {maskUsd(safeProfitAvailable, isBalanceVisible)}
+          </Chip>
+          <Chip color="default">
+            Stake {maskUsd(safeTotalStaked, isBalanceVisible)} · {safeBlendedApy.toFixed(1)}%
+          </Chip>
+          {TOKENS.map(t => (
+            <button
+              key={t.symbol}
+              onClick={() => toggleSelected(t.symbol as 'BTC' | 'ETH' | 'SOL')}
+              className={`text-xs font-semibold px-3 py-1.5 rounded-full border transition-all shrink-0 ${
+                selected === t.symbol
+                  ? 'bg-white text-black border-white'
+                  : 'border-white/15 text-white/45 hover:text-white/80'
+              }`}
+            >
+              {t.symbol}
+            </button>
+          ))}
+          {selected && (
+            <button onClick={() => setSelected(null)} className="text-white/30 text-xs px-2">✕</button>
+          )}
+        </div>
       </motion.section>
 
       {/* ═══ LIVE ALLOCATION + F&G ══════════════════════════════════════════ */}
@@ -374,7 +341,7 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
           totalValue={displayTotalUsd}
           selected={selected}
           onSelect={toggleSelected}
-          loading={pricesInitialLoading}
+          loading={false}
           balanceVisible={isBalanceVisible}
         />
         <Bento delay={0.08} className="p-4 sm:p-5 min-w-0 flex flex-col justify-center">
@@ -386,29 +353,25 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
       <PortfolioPerformanceChart
         holdings={chartHoldings}
         balanceVisible={isBalanceVisible}
-        loading={pricesInitialLoading}
+        loading={false}
         sk={sk}
       />
 
       {/* ═══ STAT BENTO ═════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
-        {pricesInitialLoading ? (
-          [0, 1, 2, 3].map(i => <PortfolioStatSkeleton key={i} />)
-        ) : (
-          [
-            { l: sk ? 'Investované' : 'Invested', v: maskUsd(displayInvested, isBalanceVisible), d: 0.04 },
-            { l: 'PnL', v: maskSignedUsd(displayPnl, isBalanceVisible), d: 0.08, pos: isGain },
-            { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: maskUsd(weeklyCapital, isBalanceVisible), d: 0.12 },
-            { l: sk ? 'Voľný cash' : 'Free cash', v: maskUsd(freeCash + reservoir.stable, isBalanceVisible), d: 0.16 },
-          ].map(s => (
-            <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
-              <Label className="truncate">{s.l}</Label>
-              <Money size="md" className="mt-2 block truncate !text-lg sm:!text-2xl" positive={s.pos} negative={s.pos === false}>
-                {s.v}
-              </Money>
-            </Bento>
-          ))
-        )}
+        {[
+          { l: sk ? 'Investované' : 'Invested', v: maskUsd(displayInvested, isBalanceVisible), d: 0.04 },
+          { l: 'PnL', v: maskSignedUsd(displayPnl, isBalanceVisible), d: 0.08, pos: isGain },
+          { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: maskUsd(weeklyCapital, isBalanceVisible), d: 0.12 },
+          { l: sk ? 'Voľný cash' : 'Free cash', v: maskUsd(freeCash + (Number(reservoir.stable ?? 0) || 0), isBalanceVisible), d: 0.16 },
+        ].map(s => (
+          <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
+            <Label className="truncate">{s.l}</Label>
+            <Money size="md" className="mt-2 block truncate !text-lg sm:!text-2xl" positive={s.pos} negative={s.pos === false}>
+              {s.v}
+            </Money>
+          </Bento>
+        ))}
       </div>
 
       {/* ═══ DAILY RISK REPORT ═══════════════════════════════════════════════ */}
@@ -537,7 +500,8 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
           {/* Expanded token detail */}
           <AnimatePresence mode="wait">
             {expandedRadar && (() => {
-              const t = radarTokens.find(x => x.sym === expandedRadar)!;
+              const t = radarTokens.find(x => x.sym === expandedRadar);
+              if (!t) return null;
               const price = livePrices[t.sym];
               const dca = dcaPrices[t.sym] ?? 0;
               return (
@@ -739,11 +703,6 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
       {/* ═══ POZÍCIE ═══════════════════════════════════════════════════════ */}
       <div className="space-y-3 min-w-0">
         <Label>{sk ? 'Pozície' : 'Positions'}</Label>
-        {safePortfolioData.loading || pricesInitialLoading ? (
-          <div className="grid gap-3">
-            {[0, 1, 2].map(i => <PortfolioPositionSkeleton key={i} />)}
-          </div>
-        ) : (
         <div className="grid gap-3">
           {liveAssets.map((a, i) => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
@@ -813,7 +772,6 @@ function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }:
             );
           })}
         </div>
-        )}
       </div>
 
       {/* ═══ ÚPRAVA DRŽIEB (PRIDAŤ / ODOBRAŤ) ═══════════════════════════════ */}

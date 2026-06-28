@@ -74,7 +74,19 @@ export function PortfolioPerformanceChart({
   const isUp = rangePct >= 0;
   const stroke = isUp ? '#10b981' : '#8b5cf6';
   const gradientId = `portfolio-perf-${isUp ? 'up' : 'down'}`;
-  const chartLoading = loading || (historyLoading && data.length === 0);
+  const chartLoading = loading && data.length === 0 && totalHoldings > 0;
+
+  const zeroChartData = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(today);
+      d.setDate(d.getDate() - (6 - i));
+      return {
+        shortLabel: d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }),
+        value: 0,
+      };
+    });
+  }, []);
 
   if (chartLoading) {
     return (
@@ -90,16 +102,9 @@ export function PortfolioPerformanceChart({
     );
   }
 
-  if (totalHoldings <= 0) {
-    return (
-      <Bento delay={0.1} className="p-4 sm:p-5 min-w-0">
-        <Label>{sk ? 'Historická výkonnosť' : 'Historical performance'}</Label>
-        <p className="text-sm text-white/35 mt-4 py-10 text-center">
-          {sk ? 'Žiadne dáta portfólia na zobrazenie grafu.' : 'No portfolio data to chart yet.'}
-        </p>
-      </Bento>
-    );
-  }
+  const showZeroFlatLine = totalHoldings <= 0;
+  const chartData = showZeroFlatLine ? zeroChartData : data;
+  const showEmptyHistory = !showZeroFlatLine && (isError || data.length < 2);
 
   return (
     <Bento delay={0.1} className="p-4 sm:p-5 min-w-0">
@@ -107,14 +112,16 @@ export function PortfolioPerformanceChart({
         <div className="min-w-0">
           <Label>{sk ? 'Historická výkonnosť' : 'Historical performance'}</Label>
           <p className="text-[11px] text-white/35 font-mono mt-1">
-            {sk
-              ? 'CoinGecko market_chart · holdings × historické ceny'
-              : 'CoinGecko market_chart · holdings × historical prices'}
-            {historyFetching ? ' · SYNC' : ''}
+            {showZeroFlatLine
+              ? (sk ? 'Zadajte držby cez ⚙️ pre historický graf' : 'Add holdings via ⚙️ to chart history')
+              : sk
+                ? 'CoinGecko market_chart · holdings × historické ceny'
+                : 'CoinGecko market_chart · holdings × historical prices'}
+            {historyFetching && !showZeroFlatLine ? ' · SYNC' : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          {data.length >= 2 && (
+          {!showZeroFlatLine && data.length >= 2 && (
             <Chip color={isUp ? 'green' : 'purple'}>
               {balanceVisible
                 ? `${isUp ? '+' : ''}${rangePct.toFixed(2)}% · ${range}D`
@@ -140,14 +147,14 @@ export function PortfolioPerformanceChart({
         </div>
       </div>
 
-      {isError || data.length < 2 ? (
+      {showEmptyHistory ? (
         <p className="text-sm text-white/35 mt-4 py-10 text-center">
           {sk ? 'Historické dáta sa nepodarilo načítať.' : 'Unable to load historical chart data.'}
         </p>
       ) : (
         <div className="mt-4 h-44 sm:h-52 min-w-0">
           <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+            <AreaChart data={chartData} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
               <defs>
                 <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor={stroke} stopOpacity={0.28} />
@@ -184,7 +191,7 @@ export function PortfolioPerformanceChart({
                     ? (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`)
                     : '$***'
                 }
-                domain={['auto', 'auto']}
+                domain={showZeroFlatLine ? [0, 1] : ['auto', 'auto']}
               />
               <Tooltip content={<ChartTooltip balanceVisible={balanceVisible} />} />
               <Area
