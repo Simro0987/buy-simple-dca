@@ -524,10 +524,10 @@ export function DCAPage({ lang: _lang }: Props) {
         <button
           onClick={handleSaveWeek}
           disabled={!allChecklistDone}
-          className={`mt-4 w-full py-2.5 rounded-lg text-sm font-semibold transition-all ${
+          className={`mt-4 w-full py-2.5 rounded-lg text-sm font-semibold transition-colors duration-300 ${
             allChecklistDone
-              ? 'bg-primary text-primary-foreground active:scale-[0.98]'
-              : 'bg-primary/40 text-primary-foreground/70 opacity-50 cursor-not-allowed'
+              ? 'bg-green-500 text-white cursor-pointer hover:bg-green-400 active:scale-[0.98]'
+              : 'bg-gray-800 text-gray-500 cursor-not-allowed'
           }`}
         >
           Uložiť tento týždeň
