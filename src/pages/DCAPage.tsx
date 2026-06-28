@@ -37,6 +37,7 @@ import {
   getIsoWeekNumber,
 } from '@/lib/mondayController';
 import { loadTuning, type TuningParams } from '@/lib/moneyMode';
+import { fireWeekSaveConfetti } from '@/lib/celebrationConfetti';
 import { toast } from 'sonner';
 import {
   adjustDcaInvestableForMarketMode,
@@ -249,6 +250,7 @@ export function DCAPage({ lang: _lang }: Props) {
     setChecklistDone(EMPTY_CHECKLIST());
     saveChecklistState(EMPTY_CHECKLIST());
     setShowHistory(true);
+    fireWeekSaveConfetti();
     toast.success('Týždeň úspešne uložený!');
   };
 
