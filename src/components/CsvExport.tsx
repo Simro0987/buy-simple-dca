@@ -2,6 +2,7 @@ import { Lang } from '@/lib/i18n';
 import { TOKENS } from '@/lib/crypto';
 import { Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 interface Props {
   lang: Lang;
@@ -18,7 +19,7 @@ function downloadCsv(filename: string, content: string) {
 }
 
 function exportPortfolio() {
-  const holdings = JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}');
+  const holdings = loadHoldingsRecord();
   const rows = [['Token', 'Množstvo'].join(',')];
   for (const token of TOKENS) {
     const key = token.symbol.toLowerCase();

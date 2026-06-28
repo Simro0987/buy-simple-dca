@@ -21,10 +21,10 @@ import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
 import {
   buildDashboardFromUserHoldings,
-  loadUserHoldings,
   saveUserHoldings,
   type UserHoldings,
 } from '@/lib/portfolioRealHoldings';
+import { useUserHoldings } from '@/hooks/useUserHoldings';
 import { maskPct, maskPrice, maskSignedUsd, maskUsd } from '@/lib/portfolioPrivacy';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
@@ -97,7 +97,7 @@ function ModernPortfolioInner({ lang }: Props) {
     solana: liveSpot?.solana ?? prices?.solana?.usd ?? 0,
   }), [liveSpot, prices]);
 
-  const [userHoldings, setUserHoldings] = useState<UserHoldings>(loadUserHoldings);
+  const { holdings: userHoldings, setHoldings: setUserHoldings } = useUserHoldings();
   const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
 
   const dashboard = useMemo(
@@ -229,9 +229,8 @@ function ModernPortfolioInner({ lang }: Props) {
 
   const handleSaveHoldings = useCallback((next: UserHoldings) => {
     setUserHoldings(next);
-    saveUserHoldings(next);
     toast.success(sk ? 'Držby uložené' : 'Holdings saved');
-  }, [sk]);
+  }, [setUserHoldings, sk]);
 
   const handleGenerateReport = useCallback(() => {
     setReportGenerating(true);

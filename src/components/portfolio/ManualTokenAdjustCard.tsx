@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react';
 import { Minus, Plus, Wallet } from 'lucide-react';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
-import { useAppSettings, useUpdateAppSettings } from '@/hooks/useAppSettings';
 import { usePrices } from '@/hooks/usePrices';
 import { Bento, Chip, Label } from '@/components/modern-portfolio/primitives';
 import {
@@ -13,6 +12,9 @@ import {
   type CoinKey,
   type InputMode,
 } from '@/lib/manualHoldingsAccumulator';
+import { useUserHoldings } from '@/hooks/useUserHoldings';
+import { persistHoldingsUpdate, userHoldingsAsState } from '@/lib/userHoldingsPersistence';
+import { coinKeyToSymbol } from '@/lib/portfolioRealHoldings';
 
 const COINS: CoinKey[] = ['btc', 'eth', 'sol'];
 
@@ -25,8 +27,7 @@ interface Props {
 
 export function ManualTokenAdjustCard({ lang, delay = 0.44 }: Props) {
   const sk = lang === 'sk';
-  const { data: settings } = useAppSettings();
-  const update = useUpdateAppSettings();
+  const { holdings: userHoldings } = useUserHoldings();
   const { data: prices } = usePrices();
 
   const [action, setAction] = useState<ActionMode>('add');
@@ -48,21 +49,13 @@ export function ManualTokenAdjustCard({ lang, delay = 0.44 }: Props) {
     });
   }, [prices, priceTouched]);
 
-  const submit = async (key: CoinKey) => {
-    if (!settings?.id) {
-      toast.error(sk ? 'Nastavenia nie sú načítané' : 'Settings not loaded');
-      return;
-    }
-
+  const submit = (key: CoinKey) => {
     const raw = Number(accInput[key]);
     const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
     const customPrice = Number(accPrice[key]);
     const execPrice = customPrice > 0 ? customPrice : spot;
 
-    const state = {
-      manual_holdings: settings.manual_holdings as Record<CoinKey, number> | undefined,
-      initial_cost_basis: settings.initial_cost_basis as Record<CoinKey, number> | undefined,
-    };
+    const state = userHoldingsAsState(userHoldings);
 
     const result = action === 'add'
       ? computeAddHoldingsUpdate(key, raw, accMode[key], execPrice, state)
@@ -73,33 +66,25 @@ export function ManualTokenAdjustCard({ lang, delay = 0.44 }: Props) {
       return;
     }
 
-    try {
-      await update.mutateAsync({
-        id: settings.id,
-        manual_holdings: result.manual_holdings,
-        initial_cost_basis: result.initial_cost_basis,
-      });
+    persistHoldingsUpdate(key, result);
 
-      setAccInput(s => ({ ...s, [key]: '' }));
-      setPriceTouched(s => ({ ...s, [key]: false }));
-      setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
+    setAccInput(s => ({ ...s, [key]: '' }));
+    setPriceTouched(s => ({ ...s, [key]: false }));
+    setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
 
-      const label = COIN_LABEL[key];
-      if (action === 'add') {
-        toast.success(
-          sk
-            ? `+${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · priemer $${result.newAvg.toFixed(2)}`
-            : `+${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · avg $${result.newAvg.toFixed(2)}`,
-        );
-      } else {
-        toast.success(
-          sk
-            ? `−${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · zostatok ${result.manual_holdings[key].toFixed(8)}`
-            : `−${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · remaining ${result.manual_holdings[key].toFixed(8)}`,
-        );
-      }
-    } catch {
-      toast.error(sk ? 'Uloženie zlyhalo' : 'Save failed');
+    const label = COIN_LABEL[key];
+    if (action === 'add') {
+      toast.success(
+        sk
+          ? `+${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · priemer $${result.newAvg.toFixed(2)}`
+          : `+${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · avg $${result.newAvg.toFixed(2)}`,
+      );
+    } else {
+      toast.success(
+        sk
+          ? `−${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · zostatok ${result.manual_holdings[key].toFixed(8)}`
+          : `−${result.deltaQty.toFixed(8)} ${label} @ $${result.execPrice.toFixed(2)} · remaining ${result.manual_holdings[key].toFixed(8)}`,
+      );
     }
   };
 
@@ -156,7 +141,7 @@ export function ManualTokenAdjustCard({ lang, delay = 0.44 }: Props) {
           const v = Number(accInput[key]) || 0;
           const customPriceNum = Number(accPrice[key]);
           const execPrice = customPriceNum > 0 ? customPriceNum : spot;
-          const held = Number((settings?.manual_holdings as Record<string, number> | undefined)?.[key] ?? 0);
+          const held = userHoldings[coinKeyToSymbol(key)].tokenAmount;
           const isCustom = priceTouched[key] && customPriceNum > 0 && Math.abs(customPriceNum - spot) > 0.005;
           const preview = v > 0 && execPrice > 0
             ? (mode === 'asset'

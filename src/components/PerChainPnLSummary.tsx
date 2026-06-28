@@ -3,6 +3,7 @@ import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
 import { TOKENS, formatUsd, PriceData } from '@/lib/crypto';
 import { getAvgCostBasis } from '@/lib/profitTaking';
 import { useChainFilter, passesChainFilter } from '@/hooks/useChainFilter';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 interface Props {
   prices: PriceData | undefined;
@@ -29,8 +30,7 @@ const CHAIN_COLORS: Record<string, string> = {
 };
 
 function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); }
-  catch { return {}; }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 function computeRealized(tokenId: string): number {

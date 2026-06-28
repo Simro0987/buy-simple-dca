@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Wallet, Lock, Plus, Minus } from 'lucide-react';
+import { Wallet, Plus, Minus } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAppSettings, useUpdateAppSettings } from '@/hooks/useAppSettings';
 import { usePrices } from '@/hooks/usePrices';
 import {
   computeAddHoldingsUpdate,
@@ -9,10 +8,9 @@ import {
   TOKEN_PRICE_ID,
   type CoinKey,
 } from '@/lib/manualHoldingsAccumulator';
-import { syncManualHoldingsToEngine } from '@/lib/cyborgHoldingsSync';
-
-// Immutable baseline (Master Top — držby pred spustením appky).
-const BASELINE = { btc: 0.01746423, eth: 0.23278498, sol: 2.60983568 } as const;
+import { useUserHoldings } from '@/hooks/useUserHoldings';
+import { persistHoldingsUpdate, persistUserHoldings, userHoldingsAsState } from '@/lib/userHoldingsPersistence';
+import { coinKeyToSymbol } from '@/lib/portfolioRealHoldings';
 
 const COINS: { key: CoinKey; label: string }[] = [
   { key: 'btc', label: 'BTC' },
@@ -23,22 +21,17 @@ const COINS: { key: CoinKey; label: string }[] = [
 type Mode = 'asset' | 'usd';
 
 export function InitialHoldingsCard() {
-  const { data: settings } = useAppSettings();
-  const update = useUpdateAppSettings();
   const { data: prices } = usePrices();
+  const { holdings: userHoldings } = useUserHoldings();
 
   const [holdings, setHoldings] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
   const [costBasis, setCostBasis] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
 
-  // Smart Manual Accumulator — prírastky
   const [accMode, setAccMode] = useState<Record<CoinKey, Mode>>({ btc: 'asset', eth: 'asset', sol: 'asset' });
   const [accInput, setAccInput] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
-  // Custom execution / purchase price per coin (USD). Empty = use live spot.
   const [accPrice, setAccPrice] = useState<Record<CoinKey, string>>({ btc: '', eth: '', sol: '' });
-  // Track which prices the user has edited so live-spot autofill won't overwrite them.
   const [priceTouched, setPriceTouched] = useState<Record<CoinKey, boolean>>({ btc: false, eth: false, sol: false });
 
-  // Auto-fill custom price from live spot once available (only if user hasn't typed yet).
   useEffect(() => {
     if (!prices) return;
     setAccPrice(prev => {
@@ -53,127 +46,86 @@ export function InitialHoldingsCard() {
   }, [prices, priceTouched]);
 
   useEffect(() => {
-    if (!settings) return;
-    const mh = (settings.manual_holdings ?? {}) as Record<CoinKey, number>;
-    const ic = (settings.initial_cost_basis ?? {}) as Record<CoinKey, number>;
     setHoldings({
-      btc: mh.btc ? String(mh.btc) : '',
-      eth: mh.eth ? String(mh.eth) : '',
-      sol: mh.sol ? String(mh.sol) : '',
+      btc: userHoldings.BTC.tokenAmount ? String(userHoldings.BTC.tokenAmount) : '',
+      eth: userHoldings.ETH.tokenAmount ? String(userHoldings.ETH.tokenAmount) : '',
+      sol: userHoldings.SOL.tokenAmount ? String(userHoldings.SOL.tokenAmount) : '',
     });
     setCostBasis({
-      btc: ic.btc ? String(ic.btc) : '',
-      eth: ic.eth ? String(ic.eth) : '',
-      sol: ic.sol ? String(ic.sol) : '',
+      btc: userHoldings.BTC.investedUsd ? String(userHoldings.BTC.investedUsd) : '',
+      eth: userHoldings.ETH.investedUsd ? String(userHoldings.ETH.investedUsd) : '',
+      sol: userHoldings.SOL.investedUsd ? String(userHoldings.SOL.investedUsd) : '',
     });
-  }, [settings]);
+  }, [userHoldings]);
 
-  useEffect(() => {
-    if (!settings?.manual_holdings) return;
-    syncManualHoldingsToEngine(settings.manual_holdings as Record<CoinKey, number>);
-  }, [settings?.manual_holdings]);
-
-  const baselineOk =
-    Number(settings?.manual_holdings?.btc ?? 0) >= BASELINE.btc &&
-    Number(settings?.manual_holdings?.eth ?? 0) >= BASELINE.eth &&
-    Number(settings?.manual_holdings?.sol ?? 0) >= BASELINE.sol;
-
-  const save = async () => {
-    if (!settings?.id) return;
-    try {
-      await update.mutateAsync({
-        id: settings.id,
-        manual_holdings: {
-          btc: Number(holdings.btc) || 0,
-          eth: Number(holdings.eth) || 0,
-          sol: Number(holdings.sol) || 0,
-        },
-        initial_cost_basis: {
-          btc: Number(costBasis.btc) || 0,
-          eth: Number(costBasis.eth) || 0,
-          sol: Number(costBasis.sol) || 0,
-        },
-      });
-      syncManualHoldingsToEngine({
-        btc: Number(holdings.btc) || 0,
-        eth: Number(holdings.eth) || 0,
-        sol: Number(holdings.sol) || 0,
-      });
-      toast.success('Holdingy uložené ✓');
-    } catch {
-      toast.error('Uloženie zlyhalo');
-    }
+  const save = () => {
+    const next = {
+      BTC: {
+        tokenAmount: Number(holdings.btc) || 0,
+        averageBuyPrice: Number(holdings.btc) > 0 && Number(costBasis.btc) > 0
+          ? Number(costBasis.btc) / Number(holdings.btc)
+          : 0,
+        investedUsd: Number(costBasis.btc) || 0,
+      },
+      ETH: {
+        tokenAmount: Number(holdings.eth) || 0,
+        averageBuyPrice: Number(holdings.eth) > 0 && Number(costBasis.eth) > 0
+          ? Number(costBasis.eth) / Number(holdings.eth)
+          : 0,
+        investedUsd: Number(costBasis.eth) || 0,
+      },
+      SOL: {
+        tokenAmount: Number(holdings.sol) || 0,
+        averageBuyPrice: Number(holdings.sol) > 0 && Number(costBasis.sol) > 0
+          ? Number(costBasis.sol) / Number(holdings.sol)
+          : 0,
+        investedUsd: Number(costBasis.sol) || 0,
+      },
+    };
+    persistUserHoldings(next);
+    toast.success('Holdingy uložené ✓');
   };
 
-  // MANUAL ONLY — never call from effect. Spúšťa sa iba z tlačidla "Pridať".
-  const addAccumulation = async (key: CoinKey) => {
-    if (!settings?.id) return;
+  const addAccumulation = (key: CoinKey) => {
     const raw = Number(accInput[key]);
     const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
     const customPrice = Number(accPrice[key]);
     const execPrice = customPrice > 0 ? customPrice : spot;
 
-    const result = computeAddHoldingsUpdate(key, raw, accMode[key], execPrice, {
-      manual_holdings: settings.manual_holdings as Record<CoinKey, number> | undefined,
-      initial_cost_basis: settings.initial_cost_basis as Record<CoinKey, number> | undefined,
-    });
-
+    const result = computeAddHoldingsUpdate(key, raw, accMode[key], execPrice, userHoldingsAsState(userHoldings));
     if ('error' in result) {
       toast.error(result.error);
       return;
     }
 
-    try {
-      await update.mutateAsync({
-        id: settings.id,
-        manual_holdings: result.manual_holdings,
-        initial_cost_basis: result.initial_cost_basis,
-      });
-      syncManualHoldingsToEngine(result.manual_holdings);
-      setAccInput(s => ({ ...s, [key]: '' }));
-      setPriceTouched(s => ({ ...s, [key]: false }));
-      setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
-      toast.success(
-        `+${result.deltaQty.toFixed(8)} ${key.toUpperCase()} @ $${result.execPrice.toFixed(2)} pridané. Nový priemer: $${result.newAvg.toFixed(2)}`,
-      );
-    } catch {
-      toast.error('Pridanie zlyhalo');
-    }
+    persistHoldingsUpdate(key, result);
+    setAccInput(s => ({ ...s, [key]: '' }));
+    setPriceTouched(s => ({ ...s, [key]: false }));
+    setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
+    toast.success(
+      `+${result.deltaQty.toFixed(8)} ${key.toUpperCase()} @ $${result.execPrice.toFixed(2)} pridané. Nový priemer: $${result.newAvg.toFixed(2)}`,
+    );
   };
 
-  const removeAccumulation = async (key: CoinKey) => {
-    if (!settings?.id) return;
+  const removeAccumulation = (key: CoinKey) => {
     const raw = Number(accInput[key]);
     const spot = prices?.[TOKEN_PRICE_ID[key]]?.usd ?? 0;
     const customPrice = Number(accPrice[key]);
     const execPrice = customPrice > 0 ? customPrice : spot;
 
-    const result = computeRemoveHoldingsUpdate(key, raw, accMode[key], execPrice, {
-      manual_holdings: settings.manual_holdings as Record<CoinKey, number> | undefined,
-      initial_cost_basis: settings.initial_cost_basis as Record<CoinKey, number> | undefined,
-    });
-
+    const result = computeRemoveHoldingsUpdate(key, raw, accMode[key], execPrice, userHoldingsAsState(userHoldings));
     if ('error' in result) {
       toast.error(result.error);
       return;
     }
 
-    try {
-      await update.mutateAsync({
-        id: settings.id,
-        manual_holdings: result.manual_holdings,
-        initial_cost_basis: result.initial_cost_basis,
-      });
-      syncManualHoldingsToEngine(result.manual_holdings);
-      setAccInput(s => ({ ...s, [key]: '' }));
-      setPriceTouched(s => ({ ...s, [key]: false }));
-      setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
-      toast.success(
-        `−${result.deltaQty.toFixed(8)} ${key.toUpperCase()} @ $${result.execPrice.toFixed(2)} odobraté. Zostatok: ${result.manual_holdings[key].toFixed(8)}`,
-      );
-    } catch {
-      toast.error('Odobratie zlyhalo');
-    }
+    persistHoldingsUpdate(key, result);
+    setAccInput(s => ({ ...s, [key]: '' }));
+    setPriceTouched(s => ({ ...s, [key]: false }));
+    setAccPrice(s => ({ ...s, [key]: spot ? String(spot) : '' }));
+    toast.success(
+      `−${result.deltaQty.toFixed(8)} ${key.toUpperCase()} @ $${result.execPrice.toFixed(2)} odobraté. Zostatok: ${result.manual_holdings[key].toFixed(8)}`,
+    );
   };
 
   return (
@@ -183,18 +135,12 @@ export function InitialHoldingsCard() {
           <Wallet className="w-4 h-4 text-primary" />
           <h3 className="font-semibold">Holdingy & cost basis</h3>
         </div>
-        {baselineOk && (
-          <span className="inline-flex items-center gap-1 text-[10px] text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-md px-1.5 py-0.5">
-            <Lock className="w-3 h-3" /> Baseline chránená
-          </span>
-        )}
       </div>
       <p className="text-xs text-muted-foreground">
-        Holdings = množstvo, Cost basis = USD ktoré si minul. Smart Manual Accumulator nižšie pridáva
-        nové nákupy a počíta weighted average automaticky.
+        Holdings = množstvo, Cost basis = USD ktoré si minul. Ukladá sa do lokálneho portfólia
+        (portfolio_real_holdings). Smart Manual Accumulator nižšie pridáva nové nákupy a počíta weighted average.
       </p>
 
-      {/* Editácia základov */}
       <div className="space-y-3">
         {COINS.map(({ key, label }) => (
           <div key={key} className="grid grid-cols-[3rem_1fr_1fr] gap-2 items-center">
@@ -227,13 +173,11 @@ export function InitialHoldingsCard() {
 
       <button
         onClick={save}
-        disabled={update.isPending}
-        className="w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold disabled:opacity-50"
+        className="w-full px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold"
       >
-        {update.isPending ? 'Ukladám…' : 'Uložiť'}
+        Uložiť
       </button>
 
-      {/* Smart Manual Accumulator */}
       <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/5 p-3 space-y-3">
         <div className="flex items-center gap-2">
           <Plus className="w-4 h-4 text-emerald-400" />
@@ -271,7 +215,6 @@ export function InitialHoldingsCard() {
                 </div>
               </div>
 
-              {/* Custom execution / purchase price */}
               <div className="space-y-0.5">
                 <div className="flex items-center justify-between">
                   <label className="text-[10px] text-muted-foreground">
@@ -301,11 +244,6 @@ export function InitialHoldingsCard() {
                     isCustom ? 'border-amber-500/50 text-amber-300' : 'border-border'
                   }`}
                 />
-                <p className="text-[9px] text-muted-foreground">
-                  {isCustom
-                    ? `Vlastná historická cena · spot $${spot.toFixed(2)}`
-                    : `Auto-vyplnené zo spotu (oracle) · $${spot.toFixed(2)}`}
-                </p>
               </div>
 
               <div className="flex gap-2">
@@ -319,13 +257,11 @@ export function InitialHoldingsCard() {
                 />
                 <button
                   onClick={() => addAccumulation(key)}
-                  disabled={update.isPending}
-                  className="px-3 py-1.5 rounded-md bg-emerald-500 text-background text-xs font-bold disabled:opacity-50"
+                  className="px-3 py-1.5 rounded-md bg-emerald-500 text-background text-xs font-bold"
                 >Pridať</button>
                 <button
                   onClick={() => removeAccumulation(key)}
-                  disabled={update.isPending}
-                  className="px-3 py-1.5 rounded-md bg-orange-500 text-background text-xs font-bold disabled:opacity-50 flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-md bg-orange-500 text-background text-xs font-bold flex items-center gap-1"
                 >
                   <Minus className="w-3 h-3" />
                   Odobrať
@@ -336,6 +272,9 @@ export function InitialHoldingsCard() {
                   {preview} @ ${execPrice.toFixed(2)}{isCustom ? ' (vlastná)' : ''}
                 </p>
               )}
+              <p className="text-[9px] text-muted-foreground">
+                Aktuálne: {userHoldings[coinKeyToSymbol(key)].tokenAmount.toFixed(8)} {label}
+              </p>
             </div>
           );
         })}

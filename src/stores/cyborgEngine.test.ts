@@ -1,4 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
+import { PORTFOLIO_REAL_HOLDINGS_KEY } from '@/lib/portfolioRealHoldings';
 import {
   adjustDcaInvestableForMarketMode,
   computeCyborgMetrics,
@@ -84,8 +85,8 @@ describe('cyborgEngine store', () => {
 
   it('applyDcaPurchase persists holdings and syncs wallet', () => {
     useCyborgEngine.getState().applyDcaPurchase('BTC', 0.01);
-    const holdings = JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}');
-    expect(Number(holdings.btc ?? 0)).toBeCloseTo(0.01, 8);
+    const holdings = JSON.parse(localStorage.getItem(PORTFOLIO_REAL_HOLDINGS_KEY) || '{}');
+    expect(Number(holdings.BTC?.tokenAmount ?? 0)).toBeCloseTo(0.01, 8);
     expect(useCyborgEngine.getState().walletBalances.BTC).toBeCloseTo(0.01, 8);
   });
 

@@ -15,6 +15,7 @@ import {
   mergeMarketData,
   type CyborgMarketData,
 } from '@/lib/cyborgMarketDataFeed';
+import { loadHoldingsRecord, adjustTokenAmount } from '@/lib/portfolioRealHoldings';
 
 export type CyborgAsset = 'BTC' | 'ETH' | 'SOL';
 
@@ -151,8 +152,6 @@ export function computePortfolioSnapshot(state: MasterState): PortfolioSnapshot 
   };
 }
 
-const HOLDINGS_KEY = 'smart-alloc-holdings';
-
 export function safeNum(value: unknown): number {
   const n = Number(value ?? 0);
   return Number.isFinite(n) && n >= 0 ? n : 0;
@@ -179,11 +178,7 @@ const INITIAL_STATE: MasterState = {
 export type { CyborgMarketData } from '@/lib/cyborgMarketDataFeed';
 
 function loadHoldings(): Record<string, number> {
-  try {
-    return JSON.parse(localStorage.getItem(HOLDINGS_KEY) || '{}');
-  } catch {
-    return {};
-  }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 function defaultApyForProtocol(protocol: string, symbol: CyborgAsset): number {
@@ -441,10 +436,7 @@ export const useCyborgEngine = create<CyborgEngineStore>((set, get) => ({
     const amount = safeNum(qty);
     if (amount <= 0) return;
     try {
-      const holdings = loadHoldings();
-      const key = symbol.toLowerCase();
-      holdings[key] = safeNum(holdings[key]) + amount;
-      localStorage.setItem(HOLDINGS_KEY, JSON.stringify(holdings));
+      adjustTokenAmount(symbol.toLowerCase() as 'btc' | 'eth' | 'sol', amount);
     } catch {
       /* persist best-effort */
     }

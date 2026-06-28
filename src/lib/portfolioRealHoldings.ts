@@ -38,6 +38,108 @@ export interface PortfolioDashboardMetrics {
 }
 
 export const PORTFOLIO_REAL_HOLDINGS_KEY = 'portfolio_real_holdings';
+export const PORTFOLIO_HOLDINGS_UPDATED_EVENT = 'portfolio-holdings-updated';
+
+/** Legacy key — no longer written; cleared on first load. */
+const LEGACY_HOLDINGS_KEY = 'smart-alloc-holdings';
+
+export type HoldingsRecord = Partial<Record<'btc' | 'eth' | 'sol', number>>;
+
+const COIN_KEY_TO_SYMBOL: Record<'btc' | 'eth' | 'sol', PortfolioSymbol> = {
+  btc: 'BTC',
+  eth: 'ETH',
+  sol: 'SOL',
+};
+
+export function coinKeyToSymbol(key: 'btc' | 'eth' | 'sol'): PortfolioSymbol {
+  return COIN_KEY_TO_SYMBOL[key];
+}
+
+export function holdingsRecordFromUserHoldings(holdings: UserHoldings): HoldingsRecord {
+  return {
+    btc: holdings.BTC.tokenAmount,
+    eth: holdings.ETH.tokenAmount,
+    sol: holdings.SOL.tokenAmount,
+  };
+}
+
+export function investedRecordFromUserHoldings(holdings: UserHoldings): HoldingsRecord {
+  return {
+    btc: holdings.BTC.investedUsd,
+    eth: holdings.ETH.investedUsd,
+    sol: holdings.SOL.investedUsd,
+  };
+}
+
+/** One-time cleanup: drop legacy mock storage so balances stay at zero until user input. */
+function clearLegacyHoldingsStorage(): void {
+  try {
+    localStorage.removeItem(LEGACY_HOLDINGS_KEY);
+  } catch {
+    /* quota */
+  }
+}
+
+let legacyCleared = false;
+function ensureLegacyCleared(): void {
+  if (legacyCleared) return;
+  legacyCleared = true;
+  clearLegacyHoldingsStorage();
+}
+
+export function loadHoldingsRecord(): HoldingsRecord {
+  ensureLegacyCleared();
+  return holdingsRecordFromUserHoldings(loadUserHoldings());
+}
+
+export function dispatchHoldingsUpdated(): void {
+  window.dispatchEvent(new Event(PORTFOLIO_HOLDINGS_UPDATED_EVENT));
+  window.dispatchEvent(new Event('portfolio-updated'));
+}
+
+export function saveUserHoldings(holdings: UserHoldings): void {
+  localStorage.setItem(PORTFOLIO_REAL_HOLDINGS_KEY, JSON.stringify(holdings));
+  dispatchHoldingsUpdated();
+}
+
+/** Update token amounts only (preserves cost basis fields). */
+export function saveHoldingsRecord(record: HoldingsRecord): void {
+  const current = loadUserHoldings();
+  const next: UserHoldings = {
+    BTC: { ...current.BTC, tokenAmount: Number(record.btc ?? 0) || 0 },
+    ETH: { ...current.ETH, tokenAmount: Number(record.eth ?? 0) || 0 },
+    SOL: { ...current.SOL, tokenAmount: Number(record.sol ?? 0) || 0 },
+  };
+  saveUserHoldings(next);
+}
+
+export function applyUserHoldingsRow(
+  holdings: UserHoldings,
+  symbol: PortfolioSymbol,
+  row: Partial<UserHoldingRow>,
+): UserHoldings {
+  return {
+    ...holdings,
+    [symbol]: {
+      tokenAmount: Number(row.tokenAmount ?? holdings[symbol].tokenAmount) || 0,
+      averageBuyPrice: Number(row.averageBuyPrice ?? holdings[symbol].averageBuyPrice) || 0,
+      investedUsd: Number(row.investedUsd ?? holdings[symbol].investedUsd) || 0,
+    },
+  };
+}
+
+export function adjustTokenAmount(
+  key: 'btc' | 'eth' | 'sol',
+  delta: number,
+): UserHoldings {
+  const holdings = loadUserHoldings();
+  const symbol = coinKeyToSymbol(key);
+  const next = applyUserHoldingsRow(holdings, symbol, {
+    tokenAmount: Math.max(0, holdings[symbol].tokenAmount + delta),
+  });
+  saveUserHoldings(next);
+  return next;
+}
 
 const TARGET_PCT: Record<PortfolioSymbol, number> = {
   BTC: 0.64,
@@ -66,6 +168,7 @@ function normalizeRow(row: Partial<UserHoldingRow> | undefined): UserHoldingRow 
 }
 
 export function loadUserHoldings(): UserHoldings {
+  ensureLegacyCleared();
   try {
     const raw = localStorage.getItem(PORTFOLIO_REAL_HOLDINGS_KEY);
     if (!raw) return { ...EMPTY_USER_HOLDINGS };
@@ -80,9 +183,6 @@ export function loadUserHoldings(): UserHoldings {
   }
 }
 
-export function saveUserHoldings(holdings: UserHoldings): void {
-  localStorage.setItem(PORTFOLIO_REAL_HOLDINGS_KEY, JSON.stringify(holdings));
-}
 
 export function buildDashboardFromUserHoldings(
   userHoldings: UserHoldings,

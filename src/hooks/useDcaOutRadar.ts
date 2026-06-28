@@ -12,6 +12,7 @@
  *  • Cascade Cooldown: next signal only after +5% price recovery
  */
 import { useQuery } from '@tanstack/react-query';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 export type DcaToken = 'BTC' | 'ETH' | 'SOL';
 
@@ -20,26 +21,25 @@ export type DcaToken = 'BTC' | 'ETH' | 'SOL';
 interface TokenRoute {
   symbol:        DcaToken;
   binancePair:   string;
-  holdingsKey:   string;     // key in smart-alloc-holdings localStorage
-  defaultHold:   number;     // hardcoded fallback from user spec
-  moonBagPct:    number;     // minimum fraction to NEVER sell
-  sources:       string[];   // where the asset lives
+  holdingsKey:   string;
+  moonBagPct:    number;
+  sources:       string[];
 }
 
 const ROUTES: TokenRoute[] = [
   {
     symbol: 'BTC', binancePair: 'BTCUSDT', holdingsKey: 'btc',
-    defaultHold: 0.0323276, moonBagPct: 0.15,
+    moonBagPct: 0.15,
     sources: ['Hardware Wallet (Native BTC)'],
   },
   {
     symbol: 'ETH', binancePair: 'ETHUSDT', holdingsKey: 'eth',
-    defaultHold: 0.527723, moonBagPct: 0.15,
+    moonBagPct: 0.15,
     sources: ['Natívne ETH', 'rETH (Rocket Pool)', 'wstETH / weETH (ether.fi – Arbitrum)'],
   },
   {
     symbol: 'SOL', binancePair: 'SOLUSDT', holdingsKey: 'sol',
-    defaultHold: 0, moonBagPct: 0.15,
+    moonBagPct: 0.15,
     sources: ['Natívne SOL', 'Marinade Native', 'INF (Sanctum)'],
   },
 ];
@@ -83,7 +83,7 @@ export function resetCooldown(symbol: DcaToken) {
 }
 
 function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); } catch { return {}; }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 // ─── RSI(14) from daily closes ────────────────────────────────────────────────
@@ -204,7 +204,7 @@ export function useDcaOutRadar(dcaPrices: Record<DcaToken, number>) {
     const price = td?.price ?? 0;
     const rsi   = td?.rsi  ?? 50;
     const dcaP  = dcaPrices[route.symbol] ?? 0;
-    const hold  = holdings[route.holdingsKey] ?? route.defaultHold;
+    const hold  = Number(holdings[route.holdingsKey] ?? 0) || 0;
 
     const pnlPct = dcaP > 0 && price > 0 ? ((price - dcaP) / dcaP) * 100 : 0;
     const pnlUsd = hold * (price - dcaP);

@@ -33,9 +33,6 @@ const MODULES: { id: TabId; label: string; icon: typeof PieChart }[] = [
   { id: 'settings',  label: 'Nastav.',   icon: Settings   },
 ];
 
-function loadInvested(): number {
-  try { return parseFloat(localStorage.getItem('total-invested') || '0') || 0; } catch { return 0; }
-}
 function loadFreeCash(): number {
   try { return parseFloat(localStorage.getItem('free-cash') || '0') || 0; } catch { return 0; }
 }
@@ -46,7 +43,7 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
   const engineTotalUsd = useCyborgTotalUsd();
   const [octagonToken, setOctagonToken] = useState<OctToken>('BTC');
 
-  const invested = loadInvested();
+  const invested = Number(metrics.totalInvested ?? 0) || 0;
   const [freeCash, setFreeCash] = useState(loadFreeCash);
   const totalValue = engineTotalUsd > 0 ? engineTotalUsd : Number(metrics.totalValue ?? 0) || 0;
   const pnlUsd = totalValue - invested;

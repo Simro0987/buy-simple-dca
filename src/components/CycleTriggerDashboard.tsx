@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 interface Props {
   lang: Lang;
@@ -24,7 +25,7 @@ interface Props {
 }
 
 function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); } catch { return {}; }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 const urgencyColors = {

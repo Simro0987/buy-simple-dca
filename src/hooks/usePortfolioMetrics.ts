@@ -1,9 +1,7 @@
-import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { TOKENS, type PriceData } from '@/lib/crypto';
-import { useAppSettings } from './useAppSettings';
 import { useProfitReservoir } from '@/lib/profitReservoir';
+import { useUserHoldings } from '@/hooks/useUserHoldings';
 
 export interface DcaPurchaseRow {
   id: string;
@@ -31,16 +29,16 @@ export interface CapitalEntryRow {
 export interface AssetMetric {
   symbol: 'BTC' | 'ETH' | 'SOL';
   coingeckoId: string;
-  targetPct: number;        // 0..1
-  holdings: number;         // coin amount
-  invested: number;         // USD spent
+  targetPct: number;
+  holdings: number;
+  invested: number;
   currentPrice: number;
-  value: number;            // USD value now
-  pnl: number;              // value - invested
+  value: number;
+  pnl: number;
   pnlPct: number;
-  actualPct: number;        // current weight in portfolio
-  deviationPct: number;     // actualPct - targetPct (in pp)
-  source: 'manual' | 'dca';
+  actualPct: number;
+  deviationPct: number;
+  source: 'user';
 }
 
 export interface PortfolioMetrics {
@@ -54,72 +52,17 @@ export interface PortfolioMetrics {
   capitalEntries: CapitalEntryRow[];
 }
 
-function useDcaPurchases() {
-  return useQuery({
-    queryKey: ['dca_purchases'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('dca_purchases')
-        .select('*')
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as DcaPurchaseRow[];
-    },
-    staleTime: 30_000,
-  });
-}
-
-function useCapitalEntries() {
-  return useQuery({
-    queryKey: ['capital_entries'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('capital_entries')
-        .select('*')
-        .order('created_at', { ascending: true });
-      if (error) throw error;
-      return (data ?? []) as CapitalEntryRow[];
-    },
-    staleTime: 30_000,
-  });
-}
-
-const TOKEN_KEY = { BTC: 'btc', ETH: 'eth', SOL: 'sol' } as const;
-
 export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMetrics {
-  const { data: purchases, isLoading: l1 } = useDcaPurchases();
-  const { data: capitalEntries, isLoading: l2 } = useCapitalEntries();
-  const { data: settings, isLoading: l3 } = useAppSettings();
   const reservoir = useProfitReservoir();
+  const { holdings: userHoldings } = useUserHoldings();
 
   return useMemo<PortfolioMetrics>(() => {
-    const rows = purchases ?? [];
-    const manual = (settings?.manual_holdings ?? {}) as { btc?: number; eth?: number; sol?: number };
-    const initialCost = (settings?.initial_cost_basis ?? {}) as { btc?: number; eth?: number; sol?: number };
-
-    const aggHoldings = {
-      BTC: rows.reduce((s, r) => s + Number(r.btc_amount || 0), 0),
-      ETH: rows.reduce((s, r) => s + Number(r.eth_amount || 0), 0),
-      SOL: rows.reduce((s, r) => s + Number(r.sol_amount || 0), 0),
-    };
-    const aggInvested = {
-      BTC: rows.reduce((s, r) => s + Number(r.btc_amount || 0) * Number(r.btc_price || 0), 0),
-      ETH: rows.reduce((s, r) => s + Number(r.eth_amount || 0) * Number(r.eth_price || 0), 0),
-      SOL: rows.reduce((s, r) => s + Number(r.sol_amount || 0) * Number(r.sol_price || 0), 0),
-    };
-
     const assets: AssetMetric[] = TOKENS.map(t => {
       const sym = t.symbol as 'BTC' | 'ETH' | 'SOL';
-      const key = TOKEN_KEY[sym];
-      const manualAmt = Number(manual[key] ?? 0);
-      const useManual = manualAmt > 0;
-      // Holdings: manual override else aggregated DCA — then subtract take-profit sells
-      const rawHoldings = useManual ? manualAmt : aggHoldings[sym];
+      const row = userHoldings[sym];
       const sold = Number(reservoir.sells[sym] ?? 0);
-      const holdings = Math.max(0, rawHoldings - sold);
-      // Invested = DCA cost + initial cost basis (USD spent before tracking) — FROZEN, take-profit does not reduce it
-      const initialCostUsd = Number(initialCost[key] ?? 0);
-      const invested = aggInvested[sym] + initialCostUsd;
+      const holdings = Math.max(0, row.tokenAmount - sold);
+      const invested = row.investedUsd;
       const currentPrice = prices?.[t.coingeckoId]?.usd ?? 0;
       const value = holdings * currentPrice;
       const pnl = value - invested;
@@ -136,7 +79,7 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
         pnlPct,
         actualPct: 0,
         deviationPct: 0,
-        source: useManual ? 'manual' : 'dca',
+        source: 'user' as const,
       };
     });
 
@@ -151,14 +94,14 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
     }
 
     return {
-      loading: l1 || l2 || l3,
+      loading: false,
       totalValue,
       totalInvested,
       totalPnl,
       totalPnlPct,
       assets,
-      history: rows,
-      capitalEntries: capitalEntries ?? [],
+      history: [],
+      capitalEntries: [],
     };
-  }, [purchases, capitalEntries, settings, prices, reservoir.sells, l1, l2, l3]);
+  }, [userHoldings, prices, reservoir.sells]);
 }

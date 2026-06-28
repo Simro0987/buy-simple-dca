@@ -8,6 +8,7 @@ import { TOKENS, PriceData, AthData } from './crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
 import { AdvancedMarketData } from '@/hooks/useAdvancedMarket';
 import { DefiApyData } from '@/hooks/useDefiApys';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 export type Priority = 'P0' | 'P1' | 'P2';
 export type Horizon = 'short' | 'mid' | 'long';
@@ -104,8 +105,7 @@ export function recordSnapshot(input: {
 
 // ---------- holdings ----------
 export function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); }
-  catch { return {}; }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 // ---------- risk changes ----------

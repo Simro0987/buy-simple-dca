@@ -18,11 +18,7 @@ import { TAB_ROUTES } from '@/lib/tabRoutes';
 import { TabPanel } from '@/components/deep-space/primitives';
 import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 
-function loadHoldings(): Record<string, number> {
-  try {
-    return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}');
-  } catch { return {}; }
-}
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 const Index = () => {
   const [unlocked, setUnlocked] = useState<boolean>(() => isUnlocked());
@@ -59,7 +55,7 @@ const Index = () => {
   const totalValue = useMemo(() => {
     if (engineTotalUsd > 0) return engineTotalUsd;
     if (!prices) return 0;
-    const holdings = loadHoldings();
+    const holdings = loadHoldingsRecord();
     return TOKENS.reduce((sum, t) => {
       const qty = Number(holdings[t.id] ?? 0) || 0;
       const price = Number(prices[t.coingeckoId]?.usd ?? 0) || 0;
