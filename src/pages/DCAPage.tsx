@@ -1,4 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';import { Activity, RefreshCw, Download, Trash2, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import {
+  Activity, RefreshCw, Download, Trash2, ChevronDown, ChevronUp,
+  TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap,
+  BarChart3, Heart, Activity as ActivityIcon, Check,
+} from 'lucide-react';
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
@@ -29,6 +34,7 @@ import {
   type MondayInputs,
   type HistoryEntry,
   type Regime,
+  getIsoWeekNumber,
 } from '@/lib/mondayController';
 import { loadTuning, type TuningParams } from '@/lib/moneyMode';
 import { toast } from 'sonner';
@@ -41,6 +47,29 @@ import {
 interface Props { lang: Lang; }
 
 const INPUTS_KEY = 'monday-controller-inputs-v1';
+const CHECKLIST_KEY = 'monday-checklist-v1';
+const CHECKLIST_STEP_COUNT = 6;
+
+const EMPTY_CHECKLIST = () => Array.from({ length: CHECKLIST_STEP_COUNT }, () => false);
+
+function loadChecklistState(): boolean[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(CHECKLIST_KEY) || '{}') as {
+      weekId?: string;
+      steps?: boolean[];
+    };
+    if (raw.weekId === thisMondayIso() && Array.isArray(raw.steps) && raw.steps.length === CHECKLIST_STEP_COUNT) {
+      return raw.steps.map(Boolean);
+    }
+  } catch {
+    // ignore
+  }
+  return EMPTY_CHECKLIST();
+}
+
+function saveChecklistState(steps: boolean[]) {
+  localStorage.setItem(CHECKLIST_KEY, JSON.stringify({ weekId: thisMondayIso(), steps }));
+}
 
 const DEFAULTS: MondayInputs = {
   capital: 500,
@@ -84,6 +113,7 @@ export function DCAPage({ lang: _lang }: Props) {
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const [showHistory, setShowHistory] = useState(false);
   const [showRitual, setShowRitual] = useState(false);
+  const [checklistDone, setChecklistDone] = useState<boolean[]>(loadChecklistState);
 
   const { data: prices, refetch: refetchPrices, isFetching: pricesLoading } = usePrices();
   const { data: fg, refetch: refetchFg, isFetching: fgLoading } = useFearGreed();
@@ -128,6 +158,16 @@ export function DCAPage({ lang: _lang }: Props) {
     localStorage.setItem(INPUTS_KEY, JSON.stringify(inputs));
   }, [inputs]);
 
+  useEffect(() => {
+    saveChecklistState(checklistDone);
+  }, [checklistDone]);
+
+  const allChecklistDone = checklistDone.every(Boolean);
+
+  const toggleChecklistStep = useCallback((index: number) => {
+    setChecklistDone(prev => prev.map((done, i) => (i === index ? !done : done)));
+  }, []);
+
   const prevDeploymentPct = history[0]?.plan.deploymentPct;
   const [tuning, setTuning] = useState<TuningParams>(loadTuning);
   // MA reclaim = previous saved week was below 200D, current input is above.
@@ -139,6 +179,15 @@ export function DCAPage({ lang: _lang }: Props) {
     () => buildPlan(inputs, prices, prevDeploymentPct, { ...tuning, maReclaimActive }),
     [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
+
+  const checklistSteps = useMemo(() => [
+    'Skontroluj nevyplnené limit ordery z minulého týždňa → zruš ich',
+    `Pripočítaj zrušený limit kapitál k tomuto týždňu (rezerva: ${formatUsd(plan.reservedUsd)})`,
+    'Zadaj market ordery podľa Dynamic Execution Engine vyššie (BTC / ETH / SOL)',
+    'Zadaj limit ordery podľa per-coin distance z Dynamic Execution Engine',
+    'Plné zadanie + Hyperliquid linky nájdeš na stránke Action',
+    'Ulož týždeň do histórie tlačidlom nižšie',
+  ], [plan.reservedUsd]);
 
   const engineRevision = useCyborgEngine(s => s.revision);
   const marketMode = useCyborgEngine(s => s.marketMode);
@@ -178,8 +227,13 @@ export function DCAPage({ lang: _lang }: Props) {
   };
 
   const handleSaveWeek = () => {
+    if (!allChecklistDone) return;
+
+    const weekDate = thisMondayIso();
     const entry: HistoryEntry = {
-      date: thisMondayIso(),
+      id: `dca-week-${weekDate}-${Date.now()}`,
+      weekNumber: getIsoWeekNumber(),
+      date: weekDate,
       inputs,
       plan: {
         valuationScore: plan.factorScore,
@@ -192,7 +246,10 @@ export function DCAPage({ lang: _lang }: Props) {
       },
     };
     setHistory(saveHistoryEntry(entry));
-    toast.success('Týždeň uložený do histórie');
+    setChecklistDone(EMPTY_CHECKLIST());
+    saveChecklistState(EMPTY_CHECKLIST());
+    setShowHistory(true);
+    toast.success('Týždeň úspešne uložený!');
   };
 
   const handleExportCsv = () => {
@@ -421,32 +478,63 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* CHECKLIST */}
       <div className="glass-card p-4">
-        <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-1.5">
-          <Activity className="w-3.5 h-3.5" /> Pondelkový checklist
-        </h2>
-        <ol className="space-y-2 text-xs text-foreground">
-          {[
-            'Skontroluj nevyplnené limit ordery z minulého týždňa → zruš ich',
-            `Pripočítaj zrušený limit kapitál k tomuto týždňu (rezerva: ${formatUsd(plan.reservedUsd)})`,
-            'Zadaj market ordery podľa Dynamic Execution Engine vyššie (BTC / ETH / SOL)',
-            'Zadaj limit ordery podľa per-coin distance z Dynamic Execution Engine',
-            'Plné zadanie + Hyperliquid linky nájdeš na stránke Action',
-            'Ulož týždeň do histórie tlačidlom nižšie',
-          ].map((step, i) => (
-            <li key={i} className="flex gap-2">
-              <span className="flex-shrink-0 w-5 h-5 rounded-full bg-secondary text-secondary-foreground flex items-center justify-center text-[10px] font-bold">
-                {i + 1}
-              </span>
-              <span className="leading-relaxed pt-0.5">{step}</span>
-            </li>
-          ))}
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+            <Activity className="w-3.5 h-3.5" /> Pondelkový checklist
+          </h2>
+          <span className="text-[10px] font-mono text-muted-foreground tabular-nums">
+            {checklistDone.filter(Boolean).length}/{CHECKLIST_STEP_COUNT}
+          </span>
+        </div>
+        <ol className="space-y-2 text-xs">
+          {checklistSteps.map((step, i) => {
+            const done = checklistDone[i];
+            return (
+              <li key={i}>
+                <button
+                  type="button"
+                  onClick={() => toggleChecklistStep(i)}
+                  className={`w-full flex gap-2.5 items-start text-left rounded-lg px-2 py-2 transition-colors ${
+                    done ? 'bg-emerald-500/10 border border-emerald-500/25' : 'hover:bg-secondary/60'
+                  }`}
+                >
+                  <span
+                    className={`flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold transition-colors ${
+                      done
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-secondary text-secondary-foreground'
+                    }`}
+                  >
+                    {done ? <Check className="w-3 h-3" /> : i + 1}
+                  </span>
+                  <span
+                    className={`leading-relaxed pt-0.5 ${
+                      done ? 'line-through text-muted-foreground' : 'text-foreground'
+                    }`}
+                  >
+                    {step}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ol>
         <button
           onClick={handleSaveWeek}
-          className="mt-4 w-full py-2.5 rounded-lg bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
+          disabled={!allChecklistDone}
+          className={`mt-4 w-full py-2.5 rounded-lg text-sm font-semibold transition-all ${
+            allChecklistDone
+              ? 'bg-primary text-primary-foreground active:scale-[0.98]'
+              : 'bg-primary/40 text-primary-foreground/70 opacity-50 cursor-not-allowed'
+          }`}
         >
           Uložiť tento týždeň
         </button>
+        {!allChecklistDone && (
+          <p className="text-[10px] text-muted-foreground text-center mt-2">
+            Dokončite všetkých {CHECKLIST_STEP_COUNT} krokov pre uloženie týždňa.
+          </p>
+        )}
       </div>
 
       {/* HISTORY — 12 weeks summary + regime + allocation strip */}
@@ -494,18 +582,22 @@ export function DCAPage({ lang: _lang }: Props) {
                   {history.map(h => {
                     const r = (h.plan.regime ?? 'sideways') as Regime;
                     const rsx = regimeStyle(r);
+                    const weekNo = h.weekNumber ?? getIsoWeekNumber(new Date(h.date));
                     return (
-                      <div key={h.date} className="flex items-center justify-between bg-secondary/40 rounded p-2 text-xs">
+                      <div key={h.id ?? h.date} className="flex items-center justify-between bg-secondary/40 rounded-lg p-2.5 text-xs border border-border/50">
                         <div className="min-w-0">
-                          <p className="font-semibold text-foreground">{h.date}</p>
-                          <p className="text-[10px] text-muted-foreground">
+                          <p className="font-semibold text-foreground">
+                            Týždeň {weekNo}
+                            <span className="text-muted-foreground font-normal"> · {h.date}</span>
+                          </p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">
                             <span className={`px-1.5 py-0.5 rounded ${rsx.bg} ${rsx.text} mr-1.5`}>{r.toUpperCase()}</span>
                             Score {h.plan.valuationScore} · {bandLabel(h.plan.band)}
                           </p>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right shrink-0 pl-3">
                           <p className="font-semibold text-foreground tabular-nums">{formatUsd(h.plan.investableUsd)}</p>
-                          <p className="text-[10px] text-muted-foreground">{Math.round(h.plan.deploymentPct * 100)}%</p>
+                          <p className="text-[10px] text-muted-foreground">{Math.round(h.plan.deploymentPct * 100)}% deploy</p>
                         </div>
                       </div>
                     );
