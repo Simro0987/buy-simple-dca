@@ -1,7 +1,7 @@
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import { Bento, Label, Money } from '@/components/modern-portfolio/primitives';
-import type { LiveHoldingMetric } from '@/lib/mockPortfolioHoldings';
+import type { LiveHoldingMetric } from '@/lib/portfolioRealHoldings';
 import { maskUsd } from '@/lib/portfolioPrivacy';
 
 interface Slice {

@@ -19,12 +19,12 @@ import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
-import { buildMockLiveMetrics, type LiveHoldingMetric } from '@/lib/mockPortfolioHoldings';
 import {
-  computePortfolioTotalValue,
-  livePricesFromMap,
-  resolvePortfolioCoinAmounts,
-} from '@/lib/portfolioTotalValue';
+  buildDashboardFromUserHoldings,
+  loadUserHoldings,
+  saveUserHoldings,
+  type UserHoldings,
+} from '@/lib/portfolioRealHoldings';
 import { maskPct, maskPrice, maskSignedUsd, maskUsd } from '@/lib/portfolioPrivacy';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
@@ -37,6 +37,7 @@ import {
   PortfolioStatSkeleton,
   PortfolioPositionSkeleton,
 } from '@/components/modern-portfolio/PortfolioSkeletons';
+import { EditHoldingsModal, EditHoldingsTrigger } from '@/components/modern-portfolio/EditHoldingsModal';
 import {
   type DcaToken,
   DCA_TOKEN_COLORS,
@@ -86,7 +87,6 @@ function ModernPortfolioInner({ lang }: Props) {
   const { data: settings } = useAppSettings();
   const reservoir = useProfitReservoir();
   const {
-    metrics,
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, portfolioData,
   } = usePortfolio();
@@ -97,78 +97,13 @@ function ModernPortfolioInner({ lang }: Props) {
     solana: liveSpot?.solana ?? prices?.solana?.usd ?? 0,
   }), [liveSpot, prices]);
 
-  const useMockHoldings = useMemo(() => {
-    const { btcAmount, ethAmount, solAmount } = resolvePortfolioCoinAmounts(false, metrics.assets);
-    const hasHoldings = btcAmount + ethAmount + solAmount > 0;
-    return !hasHoldings && metrics.totalInvested <= 0 && metrics.totalValue <= 0;
-  }, [metrics.assets, metrics.totalInvested, metrics.totalValue]);
+  const [userHoldings, setUserHoldings] = useState<UserHoldings>(loadUserHoldings);
+  const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
 
-  const dashboard = useMemo(() => {
-    const { btcAmount, ethAmount, solAmount } = resolvePortfolioCoinAmounts(useMockHoldings, metrics.assets);
-    const { liveBtcPrice, liveEthPrice, liveSolPrice } = livePricesFromMap(livePriceMap);
-
-    const totalValue = computePortfolioTotalValue(
-      btcAmount,
-      ethAmount,
-      solAmount,
-      liveBtcPrice,
-      liveEthPrice,
-      liveSolPrice,
-    );
-
-    const priceBySymbol = {
-      BTC: liveBtcPrice,
-      ETH: liveEthPrice,
-      SOL: liveSolPrice,
-    } as const;
-
-    let assets: LiveHoldingMetric[];
-    let totalInvested: number;
-
-    if (useMockHoldings) {
-      const mock = buildMockLiveMetrics(livePriceMap);
-      assets = mock.assets;
-      totalInvested = mock.totalInvested;
-    } else {
-      assets = metrics.assets.map(a => ({
-        symbol: a.symbol,
-        coingeckoId: a.coingeckoId,
-        holdings: a.holdings,
-        avgBuyPrice: a.holdings > 0 ? a.invested / a.holdings : 0,
-        invested: a.invested,
-        currentPrice: priceBySymbol[a.symbol],
-        value: a.holdings * priceBySymbol[a.symbol],
-        pnl: 0,
-        pnlPct: 0,
-        actualPct: 0,
-        targetPct: a.targetPct,
-        deviationPct: 0,
-      }));
-      totalInvested = assets.reduce((s, a) => s + a.invested, 0);
-    }
-
-    assets = assets.map(a => {
-      const currentPrice = priceBySymbol[a.symbol];
-      const value = a.holdings * currentPrice;
-      const pnl = value - a.invested;
-      const pnlPct = a.invested > 0 ? (pnl / a.invested) * 100 : 0;
-      const actualPct = totalValue > 0 ? value / totalValue : 0;
-      return {
-        ...a,
-        currentPrice,
-        value,
-        pnl,
-        pnlPct,
-        actualPct,
-        deviationPct: (actualPct - a.targetPct) * 100,
-      };
-    });
-
-    const totalPnl = totalValue - totalInvested;
-    const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
-
-    return { assets, totalValue, totalInvested, totalPnl, totalPnlPct };
-  }, [useMockHoldings, metrics.assets, livePriceMap]);
+  const dashboard = useMemo(
+    () => buildDashboardFromUserHoldings(userHoldings, livePriceMap),
+    [userHoldings, livePriceMap],
+  );
 
   const displayTotalUsd = dashboard.totalValue;
   const displayPnl = dashboard.totalPnl;
@@ -178,10 +113,11 @@ function ModernPortfolioInner({ lang }: Props) {
   const pricesInitialLoading = liveSpotLoading && !liveSpot && !prices;
   const liveAssets = dashboard.assets;
 
-  const chartHoldings = useMemo(() => {
-    const { btcAmount, ethAmount, solAmount } = resolvePortfolioCoinAmounts(useMockHoldings, metrics.assets);
-    return { bitcoin: btcAmount, ethereum: ethAmount, solana: solAmount };
-  }, [useMockHoldings, metrics.assets]);
+  const chartHoldings = useMemo(() => ({
+    bitcoin: userHoldings.BTC.tokenAmount,
+    ethereum: userHoldings.ETH.tokenAmount,
+    solana: userHoldings.SOL.tokenAmount,
+  }), [userHoldings]);
 
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
@@ -235,9 +171,9 @@ function ModernPortfolioInner({ lang }: Props) {
 
   const healthScore = useMemo(() => {
     if (displayTotalUsd <= 0) return null;
-    const drift = metrics.assets.reduce((s, a) => s + Math.abs(Number(a.deviationPct ?? 0) || 0), 0);
+    const drift = liveAssets.reduce((s, a) => s + Math.abs(Number(a.deviationPct ?? 0) || 0), 0);
     const alloc = Math.max(0, 40 - drift * 2);
-    const present = metrics.assets.filter(a => (Number(a.actualPct ?? 0) || 0) > 0.01).length;
+    const present = liveAssets.filter(a => (Number(a.actualPct ?? 0) || 0) > 0.01).length;
     const div = present === 3 ? 20 : present === 2 ? 12 : 5;
     const stakedRatio = displayTotalUsd > 0 ? (Number(totalStakedValue ?? 0) || 0) / displayTotalUsd : 0;
     const stake = stakedRatio >= 0.3 && stakedRatio <= 0.6 ? 20
@@ -246,7 +182,7 @@ function ModernPortfolioInner({ lang }: Props) {
     const pnlPct = displayPnlPct;
     const dd = pnlPct >= 0 ? 20 : Math.max(0, Math.round(20 + (pnlPct / 50) * 20));
     return Math.min(100, Math.round(alloc + div + stake + dd));
-  }, [metrics, totalStakedValue, displayTotalUsd, displayPnlPct]);
+  }, [liveAssets, totalStakedValue, displayTotalUsd, displayPnlPct]);
 
   const halvingProgress = useMemo(() => {
     const total = NEXT_HALVING.getTime() - LAST_HALVING.getTime();
@@ -261,7 +197,7 @@ function ModernPortfolioInner({ lang }: Props) {
     return { equiv, progress: Math.min(100, (equiv / GOAL_BTC) * 100) };
   }, [displayTotalUsd, prices]);
 
-  const takeProfitRows = useMemo(() => metrics.assets.map(a => {
+  const takeProfitRows = useMemo(() => liveAssets.map(a => {
     const adj = a.holdings;
     const original = adj + Number(reservoir.sells[a.symbol] ?? 0);
     const avgCost = original > 0 ? a.invested / original : 0;
@@ -274,7 +210,7 @@ function ModernPortfolioInner({ lang }: Props) {
     let sellTokens = eligible ? sellUsd / a.currentPrice : 0;
     if (sellTokens > adj) sellTokens = adj;
     return { ...a, avgCost, pnl, pnlPct, eligible, sellPct, sellUsd, sellTokens };
-  }), [metrics.assets, reservoir.sells]);
+  }), [liveAssets, reservoir.sells]);
 
   const copyText = async (text: string, id: string) => {
     try {
@@ -290,6 +226,12 @@ function ModernPortfolioInner({ lang }: Props) {
     () => takeProfitRows.filter(r => r.eligible),
     [takeProfitRows],
   );
+
+  const handleSaveHoldings = useCallback((next: UserHoldings) => {
+    setUserHoldings(next);
+    saveUserHoldings(next);
+    toast.success(sk ? 'Držby uložené' : 'Holdings saved');
+  }, [sk]);
 
   const handleGenerateReport = useCallback(() => {
     setReportGenerating(true);
@@ -331,6 +273,7 @@ function ModernPortfolioInner({ lang }: Props) {
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+                <EditHoldingsTrigger onClick={() => setHoldingsModalOpen(true)} sk={sk} />
                 <button
                   type="button"
                   onClick={() => setIsBalanceVisible(v => !v)}
@@ -378,9 +321,6 @@ function ModernPortfolioInner({ lang }: Props) {
               <Chip color="default">
                 Stake {maskUsd(totalStakedValue, isBalanceVisible)} · {blendedApy.toFixed(1)}%
               </Chip>
-              {useMockHoldings && (
-                <Chip color="purple">{sk ? 'Demo držby' : 'Demo holdings'}</Chip>
-              )}
               {TOKENS.map(t => (
                 <button
                   key={t.symbol}
@@ -926,6 +866,14 @@ function ModernPortfolioInner({ lang }: Props) {
           ))}
         </Bento>
       )}
+
+      <EditHoldingsModal
+        open={holdingsModalOpen}
+        onOpenChange={setHoldingsModalOpen}
+        holdings={userHoldings}
+        onSave={handleSaveHoldings}
+        sk={sk}
+      />
 
       {/* Footer meta */}
       <p className="text-center text-[10px] text-white/20 font-mono pt-2">

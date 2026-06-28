@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { generatePortfolioRiskInsight } from './portfolioRiskAnalysis';
-import { buildMockLiveMetrics } from './mockPortfolioHoldings';
+import { buildDashboardFromUserHoldings } from './portfolioRealHoldings';
 
 describe('generatePortfolioRiskInsight', () => {
   it('suggests taking profits when market is greedy and portfolio is up', () => {
@@ -39,17 +39,37 @@ describe('generatePortfolioRiskInsight', () => {
   });
 });
 
-describe('buildMockLiveMetrics', () => {
-  it('computes live value and pnl from mock holdings', () => {
-    const result = buildMockLiveMetrics({
-      bitcoin: 100_000,
-      ethereum: 4_000,
-      solana: 200,
-    });
-    expect(result.totalValue).toBeGreaterThan(0);
+describe('buildDashboardFromUserHoldings', () => {
+  it('computes live value and pnl from user holdings', () => {
+    const result = buildDashboardFromUserHoldings(
+      {
+        BTC: { tokenAmount: 0.5, averageBuyPrice: 60_000, investedUsd: 30_000 },
+        ETH: { tokenAmount: 0, averageBuyPrice: 0, investedUsd: 0 },
+        SOL: { tokenAmount: 0, averageBuyPrice: 0, investedUsd: 0 },
+      },
+      { bitcoin: 100_000, ethereum: 4_000, solana: 200 },
+    );
+    expect(result.totalValue).toBe(50_000);
+    expect(result.totalInvested).toBe(30_000);
+    expect(result.totalPnl).toBe(20_000);
     expect(result.assets).toHaveLength(3);
-    expect(result.totalPnl).toBe(result.totalValue - result.totalInvested);
     const btc = result.assets.find(a => a.symbol === 'BTC')!;
-    expect(btc.value).toBeCloseTo(btc.holdings * 100_000, 2);
+    expect(btc.value).toBeCloseTo(50_000, 2);
+    expect(btc.pnl).toBeCloseTo(20_000, 2);
+  });
+
+  it('defaults to zero when holdings are empty', () => {
+    const result = buildDashboardFromUserHoldings(
+      {
+        BTC: { tokenAmount: 0, averageBuyPrice: 0, investedUsd: 0 },
+        ETH: { tokenAmount: 0, averageBuyPrice: 0, investedUsd: 0 },
+        SOL: { tokenAmount: 0, averageBuyPrice: 0, investedUsd: 0 },
+      },
+      { bitcoin: 100_000, ethereum: 4_000, solana: 200 },
+    );
+    expect(result.totalValue).toBe(0);
+    expect(result.totalInvested).toBe(0);
+    expect(result.totalPnl).toBe(0);
+    expect(result.totalPnlPct).toBe(0);
   });
 });
