@@ -9,15 +9,18 @@ import {
   YAxis,
 } from 'recharts';
 import { formatUsd } from '@/lib/crypto';
+import { usePortfolioPerformanceHistory } from '@/hooks/usePortfolioPerformanceHistory';
 import { Bento, Label, Chip } from '@/components/modern-portfolio/primitives';
 import {
-  buildMockPortfolioPerformance,
   performanceRangeChangePct,
+  type PortfolioHoldingsMap,
   type PortfolioPerformanceRange,
 } from '@/lib/portfolioPerformanceHistory';
+import { MASKED_USD } from '@/lib/portfolioPrivacy';
 
 interface Props {
-  currentValueUsd: number;
+  holdings: PortfolioHoldingsMap;
+  balanceVisible?: boolean;
   loading?: boolean;
   sk?: boolean;
 }
@@ -31,35 +34,49 @@ function ChartTooltip({
   active,
   payload,
   label,
+  balanceVisible,
 }: {
   active?: boolean;
   payload?: Array<{ value?: number }>;
   label?: string;
+  balanceVisible: boolean;
 }) {
   if (!active || !payload?.length) return null;
   const value = payload[0]?.value ?? 0;
   return (
     <div className="rounded-xl border border-white/10 bg-[#0A0A0A]/95 px-3 py-2 shadow-lg">
       <p className="text-[10px] text-white/45 font-mono">{label}</p>
-      <p className="text-sm font-mono font-bold text-white tabular-nums">{formatUsd(value)}</p>
+      <p className="text-sm font-mono font-bold text-white tabular-nums">
+        {balanceVisible ? formatUsd(value) : MASKED_USD}
+      </p>
     </div>
   );
 }
 
-export function PortfolioPerformanceChart({ currentValueUsd, loading, sk }: Props) {
-  const [range, setRange] = useState<PortfolioPerformanceRange>(30);
+export function PortfolioPerformanceChart({
+  holdings,
+  balanceVisible = true,
+  loading,
+  sk,
+}: Props) {
+  const [range, setRange] = useState<PortfolioPerformanceRange>(7);
+  const totalHoldings = holdings.bitcoin + holdings.ethereum + holdings.solana;
 
-  const data = useMemo(
-    () => buildMockPortfolioPerformance(currentValueUsd, range),
-    [currentValueUsd, range],
-  );
+  const {
+    data: history,
+    isLoading: historyLoading,
+    isFetching: historyFetching,
+    isError,
+  } = usePortfolioPerformanceHistory(holdings, range);
 
+  const data = history ?? [];
   const rangePct = useMemo(() => performanceRangeChangePct(data), [data]);
   const isUp = rangePct >= 0;
   const stroke = isUp ? '#10b981' : '#8b5cf6';
   const gradientId = `portfolio-perf-${isUp ? 'up' : 'down'}`;
+  const chartLoading = loading || (historyLoading && data.length === 0);
 
-  if (loading) {
+  if (chartLoading) {
     return (
       <Bento delay={0.1} className="p-4 sm:p-5 min-w-0">
         <div className="animate-pulse space-y-4">
@@ -73,7 +90,7 @@ export function PortfolioPerformanceChart({ currentValueUsd, loading, sk }: Prop
     );
   }
 
-  if (currentValueUsd <= 0) {
+  if (totalHoldings <= 0) {
     return (
       <Bento delay={0.1} className="p-4 sm:p-5 min-w-0">
         <Label>{sk ? 'Historická výkonnosť' : 'Historical performance'}</Label>
@@ -90,13 +107,20 @@ export function PortfolioPerformanceChart({ currentValueUsd, loading, sk }: Prop
         <div className="min-w-0">
           <Label>{sk ? 'Historická výkonnosť' : 'Historical performance'}</Label>
           <p className="text-[11px] text-white/35 font-mono mt-1">
-            {sk ? 'Simulovaný trend · ukotvený na live hodnote' : 'Simulated trend · anchored to live value'}
+            {sk
+              ? 'CoinGecko market_chart · holdings × historické ceny'
+              : 'CoinGecko market_chart · holdings × historical prices'}
+            {historyFetching ? ' · SYNC' : ''}
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Chip color={isUp ? 'green' : 'purple'}>
-            {isUp ? '+' : ''}{rangePct.toFixed(2)}% · {range}D
-          </Chip>
+          {data.length >= 2 && (
+            <Chip color={isUp ? 'green' : 'purple'}>
+              {balanceVisible
+                ? `${isUp ? '+' : ''}${rangePct.toFixed(2)}% · ${range}D`
+                : `***% · ${range}D`}
+            </Chip>
+          )}
           <div className="flex gap-1 rounded-full border border-white/10 p-0.5">
             {RANGES.map(r => (
               <button
@@ -116,64 +140,72 @@ export function PortfolioPerformanceChart({ currentValueUsd, loading, sk }: Prop
         </div>
       </div>
 
-      <div className="mt-4 h-44 sm:h-52 min-w-0">
-        <ResponsiveContainer width="100%" height="100%">
-          <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
-            <defs>
-              <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor={stroke} stopOpacity={0.28} />
-                <stop offset="100%" stopColor={stroke} stopOpacity={0} />
-              </linearGradient>
-              <filter id="portfolio-line-glow" x="-20%" y="-20%" width="140%" height="140%">
-                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-            </defs>
-            <CartesianGrid
-              stroke="rgba(255,255,255,0.12)"
-              strokeOpacity={0.1}
-              vertical={false}
-            />
-            <XAxis
-              dataKey="shortLabel"
-              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
-              tickLine={false}
-              axisLine={false}
-              interval="preserveStartEnd"
-              minTickGap={24}
-            />
-            <YAxis
-              tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
-              tickLine={false}
-              axisLine={false}
-              width={48}
-              tickFormatter={(v: number) =>
-                v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`
-              }
-              domain={['auto', 'auto']}
-            />
-            <Tooltip content={<ChartTooltip />} />
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke={stroke}
-              strokeWidth={2.5}
-              fill={`url(#${gradientId})`}
-              dot={false}
-              activeDot={{
-                r: 4,
-                fill: stroke,
-                stroke: '#0A0A0A',
-                strokeWidth: 2,
-              }}
-              style={{ filter: 'url(#portfolio-line-glow)' }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
+      {isError || data.length < 2 ? (
+        <p className="text-sm text-white/35 mt-4 py-10 text-center">
+          {sk ? 'Historické dáta sa nepodarilo načítať.' : 'Unable to load historical chart data.'}
+        </p>
+      ) : (
+        <div className="mt-4 h-44 sm:h-52 min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 8, right: 8, left: -12, bottom: 0 }}>
+              <defs>
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={stroke} stopOpacity={0.28} />
+                  <stop offset="100%" stopColor={stroke} stopOpacity={0} />
+                </linearGradient>
+                <filter id="portfolio-line-glow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur stdDeviation="2.5" result="blur" />
+                  <feMerge>
+                    <feMergeNode in="blur" />
+                    <feMergeNode in="SourceGraphic" />
+                  </feMerge>
+                </filter>
+              </defs>
+              <CartesianGrid
+                stroke="rgba(255,255,255,0.12)"
+                strokeOpacity={0.1}
+                vertical={false}
+              />
+              <XAxis
+                dataKey="shortLabel"
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+                tickLine={false}
+                axisLine={false}
+                interval="preserveStartEnd"
+                minTickGap={24}
+              />
+              <YAxis
+                tick={{ fontSize: 10, fill: 'rgba(255,255,255,0.35)' }}
+                tickLine={false}
+                axisLine={false}
+                width={48}
+                tickFormatter={(v: number) =>
+                  balanceVisible
+                    ? (v >= 1000 ? `$${(v / 1000).toFixed(1)}k` : `$${v.toFixed(0)}`)
+                    : '$***'
+                }
+                domain={['auto', 'auto']}
+              />
+              <Tooltip content={<ChartTooltip balanceVisible={balanceVisible} />} />
+              <Area
+                type="monotone"
+                dataKey="value"
+                stroke={stroke}
+                strokeWidth={2.5}
+                fill={`url(#${gradientId})`}
+                dot={false}
+                activeDot={{
+                  r: 4,
+                  fill: stroke,
+                  stroke: '#0A0A0A',
+                  strokeWidth: 2,
+                }}
+                style={{ filter: 'url(#portfolio-line-glow)' }}
+              />
+            </AreaChart>
+          </ResponsiveContainer>
+        </div>
+      )}
     </Bento>
   );
 }

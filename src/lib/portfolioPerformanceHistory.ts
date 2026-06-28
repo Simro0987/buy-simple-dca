@@ -1,4 +1,7 @@
+import { cgFetch } from '@/lib/coingecko';
+
 export interface PortfolioPerformancePoint {
+  time: number;
   date: string;
   shortLabel: string;
   value: number;
@@ -6,40 +9,103 @@ export interface PortfolioPerformancePoint {
 
 export type PortfolioPerformanceRange = 7 | 30;
 
+export interface PortfolioHoldingsMap {
+  bitcoin: number;
+  ethereum: number;
+  solana: number;
+}
+
+interface MarketChartResponse {
+  prices: Array<[number, number]>;
+}
+
+const COIN_IDS: Array<{ id: keyof PortfolioHoldingsMap; cgId: string }> = [
+  { id: 'bitcoin', cgId: 'bitcoin' },
+  { id: 'ethereum', cgId: 'ethereum' },
+  { id: 'solana', cgId: 'solana' },
+];
+
+async function fetchCoinMarketChart(coinId: string, days: PortfolioPerformanceRange): Promise<Array<[number, number]>> {
+  const params: Record<string, string | number> = { vs_currency: 'usd', days };
+  if (days > 7) params.interval = 'daily';
+
+  const res = await cgFetch(`/coins/${coinId}/market_chart`, params);
+  if (!res.ok) throw new Error(`CoinGecko market_chart failed for ${coinId}: ${res.status}`);
+  const data = (await res.json()) as MarketChartResponse;
+  return data.prices ?? [];
+}
+
+/** Nearest historical price at a target timestamp. */
+export function priceAtTimestamp(series: Array<[number, number]>, targetTs: number): number {
+  if (series.length === 0) return 0;
+  let best = series[0][1];
+  let bestDiff = Math.abs(series[0][0] - targetTs);
+  for (const [ts, price] of series) {
+    const diff = Math.abs(ts - targetTs);
+    if (diff < bestDiff) {
+      bestDiff = diff;
+      best = price;
+    }
+  }
+  return best;
+}
+
 /**
- * Simulated portfolio value history anchored to the live total.
- * Last point always equals `currentValueUsd`; earlier points form a smooth growth curve.
+ * Sum holdings × historical prices across aligned CoinGecko timestamps.
  */
-export function buildMockPortfolioPerformance(
-  currentValueUsd: number,
-  days: PortfolioPerformanceRange = 30,
+export function buildPortfolioPerformanceSeries(
+  holdings: PortfolioHoldingsMap,
+  charts: Partial<Record<keyof PortfolioHoldingsMap, Array<[number, number]>>>,
 ): PortfolioPerformancePoint[] {
-  if (currentValueUsd <= 0) return [];
+  const active = COIN_IDS.filter(({ id }) => (holdings[id] ?? 0) > 0 && (charts[id]?.length ?? 0) > 0);
+  if (active.length === 0) return [];
 
-  const points: PortfolioPerformancePoint[] = [];
-  const startRatio = days === 7 ? 0.965 : 0.9;
-  const startValue = currentValueUsd * startRatio;
-
-  for (let i = 0; i < days; i++) {
-    const date = new Date();
-    date.setDate(date.getDate() - (days - 1 - i));
-
-    const t = days === 1 ? 1 : i / (days - 1);
-    const eased = 1 - Math.pow(1 - t, 1.35);
-    const base = startValue + (currentValueUsd - startValue) * eased;
-    const wobble =
-      Math.sin(i * 2.17) * currentValueUsd * 0.006 +
-      Math.cos(i * 0.83) * currentValueUsd * 0.003;
-    const value = i === days - 1 ? currentValueUsd : Math.max(0, base + wobble);
-
-    points.push({
-      date: date.toISOString().slice(0, 10),
-      shortLabel: date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-      value: Math.round(value * 100) / 100,
-    });
+  const timestamps = new Set<number>();
+  for (const { id } of active) {
+    for (const [ts] of charts[id] ?? []) timestamps.add(ts);
   }
 
-  return points;
+  const sortedTs = Array.from(timestamps).sort((a, b) => a - b);
+
+  return sortedTs.map((time) => {
+    let value = 0;
+    for (const { id } of active) {
+      const amount = holdings[id] ?? 0;
+      const price = priceAtTimestamp(charts[id] ?? [], time);
+      value += amount * price;
+    }
+
+    const dateObj = new Date(time);
+    return {
+      time,
+      date: dateObj.toISOString(),
+      shortLabel: dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+      value: Math.round(value * 100) / 100,
+    };
+  });
+}
+
+export async function fetchPortfolioPerformanceHistory(
+  holdings: PortfolioHoldingsMap,
+  days: PortfolioPerformanceRange,
+): Promise<PortfolioPerformancePoint[]> {
+  const hasHoldings = holdings.bitcoin > 0 || holdings.ethereum > 0 || holdings.solana > 0;
+  if (!hasHoldings) return [];
+
+  const charts: Partial<Record<keyof PortfolioHoldingsMap, Array<[number, number]>>> = {};
+
+  await Promise.all(
+    COIN_IDS.map(async ({ id, cgId }) => {
+      if ((holdings[id] ?? 0) <= 0) return;
+      try {
+        charts[id] = await fetchCoinMarketChart(cgId, days);
+      } catch {
+        charts[id] = [];
+      }
+    }),
+  );
+
+  return buildPortfolioPerformanceSeries(holdings, charts);
 }
 
 export function performanceRangeChangePct(points: PortfolioPerformancePoint[]): number {

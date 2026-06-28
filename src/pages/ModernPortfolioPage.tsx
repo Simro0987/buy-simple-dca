@@ -8,9 +8,9 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, RefreshCw, Copy, Check, Lock, RotateCcw,
   TrendingUp, TrendingDown, Target,
-  AlertTriangle, Sparkles, Sparkle,
+  AlertTriangle, Sparkles, Sparkle, Eye, EyeOff,
 } from 'lucide-react';
-import { TOKENS, formatUsd, formatPrice } from '@/lib/crypto';
+import { TOKENS, formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { usePortfolioLivePrices, PORTFOLIO_PRICE_REFRESH_MS } from '@/hooks/usePortfolioLivePrices';
@@ -21,6 +21,7 @@ import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
 import { buildMockLiveMetrics, type LiveHoldingMetric } from '@/lib/mockPortfolioHoldings';
+import { maskPct, maskPrice, maskSignedUsd, maskUsd } from '@/lib/portfolioPrivacy';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
 import { FlashMoney } from '@/components/modern-portfolio/FlashMoney';
@@ -150,6 +151,13 @@ function ModernPortfolioInner({ lang }: Props) {
   const pricesInitialLoading = liveSpotLoading && !liveSpot && !prices;
   const liveAssets = dashboard.assets;
 
+  const chartHoldings = useMemo(() => ({
+    bitcoin: liveAssets.find(a => a.symbol === 'BTC')?.holdings ?? 0,
+    ethereum: liveAssets.find(a => a.symbol === 'ETH')?.holdings ?? 0,
+    solana: liveAssets.find(a => a.symbol === 'SOL')?.holdings ?? 0,
+  }), [liveAssets]);
+
+  const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
   const [confirmKey, setConfirmKey] = useState(0);
   const [expandedRadar, setExpandedRadar] = useState<DcaToken | null>('BTC');
@@ -295,7 +303,21 @@ function ModernPortfolioInner({ lang }: Props) {
         ) : (
           <>
             <div className="flex items-center justify-between gap-2">
-              <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+              <div className="flex items-center gap-2 min-w-0">
+                <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+                <button
+                  type="button"
+                  onClick={() => setIsBalanceVisible(v => !v)}
+                  aria-label={isBalanceVisible
+                    ? (sk ? 'Skryť zostatky' : 'Hide balances')
+                    : (sk ? 'Zobraziť zostatky' : 'Show balances')}
+                  className="p-1.5 rounded-lg border border-white/10 text-white/45 hover:text-white hover:border-white/20 transition-colors shrink-0"
+                >
+                  {isBalanceVisible
+                    ? <Eye className="w-3.5 h-3.5" />
+                    : <EyeOff className="w-3.5 h-3.5" />}
+                </button>
+              </div>
               <Chip color={liveSpotFetching ? 'amber' : 'green'}>
                 {liveSpotFetching ? 'SYNC' : 'LIVE'}
                 {lastLiveUpdate ? ` · ${lastLiveUpdate}` : ''}
@@ -303,13 +325,13 @@ function ModernPortfolioInner({ lang }: Props) {
             </div>
             <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
               <FlashMoney price={displayTotalUsd} size="hero" className="!text-4xl sm:!text-6xl break-words">
-                {formatUsd(displayTotalUsd)}
+                {maskUsd(displayTotalUsd, isBalanceVisible)}
               </FlashMoney>
               <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
                 <div className="flex items-center gap-1.5 justify-end">
                   {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
                   <FlashMoney price={displayPnl} size="md" positive={isGain} negative={!isGain}>
-                    {isGain ? '+' : ''}{formatUsd(displayPnl)}
+                    {maskSignedUsd(displayPnl, isBalanceVisible)}
                   </FlashMoney>
                 </div>
                 <FlashMoney
@@ -317,7 +339,7 @@ function ModernPortfolioInner({ lang }: Props) {
                   size="sm"
                   className={`font-mono text-sm mt-1 block ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}
                 >
-                  {isGain ? '+' : ''}{displayPnlPct.toFixed(2)}%
+                  {maskPct(displayPnlPct, isBalanceVisible, true)}
                 </FlashMoney>
               </div>
             </div>
@@ -325,9 +347,11 @@ function ModernPortfolioInner({ lang }: Props) {
             <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
               <Chip color="green">
                 <Sparkles className="w-3 h-3 inline mr-1" />
-                Profit {formatUsd(profitAvailable)}
+                Profit {maskUsd(profitAvailable, isBalanceVisible)}
               </Chip>
-              <Chip color="default">Stake {formatUsd(totalStakedValue)} · {blendedApy.toFixed(1)}%</Chip>
+              <Chip color="default">
+                Stake {maskUsd(totalStakedValue, isBalanceVisible)} · {blendedApy.toFixed(1)}%
+              </Chip>
               {useMockHoldings && (
                 <Chip color="purple">{sk ? 'Demo držby' : 'Demo holdings'}</Chip>
               )}
@@ -360,6 +384,7 @@ function ModernPortfolioInner({ lang }: Props) {
           selected={selected}
           onSelect={toggleSelected}
           loading={pricesInitialLoading}
+          balanceVisible={isBalanceVisible}
         />
         <Bento delay={0.08} className="p-4 sm:p-5 min-w-0 flex flex-col justify-center">
           <FearGreedSlider value={fgValue} label={fgLabel} loading={fgLoading && !fg} />
@@ -368,7 +393,8 @@ function ModernPortfolioInner({ lang }: Props) {
 
       {/* ═══ HISTORICAL PERFORMANCE ═════════════════════════════════════════ */}
       <PortfolioPerformanceChart
-        currentValueUsd={displayTotalUsd}
+        holdings={chartHoldings}
+        balanceVisible={isBalanceVisible}
         loading={pricesInitialLoading}
         sk={sk}
       />
@@ -379,10 +405,10 @@ function ModernPortfolioInner({ lang }: Props) {
           [0, 1, 2, 3].map(i => <PortfolioStatSkeleton key={i} />)
         ) : (
           [
-            { l: sk ? 'Investované' : 'Invested', v: formatUsd(displayInvested), d: 0.04 },
-            { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(displayPnl)}`, d: 0.08, pos: isGain },
-            { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: formatUsd(weeklyCapital), d: 0.12 },
-            { l: sk ? 'Voľný cash' : 'Free cash', v: formatUsd(freeCash + reservoir.stable), d: 0.16 },
+            { l: sk ? 'Investované' : 'Invested', v: maskUsd(displayInvested, isBalanceVisible), d: 0.04 },
+            { l: 'PnL', v: maskSignedUsd(displayPnl, isBalanceVisible), d: 0.08, pos: isGain },
+            { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: maskUsd(weeklyCapital, isBalanceVisible), d: 0.12 },
+            { l: sk ? 'Voľný cash' : 'Free cash', v: maskUsd(freeCash + reservoir.stable, isBalanceVisible), d: 0.16 },
           ].map(s => (
             <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
               <Label className="truncate">{s.l}</Label>
@@ -536,7 +562,7 @@ function ModernPortfolioInner({ lang }: Props) {
                     {[
                       { l: 'RSI(14d)', v: String(rsi[t.sym]) },
                       { l: 'F&G', v: String(fgValue) },
-                      { l: 'PnL', v: `${t.pnlPct >= 0 ? '+' : ''}${t.pnlPct.toFixed(1)}%` },
+                      { l: 'PnL', v: maskPct(t.pnlPct, isBalanceVisible, true) },
                     ].map(m => (
                       <div key={m.l} className="bg-black/40 rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/[0.06] min-w-0">
                         <Label className="truncate">{m.l}</Label>
@@ -562,12 +588,12 @@ function ModernPortfolioInner({ lang }: Props) {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-black/30 rounded-2xl p-3 border border-white/[0.06]">
                         <Label>Hodnota</Label>
-                        <Money size="md" className="mt-1 block">{formatUsd(t.hold * price)}</Money>
+                        <Money size="md" className="mt-1 block">{maskUsd(t.hold * price, isBalanceVisible)}</Money>
                       </div>
                       <div className="bg-black/30 rounded-2xl p-3 border border-white/[0.06]">
                         <Label>PnL USD</Label>
                         <Money size="md" positive className="mt-1 block">
-                          +{formatUsd(t.hold * price - t.hold * dca)}
+                          {maskSignedUsd(t.hold * price - t.hold * dca, isBalanceVisible)}
                         </Money>
                       </div>
                     </div>
@@ -600,7 +626,7 @@ function ModernPortfolioInner({ lang }: Props) {
                         <div className="min-w-0">
                           <Label>Predaj</Label>
                           <p className="font-mono text-base sm:text-lg font-bold text-white break-all">{t.sellQty.toFixed(4)} {t.sym}</p>
-                          <p className="font-mono text-xs text-white/40">≈ {formatUsd(t.sellQty * price)}</p>
+                          <p className="font-mono text-xs text-white/40">≈ {maskUsd(t.sellQty * price, isBalanceVisible)}</p>
                         </div>
                         <button
                           onClick={() => copyText(t.sellQty.toFixed(4), t.sym)}
@@ -659,7 +685,7 @@ function ModernPortfolioInner({ lang }: Props) {
                 <div className="flex justify-between items-baseline gap-2 mb-1.5 min-w-0">
                   <span className="text-sm font-bold shrink-0" style={{ color: token.color }}>{a.symbol}</span>
                   <FlashMoney price={a.value} size="md" className="!text-lg sm:!text-2xl truncate">
-                    {formatUsd(a.value)}
+                    {maskUsd(a.value, isBalanceVisible)}
                   </FlashMoney>
                 </div>
                 <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
@@ -677,14 +703,14 @@ function ModernPortfolioInner({ lang }: Props) {
                 </div>
                 <div className="flex justify-between mt-1 text-[10px] font-mono">
                   <FlashMoney price={a.currentPrice} size="sm" className="!text-[10px] text-white/45">
-                    {formatPrice(a.currentPrice)}
+                    {maskPrice(a.currentPrice, isBalanceVisible)}
                   </FlashMoney>
                   <FlashMoney
                     price={a.pnlPct}
                     size="sm"
                     className={`!text-[10px] ${a.pnl >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}
                   >
-                    {a.pnl >= 0 ? '+' : ''}{formatUsd(a.pnl)} · {a.pnlPct >= 0 ? '+' : ''}{a.pnlPct.toFixed(1)}%
+                    {maskSignedUsd(a.pnl, isBalanceVisible)} · {maskPct(a.pnlPct, isBalanceVisible, true)}
                   </FlashMoney>
                 </div>
               </div>
@@ -745,7 +771,7 @@ function ModernPortfolioInner({ lang }: Props) {
                     </div>
                     <div className="min-w-0">
                       <FlashMoney price={a.value} size="lg" className="!text-2xl sm:!text-3xl truncate">
-                        {formatUsd(a.value)}
+                        {maskUsd(a.value, isBalanceVisible)}
                       </FlashMoney>
                       <p className="font-mono text-xs text-white/35 mt-1 break-words">
                         {a.holdings > 0
@@ -753,23 +779,25 @@ function ModernPortfolioInner({ lang }: Props) {
                           : '—'}
                         {' · '}
                         <FlashMoney price={a.currentPrice} size="sm" className="!text-xs inline">
-                          {formatPrice(a.currentPrice)}
+                          {maskPrice(a.currentPrice, isBalanceVisible)}
                         </FlashMoney>
                       </p>
                     </div>
                   </div>
                   <div className="text-left sm:text-right shrink-0">
                     <FlashMoney price={a.pnl} size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-xl sm:!text-2xl">
-                      {a.pnl >= 0 ? '+' : ''}{formatUsd(a.pnl)}
+                      {maskSignedUsd(a.pnl, isBalanceVisible)}
                     </FlashMoney>
                     <FlashMoney
                       price={a.pnlPct}
                       size="sm"
                       className={`font-mono text-sm block ${a.pnlPct >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}
                     >
-                      {a.pnlPct >= 0 ? '+' : ''}{a.pnlPct.toFixed(2)}%
+                      {maskPct(a.pnlPct, isBalanceVisible, true)}
                     </FlashMoney>
-                    <p className="text-[10px] text-white/30 font-mono mt-1">avg {formatUsd(a.avgBuyPrice)}</p>
+                    <p className="text-[10px] text-white/30 font-mono mt-1">
+                      avg {maskUsd(a.avgBuyPrice, isBalanceVisible)}
+                    </p>
                   </div>
                 </div>
                 {slice && (slice.liquidQty > 0 || slice.stakedQty > 0) && (
@@ -788,7 +816,7 @@ function ModernPortfolioInner({ lang }: Props) {
                   </p>
                 )}
                 <p className={`text-xs font-mono mt-2 ${change24h >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>
-                  24h {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
+                  24h {maskPct(change24h, isBalanceVisible, true)}
                 </p>
               </Bento>
             );
@@ -810,7 +838,7 @@ function ModernPortfolioInner({ lang }: Props) {
             <Target className="w-4 h-4 text-orange-400" />
             <span className="text-sm font-bold text-white">Dynamic Take Profit</span>
           </div>
-          <Chip color="green">Rezervoár {formatUsd(reservoir.stable)}</Chip>
+          <Chip color="green">Rezervoár {maskUsd(reservoir.stable, isBalanceVisible)}</Chip>
         </div>
         {eligibleTakeProfitRows.length === 0 ? (
           <p className="text-sm text-white/35 text-center py-4">Všetky aktíva akumulujú.</p>
@@ -823,7 +851,9 @@ function ModernPortfolioInner({ lang }: Props) {
                 <div key={r.symbol} className="rounded-2xl border border-white/[0.08] bg-black/30 p-3 sm:p-4 space-y-3 min-w-0">
                   <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center min-w-0">
                     <span className="font-bold text-white">{r.symbol}</span>
-                    <Money size="md" positive className="!text-xl">+{formatUsd(r.pnl)}</Money>
+                    <Money size="md" positive className="!text-xl">
+                      {maskSignedUsd(r.pnl, isBalanceVisible)}
+                    </Money>
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Chip color="amber">Predaj {r.sellPct.toFixed(0)}% zo zisku</Chip>

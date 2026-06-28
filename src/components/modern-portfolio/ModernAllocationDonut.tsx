@@ -2,6 +2,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { TOKENS, formatUsd } from '@/lib/crypto';
 import { Bento, Label, Money } from '@/components/modern-portfolio/primitives';
 import type { LiveHoldingMetric } from '@/lib/mockPortfolioHoldings';
+import { maskUsd } from '@/lib/portfolioPrivacy';
 
 interface Slice {
   name: string;
@@ -15,9 +16,17 @@ interface Props {
   selected?: 'BTC' | 'ETH' | 'SOL' | null;
   onSelect?: (s: 'BTC' | 'ETH' | 'SOL') => void;
   loading?: boolean;
+  balanceVisible?: boolean;
 }
 
-export function ModernAllocationDonut({ assets, totalValue, selected, onSelect, loading }: Props) {
+export function ModernAllocationDonut({
+  assets,
+  totalValue,
+  selected,
+  onSelect,
+  loading,
+  balanceVisible = true,
+}: Props) {
   const slices: Slice[] = assets
     .filter(a => a.value > 0)
     .map(a => {
@@ -86,7 +95,7 @@ export function ModernAllocationDonut({ assets, totalValue, selected, onSelect, 
                   fontSize: 12,
                 }}
                 formatter={(v: number, _n, item: { payload?: { name?: string } }) => [
-                  formatUsd(v),
+                  maskUsd(v, balanceVisible),
                   item?.payload?.name ?? '',
                 ]}
               />
@@ -96,7 +105,7 @@ export function ModernAllocationDonut({ assets, totalValue, selected, onSelect, 
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <p className="text-[9px] uppercase text-white/35 tracking-wider">{selected ?? 'Total'}</p>
           <Money size="sm" className="!text-base">
-            {formatUsd(selected ? (assets.find(a => a.symbol === selected)?.value ?? 0) : totalValue)}
+            {maskUsd(selected ? (assets.find(a => a.symbol === selected)?.value ?? 0) : totalValue, balanceVisible)}
           </Money>
         </div>
       </div>
