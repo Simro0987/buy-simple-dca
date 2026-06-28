@@ -27,7 +27,8 @@ export function ModernAllocationDonut({
   loading,
   balanceVisible = true,
 }: Props) {
-  const slices: Slice[] = assets
+  const safeAssets = assets ?? [];
+  const slices: Slice[] = safeAssets
     .filter(a => a.value > 0)
     .map(a => {
       const token = TOKENS.find(t => t.symbol === a.symbol)!;
@@ -105,12 +106,12 @@ export function ModernAllocationDonut({
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
           <p className="text-[9px] uppercase text-white/35 tracking-wider">{selected ?? 'Total'}</p>
           <Money size="sm" className="!text-base">
-            {maskUsd(selected ? (assets.find(a => a.symbol === selected)?.value ?? 0) : totalValue, balanceVisible)}
+            {maskUsd(selected ? (safeAssets.find(a => a.symbol === selected)?.value ?? 0) : totalValue, balanceVisible)}
           </Money>
         </div>
       </div>
       <div className="grid grid-cols-3 gap-2 mt-3">
-        {assets.map(a => {
+        {safeAssets.map(a => {
           const token = TOKENS.find(t => t.symbol === a.symbol)!;
           const active = selected === a.symbol;
           const dim = selected && !active;

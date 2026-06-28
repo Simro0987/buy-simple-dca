@@ -21,7 +21,6 @@ import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
 import {
   buildDashboardFromUserHoldings,
-  saveUserHoldings,
   type UserHoldings,
 } from '@/lib/portfolioRealHoldings';
 import { useUserHoldings } from '@/hooks/useUserHoldings';
@@ -38,6 +37,8 @@ import {
   PortfolioPositionSkeleton,
 } from '@/components/modern-portfolio/PortfolioSkeletons';
 import { EditHoldingsModal, EditHoldingsTrigger } from '@/components/modern-portfolio/EditHoldingsModal';
+import { PortfolioErrorBoundary } from '@/components/modern-portfolio/PortfolioErrorBoundary';
+import { ensurePortfolioData } from '@/lib/portfolioData';
 import {
   type DcaToken,
   DCA_TOKEN_COLORS,
@@ -67,14 +68,30 @@ const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
 const DAILY_REPORT_KEY = 'portfolio-risk-insight-last';
 
 export function ModernPortfolioPage({ lang }: Props) {
+  const sk = lang === 'sk';
+  const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
+
   return (
     <PortfolioProvider>
-      <ModernPortfolioInner lang={lang} />
+      <div className="min-w-0 text-white">
+        <PortfolioErrorBoundary sk={sk} onEditHoldings={() => setHoldingsModalOpen(true)}>
+          <ModernPortfolioInner
+            lang={lang}
+            holdingsModalOpen={holdingsModalOpen}
+            setHoldingsModalOpen={setHoldingsModalOpen}
+          />
+        </PortfolioErrorBoundary>
+      </div>
     </PortfolioProvider>
   );
 }
 
-function ModernPortfolioInner({ lang }: Props) {
+interface InnerProps extends Props {
+  holdingsModalOpen: boolean;
+  setHoldingsModalOpen: (open: boolean) => void;
+}
+
+function ModernPortfolioInner({ lang, holdingsModalOpen, setHoldingsModalOpen }: InnerProps) {
   const sk = lang === 'sk';
   const { data: prices, isFetching } = usePrices();
   const {
@@ -98,25 +115,26 @@ function ModernPortfolioInner({ lang }: Props) {
   }), [liveSpot, prices]);
 
   const { holdings: userHoldings, setHoldings: setUserHoldings } = useUserHoldings();
-  const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
+  const safePortfolioData = useMemo(() => ensurePortfolioData(portfolioData), [portfolioData]);
 
   const dashboard = useMemo(
     () => buildDashboardFromUserHoldings(userHoldings, livePriceMap),
     [userHoldings, livePriceMap],
   );
 
-  const displayTotalUsd = dashboard.totalValue;
-  const displayPnl = dashboard.totalPnl;
-  const displayPnlPct = dashboard.totalPnlPct;
-  const displayInvested = dashboard.totalInvested;
+  const displayTotalUsd = Number(dashboard?.totalValue ?? 0) || 0;
+  const displayPnl = Number(dashboard?.totalPnl ?? 0) || 0;
+  const displayPnlPct = Number(dashboard?.totalPnlPct ?? 0) || 0;
+  const displayInvested = Number(dashboard?.totalInvested ?? 0) || 0;
   const isGain = displayPnl >= 0;
   const pricesInitialLoading = liveSpotLoading && !liveSpot && !prices;
-  const liveAssets = dashboard.assets;
+  const liveAssets = dashboard?.assets ?? [];
+  const isZeroPortfolio = displayTotalUsd <= 0 && displayInvested <= 0;
 
   const chartHoldings = useMemo(() => ({
-    bitcoin: userHoldings.BTC.tokenAmount,
-    ethereum: userHoldings.ETH.tokenAmount,
-    solana: userHoldings.SOL.tokenAmount,
+    bitcoin: Number(userHoldings?.BTC?.tokenAmount ?? 0) || 0,
+    ethereum: Number(userHoldings?.ETH?.tokenAmount ?? 0) || 0,
+    solana: Number(userHoldings?.SOL?.tokenAmount ?? 0) || 0,
   }), [userHoldings]);
 
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
@@ -136,7 +154,7 @@ function ModernPortfolioInner({ lang }: Props) {
   const fgLabel = fg?.classification ?? (fgValue <= 44 ? 'Fear' : fgValue >= 56 ? 'Greed' : 'Neutral');
   const weeklyCapital = Number(settings?.default_amount ?? 0);
   const freeCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
-  const warnings = useMemo(() => computeConcentrationWarnings(prices), [prices]);
+  const warnings = useMemo(() => computeConcentrationWarnings(prices) ?? [], [prices]);
 
   const { data: rsiData, isLoading: rsiLoading, refetch: rsiRefetch } = useQuery({
     queryKey: ['modern-dca-rsi'],
@@ -197,7 +215,7 @@ function ModernPortfolioInner({ lang }: Props) {
     return { equiv, progress: Math.min(100, (equiv / GOAL_BTC) * 100) };
   }, [displayTotalUsd, prices]);
 
-  const takeProfitRows = useMemo(() => liveAssets.map(a => {
+  const takeProfitRows = useMemo(() => (liveAssets ?? []).map(a => {
     const adj = a.holdings;
     const original = adj + Number(reservoir.sells[a.symbol] ?? 0);
     const avgCost = original > 0 ? a.invested / original : 0;
@@ -223,7 +241,7 @@ function ModernPortfolioInner({ lang }: Props) {
   };
 
   const eligibleTakeProfitRows = useMemo(
-    () => takeProfitRows.filter(r => r.eligible),
+    () => (takeProfitRows ?? []).filter(r => r.eligible),
     [takeProfitRows],
   );
 
@@ -311,6 +329,14 @@ function ModernPortfolioInner({ lang }: Props) {
                 </FlashMoney>
               </div>
             </div>
+
+            {isZeroPortfolio && !pricesInitialLoading && (
+              <p className="mt-3 text-sm text-white/45 leading-relaxed">
+                {sk
+                  ? 'Portfólio je prázdne. Kliknite na ⚙️ a zadajte svoje reálne držby BTC, ETH a SOL.'
+                  : 'Portfolio is empty. Click ⚙️ to enter your real BTC, ETH, and SOL holdings.'}
+              </p>
+            )}
 
             <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
               <Chip color="green">
@@ -713,7 +739,7 @@ function ModernPortfolioInner({ lang }: Props) {
       {/* ═══ POZÍCIE ═══════════════════════════════════════════════════════ */}
       <div className="space-y-3 min-w-0">
         <Label>{sk ? 'Pozície' : 'Positions'}</Label>
-        {portfolioData.loading || pricesInitialLoading ? (
+        {safePortfolioData.loading || pricesInitialLoading ? (
           <div className="grid gap-3">
             {[0, 1, 2].map(i => <PortfolioPositionSkeleton key={i} />)}
           </div>
@@ -722,7 +748,7 @@ function ModernPortfolioInner({ lang }: Props) {
           {liveAssets.map((a, i) => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
-            const slice = portfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
+            const slice = safePortfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
             const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
             return (
               <Bento key={a.symbol} delay={0.36 + i * 0.05} className={`p-4 sm:p-5 min-w-0 ${dim ? 'opacity-35' : ''}`}>
@@ -770,14 +796,14 @@ function ModernPortfolioInner({ lang }: Props) {
                     {slice.liquidQty.toFixed(6)} {sk ? 'voľné' : 'liquid'} · {slice.stakedQty.toFixed(6)} {sk ? 'staknuté' : 'staked'}
                   </p>
                 )}
-                {a.symbol === 'ETH' && (portfolioData.alchemixReserve.eth.qty > 0 || portfolioData.activeMotor.rEth.qty > 0) && (
+                {a.symbol === 'ETH' && ((safePortfolioData.alchemixReserve?.eth?.qty ?? 0) > 0 || (safePortfolioData.activeMotor?.rEth?.qty ?? 0) > 0) && (
                   <p className="text-[10px] text-white/25 font-mono mt-1">
-                    Alchemix {portfolioData.alchemixReserve.eth.qty.toFixed(4)} · rETH {portfolioData.activeMotor.rEth.qty.toFixed(4)}
+                    Alchemix {(safePortfolioData.alchemixReserve?.eth?.qty ?? 0).toFixed(4)} · rETH {(safePortfolioData.activeMotor?.rEth?.qty ?? 0).toFixed(4)}
                   </p>
                 )}
-                {a.symbol === 'SOL' && portfolioData.activeMotor.mSol.qty > 0 && (
+                {a.symbol === 'SOL' && (safePortfolioData.activeMotor?.mSol?.qty ?? 0) > 0 && (
                   <p className="text-[10px] text-white/25 font-mono mt-1">
-                    mSOL {portfolioData.activeMotor.mSol.qty.toFixed(2)}
+                    mSOL {(safePortfolioData.activeMotor?.mSol?.qty ?? 0).toFixed(2)}
                   </p>
                 )}
                 <p className={`text-xs font-mono mt-2 ${change24h >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>

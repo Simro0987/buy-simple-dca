@@ -2,6 +2,7 @@ import { useMemo } from 'react';
 import { TOKENS, type PriceData } from '@/lib/crypto';
 import { useProfitReservoir } from '@/lib/profitReservoir';
 import { useUserHoldings } from '@/hooks/useUserHoldings';
+import { normalizeUserHoldings } from '@/lib/portfolioRealHoldings';
 
 export interface DcaPurchaseRow {
   id: string;
@@ -57,12 +58,13 @@ export function usePortfolioMetrics(prices: PriceData | undefined): PortfolioMet
   const { holdings: userHoldings } = useUserHoldings();
 
   return useMemo<PortfolioMetrics>(() => {
+    const safeHoldings = normalizeUserHoldings(userHoldings);
     const assets: AssetMetric[] = TOKENS.map(t => {
       const sym = t.symbol as 'BTC' | 'ETH' | 'SOL';
-      const row = userHoldings[sym];
-      const sold = Number(reservoir.sells[sym] ?? 0);
-      const holdings = Math.max(0, row.tokenAmount - sold);
-      const invested = row.investedUsd;
+      const row = safeHoldings[sym];
+      const sold = Number(reservoir.sells?.[sym] ?? 0);
+      const holdings = Math.max(0, (row?.tokenAmount ?? 0) - sold);
+      const invested = row?.investedUsd ?? 0;
       const currentPrice = prices?.[t.coingeckoId]?.usd ?? 0;
       const value = holdings * currentPrice;
       const pnl = value - invested;

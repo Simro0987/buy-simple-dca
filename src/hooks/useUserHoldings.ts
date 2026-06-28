@@ -2,15 +2,16 @@ import { useCallback, useEffect, useState } from 'react';
 import {
   loadUserHoldings,
   saveUserHoldings,
+  normalizeUserHoldings,
   PORTFOLIO_HOLDINGS_UPDATED_EVENT,
   type UserHoldings,
 } from '@/lib/portfolioRealHoldings';
 
 export function useUserHoldings() {
-  const [holdings, setHoldings] = useState<UserHoldings>(loadUserHoldings);
+  const [holdings, setHoldings] = useState<UserHoldings>(() => normalizeUserHoldings(loadUserHoldings()));
 
   useEffect(() => {
-    const refresh = () => setHoldings(loadUserHoldings());
+    const refresh = () => setHoldings(normalizeUserHoldings(loadUserHoldings()));
     window.addEventListener(PORTFOLIO_HOLDINGS_UPDATED_EVENT, refresh);
     window.addEventListener('portfolio-updated', refresh);
     return () => {
@@ -20,8 +21,9 @@ export function useUserHoldings() {
   }, []);
 
   const updateHoldings = useCallback((next: UserHoldings) => {
-    saveUserHoldings(next);
-    setHoldings(next);
+    const safe = normalizeUserHoldings(next);
+    saveUserHoldings(safe);
+    setHoldings(safe);
   }, []);
 
   return { holdings, setHoldings: updateHoldings, refresh: () => setHoldings(loadUserHoldings()) };

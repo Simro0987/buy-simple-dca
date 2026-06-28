@@ -167,17 +167,49 @@ function normalizeRow(row: Partial<UserHoldingRow> | undefined): UserHoldingRow 
   };
 }
 
+/** Coerce any stored / partial shape into a safe UserHoldings object. */
+export function normalizeUserHoldings(
+  raw?: Partial<UserHoldings> | Record<string, unknown> | null,
+): UserHoldings {
+  if (!raw || typeof raw !== 'object') return { ...EMPTY_USER_HOLDINGS };
+
+  const legacy = raw as Record<string, unknown>;
+  const hasLegacyFlat = 'btc' in legacy || 'eth' in legacy || 'sol' in legacy;
+  if (hasLegacyFlat && !('BTC' in legacy)) {
+    return {
+      BTC: {
+        tokenAmount: Number(legacy.btc ?? 0) || 0,
+        averageBuyPrice: Number(legacy.btcAvg ?? legacy.btc_avg ?? 0) || 0,
+        investedUsd: Number(legacy.btcInvested ?? legacy.btc_invested ?? 0) || 0,
+      },
+      ETH: {
+        tokenAmount: Number(legacy.eth ?? 0) || 0,
+        averageBuyPrice: Number(legacy.ethAvg ?? legacy.eth_avg ?? 0) || 0,
+        investedUsd: Number(legacy.ethInvested ?? legacy.eth_invested ?? 0) || 0,
+      },
+      SOL: {
+        tokenAmount: Number(legacy.sol ?? 0) || 0,
+        averageBuyPrice: Number(legacy.solAvg ?? legacy.sol_avg ?? 0) || 0,
+        investedUsd: Number(legacy.solInvested ?? legacy.sol_invested ?? 0) || 0,
+      },
+    };
+  }
+
+  const typed = raw as Partial<UserHoldings>;
+  return {
+    BTC: normalizeRow(typed.BTC),
+    ETH: normalizeRow(typed.ETH),
+    SOL: normalizeRow(typed.SOL),
+  };
+}
+
 export function loadUserHoldings(): UserHoldings {
   ensureLegacyCleared();
   try {
     const raw = localStorage.getItem(PORTFOLIO_REAL_HOLDINGS_KEY);
     if (!raw) return { ...EMPTY_USER_HOLDINGS };
-    const parsed = JSON.parse(raw) as Partial<UserHoldings>;
-    return {
-      BTC: normalizeRow(parsed.BTC),
-      ETH: normalizeRow(parsed.ETH),
-      SOL: normalizeRow(parsed.SOL),
-    };
+    const parsed = JSON.parse(raw) as Partial<UserHoldings> | Record<string, unknown>;
+    return normalizeUserHoldings(parsed);
   } catch {
     return { ...EMPTY_USER_HOLDINGS };
   }
@@ -185,15 +217,16 @@ export function loadUserHoldings(): UserHoldings {
 
 
 export function buildDashboardFromUserHoldings(
-  userHoldings: UserHoldings,
+  userHoldings: UserHoldings | Partial<UserHoldings> | Record<string, unknown> | null | undefined,
   livePriceMap: { bitcoin?: number; ethereum?: number; solana?: number },
 ): PortfolioDashboardMetrics {
+  const safeHoldings = normalizeUserHoldings(userHoldings);
   const { liveBtcPrice, liveEthPrice, liveSolPrice } = livePricesFromMap(livePriceMap);
 
   const totalValue = computePortfolioTotalValue(
-    userHoldings.BTC.tokenAmount,
-    userHoldings.ETH.tokenAmount,
-    userHoldings.SOL.tokenAmount,
+    safeHoldings.BTC.tokenAmount,
+    safeHoldings.ETH.tokenAmount,
+    safeHoldings.SOL.tokenAmount,
     liveBtcPrice,
     liveEthPrice,
     liveSolPrice,
@@ -206,7 +239,7 @@ export function buildDashboardFromUserHoldings(
   } as const;
 
   const assets = (['BTC', 'ETH', 'SOL'] as PortfolioSymbol[]).map((symbol) => {
-    const row = userHoldings[symbol];
+    const row = safeHoldings[symbol];
     const token = TOKENS.find(t => t.symbol === symbol)!;
     const currentPrice = priceBySymbol[symbol];
     const value = row.tokenAmount * currentPrice;
