@@ -26,6 +26,7 @@ import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primiti
 import { FlashMoney } from '@/components/modern-portfolio/FlashMoney';
 import { ModernAllocationDonut } from '@/components/modern-portfolio/ModernAllocationDonut';
 import { FearGreedSlider } from '@/components/modern-portfolio/FearGreedSlider';
+import { PortfolioPerformanceChart } from '@/components/modern-portfolio/PortfolioPerformanceChart';
 import {
   PortfolioHeroSkeleton,
   PortfolioStatSkeleton,
@@ -364,6 +365,13 @@ function ModernPortfolioInner({ lang }: Props) {
           <FearGreedSlider value={fgValue} label={fgLabel} loading={fgLoading && !fg} />
         </Bento>
       </div>
+
+      {/* ═══ HISTORICAL PERFORMANCE ═════════════════════════════════════════ */}
+      <PortfolioPerformanceChart
+        currentValueUsd={displayTotalUsd}
+        loading={pricesInitialLoading}
+        sk={sk}
+      />
 
       {/* ═══ STAT BENTO ═════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
