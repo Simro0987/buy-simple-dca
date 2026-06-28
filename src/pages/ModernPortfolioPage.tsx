@@ -16,11 +16,15 @@ import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { usePortfolioLivePrices, PORTFOLIO_PRICE_REFRESH_MS } from '@/hooks/usePortfolioLivePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
-import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
 import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
 import { buildMockLiveMetrics, type LiveHoldingMetric } from '@/lib/mockPortfolioHoldings';
+import {
+  computePortfolioTotalValue,
+  livePricesFromMap,
+  resolvePortfolioCoinAmounts,
+} from '@/lib/portfolioTotalValue';
 import { maskPct, maskPrice, maskSignedUsd, maskUsd } from '@/lib/portfolioPrivacy';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
@@ -61,32 +65,6 @@ const NEXT_HALVING = new Date('2028-04-19');
 const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
 const DAILY_REPORT_KEY = 'portfolio-risk-insight-last';
 
-function recomputeLiveMetrics(
-  assets: LiveHoldingMetric[],
-): {
-  assets: LiveHoldingMetric[];
-  totalValue: number;
-  totalInvested: number;
-  totalPnl: number;
-  totalPnlPct: number;
-} {
-  const nextAssets = assets.map(a => {
-    const value = a.holdings * a.currentPrice;
-    const pnl = value - a.invested;
-    const pnlPct = a.invested > 0 ? (pnl / a.invested) * 100 : 0;
-    return { ...a, value, pnl, pnlPct };
-  });
-  const totalValue = nextAssets.reduce((s, a) => s + a.value, 0);
-  const totalInvested = nextAssets.reduce((s, a) => s + a.invested, 0);
-  const totalPnl = totalValue - totalInvested;
-  const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
-  for (const asset of nextAssets) {
-    asset.actualPct = totalValue > 0 ? asset.value / totalValue : 0;
-    asset.deviationPct = (asset.actualPct - asset.targetPct) * 100;
-  }
-  return { assets: nextAssets, totalValue, totalInvested, totalPnl, totalPnlPct };
-}
-
 export function ModernPortfolioPage({ lang }: Props) {
   return (
     <PortfolioProvider>
@@ -112,7 +90,6 @@ function ModernPortfolioInner({ lang }: Props) {
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, portfolioData,
   } = usePortfolio();
-  const engineTotalUsd = useCyborgTotalUsd();
 
   const livePriceMap = useMemo(() => ({
     bitcoin: liveSpot?.bitcoin ?? prices?.bitcoin?.usd ?? 0,
@@ -120,30 +97,80 @@ function ModernPortfolioInner({ lang }: Props) {
     solana: liveSpot?.solana ?? prices?.solana?.usd ?? 0,
   }), [liveSpot, prices]);
 
-  const useMockHoldings = metrics.totalInvested <= 0 && metrics.totalValue <= 0 && engineTotalUsd <= 0;
+  const useMockHoldings = useMemo(() => {
+    const { btcAmount, ethAmount, solAmount } = resolvePortfolioCoinAmounts(false, metrics.assets);
+    const hasHoldings = btcAmount + ethAmount + solAmount > 0;
+    return !hasHoldings && metrics.totalInvested <= 0 && metrics.totalValue <= 0;
+  }, [metrics.assets, metrics.totalInvested, metrics.totalValue]);
 
   const dashboard = useMemo(() => {
+    const { btcAmount, ethAmount, solAmount } = resolvePortfolioCoinAmounts(useMockHoldings, metrics.assets);
+    const { liveBtcPrice, liveEthPrice, liveSolPrice } = livePricesFromMap(livePriceMap);
+
+    const totalValue = computePortfolioTotalValue(
+      btcAmount,
+      ethAmount,
+      solAmount,
+      liveBtcPrice,
+      liveEthPrice,
+      liveSolPrice,
+    );
+
+    const priceBySymbol = {
+      BTC: liveBtcPrice,
+      ETH: liveEthPrice,
+      SOL: liveSolPrice,
+    } as const;
+
+    let assets: LiveHoldingMetric[];
+    let totalInvested: number;
+
     if (useMockHoldings) {
-      return buildMockLiveMetrics(livePriceMap);
+      const mock = buildMockLiveMetrics(livePriceMap);
+      assets = mock.assets;
+      totalInvested = mock.totalInvested;
+    } else {
+      assets = metrics.assets.map(a => ({
+        symbol: a.symbol,
+        coingeckoId: a.coingeckoId,
+        holdings: a.holdings,
+        avgBuyPrice: a.holdings > 0 ? a.invested / a.holdings : 0,
+        invested: a.invested,
+        currentPrice: priceBySymbol[a.symbol],
+        value: a.holdings * priceBySymbol[a.symbol],
+        pnl: 0,
+        pnlPct: 0,
+        actualPct: 0,
+        targetPct: a.targetPct,
+        deviationPct: 0,
+      }));
+      totalInvested = assets.reduce((s, a) => s + a.invested, 0);
     }
-    const baseAssets: LiveHoldingMetric[] = metrics.assets.map(a => ({
-      symbol: a.symbol,
-      coingeckoId: a.coingeckoId,
-      holdings: a.holdings,
-      avgBuyPrice: a.holdings > 0 ? a.invested / a.holdings : 0,
-      invested: a.invested,
-      currentPrice: Number(livePriceMap[a.coingeckoId as keyof typeof livePriceMap] ?? a.currentPrice) || 0,
-      value: 0,
-      pnl: 0,
-      pnlPct: 0,
-      actualPct: 0,
-      targetPct: a.targetPct,
-      deviationPct: 0,
-    }));
-    return recomputeLiveMetrics(baseAssets);
+
+    assets = assets.map(a => {
+      const currentPrice = priceBySymbol[a.symbol];
+      const value = a.holdings * currentPrice;
+      const pnl = value - a.invested;
+      const pnlPct = a.invested > 0 ? (pnl / a.invested) * 100 : 0;
+      const actualPct = totalValue > 0 ? value / totalValue : 0;
+      return {
+        ...a,
+        currentPrice,
+        value,
+        pnl,
+        pnlPct,
+        actualPct,
+        deviationPct: (actualPct - a.targetPct) * 100,
+      };
+    });
+
+    const totalPnl = totalValue - totalInvested;
+    const totalPnlPct = totalInvested > 0 ? (totalPnl / totalInvested) * 100 : 0;
+
+    return { assets, totalValue, totalInvested, totalPnl, totalPnlPct };
   }, [useMockHoldings, metrics.assets, livePriceMap]);
 
-  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : dashboard.totalValue;
+  const displayTotalUsd = dashboard.totalValue;
   const displayPnl = dashboard.totalPnl;
   const displayPnlPct = dashboard.totalPnlPct;
   const displayInvested = dashboard.totalInvested;
@@ -151,11 +178,10 @@ function ModernPortfolioInner({ lang }: Props) {
   const pricesInitialLoading = liveSpotLoading && !liveSpot && !prices;
   const liveAssets = dashboard.assets;
 
-  const chartHoldings = useMemo(() => ({
-    bitcoin: liveAssets.find(a => a.symbol === 'BTC')?.holdings ?? 0,
-    ethereum: liveAssets.find(a => a.symbol === 'ETH')?.holdings ?? 0,
-    solana: liveAssets.find(a => a.symbol === 'SOL')?.holdings ?? 0,
-  }), [liveAssets]);
+  const chartHoldings = useMemo(() => {
+    const { btcAmount, ethAmount, solAmount } = resolvePortfolioCoinAmounts(useMockHoldings, metrics.assets);
+    return { bitcoin: btcAmount, ethereum: ethAmount, solana: solAmount };
+  }, [useMockHoldings, metrics.assets]);
 
   const [isBalanceVisible, setIsBalanceVisible] = useState(true);
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
