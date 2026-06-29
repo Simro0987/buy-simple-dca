@@ -20,6 +20,7 @@ import {
 } from '@/lib/dynamicExecution';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
 import { useRegimeLimits } from '@/hooks/useRegimeLimits';
+import { useCyborgEngine, type CyborgAsset } from '@/stores/cyborgEngine';
 
 // BTC funding split based on Final Score (Profit Reservoir vs Regular Capital)
 function btcReservoirPct(score: number): number {
@@ -97,6 +98,32 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const reservoir = useProfitReservoir();
   const qc = useQueryClient();
   const week = useMemo(() => getMondayWeek(), []);
+  const engineRevision = useCyborgEngine(s => s.revision);
+  const engineComputed = useMemo(
+    () => useCyborgEngine.getState().getComputed(),
+    [engineRevision],
+  );
+  const dcaPaused = engineComputed.dcaPaused;
+
+  const guardDcaExecution = (amountUsd: number): boolean => {
+    if (dcaPaused) {
+      toast.error(engineComputed.dcaPauseMessageSk);
+      return false;
+    }
+    if (!useCyborgEngine.getState().canAffordDcaUsd(Number(amountUsd ?? 0))) {
+      toast.error('Nedostatok voľného zostatku v peňaženke pre DCA exekúciu');
+      return false;
+    }
+    return true;
+  };
+
+  const recordDcaPurchase = (coin: CoinKey, amountUsd: number, price: number) => {
+    const px = Number(price ?? 0);
+    if (px <= 0) return;
+    const symbol = coin.toUpperCase() as CyborgAsset;
+    const qty = Number(amountUsd ?? 0) / px;
+    useCyborgEngine.getState().applyDcaPurchase(symbol, qty);
+  };
 
   // ===== DECOUPLED activation state — Market and Dynamic run independently =====
   const [isMarketActive, setIsMarketActive] = useState<string | null>(null);
@@ -143,6 +170,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   // ============= INDEPENDENT ACTIVATIONS =============
   const activateMarket = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
     if (emergencyPaused) { toast.error('SYSTEM HALTED — exekúcia zablokovaná'); return; }
+    if (!guardDcaExecution(amount)) return;
     if (isMarketActive === coin) return;
     setIsMarketActive(coin);
     try {
@@ -150,6 +178,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         body: { coin, kind: 'market', amount_usd: amount, target_price: price },
       });
       if (error) throw error;
+      recordDcaPurchase(coin, amount, price);
       if (coin === 'btc' && fromReservoir > 0) {
         deductReservoir(fromReservoir, `BTC MARKET · ${formatUsd(amount)} (rezervoár ${formatUsd(fromReservoir)})`);
       }
@@ -165,6 +194,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
 
   const activateLimitDynamic = async (coin: CoinKey, amount: number, price: number, fromReservoir = 0) => {
     if (emergencyPaused) { toast.error('SYSTEM HALTED — Limit objednávky blokované'); return; }
+    if (!guardDcaExecution(amount)) return;
     if (isDynamicActive === coin) return;
     setIsDynamicActive(coin);
     try {
@@ -308,20 +338,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     if (emergencyPaused) marketPct = 0;
     return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket, wSent: w.sent, wVol: w.vol, scale };
   }
-  function perTokenReason(sym: string, vol30d: number, split: ReturnType<typeof perTokenSplit>, atrDiscount: number): string {
-    const fgTag  = fgGlobal < 30 ? 'extrémny strach' : fgGlobal > 75 ? 'extrémna chamtivosť' : 'neutrálny sentiment';
-    const volTag = vol30d >= 4.5 ? 'vysoká' : vol30d >= 2.5 ? 'stredná' : 'nízka';
-    const wTag   = `váhy ${Math.round(split.wSent * 100)}/${Math.round(split.wVol * 100)} (sent/vol), škála ${split.scale}`;
-    const mult   = sym === 'BTC' ? '×1.0' : sym === 'ETH' ? '×1.6' : '×2.15';
-    const atrTag = `ATR(7d) volatilita driví limit –${atrDiscount.toFixed(1)}% (Binance týžd. knôty ${mult})`;
-    if (split.marketPct >= 65) {
-      return `${sym} MKT navýšený na ${split.marketPct} % — ${fgTag} (F&G ${fgGlobal}) a ${volTag} 14D vol (${vol30d.toFixed(2)} %). ${atrTag}. ${wTag}.`;
-    }
-    if (split.marketPct <= 35) {
-      return `${sym} LMT navýšený na ${split.limitPct} % — ${fgTag} a ${volTag} vol odporúčajú čakať na sweep zóny. ${atrTag} zapísaná do cieľovej ceny. ${wTag}.`;
-    }
-    return `${sym} vyvážený split ${split.marketPct}/${split.limitPct} — ${fgTag} (F&G ${fgGlobal}), ${volTag} 14D vol (${vol30d.toFixed(2)} %). ${atrTag}. ${wTag}.`;
-  }
 
   const copy = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -432,9 +448,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const regimeLabel = regimeInfo
             ? (regimeInfo.regime === 'bull' ? 'BÝK · pullback' : 'MEDVEĎ · 7D support')
             : 'fallback';
-          const regimeReason = regimeInfo?.reason
-            ?? 'Dáta z Binance momentálne nedostupné — používame bezpečný fallback limit.';
-          const splitReason  = perTokenReason(e.symbol, e.volatility30d, split, atrDiscountPct);
           let marketUsdRaw = coinUsd * (marketPct / 100);
           let dynUsdRaw = coinUsd * (dynamicPct / 100);
 
@@ -842,17 +855,6 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                   💰 Presunúť do STAKE ({qtyFmt(mAddedQty + lAddedQty)} {e.symbol})
                 </button>
               )}
-
-              <div className="space-y-1">
-                <p className="text-[10px] text-foreground/90 leading-snug bg-background/40 rounded px-2 py-1.5 border-l-2 border-primary/60">
-                  <span className="font-bold text-primary">Prečo limit? </span>
-                  {regimeReason}
-                </p>
-                <p className="text-[10px] text-muted-foreground leading-snug">
-                  <span className="font-semibold text-foreground/80">Split: </span>
-                  {splitReason} {e.rationale}
-                </p>
-              </div>
             </div>
           );
         })}

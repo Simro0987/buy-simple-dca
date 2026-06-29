@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';import { Activity, RefreshCw, Download, Trash2, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
@@ -32,6 +32,11 @@ import {
 } from '@/lib/mondayController';
 import { loadTuning, type TuningParams } from '@/lib/moneyMode';
 import { toast } from 'sonner';
+import {
+  adjustDcaInvestableForMarketMode,
+  useCyborgEngine,
+  type CyborgAsset,
+} from '@/stores/cyborgEngine';
 
 interface Props { lang: Lang; }
 
@@ -77,7 +82,6 @@ function regimeStyle(regime: Regime): { bg: string; text: string; dot: string; b
 export function DCAPage({ lang: _lang }: Props) {
   const [inputs, setInputs] = useState<MondayInputs>(loadInputs);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
-  const [showWhy, setShowWhy] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showRitual, setShowRitual] = useState(false);
 
@@ -135,6 +139,32 @@ export function DCAPage({ lang: _lang }: Props) {
     () => buildPlan(inputs, prices, prevDeploymentPct, { ...tuning, maReclaimActive }),
     [inputs, prices, prevDeploymentPct, tuning, maReclaimActive],
   );
+
+  const engineRevision = useCyborgEngine(s => s.revision);
+  const marketMode = useCyborgEngine(s => s.marketMode);
+  const engineComputed = useMemo(
+    () => useCyborgEngine.getState().getComputed(),
+    [engineRevision],
+  );
+  const adjustedInvestableUsd = useMemo(
+    () => adjustDcaInvestableForMarketMode(Number(plan.investableUsd ?? 0), marketMode),
+    [plan.investableUsd, marketMode],
+  );
+
+  useEffect(() => {
+    useCyborgEngine.getState().setDcaSchedule({
+      capital: Number(inputs.capital ?? 0),
+      investableUsd: Number(plan.investableUsd ?? 0),
+      finalAllocationPct: Number(plan.finalAllocationPct ?? 0),
+      regime: plan.regime,
+      perAsset: (plan.perAsset ?? []).map(asset => ({
+        symbol: String(asset.symbol ?? 'BTC').toUpperCase() as CyborgAsset,
+        marketUsd: Number(asset.marketUsd ?? 0),
+        limitUsd: Number(asset.limitUsd ?? 0),
+      })),
+      updatedAt: Date.now(),
+    });
+  }, [inputs.capital, plan]);
 
   // Engine is fully automatic — no manual factor/regime overrides.
   const effectiveScore = plan.factorScore;
@@ -341,22 +371,6 @@ export function DCAPage({ lang: _lang }: Props) {
             <p className="font-semibold text-foreground tabular-nums">{formatUsd(inputs.capital)}</p>
           </div>
         </div>
-
-        <button
-          onClick={() => setShowWhy(s => !s)}
-          className="mt-3 w-full flex items-center justify-between text-xs text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <span className="flex items-center gap-1.5"><Info className="w-3.5 h-3.5" /> Prečo táto alokácia?</span>
-          {showWhy ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-        </button>
-        {showWhy && (
-          <div className="mt-2 space-y-2 bg-secondary/40 rounded-lg p-3">
-            <p className="text-xs text-muted-foreground leading-relaxed">{plan.rationale}</p>
-            <p className="text-[10px] text-muted-foreground leading-relaxed">
-              Vzorec: Allocation % = 82 − (Score × 0.62), clamp [22 %, 80 %]. Override: Panic + score &lt; 15 → 85 %; Eufória + score &gt; 90 → 20 %. Confidence multiplier: High ×1.00 · Medium ×0.93 · Low ×0.85.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* MONEY MODE — performance vs Plain DCA + auto-tuning */}
@@ -387,7 +401,13 @@ export function DCAPage({ lang: _lang }: Props) {
       </div>
 
       {/* DYNAMIC EXECUTION ENGINE — per-coin Market/Limit split (always automatic) */}
-      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={plan.investableUsd} />
+      {engineComputed.dcaPaused && (
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-200">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <p className="text-xs font-medium">{engineComputed.dcaPauseMessageSk}</p>
+        </div>
+      )}
+      <DynamicExecutionCard score={effectiveScore} prices={prices} investableUsd={adjustedInvestableUsd} />
 
 
       {/* EXECUTION PERFORMANCE & ACTIVE ADVISOR — Alpha, Grade, 1-click tune */}
@@ -586,8 +606,6 @@ export function DCAPage({ lang: _lang }: Props) {
                 </div>
               ))}
             </div>
-
-            <p className="text-[10px] text-muted-foreground leading-relaxed">{plan.rationale}</p>
           </div>
         </div>
       )}

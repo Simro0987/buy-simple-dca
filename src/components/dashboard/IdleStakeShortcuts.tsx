@@ -16,7 +16,6 @@ import {
   computeAdvice,
   computeUnstakeAdvice,
   getTimingWindow,
-  strategyCommentary,
   overheatedWarning,
   previewWindowNote,
   isEmergencyBypassActive,
@@ -313,15 +312,6 @@ function ShortcutRow({
                     </span></li>
                 )}
               </ol>
-              <div className="pt-1 border-t border-border/40">
-                <p className="text-[10px] font-semibold text-foreground mb-1">
-                  {sk ? 'Strategické zdôvodnenie:' : 'Strategic rationale:'}
-                </p>
-                <p className="text-[10px] text-muted-foreground leading-snug">
-                  <span className="mr-1">{strategyCommentary(marketScore, lang, { concentration, phase }).icon}</span>
-                  {strategyCommentary(marketScore, lang, { concentration, phase }).text}
-                </p>
-              </div>
               {locked && (
                 <p className="text-[10px] text-amber-300/90">{previewWindowNote(lang, daysRemaining)}</p>
               )}

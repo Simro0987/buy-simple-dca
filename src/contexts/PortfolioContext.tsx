@@ -26,6 +26,9 @@ import {
   type MarketConditionsSnapshot,
 } from '@/lib/hcdDecisionLog';
 import type { PortfolioBalanceSnapshot } from '@/lib/hcdSilentTracker';
+import {
+  useCyborgEngine,
+} from '@/stores/cyborgEngine';
 
 export interface DecisionConfirmMeta {
   marketConditions: MarketConditionsSnapshot;
@@ -84,6 +87,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const { data: prices, isLoading: pricesLoading } = usePrices();
   const metrics = usePortfolioMetrics(prices);
   const ledger = useStakingLedger();
+  const engineRevision = useCyborgEngine(s => s.revision);
   const [selected, setSelected] = useState<AssetFilter>(null);
   const [movedProfit, setMovedProfit] = useState<number>(loadMoved());
   const [cyborgUsdcDebt, setCyborgUsdcDebt] = useState<number>(() => loadCyborgUsdcDebt());
@@ -107,41 +111,57 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   const updatePortfolioBalances = useCallback((update: PortfolioBalanceUpdate) => {
     applyPortfolioBalanceUpdate(update);
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
+    useCyborgEngine.getState().syncFromSources();
   }, []);
 
   const confirmExecutionStep = useCallback((key: string, update: PortfolioBalanceUpdate, meta?: DecisionConfirmMeta) => {
-    applyPortfolioBalanceUpdate(update);
-    markStepConfirmed(key, update);
-    if (meta?.marketConditions) {
-      appendDecisionLogEntry({
-        stepKey: key,
-        portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
-        marketConditions: meta.marketConditions,
-        balanceSnapshot: meta.balanceSnapshot,
-      });
+    const engine = useCyborgEngine.getState();
+    engine.beginStakeExecution();
+    try {
+      applyPortfolioBalanceUpdate(update);
+      engine.applyStakeExecution(update);
+      engine.syncFromSources();
+      markStepConfirmed(key, update);
+      if (meta?.marketConditions) {
+        appendDecisionLogEntry({
+          stepKey: key,
+          portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
+          marketConditions: meta.marketConditions,
+          balanceSnapshot: meta.balanceSnapshot,
+        });
+      }
+      setConfirmedSteps(loadConfirmedSteps());
+      setCyborgUsdcDebt(loadCyborgUsdcDebt());
+    } finally {
+      engine.endStakeExecution();
     }
-    setConfirmedSteps(loadConfirmedSteps());
-    setCyborgUsdcDebt(loadCyborgUsdcDebt());
   }, [metrics.totalValue]);
 
   const executeAlchemixAutonomousRebalanceFn = useCallback((
     input: Parameters<typeof applyAlchemixAutonomousRebalance>[0],
     meta?: DecisionConfirmMeta,
   ) => {
-    applyAlchemixAutonomousRebalance(input);
-    markStepConfirmed('hcd-autonomous-alchemix', {});
-    if (meta?.marketConditions) {
-      appendDecisionLogEntry({
-        stepKey: 'hcd-autonomous-alchemix',
-        portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
-        marketConditions: meta.marketConditions,
-        balanceSnapshot: meta.balanceSnapshot,
-        actionType: 'alchemix-autonomous-rebalance',
-        strategyKey: 'eth-alchemix-autonomous',
-      });
+    const engine = useCyborgEngine.getState();
+    engine.beginStakeExecution();
+    try {
+      applyAlchemixAutonomousRebalance(input);
+      engine.syncFromSources();
+      markStepConfirmed('hcd-autonomous-alchemix', {});
+      if (meta?.marketConditions) {
+        appendDecisionLogEntry({
+          stepKey: 'hcd-autonomous-alchemix',
+          portfolioUsdAtConfirm: meta.balanceSnapshot?.totalUsd ?? meta.marketConditions.portfolioUsd ?? metrics.totalValue,
+          marketConditions: meta.marketConditions,
+          balanceSnapshot: meta.balanceSnapshot,
+          actionType: 'alchemix-autonomous-rebalance',
+          strategyKey: 'eth-alchemix-autonomous',
+        });
+      }
+      setConfirmedSteps(loadConfirmedSteps());
+      setCyborgUsdcDebt(loadCyborgUsdcDebt());
+    } finally {
+      engine.endStakeExecution();
     }
-    setConfirmedSteps(loadConfirmedSteps());
-    setCyborgUsdcDebt(loadCyborgUsdcDebt());
   }, [metrics.totalValue]);
 
   const revertExecutionStep = useCallback((key: string) => {
@@ -152,6 +172,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     removeDecisionLogEntry(key);
     setConfirmedSteps(loadConfirmedSteps());
     setCyborgUsdcDebt(loadCyborgUsdcDebt());
+    useCyborgEngine.getState().syncFromSources();
   }, []);
 
   const isExecutionConfirmed = useCallback(
@@ -234,13 +255,24 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       breakdown,
     });
 
+    const engineComputed = useCyborgEngine.getState().getComputed();
+    const unifiedTotalValue = Number(engineComputed.totalBalanceUsd ?? 0) > 0
+      ? Number(engineComputed.totalBalanceUsd ?? 0)
+      : metrics.totalValue;
+    const unifiedStakedValue = Number(engineComputed.totalStakedUsd ?? 0) > 0
+      ? Number(engineComputed.totalStakedUsd ?? 0)
+      : totalStakedValue;
+    const unifiedBlendedApy = Number(engineComputed.weightedApyPct ?? 0) > 0
+      ? Number(engineComputed.weightedApyPct ?? 0)
+      : blendedApy;
+
     return {
       prices,
       metrics,
       portfolioData,
-      totalValue: metrics.totalValue,
-      totalStakedValue,
-      blendedApy,
+      totalValue: unifiedTotalValue,
+      totalStakedValue: unifiedStakedValue,
+      blendedApy: unifiedBlendedApy,
       breakdown,
       realizedProfit,
       realizedBySymbol,
@@ -258,7 +290,7 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
       setSelected,
       toggleSelected,
     };
-  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, updatePortfolioBalances, confirmExecutionStep, executeAlchemixAutonomousRebalanceFn, revertExecutionStep, isExecutionConfirmed]);
+  }, [prices, pricesLoading, metrics, selected, movedProfit, ledger, cyborgUsdcDebt, confirmedSteps, engineRevision, updatePortfolioBalances, confirmExecutionStep, executeAlchemixAutonomousRebalanceFn, revertExecutionStep, isExecutionConfirmed]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
