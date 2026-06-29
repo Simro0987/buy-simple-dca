@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Flame } from 'lucide-react';
+import { RefreshCw, Clock, TrendingUp, TrendingDown, Minus, Flame, Zap, Newspaper } from 'lucide-react';
 
 /* ──────────────────────────────────────────────────────────────────────────
  * Types
@@ -95,6 +95,22 @@ const FILTERS: { key: 'all' | Category; label: string }[] = [
 ];
 
 /* ──────────────────────────────────────────────────────────────────────────
+ * Source logo mapping — maps known source names to their logo URLs.
+ * Unknown sources fall back to a generic icon (handled in <SourceFooter />).
+ * ────────────────────────────────────────────────────────────────────────── */
+const sourceLogos: Record<string, string> = {
+  CoinDesk: 'https://cryptopanic.com/s/img/news/coindesk.png',
+  Cointelegraph: 'https://cryptopanic.com/s/img/news/cointelegraph.png',
+  'The Block': 'https://cryptopanic.com/s/img/news/theblock.png',
+  Decrypt: 'https://cryptopanic.com/s/img/news/decrypt.png',
+};
+
+/** Resolve a source name to a mapped logo URL, or '' if unknown. */
+function resolveSourceLogo(source: string, apiLogo = ''): string {
+  return sourceLogos[source] || apiLogo || '';
+}
+
+/* ──────────────────────────────────────────────────────────────────────────
  * Helpers
  * ────────────────────────────────────────────────────────────────────────── */
 function timeAgo(ts: number): string {
@@ -166,14 +182,27 @@ function SourceFooter({ article }: { article: Article }) {
   return (
     <div className="mt-3 flex items-center justify-between">
       <div className="flex items-center gap-2">
-        <img
-          src={article.sourceLogo || FALLBACK_IMG}
-          alt={article.source}
-          className="h-5 w-5 rounded-full bg-zinc-800 object-cover ring-1 ring-zinc-700"
-          onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
-          }}
-        />
+        {article.sourceLogo ? (
+          <img
+            src={article.sourceLogo}
+            alt={article.source}
+            referrerPolicy="no-referrer"
+            className="h-5 w-5 rounded-full bg-zinc-800 object-cover ring-1 ring-zinc-700"
+            onError={(e) => {
+              // Hide broken logo and reveal the generic icon sibling
+              const img = e.currentTarget as HTMLImageElement;
+              img.style.display = 'none';
+              const fallback = img.nextElementSibling as HTMLElement | null;
+              if (fallback) fallback.style.display = 'flex';
+            }}
+          />
+        ) : null}
+        <span
+          className="h-5 w-5 items-center justify-center rounded-full bg-zinc-800 text-zinc-400 ring-1 ring-zinc-700"
+          style={{ display: article.sourceLogo ? 'none' : 'flex' }}
+        >
+          <Newspaper className="h-3 w-3" />
+        </span>
         <span className="text-xs font-medium text-zinc-400">{article.source}</span>
       </div>
       <span className="flex items-center gap-1 text-xs text-zinc-500">
@@ -230,7 +259,7 @@ export function CryptoNewsFeed() {
         excerpt: a.body || '',
         image: a.imageurl || FALLBACK_IMG,
         source: a.source_info?.name || a.source || 'Neznámy zdroj',
-        sourceLogo: a.source_info?.img || '',
+        sourceLogo: resolveSourceLogo(a.source_info?.name || a.source || '', a.source_info?.img || ''),
         category: deriveCategory(a.tags, a.title),
         sentiment: deriveSentiment(a.title, a.body),
         publishedAt: a.published_on ? a.published_on * 1000 : Date.now(),
@@ -258,7 +287,31 @@ export function CryptoNewsFeed() {
 
   return (
     <div className="min-h-screen bg-zinc-950 font-sans text-zinc-100">
+      <style>{`
+        @keyframes news-ticker-scroll {
+          0% { transform: translateX(0); }
+          100% { transform: translateX(-50%); }
+        }
+        .news-ticker {
+          display: inline-block;
+          animation: news-ticker-scroll 18s linear infinite;
+        }
+      `}</style>
       <div className="mx-auto max-w-md px-4 py-6">
+        {/* Flash alert ticker — persistent urgent market news */}
+        <div className="mb-4 flex items-center gap-2 overflow-hidden rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+          <span className="flex shrink-0 items-center gap-1 rounded-md bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-amber-400">
+            <Zap className="h-3 w-3 animate-pulse" />
+            Flash
+          </span>
+          <div className="relative flex-1 overflow-hidden">
+            <p className="news-ticker whitespace-nowrap text-xs font-medium text-amber-200/90">
+              <span className="px-2">BTC prudko rastie nad kľúčovú úroveň • Fed signalizuje stabilné sadzby • ETH ETF zaznamenáva rekordné prílevy • SOL preráža rezistenciu •&nbsp;</span>
+              <span className="px-2" aria-hidden="true">BTC prudko rastie nad kľúčovú úroveň • Fed signalizuje stabilné sadzby • ETH ETF zaznamenáva rekordné prílevy • SOL preráža rezistenciu •&nbsp;</span>
+            </p>
+          </div>
+        </div>
+
         {/* Header */}
         <header className="mb-5">
           <div className="flex items-center justify-between">
@@ -326,6 +379,7 @@ export function CryptoNewsFeed() {
                   <img
                     src={hero.image}
                     alt={hero.title}
+                    referrerPolicy="no-referrer"
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
@@ -361,6 +415,7 @@ export function CryptoNewsFeed() {
                   <img
                     src={item.image}
                     alt={item.title}
+                    referrerPolicy="no-referrer"
                     className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
                     onError={(e) => {
                       (e.currentTarget as HTMLImageElement).src = FALLBACK_IMG;
