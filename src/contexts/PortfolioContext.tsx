@@ -181,34 +181,58 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo<PortfolioCtx>(() => {
-    const breakdown: AssetBreakdown[] = metrics.assets.map(a => {
-      const cfg = STAKING_CONFIG.find(c => c.symbol === a.symbol);
-      let yieldPct = 0;
-      if (cfg) {
-        for (const p of cfg.positions) {
-          if (p.apy) yieldPct += (p.percentage / 100) * p.apy;
-        }
-      }
-      const stakedQty = Math.min(a.holdings, ledger.bySymbol[a.symbol] ?? 0);
-      const liquidQty = Math.max(0, a.holdings - stakedQty);
-      const stakedValue = stakedQty * a.currentPrice;
-      const holdValue = a.value - stakedValue;
-      const projectedYieldUsd = a.value * (yieldPct / 100);
-      return {
-        symbol: a.symbol,
-        value: a.value,
-        holdValue,
-        stakedValue,
-        stakedQty,
-        liquidQty,
-        stakedEntries: ledger.breakdown[a.symbol] ?? [],
-        projectedYieldUsd,
-      };
-    });
+    const engineSnapshot = useCyborgEngine.getState().getPortfolioSnapshot();
+    const engineHasHoldings = engineSnapshot.assets.some(a => a.totalQty > 0);
 
-    const totalStakedValue = breakdown.reduce((s, b) => s + b.stakedValue, 0);
-    const totalProjected = breakdown.reduce((s, b) => s + b.projectedYieldUsd, 0);
-    const blendedApy = metrics.totalValue > 0 ? (totalProjected / metrics.totalValue) * 100 : 0;
+    const breakdown: AssetBreakdown[] = engineHasHoldings
+      ? engineSnapshot.assets.map(asset => {
+          const cfg = STAKING_CONFIG.find(c => c.symbol === asset.symbol);
+          let yieldPct = 0;
+          if (cfg) {
+            for (const p of cfg.positions) {
+              if (p.apy) yieldPct += (p.percentage / 100) * p.apy;
+            }
+          }
+          return {
+            symbol: asset.symbol,
+            value: asset.totalUsd,
+            holdValue: asset.walletUsd,
+            stakedValue: asset.stakedUsd,
+            stakedQty: asset.stakedQty,
+            liquidQty: asset.walletQty,
+            stakedEntries: ledger.breakdown[asset.symbol] ?? [],
+            projectedYieldUsd: asset.totalUsd * (yieldPct / 100),
+          };
+        })
+      : metrics.assets.map(a => {
+          const cfg = STAKING_CONFIG.find(c => c.symbol === a.symbol);
+          let yieldPct = 0;
+          if (cfg) {
+            for (const p of cfg.positions) {
+              if (p.apy) yieldPct += (p.percentage / 100) * p.apy;
+            }
+          }
+          const stakedQty = Math.min(a.holdings, ledger.bySymbol[a.symbol] ?? 0);
+          const liquidQty = Math.max(0, a.holdings - stakedQty);
+          const stakedValue = stakedQty * a.currentPrice;
+          const holdValue = a.value - stakedValue;
+          const projectedYieldUsd = a.value * (yieldPct / 100);
+          return {
+            symbol: a.symbol,
+            value: a.value,
+            holdValue,
+            stakedValue,
+            stakedQty,
+            liquidQty,
+            stakedEntries: ledger.breakdown[a.symbol] ?? [],
+            projectedYieldUsd,
+          };
+        });
+
+    const totalStakedValue = breakdown.reduce((s, b) => s + (Number(b.stakedValue ?? 0) || 0), 0);
+    const totalProjected = breakdown.reduce((s, b) => s + (Number(b.projectedYieldUsd ?? 0) || 0), 0);
+    const breakdownTotal = breakdown.reduce((s, b) => s + (Number(b.value ?? 0) || 0), 0);
+    const blendedApy = breakdownTotal > 0 ? (totalProjected / breakdownTotal) * 100 : 0;
 
     const executed = getExecutedLevels();
     let realizedProfit = 0;
@@ -256,9 +280,11 @@ export function PortfolioProvider({ children }: { children: ReactNode }) {
     });
 
     const engineComputed = useCyborgEngine.getState().getComputed();
-    const unifiedTotalValue = Number(engineComputed.totalBalanceUsd ?? 0) > 0
-      ? Number(engineComputed.totalBalanceUsd ?? 0)
-      : metrics.totalValue;
+    const unifiedTotalValue = engineHasHoldings
+      ? Number(engineSnapshot.totalBalanceUsd ?? 0) || breakdownTotal
+      : Number(engineComputed.totalBalanceUsd ?? 0) > 0
+        ? Number(engineComputed.totalBalanceUsd ?? 0)
+        : Number(metrics.totalValue ?? 0) || breakdownTotal;
     const unifiedStakedValue = Number(engineComputed.totalStakedUsd ?? 0) > 0
       ? Number(engineComputed.totalStakedUsd ?? 0)
       : totalStakedValue;

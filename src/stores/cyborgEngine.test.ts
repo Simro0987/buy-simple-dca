@@ -99,4 +99,20 @@ describe('cyborgEngine store', () => {
     useCyborgEngine.getState().endStakeExecution();
     expect(useCyborgEngine.getState().canAffordDcaUsd(100)).toBe(true);
   });
+
+  it('getPortfolioSnapshot returns per-asset wallet and staked totals', () => {
+    useCyborgEngine.setState({
+      ...baseState(),
+      walletBalances: { BTC: 0.1, ETH: 0.5, SOL: 2, USDC: 0 },
+      stakingPositions: [
+        { id: 'eth-1', symbol: 'ETH', protocol: 'Rocket Pool (rETH)', amount: 0.5, apyPct: 3.1, layer: 'core' },
+      ],
+      prices: { btc: 100_000, eth: 3_000, sol: 150 },
+    });
+    const snap = useCyborgEngine.getState().getPortfolioSnapshot();
+    expect(snap.bySymbol.ETH.walletQty).toBe(0.5);
+    expect(snap.bySymbol.ETH.stakedQty).toBe(0.5);
+    expect(snap.bySymbol.ETH.totalQty).toBe(1);
+    expect(snap.totalBalanceUsd).toBeGreaterThan(0);
+  });
 });

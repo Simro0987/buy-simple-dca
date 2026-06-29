@@ -348,6 +348,7 @@ function CyborgActionPlan({
   positionSymbol,
   positionTokenLabel,
   positionUsdcDebt,
+  baseAssetSymbol = 'ETH',
 }: {
   sk: boolean;
   layerPct: number;
@@ -393,6 +394,7 @@ function CyborgActionPlan({
   positionSymbol?: 'ETH' | 'SOL';
   positionTokenLabel?: string;
   positionUsdcDebt?: number;
+  baseAssetSymbol?: 'ETH' | 'SOL';
 }) {
   const [flashBorder, setFlashBorder] = useState(false);
   const wasConfirmedRef = useRef(planConfirmed);
@@ -539,6 +541,7 @@ function CyborgActionPlan({
           copyCollateralQty={copyQty}
           collateralQty={collateralQty}
           collateralLabel={collateralLabel}
+          baseAssetSymbol={baseAssetSymbol ?? positionSymbol ?? 'ETH'}
           collateralDecimals={collateralDecimals}
           safeBorrowUsdc={supplyOnlyMode ? 0 : safeBorrowUsdc}
           supplyOnlyMode={supplyOnlyMode}
@@ -1194,7 +1197,10 @@ function TacticalLayerExecution({
   const handleCollateralBatchConfirm = useCallback(() => {
     const steps: { id: CollateralActionId; update: PortfolioBalanceUpdate; url?: string }[] = [];
     if (copyCollateralQty > 0) {
-      steps.push({ id: 'deposit', update: { rEthQty: collateralQty }, url: protocolUrl });
+      const depositUpdate = symbol === 'SOL'
+        ? { mSolQty: copyCollateralQty }
+        : { rEthQty: copyCollateralQty };
+      steps.push({ id: 'deposit', update: depositUpdate, url: protocolUrl });
     }
     if (!supplyOnlyMode && borrowUsd > 0) {
       steps.push({ id: 'borrow', update: { usdcBorrowed: borrowUsd }, url: protocolUrl });
@@ -1324,6 +1330,7 @@ function TacticalLayerExecution({
           positionSymbol={symbol}
           positionTokenLabel={motorLabel}
           positionUsdcDebt={usdcDebt}
+          baseAssetSymbol={symbol}
         />
       </CollapsibleContent>
     </Collapsible>
@@ -1439,6 +1446,7 @@ function AlchemixLayerExecution({
           positionMode="alchemix"
           positionSymbol="ETH"
           positionTokenLabel="ETH"
+          baseAssetSymbol="ETH"
         />
         <p className="text-[9px] text-muted-foreground mt-2 px-1">
           {sk ? `${layer?.protocol ?? 'Alchemix'} · Bez likvidácie` : `${layer?.protocol ?? 'Alchemix'} · No liquidation`}

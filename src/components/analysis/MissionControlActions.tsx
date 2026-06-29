@@ -51,9 +51,10 @@ export function MissionControlActions({ lang, cycleResult }: Props) {
     for (const sym of ['ETH','SOL'] as const) {
       const b = breakdown.find(x => x.symbol === sym);
       if (!b) continue;
-      const liquidUsd = b.holdValue;
-      if (liquidUsd >= IDLE_USD_THRESHOLD && (bySymbol[sym] ?? 0) === 0) {
-        idleAsset = { symbol: sym, amount: b.liquidQty, usd: liquidUsd };
+      const liquidUsd = Number(b.holdValue ?? 0) || 0;
+      const liquidQty = Number(b.liquidQty ?? 0) || 0;
+      if (liquidUsd >= IDLE_USD_THRESHOLD && liquidQty > 0) {
+        idleAsset = { symbol: sym, amount: liquidQty, usd: liquidUsd };
         break;
       }
     }
