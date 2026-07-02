@@ -57,6 +57,7 @@ async function fetchRealYield(): Promise<RealYieldData> {
       clearTimeout(timer);
     }
 
+    // ETH → Rocket Pool (rETH); SOL → Marinade Native (fallback: Marinade mSOL).
     const pools = json?.data ?? [];
     const ethApy = selectEthStakingApy(pools);
     const solApy = selectSolStakingApy(pools);
@@ -93,8 +94,9 @@ async function fetchRealYield(): Promise<RealYieldData> {
 
 /**
  * Live Real Yield Index (RYI) inputs for the Satellite Staking Booster.
- * Fetches staking APY from DefiLlama (free, no key), combines with a hardcoded
- * base inflation rate, and falls back to safe constants on any failure.
+ * Fetches staking APY from DefiLlama (free, no key) — Rocket Pool (rETH) for
+ * ETH and Marinade Native for SOL — combines with a hardcoded base inflation
+ * rate, and falls back to safe constants on any failure.
  */
 export function useRealYield() {
   return useQuery<RealYieldData>({

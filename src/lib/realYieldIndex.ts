@@ -39,9 +39,9 @@ export function ryiFromApy(grossApyPct: number, inflationPct: number): number {
 }
 
 // ─── Live staking-APY selection from the DefiLlama /pools payload ─────────────
-// Pure + testable: given the raw pool list, pick a representative canonical
-// staking APY for ETH (Lido stETH) and SOL (Jito / Marinade LSTs). Prefer
-// `apyBase` (pure staking yield) over `apy` (which can include reward farming).
+// Pure + testable: given the raw pool list, pick the canonical staking APY for
+// ETH (Rocket Pool rETH) and SOL (Marinade Native). Prefer `apyBase` (pure
+// staking yield) over `apy` (which can include reward farming).
 
 export interface LlamaPool {
   chain?: string;
@@ -58,32 +58,46 @@ function poolApy(p: LlamaPool): number | null {
   return total;
 }
 
-/** Canonical ETH staking APY — Lido stETH on Ethereum. */
+/** DefiLlama project slug for the ETH staking provider (Rocket Pool). */
+export const ETH_STAKING_PROJECT = 'rocket-pool';
+/** DefiLlama symbol for the Rocket Pool liquid staking token. */
+export const ETH_STAKING_SYMBOL = 'RETH';
+
+/**
+ * DefiLlama project slugs for the SOL staking provider (Marinade Native), in
+ * priority order. Marinade Native is preferred; if the feed does not expose the
+ * native product as a standalone pool we fall back to Marinade's liquid-staking
+ * (mSOL) pool, which tracks the same underlying Marinade validator yield.
+ */
+export const SOL_STAKING_PROJECT_PRIORITY = [
+  'marinade-native-staking',
+  'marinade-native',
+  'marinade-liquid-staking',
+];
+
+/** Canonical ETH staking APY — Rocket Pool rETH on Ethereum. */
 export function selectEthStakingApy(pools: LlamaPool[]): number | null {
   if (!Array.isArray(pools)) return null;
-  const lido = pools.find(
+  const rocketPool = pools.find(
     p => (p.chain ?? '') === 'Ethereum'
-      && (p.project ?? '') === 'lido'
-      && (p.symbol ?? '').toUpperCase() === 'STETH',
+      && (p.project ?? '') === ETH_STAKING_PROJECT
+      && (p.symbol ?? '').toUpperCase() === ETH_STAKING_SYMBOL,
   );
-  const apy = lido ? poolApy(lido) : null;
+  const apy = rocketPool ? poolApy(rocketPool) : null;
   return apy !== null && apy > 0 && apy < 100 ? apy : null;
 }
 
-/** Canonical SOL staking APY — prefer Jito, then Marinade / other major LSTs. */
+/** Canonical SOL staking APY — Marinade Native (fallback: Marinade liquid mSOL). */
 export function selectSolStakingApy(pools: LlamaPool[]): number | null {
   if (!Array.isArray(pools)) return null;
-  const isSolLst = (p: LlamaPool) =>
-    (p.chain ?? '') === 'Solana'
-    && ['JITOSOL', 'MSOL', 'BSOL', 'JSOL', 'INF'].includes((p.symbol ?? '').toUpperCase());
-  const candidates = pools.filter(isSolLst);
-  if (!candidates.length) return null;
-  const preferred =
-    candidates.find(p => (p.project ?? '').includes('jito'))
-    ?? candidates.find(p => (p.project ?? '').includes('marinade'))
-    ?? candidates[0];
-  const apy = poolApy(preferred);
-  return apy !== null && apy > 0 && apy < 100 ? apy : null;
+  for (const project of SOL_STAKING_PROJECT_PRIORITY) {
+    const pool = pools.find(
+      p => (p.chain ?? '') === 'Solana' && (p.project ?? '') === project,
+    );
+    const apy = pool ? poolApy(pool) : null;
+    if (apy !== null && apy > 0 && apy < 100) return apy;
+  }
+  return null;
 }
 
 /**
