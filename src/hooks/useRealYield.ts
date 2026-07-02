@@ -100,7 +100,10 @@ export function useRealYield() {
   return useQuery<RealYieldData>({
     queryKey: ['dca-real-yield-v1'],
     queryFn: fetchRealYield,
-    initialData: () => readCache() ?? FALLBACK,
+    // placeholderData (NOT initialData) shows the cached/fallback values
+    // instantly WHILE still performing the live fetch on mount, then swaps in
+    // the live result. initialData + staleTime would suppress the fetch.
+    placeholderData: () => readCache() ?? FALLBACK,
     staleTime: 30 * 60 * 1000, // 30 min
     refetchInterval: 60 * 60 * 1000, // hourly
     refetchOnWindowFocus: false,
