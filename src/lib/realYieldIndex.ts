@@ -16,17 +16,74 @@ export interface RealYieldConfig {
   inflationPct: number;
 }
 
-// Manual constants — update as staking / inflation regimes change.
+// Fallback constants — used when the live yields API is unreachable.
+// `inflationPct` is a hardcoded base network-inflation rate (SOL ~5 %, ETH
+// ~0.5 %) that is combined with the LIVE staking APY when available.
 // (ETH: modest staking APY, near-zero post-Merge issuance → solid real yield.
 //  SOL: high staking APY but higher inflation → strong but partly eroded yield.)
 export const ETH_REAL_YIELD: RealYieldConfig = { grossApyPct: 3.5, inflationPct: 0.5 };
-export const SOL_REAL_YIELD: RealYieldConfig = { grossApyPct: 8.0, inflationPct: 3.0 };
+export const SOL_REAL_YIELD: RealYieldConfig = { grossApyPct: 9.0, inflationPct: 5.0 };
 
 /** RYI = APY − inflation. */
 export function realYieldIndex(cfg: RealYieldConfig): number {
   const apy = Number.isFinite(cfg?.grossApyPct) ? cfg.grossApyPct : 0;
   const infl = Number.isFinite(cfg?.inflationPct) ? cfg.inflationPct : 0;
   return apy - infl;
+}
+
+/** Compute RYI directly from a live gross APY and a base inflation rate. */
+export function ryiFromApy(grossApyPct: number, inflationPct: number): number {
+  const apy = Number.isFinite(grossApyPct) ? grossApyPct : 0;
+  const infl = Number.isFinite(inflationPct) ? inflationPct : 0;
+  return apy - infl;
+}
+
+// ─── Live staking-APY selection from the DefiLlama /pools payload ─────────────
+// Pure + testable: given the raw pool list, pick a representative canonical
+// staking APY for ETH (Lido stETH) and SOL (Jito / Marinade LSTs). Prefer
+// `apyBase` (pure staking yield) over `apy` (which can include reward farming).
+
+export interface LlamaPool {
+  chain?: string;
+  project?: string;
+  symbol?: string;
+  apy?: number | null;
+  apyBase?: number | null;
+}
+
+function poolApy(p: LlamaPool): number | null {
+  const base = typeof p.apyBase === 'number' && p.apyBase > 0 ? p.apyBase : null;
+  if (base !== null) return base;
+  const total = typeof p.apy === 'number' && p.apy > 0 ? p.apy : null;
+  return total;
+}
+
+/** Canonical ETH staking APY — Lido stETH on Ethereum. */
+export function selectEthStakingApy(pools: LlamaPool[]): number | null {
+  if (!Array.isArray(pools)) return null;
+  const lido = pools.find(
+    p => (p.chain ?? '') === 'Ethereum'
+      && (p.project ?? '') === 'lido'
+      && (p.symbol ?? '').toUpperCase() === 'STETH',
+  );
+  const apy = lido ? poolApy(lido) : null;
+  return apy !== null && apy > 0 && apy < 100 ? apy : null;
+}
+
+/** Canonical SOL staking APY — prefer Jito, then Marinade / other major LSTs. */
+export function selectSolStakingApy(pools: LlamaPool[]): number | null {
+  if (!Array.isArray(pools)) return null;
+  const isSolLst = (p: LlamaPool) =>
+    (p.chain ?? '') === 'Solana'
+    && ['JITOSOL', 'MSOL', 'BSOL', 'JSOL', 'INF'].includes((p.symbol ?? '').toUpperCase());
+  const candidates = pools.filter(isSolLst);
+  if (!candidates.length) return null;
+  const preferred =
+    candidates.find(p => (p.project ?? '').includes('jito'))
+    ?? candidates.find(p => (p.project ?? '').includes('marinade'))
+    ?? candidates[0];
+  const apy = poolApy(preferred);
+  return apy !== null && apy > 0 && apy < 100 ? apy : null;
 }
 
 /**

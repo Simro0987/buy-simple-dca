@@ -3,12 +3,14 @@ import { useFearGreed, usePrices } from '@/hooks/usePrices';
 import { useMarketData } from '@/hooks/useMarketData';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { runCoreSatelliteEngine, type EngineResult } from '@/lib/coreSatelliteEngine';
-import { ETH_REAL_YIELD, SOL_REAL_YIELD, realYieldIndex } from '@/lib/realYieldIndex';
+import { useRealYield, type RealYieldData } from '@/hooks/useRealYield';
 
 interface MarketContextValue {
   engine: EngineResult;
   isLoading: boolean;
   isDegraded: boolean;
+  /** Live (or fallback) Real Yield Index inputs powering the Satellite Staking Booster. */
+  realYield: RealYieldData;
 }
 
 const MarketContext = createContext<MarketContextValue | null>(null);
@@ -23,6 +25,7 @@ export function MarketProvider({ children }: { children: ReactNode }) {
   const { data: market, isLoading: mdLoading } = useMarketData();
   const { data: prices, isLoading: pLoading } = usePrices();
   const { data: metrics, isLoading: mLoading } = usePerCoinMetrics();
+  const { data: realYield } = useRealYield();
 
   const engine = useMemo<EngineResult>(() => {
     const btcPrice = market?.btc?.price && market.btc.price > 0 ? market.btc.price : (prices?.bitcoin?.usd ?? 0);
@@ -49,17 +52,22 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       ethVol14d: metrics?.eth?.volatility30d ?? 2.8,
       solVol14d: metrics?.sol?.volatility30d ?? 4.0,
       solVol14dBaseline: SOL_VOL_BASELINE,
-      // RYI (Real Yield Index) Staking Booster inputs — currently manual
-      // constants (see realYieldIndex.ts), ready for future API wiring.
-      ethRyi: realYieldIndex(ETH_REAL_YIELD),
-      solRyi: realYieldIndex(SOL_REAL_YIELD),
+      // RYI (Real Yield Index) Staking Booster inputs — LIVE staking APY from
+      // DefiLlama (see useRealYield) combined with base inflation, with a safe
+      // fallback to constants. Recomputes when the fetched yields change.
+      ethRyi: realYield?.ethRyi ?? 0,
+      solRyi: realYield?.solRyi ?? 0,
     });
-  }, [fg, market, prices, metrics]);
+  }, [fg, market, prices, metrics, realYield?.ethRyi, realYield?.solRyi]);
 
   const value: MarketContextValue = {
     engine,
     isLoading: fgLoading || mdLoading || pLoading || mLoading,
     isDegraded: market?.degraded === true,
+    realYield: realYield ?? {
+      ethApyPct: 0, solApyPct: 0, ethInflationPct: 0, solInflationPct: 0,
+      ethRyi: 0, solRyi: 0, source: 'fallback',
+    },
   };
 
   return <MarketContext.Provider value={value}>{children}</MarketContext.Provider>;
