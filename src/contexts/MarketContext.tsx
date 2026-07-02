@@ -3,6 +3,7 @@ import { useFearGreed, usePrices } from '@/hooks/usePrices';
 import { useMarketData } from '@/hooks/useMarketData';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { runCoreSatelliteEngine, type EngineResult } from '@/lib/coreSatelliteEngine';
+import { ETH_REAL_YIELD, SOL_REAL_YIELD, realYieldIndex } from '@/lib/realYieldIndex';
 
 interface MarketContextValue {
   engine: EngineResult;
@@ -48,6 +49,10 @@ export function MarketProvider({ children }: { children: ReactNode }) {
       ethVol14d: metrics?.eth?.volatility30d ?? 2.8,
       solVol14d: metrics?.sol?.volatility30d ?? 4.0,
       solVol14dBaseline: SOL_VOL_BASELINE,
+      // RYI (Real Yield Index) Staking Booster inputs — currently manual
+      // constants (see realYieldIndex.ts), ready for future API wiring.
+      ethRyi: realYieldIndex(ETH_REAL_YIELD),
+      solRyi: realYieldIndex(SOL_REAL_YIELD),
     });
   }, [fg, market, prices, metrics]);
 

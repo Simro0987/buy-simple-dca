@@ -2,9 +2,14 @@ import { describe, it, expect } from 'vitest';
 import {
   evaluateOverbought,
   resolveExecutionSplit,
+  octagonMarketPct,
+  executionSplitFromOctagon,
   MIN_LIMIT_USD,
   RSI_OVERBOUGHT,
   EMA_OVEREXTENSION_PCT,
+  OCTAGON_LOW_MARKET_PCT,
+  OCTAGON_HIGH_MARKET_PCT,
+  VOL_BASELINE_PCT,
 } from './dynamicExecution';
 
 describe('evaluateOverbought', () => {
@@ -87,5 +92,65 @@ describe('resolveExecutionSplit', () => {
     expect(r.merged).toBe(false);
     expect(r.marketUsd).toBe(0);
     expect(r.dynUsd).toBe(0);
+  });
+});
+
+describe('octagonMarketPct (sliding scale)', () => {
+  it('hits the low anchor: score 10 → 30% market', () => {
+    expect(octagonMarketPct(10)).toBe(OCTAGON_LOW_MARKET_PCT);
+  });
+
+  it('hits the high anchor: score 80 → 100% market', () => {
+    expect(octagonMarketPct(80)).toBe(OCTAGON_HIGH_MARKET_PCT);
+  });
+
+  it('is monotonic and gradual between anchors (no step jumps)', () => {
+    const a = octagonMarketPct(30);
+    const b = octagonMarketPct(50);
+    const c = octagonMarketPct(70);
+    expect(a).toBeLessThan(b);
+    expect(b).toBeLessThan(c);
+    // linear midpoint: score 50 → ~70% market
+    expect(b).toBeCloseTo(70, 5);
+  });
+
+  it('clamps below the low anchor and above the high anchor', () => {
+    expect(octagonMarketPct(0)).toBe(OCTAGON_LOW_MARKET_PCT);
+    expect(octagonMarketPct(100)).toBe(OCTAGON_HIGH_MARKET_PCT);
+  });
+
+  it('defaults to a neutral score when input is not finite', () => {
+    expect(octagonMarketPct(Number.NaN)).toBe(octagonMarketPct(50));
+  });
+});
+
+describe('executionSplitFromOctagon', () => {
+  it('uses the octagon base with a neutral volatility (no tilt)', () => {
+    const r = executionSplitFromOctagon(50, VOL_BASELINE_PCT);
+    expect(r.volTiltPp).toBe(0);
+    expect(r.marketPct).toBe(70);
+    expect(r.limitPct).toBe(30);
+    expect(r.octagonMarketPct).toBe(70);
+  });
+
+  it('low octagon favours LIMIT (≈30/70) to catch deep wicks', () => {
+    const r = executionSplitFromOctagon(10, VOL_BASELINE_PCT);
+    expect(r.marketPct).toBe(30);
+    expect(r.limitPct).toBe(70);
+  });
+
+  it('high octagon favours MARKET (100/0) so we do not miss the run', () => {
+    const r = executionSplitFromOctagon(85, VOL_BASELINE_PCT);
+    expect(r.marketPct).toBe(100);
+    expect(r.limitPct).toBe(0);
+  });
+
+  it('higher volatility tilts toward MARKET (bounded)', () => {
+    const neutral = executionSplitFromOctagon(50, VOL_BASELINE_PCT).marketPct;
+    const highVol = executionSplitFromOctagon(50, VOL_BASELINE_PCT + 10).marketPct;
+    expect(highVol).toBeGreaterThan(neutral);
+    // Market always stays within [30, 100]
+    expect(highVol).toBeLessThanOrEqual(100);
+    expect(executionSplitFromOctagon(10, 0).marketPct).toBeGreaterThanOrEqual(30);
   });
 });
