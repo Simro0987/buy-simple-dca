@@ -533,6 +533,8 @@ export function bandLabel(band: ValuationBand): string {
 const HISTORY_KEY = 'monday-controller-history-v1';
 
 export interface HistoryEntry {
+  id?: string;
+  weekNumber?: number;
   date: string;
   inputs: MondayInputs;
   plan: {
@@ -583,6 +585,11 @@ export function thisMondayIso(): string {
   d.setDate(d.getDate() - diff);
   d.setHours(0, 0, 0, 0);
   return d.toISOString().slice(0, 10);
+}
+
+export function getIsoWeekNumber(date = new Date()): number {
+  const oneJan = new Date(date.getFullYear(), 0, 1);
+  return Math.ceil(((date.getTime() - oneJan.getTime()) / 86400000 + oneJan.getDay() + 1) / 7);
 }
 
 export function exportHistoryCsv(history: HistoryEntry[]): string {
