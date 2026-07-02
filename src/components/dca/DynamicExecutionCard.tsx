@@ -16,6 +16,9 @@ import { useEmergencyPause } from '@/lib/emergencyPause';
 import {
   calcUnifiedExecution,
   fixedExecution,
+  evaluateOverbought,
+  resolveExecutionSplit,
+  MIN_LIMIT_USD,
   type CoinKey,
 } from '@/lib/dynamicExecution';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
@@ -447,24 +450,31 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
           const regimeLabel = regimeInfo
             ? (regimeInfo.regime === 'bull' ? 'BÝK · pullback' : 'MEDVEĎ · 7D support')
             : 'fallback';
-          let marketUsdRaw = coinUsd * (marketPct / 100);
-          let dynUsdRaw = coinUsd * (dynamicPct / 100);
+          const marketBaseUsd = coinUsd * (marketPct / 100);
+          const dynBaseUsd = coinUsd * (dynamicPct / 100);
 
-          // $10 MIN VOLUME FILTER + merge rule
-          const MIN_USD = 10;
-          const totalInsufficient = coinUsd < MIN_USD;
-          let dynMergedIntoMarket = false;
-          if (!totalInsufficient && dynUsdRaw < MIN_USD) {
-            marketUsdRaw = marketUsdRaw + dynUsdRaw;
-            dynUsdRaw = 0;
-            dynMergedIntoMarket = true;
-          }
-          let marketMergedIntoDyn = false;
-          if (!totalInsufficient && !dynMergedIntoMarket && marketUsdRaw < MIN_USD) {
-            dynUsdRaw = dynUsdRaw + marketUsdRaw;
-            marketUsdRaw = 0;
-            marketMergedIntoDyn = true;
-          }
+          // ── LONG-TERM WEEKLY DCA · MERGE + INDICATOR ROUTING ──
+          // Market orders have NO minimum (any weekly amount executes now).
+          // If the Dynamic Limit slice is strictly < $10 we merge both slices
+          // into one order and route the whole weekly buy by short/medium-term
+          // indicators (daily RSI + distance above the 50D EMA):
+          //   • Overbought (RSI > 70 / strongly overextended) → single LIMIT
+          //     (wait for the short-term pullback).
+          //   • Normal / neutral / oversold → single MARKET (accumulate now).
+          const dailyRsi = c === 'eth' ? market?.eth?.rsi14
+            : c === 'sol' ? market?.sol?.rsi14
+            : null; // market-data-service does not expose a BTC daily RSI
+          const ema50 = regimeInfo?.ema50 ?? 0;
+          const priceVsEma50Pct = ema50 > 0 && price > 0
+            ? ((price - ema50) / ema50) * 100
+            : null;
+          const overboughtInfo = evaluateOverbought({ rsi: dailyRsi, priceVsEma50Pct });
+          const splitResult = resolveExecutionSplit(marketBaseUsd, dynBaseUsd, overboughtInfo.overbought);
+          const marketUsdRaw = splitResult.marketUsd;
+          const dynUsdRaw = splitResult.dynUsd;
+          const dynMergedIntoMarket = splitResult.merged && splitResult.routing === 'market';
+          const marketMergedIntoDyn = splitResult.merged && splitResult.routing === 'limit';
+          const noBudget = coinUsd <= 0;
 
           // Market price = spot
           // Limit Dynamic = regime engine output (clamped); freeze when order locked.
@@ -575,6 +585,32 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               </div>
 
+              {/* MERGE + INDICATOR ROUTING — Limit slice < $10 → single order,
+                  routed by RSI/EMA (Overbought → Limit, else → Market). */}
+              {splitResult.merged && !noBudget && (
+                <div className={`rounded-lg border px-2.5 py-1.5 space-y-0.5 ${
+                  splitResult.routing === 'limit'
+                    ? 'border-amber-500/40 bg-amber-500/10'
+                    : 'border-emerald-500/40 bg-emerald-500/10'
+                }`}>
+                  <p className={`text-[10px] font-bold tracking-wide flex items-center gap-1 ${
+                    splitResult.routing === 'limit' ? 'text-amber-200' : 'text-emerald-200'
+                  }`}>
+                    {splitResult.routing === 'limit'
+                      ? <><Clock className="w-3 h-3" /> Zlúčené → celá suma ako LIMIT</>
+                      : <><ShoppingCart className="w-3 h-3" /> Zlúčené → celá suma ako MARKET</>}
+                  </p>
+                  <p className="text-[9px] leading-snug text-foreground/70">
+                    Limit &lt; ${MIN_LIMIT_USD} → 1 príkaz.{' '}
+                    {splitResult.routing === 'limit'
+                      ? `Prehriate (${overboughtInfo.reasons.join(' · ')}) — čakáme na short-term pullback pred týždenným nákupom.`
+                      : overboughtInfo.hasSignal
+                        ? `Neutrál/oversold (${overboughtInfo.rsi !== null ? `RSI ${overboughtInfo.rsi.toFixed(0)}` : 'RSI N/A'}${overboughtInfo.priceVsEma50Pct !== null ? ` · ${overboughtInfo.priceVsEma50Pct >= 0 ? '+' : ''}${overboughtInfo.priceVsEma50Pct.toFixed(1)}% vs 50D EMA` : ''}) — férová/zľavnená cena, akumulujeme hneď.`
+                        : 'Bez prehriatia (indikátory nedostupné) — akumulujeme hneď.'}
+                  </p>
+                </div>
+              )}
+
               {/* Suma pre token + držané */}
               <div className="flex items-center justify-between bg-background/40 rounded px-2 py-1.5">
                 <div>
@@ -625,17 +661,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                 </div>
               )}
 
-              {totalInsufficient && (
+              {noBudget && (
                 <div className="rounded-lg border border-rose-500/50 bg-rose-500/10 px-2.5 py-2 flex items-start gap-2">
                   <AlertTriangle className="w-3.5 h-3.5 text-rose-300 mt-0.5 flex-shrink-0" />
                   <p className="text-[11px] font-semibold text-rose-200 leading-snug">
-                    Nedostatočný týždenný rozpočet (Minimum pre exekúciu je 10 USD)
+                    Žiadny týždenný rozpočet na exekúciu tohto tokenu.
                   </p>
                 </div>
               )}
 
               {/* DUAL-CARD: MARKET (left) + LIMIT DYNAMIC (right) — mobile stacks vertically */}
-              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-1.5 ${totalInsufficient ? 'opacity-40 pointer-events-none' : ''}`}>
+              <div className={`grid grid-cols-1 sm:grid-cols-2 gap-1.5 ${noBudget ? 'opacity-40 pointer-events-none' : ''}`}>
                 {([
                   {
                     mode: 'market' as Mode,
@@ -678,13 +714,15 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                     ? (price > 0 && card.effPrice > 0 && price <= card.effPrice)
                     : false;
                   const isMerged = card.mergedAway;
-                  const cardDisabled = isMerged || card.usd < MIN_USD;
+                  // Market has no minimum; a card is only disabled when it was
+                  // merged away (routed to the other order) or has no amount.
+                  const cardDisabled = isMerged || card.usd <= 0;
                   // Per-card busy reads from its OWN independent state hook.
                   const cardBusy = card.mode === 'market'
                     ? isMarketActive === c
                     : isDynamicActive === c;
                   const cardBg = isMerged
-                    ? 'bg-rose-500/5 ring-1 ring-rose-500/30 opacity-70'
+                    ? 'bg-white/5 ring-1 ring-white/10 opacity-60'
                     : card.isFilled
                     ? 'bg-emerald-500/15 ring-1 ring-emerald-500/40'
                     : card.isPending
@@ -709,10 +747,10 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
                         </button>
                       </div>
                       {isMerged ? (
-                        <p className="text-[10px] font-bold text-rose-300 leading-tight mt-0.5">
-                          NEDOSTATOČNÁ SUMA<br/>
-                          <span className="font-normal text-rose-200/80">
-                            (Zlúčené do {card.mode === 'dynamic' ? 'Market' : 'Limit Dynamic'})
+                        <p className="text-[10px] font-bold text-foreground/70 leading-tight mt-0.5">
+                          ZLÚČENÉ<br/>
+                          <span className="font-normal text-foreground/50">
+                            (Celá suma → {card.mode === 'dynamic' ? 'Market' : 'Limit Dynamic'})
                           </span>
                         </p>
                       ) : (
