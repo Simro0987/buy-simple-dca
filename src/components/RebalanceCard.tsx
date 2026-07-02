@@ -19,12 +19,7 @@ const TARGET: Record<string, number> = { BTC: 64, ETH: 25, SOL: 11 };
 const DRIFT_THRESHOLD = 3;
 const ACTION_THRESHOLD = 5;
 
-function getHoldings(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem('smart-alloc-holdings');
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 interface Drift {
   symbol: string;
@@ -39,7 +34,7 @@ interface Drift {
 
 export function RebalanceCard({ lang, prices, selected }: Props) {
   const sk = lang === 'sk';
-  const holdings = getHoldings();
+  const holdings = loadHoldingsRecord();
   const [sending, setSending] = useState(false);
 
   const [confirmedAt, setConfirmedAt] = useState<string | null>(() => {

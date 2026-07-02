@@ -10,7 +10,7 @@ import {
   PROFIT_CONFIGS, TokenProfitConfig, ProfitLevel,
   getExecutedLevels, markLevelExecuted, isLevelExecuted,
   getAvgCostBasis, setAvgCostBasis, computeProfitPct, getTotalSoldPct,
-  getDcaPurchases, addDcaPurchase, recalcAllAvgCosts, importFromExecutionHistory, DcaPurchase,
+  getDcaPurchases, addDcaPurchase, recalcAllAvgCosts, DcaPurchase,
 } from '@/lib/profitTaking';
 import { CopyButton } from '@/components/CopyButton';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -81,12 +81,6 @@ interface Props {
   advancedData?: AdvancedMarketData | null;
 }
 
-function loadHoldings(): Record<string, number> {
-  try {
-    return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}');
-  } catch { return {}; }
-}
-
 function sameNumberMap(a: Record<string, number>, b: Record<string, number>): boolean {
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
   for (const k of keys) {
@@ -120,7 +114,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
   const [purchaseType, setPurchaseType] = useState<'market' | 'limit'>('market');
   const [costSource, setCostSource] = useState<Record<string, 'auto' | 'manual'>>({});
 
-  // Holdings z portfólia (manual_holdings + DCA agregát) — jediný zdroj pravdy
+  // Holdings from portfolio_real_holdings via usePortfolioMetrics
   const holdings = useMemo<Record<string, number>>(() => {
     const map: Record<string, number> = {};
     for (const a of portfolio.assets) {
@@ -137,17 +131,6 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
     }
     return map;
   }, [portfolio.assets]);
-
-  // Auto-import from execution history on first load.
-  const importAttemptedRef = useRef(false);
-  useEffect(() => {
-    if (!prices || importAttemptedRef.current) return;
-    importAttemptedRef.current = true;
-    const imported = importFromExecutionHistory(prices);
-    if (imported > 0) {
-      toast.success(`Importovaných ${imported} nákupov z DCA histórie`);
-    }
-  }, [prices]);
 
   // Auto-recalculate avg costs: portfólio (DB) má prioritu, fallback na lokálne DCA nákupy
   useEffect(() => {

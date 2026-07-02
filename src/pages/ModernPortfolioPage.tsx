@@ -8,20 +8,31 @@ import { motion, AnimatePresence } from 'framer-motion';
 import {
   Zap, RefreshCw, Copy, Check, Lock, RotateCcw,
   TrendingUp, TrendingDown, Target,
-  AlertTriangle, Sparkles, Send,
+  AlertTriangle, Sparkles, Sparkle, Eye, EyeOff,
 } from 'lucide-react';
-import { TOKENS, formatUsd, formatPrice } from '@/lib/crypto';
+import { TOKENS, formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
+import { usePortfolioLivePrices, PORTFOLIO_PRICE_REFRESH_MS } from '@/hooks/usePortfolioLivePrices';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { PortfolioProvider, usePortfolio } from '@/contexts/PortfolioContext';
-import { useCyborgTotalUsd } from '@/hooks/useCyborgPortfolio';
 import { computeConcentrationWarnings } from '@/lib/decisionEngine';
 import { useProfitReservoir, addTakeProfit } from '@/lib/profitReservoir';
-import { generateDailyRiskReport } from '@/lib/dailyRiskReport';
-import { sendDailyRiskReportToTelegram } from '@/lib/telegramService';
+import { generatePortfolioRiskInsight } from '@/lib/portfolioRiskAnalysis';
+import {
+  buildDashboardFromUserHoldings,
+  type UserHoldings,
+} from '@/lib/portfolioRealHoldings';
+import { useUserHoldings } from '@/hooks/useUserHoldings';
+import { maskPct, maskPrice, maskSignedUsd, maskUsd } from '@/lib/portfolioPrivacy';
 import { toast } from 'sonner';
 import { Bento, Label, Money, Chip } from '@/components/modern-portfolio/primitives';
+import { FlashMoney } from '@/components/modern-portfolio/FlashMoney';
+import { ModernAllocationDonut } from '@/components/modern-portfolio/ModernAllocationDonut';
+import { FearGreedSlider } from '@/components/modern-portfolio/FearGreedSlider';
+import { PortfolioPerformanceChart } from '@/components/modern-portfolio/PortfolioPerformanceChart';
+import { EditHoldingsModal, EditHoldingsTrigger } from '@/components/modern-portfolio/EditHoldingsModal';
+import { ensurePortfolioData } from '@/lib/portfolioData';
 import {
   type DcaToken,
   DCA_TOKEN_COLORS,
@@ -48,13 +59,14 @@ const GOAL_BTC = 1;
 const LAST_HALVING = new Date('2024-04-19');
 const NEXT_HALVING = new Date('2028-04-19');
 const DEFAULT_RSI: Record<DcaToken, number> = { BTC: 50, ETH: 50, SOL: 50 };
-const DAILY_REPORT_KEY = 'daily-risk-report-last';
-const DAILY_REPORT_SENT_IDS_KEY = 'telegram_sent_news_ids';
+const DAILY_REPORT_KEY = 'portfolio-risk-insight-last';
 
 export function ModernPortfolioPage({ lang }: Props) {
   return (
     <PortfolioProvider>
-      <ModernPortfolioInner lang={lang} />
+      <div className="min-w-0 text-white">
+        <ModernPortfolioInner lang={lang} />
+      </div>
     </PortfolioProvider>
   );
 }
@@ -62,37 +74,69 @@ export function ModernPortfolioPage({ lang }: Props) {
 function ModernPortfolioInner({ lang }: Props) {
   const sk = lang === 'sk';
   const { data: prices, isFetching } = usePrices();
-  const { data: fg } = useFearGreed();
+  const {
+    data: liveSpot,
+    isLoading: liveSpotLoading,
+    isFetching: liveSpotFetching,
+    dataUpdatedAt: liveSpotUpdatedAt,
+  } = usePortfolioLivePrices();
+  const { data: fg, isLoading: fgLoading } = useFearGreed();
   const { data: settings } = useAppSettings();
   const reservoir = useProfitReservoir();
   const {
-    metrics,
     selected, toggleSelected, setSelected,
     totalStakedValue, blendedApy, profitAvailable, portfolioData,
-    totalValue,
   } = usePortfolio();
-  const engineTotalUsd = useCyborgTotalUsd();
-  const displayTotalUsd = engineTotalUsd > 0 ? engineTotalUsd : Number(totalValue ?? 0) || 0;
-  const displayPnl = Number(metrics.totalPnl ?? 0) || 0;
-  const displayPnlPct = Number(metrics.totalPnlPct ?? 0) || 0;
-  const isGain = displayPnl >= 0;
 
+  const livePriceMap = useMemo(() => ({
+    bitcoin: liveSpot?.bitcoin ?? prices?.bitcoin?.usd ?? 0,
+    ethereum: liveSpot?.ethereum ?? prices?.ethereum?.usd ?? 0,
+    solana: liveSpot?.solana ?? prices?.solana?.usd ?? 0,
+  }), [liveSpot, prices]);
+
+  const { holdings: userHoldings, setHoldings: setUserHoldings } = useUserHoldings();
+  const safePortfolioData = useMemo(() => ensurePortfolioData(portfolioData), [portfolioData]);
+
+  const dashboard = useMemo(
+    () => buildDashboardFromUserHoldings(userHoldings, livePriceMap),
+    [userHoldings, livePriceMap],
+  );
+
+  const displayTotalUsd = Number(dashboard?.totalValue ?? 0) || 0;
+  const displayPnl = Number(dashboard?.totalPnl ?? 0) || 0;
+  const displayPnlPct = Number(dashboard?.totalPnlPct ?? 0) || 0;
+  const displayInvested = Number(dashboard?.totalInvested ?? 0) || 0;
+  const isGain = displayPnl >= 0;
+  const liveAssets = dashboard?.assets ?? [];
+  const safeBlendedApy = Number(blendedApy ?? 0) || 0;
+  const safeProfitAvailable = Number(profitAvailable ?? 0) || 0;
+  const safeTotalStaked = Number(totalStakedValue ?? 0) || 0;
+
+  const chartHoldings = useMemo(() => ({
+    bitcoin: Number(userHoldings?.BTC?.tokenAmount ?? 0) || 0,
+    ethereum: Number(userHoldings?.ETH?.tokenAmount ?? 0) || 0,
+    solana: Number(userHoldings?.SOL?.tokenAmount ?? 0) || 0,
+  }), [userHoldings]);
+
+  const [isBalanceVisible, setIsBalanceVisible] = useState(true);
+  const [holdingsModalOpen, setHoldingsModalOpen] = useState(false);
   const [dcaPrices, setDcaPrices] = useState(loadDcaPrices);
   const [confirmKey, setConfirmKey] = useState(0);
   const [expandedRadar, setExpandedRadar] = useState<DcaToken | null>('BTC');
   const [copied, setCopied] = useState<string | null>(null);
   const [busyTp, setBusyTp] = useState<string | null>(null);
-  const [reportSending, setReportSending] = useState(false);
-  const [dailyReport, setDailyReport] = useState<string>(() =>
+  const [reportGenerating, setReportGenerating] = useState(false);
+  const [riskInsight, setRiskInsight] = useState<string>(() =>
     localStorage.getItem(DAILY_REPORT_KEY) || (lang === 'sk'
-      ? 'Denný report ešte nebol vygenerovaný.'
-      : 'Daily report has not been generated yet.'),
+      ? 'Kliknite na „Generuj Report“ pre živú analýzu portfólia.'
+      : 'Click “Generate Report” for a live portfolio analysis.'),
   );
 
   const fgValue = fg?.value ?? 50;
+  const fgLabel = fg?.classification ?? (fgValue <= 44 ? 'Fear' : fgValue >= 56 ? 'Greed' : 'Neutral');
   const weeklyCapital = Number(settings?.default_amount ?? 0);
   const freeCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
-  const warnings = useMemo(() => computeConcentrationWarnings(prices), [prices]);
+  const warnings = useMemo(() => computeConcentrationWarnings(prices) ?? [], [prices]);
 
   const { data: rsiData, isLoading: rsiLoading, refetch: rsiRefetch } = useQuery({
     queryKey: ['modern-dca-rsi'],
@@ -106,10 +150,10 @@ function ModernPortfolioInner({ lang }: Props) {
   );
 
   const livePrices = useMemo<Record<DcaToken, number>>(() => ({
-    BTC: prices?.[DCA_CG_ID.BTC]?.usd ?? 0,
-    ETH: prices?.[DCA_CG_ID.ETH]?.usd ?? 0,
-    SOL: prices?.[DCA_CG_ID.SOL]?.usd ?? 0,
-  }), [prices]);
+    BTC: livePriceMap.bitcoin || (prices?.[DCA_CG_ID.BTC]?.usd ?? 0),
+    ETH: livePriceMap.ethereum || (prices?.[DCA_CG_ID.ETH]?.usd ?? 0),
+    SOL: livePriceMap.solana || (prices?.[DCA_CG_ID.SOL]?.usd ?? 0),
+  }), [livePriceMap, prices]);
 
   const updateDcaPrice = useCallback((sym: DcaToken, v: number) => {
     setDcaPrices(prev => { const n = { ...prev, [sym]: v }; saveDcaPrices(n); return n; });
@@ -127,9 +171,9 @@ function ModernPortfolioInner({ lang }: Props) {
 
   const healthScore = useMemo(() => {
     if (displayTotalUsd <= 0) return null;
-    const drift = metrics.assets.reduce((s, a) => s + Math.abs(Number(a.deviationPct ?? 0) || 0), 0);
+    const drift = liveAssets.reduce((s, a) => s + Math.abs(Number(a.deviationPct ?? 0) || 0), 0);
     const alloc = Math.max(0, 40 - drift * 2);
-    const present = metrics.assets.filter(a => (Number(a.actualPct ?? 0) || 0) > 0.01).length;
+    const present = liveAssets.filter(a => (Number(a.actualPct ?? 0) || 0) > 0.01).length;
     const div = present === 3 ? 20 : present === 2 ? 12 : 5;
     const stakedRatio = displayTotalUsd > 0 ? (Number(totalStakedValue ?? 0) || 0) / displayTotalUsd : 0;
     const stake = stakedRatio >= 0.3 && stakedRatio <= 0.6 ? 20
@@ -138,7 +182,7 @@ function ModernPortfolioInner({ lang }: Props) {
     const pnlPct = displayPnlPct;
     const dd = pnlPct >= 0 ? 20 : Math.max(0, Math.round(20 + (pnlPct / 50) * 20));
     return Math.min(100, Math.round(alloc + div + stake + dd));
-  }, [metrics, totalStakedValue, displayTotalUsd, displayPnlPct]);
+  }, [liveAssets, totalStakedValue, displayTotalUsd, displayPnlPct]);
 
   const halvingProgress = useMemo(() => {
     const total = NEXT_HALVING.getTime() - LAST_HALVING.getTime();
@@ -153,7 +197,7 @@ function ModernPortfolioInner({ lang }: Props) {
     return { equiv, progress: Math.min(100, (equiv / GOAL_BTC) * 100) };
   }, [displayTotalUsd, prices]);
 
-  const takeProfitRows = useMemo(() => metrics.assets.map(a => {
+  const takeProfitRows = useMemo(() => (liveAssets ?? []).map(a => {
     const adj = a.holdings;
     const original = adj + Number(reservoir.sells[a.symbol] ?? 0);
     const avgCost = original > 0 ? a.invested / original : 0;
@@ -166,7 +210,7 @@ function ModernPortfolioInner({ lang }: Props) {
     let sellTokens = eligible ? sellUsd / a.currentPrice : 0;
     if (sellTokens > adj) sellTokens = adj;
     return { ...a, avgCost, pnl, pnlPct, eligible, sellPct, sellUsd, sellTokens };
-  }), [metrics.assets, reservoir.sells]);
+  }), [liveAssets, reservoir.sells]);
 
   const copyText = async (text: string, id: string) => {
     try {
@@ -179,67 +223,37 @@ function ModernPortfolioInner({ lang }: Props) {
   };
 
   const eligibleTakeProfitRows = useMemo(
-    () => takeProfitRows.filter(r => r.eligible),
+    () => (takeProfitRows ?? []).filter(r => r.eligible),
     [takeProfitRows],
   );
-  const pnl24hUsd = useMemo(() => {
-    return metrics.assets.reduce((sum, asset) => {
-      const tokenMeta = TOKENS.find(t => t.symbol === asset.symbol);
-      if (!tokenMeta) return sum;
-      const changePct = prices?.[tokenMeta.coingeckoId]?.usd_24h_change ?? 0;
-      return sum + (asset.value * changePct) / 100;
-    }, 0);
-  }, [metrics.assets, prices]);
 
-  const buildDailyReport = useCallback(() => {
-    return generateDailyRiskReport({
-      totalPortfolioValueUsd: metrics.totalValue,
-      cleanLiquidityUsd: freeCash + reservoir.stable,
-      pnl24hUsd,
-      cumulativePnlUsd: metrics.totalPnl,
-      globalRiskScore: maxRisk,
-      assets: metrics.assets.map((asset) => ({
-        symbol: asset.symbol,
-        allocationPct: asset.actualPct * 100,
-        spotPrice: asset.currentPrice,
-        holdings: asset.holdings,
-        investedUsd: asset.invested,
-      })),
-    });
-  }, [freeCash, maxRisk, metrics, pnl24hUsd, reservoir.stable]);
+  const handleSaveHoldings = useCallback((next: UserHoldings) => {
+    setUserHoldings(next);
+    toast.success(sk ? 'Držby uložené' : 'Holdings saved');
+  }, [setUserHoldings, sk]);
 
-  const handleManualReport = useCallback(async () => {
-    setReportSending(true);
+  const handleGenerateReport = useCallback(() => {
+    setReportGenerating(true);
     try {
-      const report = buildDailyReport();
-      setDailyReport(report);
-      localStorage.setItem(DAILY_REPORT_KEY, report);
-
-      const chatId = localStorage.getItem('telegram_chat_id')?.trim();
-      const sendResult = await sendDailyRiskReportToTelegram(report, chatId);
-      if (!sendResult.success) {
-        throw new Error(sendResult.error || (sk ? 'Odoslanie reportu zlyhalo' : 'Report delivery failed'));
-      }
-
-      // localStorage hardening for sent ids history
-      let sentIds: string[] = [];
-      try {
-        sentIds = JSON.parse(localStorage.getItem(DAILY_REPORT_SENT_IDS_KEY) || '[]');
-      } catch {
-        sentIds = [];
-      }
-      const reportId = `daily-risk-report:${new Date().toISOString().slice(0, 10)}`;
-      if (!sentIds.includes(reportId)) {
-        sentIds = [...sentIds, reportId].slice(-200);
-      }
-      localStorage.setItem(DAILY_REPORT_SENT_IDS_KEY, JSON.stringify(sentIds));
-      toast.success(sk ? 'Denný report odoslaný na Telegram' : 'Daily report sent to Telegram');
+      const insight = generatePortfolioRiskInsight({
+        fearGreedValue: fgValue,
+        fearGreedLabel: fgLabel,
+        totalPnlPct: displayPnlPct,
+        lang: sk ? 'sk' : 'en',
+      });
+      setRiskInsight(insight);
+      localStorage.setItem(DAILY_REPORT_KEY, insight);
+      toast.success(sk ? 'Report vygenerovaný' : 'Report generated');
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : (sk ? 'Report sa nepodarilo odoslať' : 'Failed to send report'));
+      toast.error(e instanceof Error ? e.message : (sk ? 'Report sa nepodarilo vygenerovať' : 'Failed to generate report'));
     } finally {
-      setReportSending(false);
+      setReportGenerating(false);
     }
-  }, [buildDailyReport, sk]);
+  }, [displayPnlPct, fgLabel, fgValue, sk]);
+
+  const lastLiveUpdate = liveSpotUpdatedAt
+    ? new Date(liveSpotUpdatedAt).toLocaleTimeString(sk ? 'sk-SK' : 'en-US', { hour: '2-digit', minute: '2-digit' })
+    : null;
 
   return (
     <div className="relative space-y-4 sm:space-y-5 pb-8 min-w-0 overflow-x-hidden">
@@ -251,28 +265,56 @@ function ModernPortfolioInner({ lang }: Props) {
         transition={{ duration: 0.45 }}
         className="pt-2 pb-1"
       >
-        <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <Label>{sk ? 'Celková hodnota portfólia' : 'Total portfolio value'}</Label>
+            <EditHoldingsTrigger onClick={() => setHoldingsModalOpen(true)} sk={sk} />
+            <button
+              type="button"
+              onClick={() => setIsBalanceVisible(v => !v)}
+              aria-label={isBalanceVisible
+                ? (sk ? 'Skryť zostatky' : 'Hide balances')
+                : (sk ? 'Zobraziť zostatky' : 'Show balances')}
+              className="p-1.5 rounded-lg border border-white/10 text-white/45 hover:text-white hover:border-white/20 transition-colors shrink-0"
+            >
+              {isBalanceVisible
+                ? <Eye className="w-3.5 h-3.5" />
+                : <EyeOff className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          <Chip color={liveSpotFetching ? 'amber' : 'green'}>
+            {liveSpotFetching ? 'SYNC' : 'LIVE'}
+            {lastLiveUpdate ? ` · ${lastLiveUpdate}` : ''}
+          </Chip>
+        </div>
         <div className="mt-2 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 min-w-0">
-          <Money size="hero" className="!text-4xl sm:!text-6xl break-words">{formatUsd(displayTotalUsd)}</Money>
+          <FlashMoney price={displayTotalUsd} size="hero" className="!text-4xl sm:!text-6xl break-words">
+            {maskUsd(displayTotalUsd, isBalanceVisible)}
+          </FlashMoney>
           <div className="text-left sm:text-right pb-0 sm:pb-1 shrink-0">
             <div className="flex items-center gap-1.5 justify-end">
               {isGain ? <TrendingUp className="w-4 h-4 text-[#14F195]" /> : <TrendingDown className="w-4 h-4 text-red-400" />}
-              <Money size="md" positive={isGain} negative={!isGain}>
-                {isGain ? '+' : ''}{formatUsd(displayPnl)}
-              </Money>
+              <FlashMoney price={displayPnl} size="md" positive={isGain} negative={!isGain}>
+                {maskSignedUsd(displayPnl, isBalanceVisible)}
+              </FlashMoney>
             </div>
-            <p className={`font-mono text-sm mt-1 ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}>
-              {isGain ? '+' : ''}{displayPnlPct.toFixed(2)}%
-            </p>
+            <FlashMoney
+              price={displayPnlPct}
+              size="sm"
+              className={`font-mono text-sm mt-1 block ${isGain ? 'text-[#14F195]' : 'text-red-400'}`}
+            >
+              {maskPct(displayPnlPct, isBalanceVisible, true)}
+            </FlashMoney>
           </div>
         </div>
-
         <div className="flex items-center gap-2 mt-4 overflow-x-auto scrollbar-hide pb-0.5 -mx-0.5 px-0.5">
           <Chip color="green">
             <Sparkles className="w-3 h-3 inline mr-1" />
-            Profit {formatUsd(profitAvailable)}
+            Profit {maskUsd(safeProfitAvailable, isBalanceVisible)}
           </Chip>
-          <Chip color="default">Stake {formatUsd(totalStakedValue)} · {blendedApy.toFixed(1)}%</Chip>
+          <Chip color="default">
+            Stake {maskUsd(safeTotalStaked, isBalanceVisible)} · {safeBlendedApy.toFixed(1)}%
+          </Chip>
           {TOKENS.map(t => (
             <button
               key={t.symbol}
@@ -292,13 +334,36 @@ function ModernPortfolioInner({ lang }: Props) {
         </div>
       </motion.section>
 
+      {/* ═══ LIVE ALLOCATION + F&G ══════════════════════════════════════════ */}
+      <div className="grid md:grid-cols-2 gap-2 sm:gap-3 min-w-0">
+        <ModernAllocationDonut
+          assets={liveAssets}
+          totalValue={displayTotalUsd}
+          selected={selected}
+          onSelect={toggleSelected}
+          loading={false}
+          balanceVisible={isBalanceVisible}
+        />
+        <Bento delay={0.08} className="p-4 sm:p-5 min-w-0 flex flex-col justify-center">
+          <FearGreedSlider value={fgValue} label={fgLabel} loading={fgLoading && !fg} />
+        </Bento>
+      </div>
+
+      {/* ═══ HISTORICAL PERFORMANCE ═════════════════════════════════════════ */}
+      <PortfolioPerformanceChart
+        holdings={chartHoldings}
+        balanceVisible={isBalanceVisible}
+        loading={false}
+        sk={sk}
+      />
+
       {/* ═══ STAT BENTO ═════════════════════════════════════════════════════ */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-3 min-w-0">
         {[
-          { l: sk ? 'Investované' : 'Invested', v: formatUsd(metrics.totalInvested), d: 0.04 },
-          { l: 'PnL', v: `${isGain ? '+' : ''}${formatUsd(displayPnl)}`, d: 0.08, pos: isGain },
-          { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: formatUsd(weeklyCapital), d: 0.12 },
-          { l: sk ? 'Voľný cash' : 'Free cash', v: formatUsd(freeCash + reservoir.stable), d: 0.16 },
+          { l: sk ? 'Investované' : 'Invested', v: maskUsd(displayInvested, isBalanceVisible), d: 0.04 },
+          { l: 'PnL', v: maskSignedUsd(displayPnl, isBalanceVisible), d: 0.08, pos: isGain },
+          { l: sk ? 'Týž. DCA' : 'Weekly DCA', v: maskUsd(weeklyCapital, isBalanceVisible), d: 0.12 },
+          { l: sk ? 'Voľný cash' : 'Free cash', v: maskUsd(freeCash + (Number(reservoir.stable ?? 0) || 0), isBalanceVisible), d: 0.16 },
         ].map(s => (
           <Bento key={s.l} delay={s.d} className="p-3 sm:p-4 min-w-0">
             <Label className="truncate">{s.l}</Label>
@@ -313,21 +378,25 @@ function ModernPortfolioInner({ lang }: Props) {
       <Bento delay={0.18} className="bg-[#0A0A0A] border border-white/10 p-4 sm:p-5 min-w-0">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between min-w-0">
           <div className="min-w-0">
-            <Label>Daily Risk Report</Label>
-            <p className="text-[11px] text-white/35 font-mono mt-1 break-words">Portfolio + WACB + LiveRiskScore + concentration risk</p>
+            <Label>{sk ? 'Denný risk report' : 'Daily Risk Report'}</Label>
+            <p className="text-[11px] text-white/35 font-mono mt-1 break-words">
+              {sk ? 'Simulovaná AI analýza z live PnL % a Fear & Greed indexu' : 'Simulated AI analysis from live PnL % and Fear & Greed'}
+            </p>
           </div>
           <button
-            onClick={() => void handleManualReport()}
-            disabled={reportSending}
-            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60 shrink-0 w-full sm:w-auto"
+            onClick={handleGenerateReport}
+            disabled={reportGenerating}
+            className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl border border-white/15 text-white/80 text-xs font-mono disabled:opacity-60 shrink-0 w-full sm:w-auto hover:border-[#14F195]/30 hover:text-white transition-colors"
           >
-            <Send className="w-3.5 h-3.5" />
-            {reportSending ? 'Sending…' : 'Generate & Send'}
+            <Sparkle className="w-3.5 h-3.5" />
+            {reportGenerating
+              ? (sk ? 'Generujem…' : 'Generating…')
+              : (sk ? 'Generuj Report' : 'Generate Report')}
           </button>
         </div>
-        <pre className="mt-4 text-[11px] leading-relaxed text-white/75 whitespace-pre-wrap break-words font-mono">
-          {dailyReport}
-        </pre>
+        <p className="mt-4 text-sm leading-relaxed text-white/80 whitespace-pre-wrap break-words">
+          {riskInsight.replace(/\*\*(.*?)\*\*/g, '$1')}
+        </p>
       </Bento>
 
       {/* ═══ DCA-OUT RADAR — VIZUÁLNA DOMINANTA ═══════════════════════════ */}
@@ -366,10 +435,7 @@ function ModernPortfolioInner({ lang }: Props) {
               </p>
             </div>
             <div className="text-left sm:text-right shrink-0 flex sm:block items-center justify-between gap-3">
-              <Label>F&G Index</Label>
-              <Money size="lg" className="mt-1 block" positive={fgValue < 35} negative={fgValue > 70}>
-                {fgValue}
-              </Money>
+              <FearGreedSlider value={fgValue} label={fgLabel} loading={fgLoading && !fg} />
               {sellSignals > 0 && (
                 <Chip color="red" >
                   <Zap className="w-3 h-3 inline mr-0.5" />
@@ -434,7 +500,8 @@ function ModernPortfolioInner({ lang }: Props) {
           {/* Expanded token detail */}
           <AnimatePresence mode="wait">
             {expandedRadar && (() => {
-              const t = radarTokens.find(x => x.sym === expandedRadar)!;
+              const t = radarTokens.find(x => x.sym === expandedRadar);
+              if (!t) return null;
               const price = livePrices[t.sym];
               const dca = dcaPrices[t.sym] ?? 0;
               return (
@@ -450,7 +517,7 @@ function ModernPortfolioInner({ lang }: Props) {
                     {[
                       { l: 'RSI(14d)', v: String(rsi[t.sym]) },
                       { l: 'F&G', v: String(fgValue) },
-                      { l: 'PnL', v: `${t.pnlPct >= 0 ? '+' : ''}${t.pnlPct.toFixed(1)}%` },
+                      { l: 'PnL', v: maskPct(t.pnlPct, isBalanceVisible, true) },
                     ].map(m => (
                       <div key={m.l} className="bg-black/40 rounded-xl sm:rounded-2xl p-2 sm:p-3 border border-white/[0.06] min-w-0">
                         <Label className="truncate">{m.l}</Label>
@@ -476,12 +543,12 @@ function ModernPortfolioInner({ lang }: Props) {
                     <div className="grid grid-cols-2 gap-3">
                       <div className="bg-black/30 rounded-2xl p-3 border border-white/[0.06]">
                         <Label>Hodnota</Label>
-                        <Money size="md" className="mt-1 block">{formatUsd(t.hold * price)}</Money>
+                        <Money size="md" className="mt-1 block">{maskUsd(t.hold * price, isBalanceVisible)}</Money>
                       </div>
                       <div className="bg-black/30 rounded-2xl p-3 border border-white/[0.06]">
                         <Label>PnL USD</Label>
                         <Money size="md" positive className="mt-1 block">
-                          +{formatUsd(t.hold * price - t.hold * dca)}
+                          {maskSignedUsd(t.hold * price - t.hold * dca, isBalanceVisible)}
                         </Money>
                       </div>
                     </div>
@@ -514,7 +581,7 @@ function ModernPortfolioInner({ lang }: Props) {
                         <div className="min-w-0">
                           <Label>Predaj</Label>
                           <p className="font-mono text-base sm:text-lg font-bold text-white break-all">{t.sellQty.toFixed(4)} {t.sym}</p>
-                          <p className="font-mono text-xs text-white/40">≈ {formatUsd(t.sellQty * price)}</p>
+                          <p className="font-mono text-xs text-white/40">≈ {maskUsd(t.sellQty * price, isBalanceVisible)}</p>
                         </div>
                         <button
                           onClick={() => copyText(t.sellQty.toFixed(4), t.sym)}
@@ -556,7 +623,7 @@ function ModernPortfolioInner({ lang }: Props) {
           </AnimatePresence>
 
           <p className="text-[10px] text-white/25 text-center font-mono">
-            CoinGecko 30s · Binance RSI 10min · alternative.me F&G
+            CoinGecko {PORTFOLIO_PRICE_REFRESH_MS / 1000}s · Binance RSI 10min · alternative.me F&G
           </p>
         </div>
       </Bento>
@@ -565,27 +632,41 @@ function ModernPortfolioInner({ lang }: Props) {
       <div className="grid md:grid-cols-2 gap-2 sm:gap-3 min-w-0">
         <Bento delay={0.28} className="p-4 sm:p-5 space-y-4 min-w-0">
           <Label>{sk ? 'Alokácia · USD' : 'Allocation · USD'}</Label>
-          {metrics.assets.map(a => {
+          {liveAssets.map(a => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
             return (
               <div key={a.symbol} className={dim ? 'opacity-30' : ''}>
                 <div className="flex justify-between items-baseline gap-2 mb-1.5 min-w-0">
                   <span className="text-sm font-bold shrink-0" style={{ color: token.color }}>{a.symbol}</span>
-                  <Money size="md" className="!text-lg sm:!text-2xl truncate">{formatUsd(a.value)}</Money>
+                  <FlashMoney price={a.value} size="md" className="!text-lg sm:!text-2xl truncate">
+                    {maskUsd(a.value, isBalanceVisible)}
+                  </FlashMoney>
                 </div>
                 <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
                   <div
-                    className="h-full rounded-full transition-all"
+                    className="h-full rounded-full transition-all duration-500"
                     style={{ width: `${a.actualPct * 100}%`, backgroundColor: token.color }}
                   />
                 </div>
                 <div className="flex justify-between mt-1 text-[10px] font-mono text-white/35">
-                  <span>{(a.actualPct * 100).toFixed(1)}% aktuálne</span>
-                  <span>{(a.targetPct * 100).toFixed(0)}% cieľ</span>
+                  <span>{(a.actualPct * 100).toFixed(1)}% {sk ? 'aktuálne' : 'current'}</span>
+                  <span>{(a.targetPct * 100).toFixed(0)}% {sk ? 'cieľ' : 'target'}</span>
                   <span className={a.deviationPct > 3 ? 'text-orange-400' : ''}>
                     {a.deviationPct >= 0 ? '+' : ''}{a.deviationPct.toFixed(1)}pp
                   </span>
+                </div>
+                <div className="flex justify-between mt-1 text-[10px] font-mono">
+                  <FlashMoney price={a.currentPrice} size="sm" className="!text-[10px] text-white/45">
+                    {maskPrice(a.currentPrice, isBalanceVisible)}
+                  </FlashMoney>
+                  <FlashMoney
+                    price={a.pnlPct}
+                    size="sm"
+                    className={`!text-[10px] ${a.pnl >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}
+                  >
+                    {maskSignedUsd(a.pnl, isBalanceVisible)} · {maskPct(a.pnlPct, isBalanceVisible, true)}
+                  </FlashMoney>
                 </div>
               </div>
             );
@@ -622,20 +703,11 @@ function ModernPortfolioInner({ lang }: Props) {
       {/* ═══ POZÍCIE ═══════════════════════════════════════════════════════ */}
       <div className="space-y-3 min-w-0">
         <Label>{sk ? 'Pozície' : 'Positions'}</Label>
-        {portfolioData.loading ? (
-          <Bento className="p-5 space-y-3">
-            <p className="text-sm text-white/40 flex items-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              {sk ? 'Načítavam portfólio…' : 'Loading portfolio…'}
-            </p>
-          </Bento>
-        ) : (
         <div className="grid gap-3">
-          {metrics.assets.map((a, i) => {
+          {liveAssets.map((a, i) => {
             const token = TOKENS.find(t => t.symbol === a.symbol)!;
             const dim = selected && selected !== a.symbol;
-            const avgCost = a.holdings > 0 ? a.invested / a.holdings : 0;
-            const slice = portfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
+            const slice = safePortfolioData.assets[a.symbol as 'BTC' | 'ETH' | 'SOL'];
             const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
             return (
               <Bento key={a.symbol} delay={0.36 + i * 0.05} className={`p-4 sm:p-5 min-w-0 ${dim ? 'opacity-35' : ''}`}>
@@ -648,23 +720,34 @@ function ModernPortfolioInner({ lang }: Props) {
                       {a.symbol}
                     </div>
                     <div className="min-w-0">
-                      <Money size="lg" className="!text-2xl sm:!text-3xl truncate">{formatUsd(a.value)}</Money>
+                      <FlashMoney price={a.value} size="lg" className="!text-2xl sm:!text-3xl truncate">
+                        {maskUsd(a.value, isBalanceVisible)}
+                      </FlashMoney>
                       <p className="font-mono text-xs text-white/35 mt-1 break-words">
                         {a.holdings > 0
                           ? `${a.symbol === 'BTC' ? a.holdings.toFixed(6) : a.holdings.toFixed(4)} ${a.symbol}`
                           : '—'}
-                        {' · '}{formatPrice(a.currentPrice)}
+                        {' · '}
+                        <FlashMoney price={a.currentPrice} size="sm" className="!text-xs inline">
+                          {maskPrice(a.currentPrice, isBalanceVisible)}
+                        </FlashMoney>
                       </p>
                     </div>
                   </div>
                   <div className="text-left sm:text-right shrink-0">
-                    <Money size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-xl sm:!text-2xl">
-                      {a.pnl >= 0 ? '+' : ''}{formatUsd(a.pnl)}
-                    </Money>
-                    <p className={`font-mono text-sm ${a.pnlPct >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>
-                      {a.pnlPct >= 0 ? '+' : ''}{a.pnlPct.toFixed(2)}%
+                    <FlashMoney price={a.pnl} size="md" positive={a.pnl >= 0} negative={a.pnl < 0} className="!text-xl sm:!text-2xl">
+                      {maskSignedUsd(a.pnl, isBalanceVisible)}
+                    </FlashMoney>
+                    <FlashMoney
+                      price={a.pnlPct}
+                      size="sm"
+                      className={`font-mono text-sm block ${a.pnlPct >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}
+                    >
+                      {maskPct(a.pnlPct, isBalanceVisible, true)}
+                    </FlashMoney>
+                    <p className="text-[10px] text-white/30 font-mono mt-1">
+                      avg {maskUsd(a.avgBuyPrice, isBalanceVisible)}
                     </p>
-                    <p className="text-[10px] text-white/30 font-mono mt-1">avg {formatUsd(avgCost)}</p>
                   </div>
                 </div>
                 {slice && (slice.liquidQty > 0 || slice.stakedQty > 0) && (
@@ -672,24 +755,23 @@ function ModernPortfolioInner({ lang }: Props) {
                     {slice.liquidQty.toFixed(6)} {sk ? 'voľné' : 'liquid'} · {slice.stakedQty.toFixed(6)} {sk ? 'staknuté' : 'staked'}
                   </p>
                 )}
-                {a.symbol === 'ETH' && (portfolioData.alchemixReserve.eth.qty > 0 || portfolioData.activeMotor.rEth.qty > 0) && (
+                {a.symbol === 'ETH' && ((safePortfolioData.alchemixReserve?.eth?.qty ?? 0) > 0 || (safePortfolioData.activeMotor?.rEth?.qty ?? 0) > 0) && (
                   <p className="text-[10px] text-white/25 font-mono mt-1">
-                    Alchemix {portfolioData.alchemixReserve.eth.qty.toFixed(4)} · rETH {portfolioData.activeMotor.rEth.qty.toFixed(4)}
+                    Alchemix {(safePortfolioData.alchemixReserve?.eth?.qty ?? 0).toFixed(4)} · rETH {(safePortfolioData.activeMotor?.rEth?.qty ?? 0).toFixed(4)}
                   </p>
                 )}
-                {a.symbol === 'SOL' && portfolioData.activeMotor.mSol.qty > 0 && (
+                {a.symbol === 'SOL' && (safePortfolioData.activeMotor?.mSol?.qty ?? 0) > 0 && (
                   <p className="text-[10px] text-white/25 font-mono mt-1">
-                    mSOL {portfolioData.activeMotor.mSol.qty.toFixed(2)}
+                    mSOL {(safePortfolioData.activeMotor?.mSol?.qty ?? 0).toFixed(2)}
                   </p>
                 )}
                 <p className={`text-xs font-mono mt-2 ${change24h >= 0 ? 'text-[#14F195]' : 'text-red-400'}`}>
-                  24h {change24h >= 0 ? '+' : ''}{change24h.toFixed(2)}%
+                  24h {maskPct(change24h, isBalanceVisible, true)}
                 </p>
               </Bento>
             );
           })}
         </div>
-        )}
       </div>
 
       {/* ═══ ÚPRAVA DRŽIEB (PRIDAŤ / ODOBRAŤ) ═══════════════════════════════ */}
@@ -705,7 +787,7 @@ function ModernPortfolioInner({ lang }: Props) {
             <Target className="w-4 h-4 text-orange-400" />
             <span className="text-sm font-bold text-white">Dynamic Take Profit</span>
           </div>
-          <Chip color="green">Rezervoár {formatUsd(reservoir.stable)}</Chip>
+          <Chip color="green">Rezervoár {maskUsd(reservoir.stable, isBalanceVisible)}</Chip>
         </div>
         {eligibleTakeProfitRows.length === 0 ? (
           <p className="text-sm text-white/35 text-center py-4">Všetky aktíva akumulujú.</p>
@@ -718,7 +800,9 @@ function ModernPortfolioInner({ lang }: Props) {
                 <div key={r.symbol} className="rounded-2xl border border-white/[0.08] bg-black/30 p-3 sm:p-4 space-y-3 min-w-0">
                   <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center min-w-0">
                     <span className="font-bold text-white">{r.symbol}</span>
-                    <Money size="md" positive className="!text-xl">+{formatUsd(r.pnl)}</Money>
+                    <Money size="md" positive className="!text-xl">
+                      {maskSignedUsd(r.pnl, isBalanceVisible)}
+                    </Money>
                   </div>
                   <div className="flex gap-2 flex-wrap">
                     <Chip color="amber">Predaj {r.sellPct.toFixed(0)}% zo zisku</Chip>
@@ -766,9 +850,19 @@ function ModernPortfolioInner({ lang }: Props) {
         </Bento>
       )}
 
+      <EditHoldingsModal
+        open={holdingsModalOpen}
+        onOpenChange={setHoldingsModalOpen}
+        holdings={userHoldings}
+        onSave={handleSaveHoldings}
+        sk={sk}
+      />
+
       {/* Footer meta */}
       <p className="text-center text-[10px] text-white/20 font-mono pt-2">
-        Všetky sumy v USD · PnL = hodnota − investované (DCA + počiatočná nákupná cena)
+        {sk
+          ? 'Všetky sumy v USD · Live ceny každých 60s · PnL = hodnota − investované'
+          : 'All amounts in USD · Live prices every 60s · PnL = value − invested'}
       </p>
     </div>
   );

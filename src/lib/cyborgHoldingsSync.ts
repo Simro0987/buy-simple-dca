@@ -1,9 +1,20 @@
 import { useCyborgEngine } from '@/stores/cyborgEngine';
 import type { CyborgAsset } from '@/stores/cyborgEngine';
+import {
+  type HoldingsRecord,
+  holdingsRecordFromUserHoldings,
+  loadHoldingsRecord,
+  loadUserHoldings,
+  saveHoldingsRecord,
+  saveUserHoldings,
+  type UserHoldings,
+} from '@/lib/portfolioRealHoldings';
+import { syncUserHoldingsToEngine } from '@/lib/userHoldingsPersistence';
 
-export const HOLDINGS_STORAGE_KEY = 'smart-alloc-holdings';
+/** @deprecated use PORTFOLIO_REAL_HOLDINGS_KEY */
+export const HOLDINGS_STORAGE_KEY = 'portfolio_real_holdings';
 
-export type HoldingsRecord = Partial<Record<'btc' | 'eth' | 'sol', number>>;
+export type { HoldingsRecord };
 
 export function holdingsRecordFromManual(
   manual?: HoldingsRecord | null,
@@ -15,28 +26,20 @@ export function holdingsRecordFromManual(
   };
 }
 
-export function loadHoldingsRecord(): HoldingsRecord {
-  try {
-    return JSON.parse(localStorage.getItem(HOLDINGS_STORAGE_KEY) || '{}') as HoldingsRecord;
-  } catch {
-    return {};
-  }
-}
+export { loadHoldingsRecord, saveHoldingsRecord, syncUserHoldingsToEngine, loadUserHoldings };
 
-export function saveHoldingsRecord(record: HoldingsRecord): void {
-  try {
-    localStorage.setItem(HOLDINGS_STORAGE_KEY, JSON.stringify(record));
-  } catch {
-    /* quota */
-  }
-}
-
-/** Writes Supabase/manual holdings into localStorage and refreshes the cyborg engine. */
+/** Writes holdings into portfolio_real_holdings and refreshes the cyborg engine. */
 export function syncManualHoldingsToEngine(manual?: HoldingsRecord | null): void {
   const next = holdingsRecordFromManual(manual);
   saveHoldingsRecord(next);
   useCyborgEngine.getState().syncFromSources({ holdings: next });
-  window.dispatchEvent(new Event('portfolio-updated'));
+}
+
+export function syncUserHoldingsRecordToEngine(holdings: UserHoldings): void {
+  saveUserHoldings(holdings);
+  useCyborgEngine.getState().syncFromSources({
+    holdings: holdingsRecordFromUserHoldings(holdings),
+  });
 }
 
 export function walletQtyForAsset(symbol: CyborgAsset): number {

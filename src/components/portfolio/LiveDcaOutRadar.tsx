@@ -20,6 +20,8 @@ import {
 } from 'lucide-react';
 import { usePrices, useFearGreed } from '@/hooks/usePrices';
 import { TOKENS, formatPrice, formatUsd } from '@/lib/crypto';
+import { adjustTokenAmount } from '@/lib/portfolioRealHoldings';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 type DcaT = 'BTC' | 'ETH' | 'SOL';
 
@@ -45,7 +47,6 @@ const SOURCES: Record<DcaT, string[]> = {
   ETH: ['Natívne ETH', 'rETH (Rocket Pool)', 'wstETH / weETH (ether.fi – Arbitrum)'],
   SOL: ['Natívne SOL', 'Marinade Native', 'INF (Sanctum)'],
 };
-const DEFAULT_HOLD: Record<DcaT, number> = { BTC: 0.0323276, ETH: 0.527723, SOL: 0 };
 
 // ─── localStorage helpers ─────────────────────────────────────────────────────
 function loadDcaPrices(): Record<DcaT, number> {
@@ -62,7 +63,7 @@ function saveCooldown(c: Record<string, number>) {
   try { localStorage.setItem('dca-out-cooldown-v1', JSON.stringify(c)); } catch { /* quota */ }
 }
 function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); } catch { return {}; }
+  return loadHoldingsRecord() as Record<string, number>;
 }
 
 // ─── RSI fetch (Binance daily klines) ────────────────────────────────────────
@@ -128,13 +129,7 @@ function Pill({ l, c, bg }: { l: string; c: string; bg: string }) {
 
 // ─── confirm-sell: updates holdings + free cash + cooldown ───────────────────
 function confirmSell(sym: DcaT, sellQty: number, currentPrice: number) {
-  // A) Reduce holdings in localStorage
-  const h   = loadHoldings();
-  const key = sym.toLowerCase();
-  h[key]    = Math.max(0, (h[key] ?? DEFAULT_HOLD[sym]) - sellQty);
-  localStorage.setItem('smart-alloc-holdings', JSON.stringify(h));
-
-  // B) Add sold USD value to Voľný cash (Profit Reservoir)
+  adjustTokenAmount(sym.toLowerCase() as 'btc' | 'eth' | 'sol', -sellQty);
   const soldUsd  = sellQty * currentPrice;
   const prevCash = parseFloat(localStorage.getItem('free-cash') || '0') || 0;
   localStorage.setItem('free-cash', String(prevCash + soldUsd));
@@ -207,7 +202,7 @@ function TokenCard({
   const tc = TC[sym];
 
   const holdings  = loadHoldings();
-  const hold      = holdings[sym.toLowerCase()] ?? DEFAULT_HOLD[sym];
+  const hold      = Number(holdings[sym.toLowerCase()] ?? 0) || 0;
   const pnlPct    = dcaPrice > 0 && currentPrice > 0 ? ((currentPrice - dcaPrice) / dcaPrice) * 100 : 0;
   const inProfit  = pnlPct > 0;
 
@@ -529,7 +524,7 @@ export function LiveDcaOutRadar() {
   const portfolioTotals = useMemo(() => {
     let totalInvested = 0, totalValue = 0;
     (['BTC', 'ETH', 'SOL'] as DcaT[]).forEach(sym => {
-      const hold  = holdings[sym.toLowerCase()] ?? DEFAULT_HOLD[sym];
+      const hold  = Number(holdings[sym.toLowerCase()] ?? 0) || 0;
       const dca   = dcaPrices[sym] ?? 0;
       const price = livePrices[sym];
       if (dca > 0)   totalInvested += hold * dca;

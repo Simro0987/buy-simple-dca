@@ -1,16 +1,12 @@
 import { TrendingUp, TrendingDown, AlertTriangle, Trophy, Activity } from 'lucide-react';
 import { usePrices, useAthData } from '@/hooks/usePrices';
 import { TOKENS, formatUsd } from '@/lib/crypto';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 interface PriorityItem {
   icon: typeof TrendingUp;
   label: string;
   tone: 'positive' | 'negative' | 'warning' | 'info';
-}
-
-function loadHoldings(): Record<string, number> {
-  try { return JSON.parse(localStorage.getItem('smart-alloc-holdings') || '{}'); }
-  catch { return {}; }
 }
 
 function toneClasses(tone: PriorityItem['tone']) {
@@ -48,7 +44,7 @@ export function PriorityDashboard() {
     }
 
     // Holdings value & ATH check
-    const holdings = loadHoldings();
+    const holdings = loadHoldingsRecord();
     const totalValue = TOKENS.reduce((s, t) => s + (holdings[t.id] ?? 0) * (prices[t.coingeckoId]?.usd ?? 0), 0);
 
     if (totalValue > 0) {

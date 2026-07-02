@@ -11,24 +11,27 @@ import { computeSmartAllocation, HoldingInput, AllocationAction } from '@/lib/al
 import { formatUsd } from '@/lib/crypto';
 import { STAKING_CONFIG } from '@/lib/wallets';
 import { ExactBreakdown } from '@/components/ExactBreakdown';
+import { loadUserHoldings, saveUserHoldings } from '@/lib/portfolioRealHoldings';
+import { syncUserHoldingsToEngine } from '@/lib/userHoldingsPersistence';
 
 interface Props {
   lang: Lang;
 }
 
-const STORAGE_KEY = 'smart-alloc-holdings';
-
 function loadHoldings(): HoldingInput {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : { btc: 0, eth: 0, sol: 0 };
-  } catch {
-    return { btc: 0, eth: 0, sol: 0 };
-  }
+  const h = loadUserHoldings();
+  return { btc: h.BTC.tokenAmount, eth: h.ETH.tokenAmount, sol: h.SOL.tokenAmount };
 }
 
 function saveHoldings(h: HoldingInput) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(h));
+  const current = loadUserHoldings();
+  const next = {
+    BTC: { ...current.BTC, tokenAmount: h.btc },
+    ETH: { ...current.ETH, tokenAmount: h.eth },
+    SOL: { ...current.SOL, tokenAmount: h.sol },
+  };
+  saveUserHoldings(next);
+  syncUserHoldingsToEngine(next);
 }
 
 function actionIcon(type: AllocationAction['type']) {

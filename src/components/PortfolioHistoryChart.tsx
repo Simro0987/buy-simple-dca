@@ -15,6 +15,7 @@ import {
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { BentoCard } from '@/components/portfolio/ui/BentoCard';
 import { MoneyValue } from '@/components/portfolio/ui/MoneyValue';
+import { loadHoldingsRecord } from '@/lib/portfolioRealHoldings';
 
 const STORAGE_KEY = 'portfolio-history-v2';
 const MAX_POINTS = 90;
@@ -47,14 +48,6 @@ function saveHistory(points: HistoryPoint[]) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(points.slice(-MAX_POINTS)));
 }
 
-function getHoldings(): Record<string, number> {
-  try {
-    const raw = localStorage.getItem('smart-alloc-holdings');
-    return raw ? JSON.parse(raw) : {};
-  } catch { return {}; }
-}
-
-interface Props {
   lang: Lang;
   prices?: PriceData;
   selected?: 'BTC' | 'ETH' | 'SOL' | null;
@@ -71,7 +64,7 @@ export function PortfolioHistoryChart({ lang, prices, selected }: Props) {
   // Record today's value with per-token breakdown
   useEffect(() => {
     if (!prices) return;
-    const holdings = getHoldings();
+    const holdings = loadHoldingsRecord();
     let totalValue = 0;
     const tokens: TokenSnapshot = {};
 
