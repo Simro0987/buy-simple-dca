@@ -225,18 +225,15 @@ export function ManualTokenAdjustCard({ lang, delay = 0.44 }: Props) {
                 <button
                   type="button"
                   onClick={() => void submit(key)}
-                  disabled={update.isPending}
                   className={`px-4 py-2.5 rounded-xl text-xs font-bold uppercase tracking-wide disabled:opacity-50 shrink-0 w-full sm:w-auto ${
                     isAdd
                       ? 'bg-emerald-500 text-black hover:bg-emerald-400'
                       : 'bg-orange-500 text-black hover:bg-orange-400'
                   }`}
                 >
-                  {update.isPending
-                    ? (sk ? 'Ukladám…' : 'Saving…')
-                    : isAdd
-                      ? (sk ? 'Pridať' : 'Add')
-                      : (sk ? 'Odobrať' : 'Remove')}
+                  {isAdd
+                    ? (sk ? 'Pridať' : 'Add')
+                    : (sk ? 'Odobrať' : 'Remove')}
                 </button>
               </div>
 
