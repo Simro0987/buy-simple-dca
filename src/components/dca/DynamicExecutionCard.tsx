@@ -18,9 +18,11 @@ import {
   fixedExecution,
   evaluateOverbought,
   resolveExecutionSplit,
+  executionSplitFromOctagon,
   MIN_LIMIT_USD,
   type CoinKey,
 } from '@/lib/dynamicExecution';
+import { useConfluenceMetrics, type OctToken } from '@/hooks/useConfluenceMetrics';
 import { formatLimitPrice, formatUsd, type PriceData } from '@/lib/crypto';
 import { useRegimeLimits } from '@/hooks/useRegimeLimits';
 import { useCyborgEngine, type CyborgAsset } from '@/stores/cyborgEngine';
@@ -67,7 +69,7 @@ type Mode = 'market' | 'dynamic';
  * Two-Tier Dynamic Allocation Matrix:
  *  - Tier 1: Cross-asset split — riadený plne Master Dynamic Allocation engine (žiadne fixné cieľové váhy).
  *  - Tier 2: Execution split per coin — MARKET vs LIMIT DYNAMIC, riadené
- *    Final Score, per-coin volatilitou/momentom a Fear & Greed indexom.
+ *    Confluence Octagon skóre (sliding scale) + per-coin volatilita (tilt).
  */
 
 export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
@@ -77,8 +79,17 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: fg } = useFearGreed();
   const { engine } = useMarketEngine();
   const { data: market } = useMarketData();
+  const { metrics: octagonMetrics } = useConfluenceMetrics();
   const marketDebugError = market?.debugError || market?.error || null;
   const [emergencyPaused] = useEmergencyPause();
+
+  // Confluence Octagon macro score (0..100) for a token = average of its 8 axes.
+  // Drives the Market/Limit execution split via the sliding-scale formula.
+  const octagonScoreFor = (sym: OctToken): number => {
+    const axes = octagonMetrics?.[sym]?.axes ?? [];
+    if (!axes.length) return 50;
+    return axes.reduce((s, a) => s + a.value, 0) / axes.length;
+  };
   const syncLabel = (() => {
     const d = market?.generatedAt ? new Date(market.generatedAt) : null;
     return d && !Number.isNaN(d.getTime())
@@ -311,34 +322,25 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { executions, base } = result;
   const coins: CoinKey[] = ['btc', 'eth', 'sol'];
 
-  // ===== DUAL-FACTOR PER-TOKEN SPLIT ENGINE =====
-  // Each token has its OWN Market/Limit split derived from two factors (50/50 weight):
-  //   a) SENTIMENT (Fear & Greed): low F&G → more MARKET; high F&G → more LIMIT.
-  //      sentMarket = 80 − (fg/100)·60   (fg 0→80, fg 50→50, fg 100→20)
-  //   b) VOLATILITY (per-coin 14D σ): high vol → more MARKET, low vol → more LIMIT.
-  //      Per-asset dynamic scale reflects historický spread true range:
-  //        BTC scale 6 (úzky), ETH scale 5, SOL scale 4 (najširší → vyšší multiplier).
-  //      volMarket = 20 + clamp(vol/scale, 0..1)·60
-  // Weights (CALIBRATED for altcoin sensitivity):
-  //   • BTC: 50 % sent + 50 % vol
-  //   • ETH/SOL: 40 % sent + 60 % vol  (vol dominuje pri altcoinoch)
-  // Final marketPct = round(wS·sent + wV·vol), clamp [20, 80].
-  const fgGlobal = fgValue;
-  const VOL_SCALE: Record<string, number> = { BTC: 6, ETH: 5, SOL: 4 };
-  const VOL_WEIGHT: Record<string, { sent: number; vol: number }> = {
-    BTC: { sent: 0.5, vol: 0.5 },
-    ETH: { sent: 0.4, vol: 0.6 },
-    SOL: { sent: 0.4, vol: 0.6 },
-  };
-  function perTokenSplit(sym: string, vol30d: number): { marketPct: number; limitPct: number; sentMarket: number; volMarket: number; wSent: number; wVol: number; scale: number } {
-    const sentMarket = Math.max(20, Math.min(80, 80 - (fgGlobal / 100) * 60));
-    const scale = VOL_SCALE[sym] ?? 6;
-    const w = VOL_WEIGHT[sym] ?? { sent: 0.5, vol: 0.5 };
-    const volNorm = Math.max(0, Math.min(1, vol30d / scale));
-    const volMarket = Math.max(20, Math.min(80, 20 + volNorm * 60));
-    let marketPct = Math.round(Math.max(20, Math.min(80, w.sent * sentMarket + w.vol * volMarket)));
-    if (emergencyPaused) marketPct = 0;
-    return { marketPct, limitPct: 100 - marketPct, sentMarket, volMarket, wSent: w.sent, wVol: w.vol, scale };
+  // ===== OCTAGON-DRIVEN PER-TOKEN EXECUTION SPLIT =====
+  // Each token's Market/Limit split is dictated by that token's Confluence
+  // Octagon score (0..100) via a smooth SLIDING SCALE (see dynamicExecution.ts):
+  //   Octagon 10 → 30 % Market / 70 % Limit  (capitulation → catch deep wicks with limits)
+  //   Octagon 80 → 100 % Market / 0 % Limit  (uptrend/greed → don't miss the run)
+  // Per-coin 14D volatility applies a small bounded ± tilt on top (preserving the
+  // existing volatility indicator). No hard IF/ELSE breakpoints — pure formula.
+  function perTokenSplit(sym: string, vol30d: number): {
+    marketPct: number; limitPct: number; octScore: number; octMarket: number; volTiltPp: number;
+  } {
+    const b = executionSplitFromOctagon(octagonScoreFor(sym as OctToken), vol30d);
+    const marketPct = emergencyPaused ? 0 : b.marketPct;
+    return {
+      marketPct,
+      limitPct: 100 - marketPct,
+      octScore: b.octagonScore,
+      octMarket: b.octagonMarketPct,
+      volTiltPp: b.volTiltPp,
+    };
   }
 
   const copy = (text: string) => {
@@ -564,12 +566,12 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
               })()}
 
 
-              {/* PER-TOKEN MKT / LMT SLIDER BAR — dual-factor engine (F&G + vol) */}
+              {/* PER-TOKEN MKT / LMT SLIDER BAR — Confluence Octagon sliding scale + vol tilt */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[9px] tabular-nums">
                   <span className="font-bold text-emerald-300">MKT {marketPct}%</span>
                   <span className="text-muted-foreground uppercase tracking-wide">
-                    sent {Math.round(split.sentMarket)} · vol {Math.round(split.volMarket)}
+                    Octagon {split.octScore} → {split.octMarket}% · vol {split.volTiltPp >= 0 ? '+' : ''}{split.volTiltPp}pp
                   </span>
                   <span className="font-bold text-amber-400">LMT {dynamicPct}%</span>
                 </div>

@@ -49,7 +49,7 @@ interface Props {
 }
 
 export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
-  const { engine, isDegraded } = useMarketEngine();
+  const { engine, isDegraded, realYield } = useMarketEngine();
   const { data: market } = useMarketData();
   const lastSync = market?.generatedAt ? new Date(market.generatedAt) : null;
   const lastSyncLabel = lastSync && !Number.isNaN(lastSync.getTime())
@@ -293,6 +293,43 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
             </motion.span>
           </div>
         ))}
+      </div>
+
+      {/* RYI — Real Yield Index "Staking Booster" (ETH vs SOL satellite split) */}
+      <div className="rounded-lg border border-[#14F195]/25 bg-[#14F195]/5 p-2.5 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wide text-[#14F195] font-semibold flex items-center gap-1">
+            <Zap className="w-3 h-3" /> RYI · Staking Booster
+          </p>
+          <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded uppercase tracking-wide ${
+            realYield.source === 'live'
+              ? 'bg-emerald-500/15 text-emerald-300'
+              : 'bg-amber-500/15 text-amber-300'
+          }`}>
+            {realYield.source === 'live' ? 'Live · DefiLlama' : 'Fallback'}
+          </span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="rounded bg-indigo-500/10 border border-indigo-500/30 px-2 py-1">
+            <p className="text-[9px] text-indigo-300 font-semibold">ETH · RYI</p>
+            <p className="text-sm font-bold tabular-nums text-indigo-200">{engine.satelliteRyi.eth >= 0 ? '+' : ''}{engine.satelliteRyi.eth.toFixed(1)}%</p>
+            <p className="text-[8px] text-muted-foreground tabular-nums">
+              APY {realYield.ethApyPct.toFixed(1)}% − infl {realYield.ethInflationPct.toFixed(1)}%
+            </p>
+          </div>
+          <div className="rounded bg-fuchsia-500/10 border border-fuchsia-500/30 px-2 py-1">
+            <p className="text-[9px] text-fuchsia-300 font-semibold">SOL · RYI</p>
+            <p className="text-sm font-bold tabular-nums text-fuchsia-200">{engine.satelliteRyi.sol >= 0 ? '+' : ''}{engine.satelliteRyi.sol.toFixed(1)}%</p>
+            <p className="text-[8px] text-muted-foreground tabular-nums">
+              APY {realYield.solApyPct.toFixed(1)}% − infl {realYield.solInflationPct.toFixed(1)}%
+            </p>
+          </div>
+        </div>
+        <p className="text-[9px] leading-snug text-foreground/70">
+          {engine.satelliteRyi.boosterApplied
+            ? `RYI Booster: ${engine.satelliteRyi.shiftPp >= 0 ? 'ETH' : 'SOL'} (+${Math.max(engine.satelliteRyi.eth, engine.satelliteRyi.sol).toFixed(1)}% Real Yield) posúva alokáciu o +${Math.abs(engine.satelliteRyi.shiftPp).toFixed(0)} pp.`
+            : 'Rozdiel Real Yield je zanedbateľný — bez posunu alokácie.'}
+        </p>
       </div>
 
       {/* NARRATIVE — "Prečo?" */}
