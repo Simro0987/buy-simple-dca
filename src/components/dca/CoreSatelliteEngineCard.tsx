@@ -295,6 +295,31 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
         ))}
       </div>
 
+      {/* RYI — Real Yield Index "Staking Booster" (ETH vs SOL satellite split) */}
+      <div className="rounded-lg border border-[#14F195]/25 bg-[#14F195]/5 p-2.5 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <p className="text-[10px] uppercase tracking-wide text-[#14F195] font-semibold flex items-center gap-1">
+            <Zap className="w-3 h-3" /> RYI · Staking Booster
+          </p>
+          <span className="text-[9px] text-muted-foreground">APY − inflácia (Real Yield)</span>
+        </div>
+        <div className="grid grid-cols-2 gap-1.5">
+          <div className="rounded bg-indigo-500/10 border border-indigo-500/30 px-2 py-1">
+            <p className="text-[9px] text-indigo-300 font-semibold">ETH</p>
+            <p className="text-sm font-bold tabular-nums text-indigo-200">{engine.satelliteRyi.eth >= 0 ? '+' : ''}{engine.satelliteRyi.eth.toFixed(1)}%</p>
+          </div>
+          <div className="rounded bg-fuchsia-500/10 border border-fuchsia-500/30 px-2 py-1">
+            <p className="text-[9px] text-fuchsia-300 font-semibold">SOL</p>
+            <p className="text-sm font-bold tabular-nums text-fuchsia-200">{engine.satelliteRyi.sol >= 0 ? '+' : ''}{engine.satelliteRyi.sol.toFixed(1)}%</p>
+          </div>
+        </div>
+        <p className="text-[9px] leading-snug text-foreground/70">
+          {engine.satelliteRyi.boosterApplied
+            ? `Posun alokácie o ${Math.abs(engine.satelliteRyi.shiftPp).toFixed(0)} pp smerom k ${engine.satelliteRyi.shiftPp >= 0 ? 'ETH' : 'SOL'} (vyšší Real Yield).`
+            : 'Rozdiel Real Yield je zanedbateľný — bez posunu alokácie.'}
+        </p>
+      </div>
+
       {/* NARRATIVE — "Prečo?" */}
       <div className="rounded-lg border border-border bg-secondary/40 p-2.5 space-y-1">
         <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-semibold">

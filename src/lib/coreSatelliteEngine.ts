@@ -2,6 +2,8 @@
 // Derives Core (BTC) vs Satellite (ETH+SOL) split from 5 Market Mode factors.
 // Pure / deterministic — UI components consume the result through MarketContext.
 
+import { ryiAllocationShiftPp } from './realYieldIndex';
+
 export type MarketMode = 'ACCUMULATION' | 'CAUTIOUS_ACCUMULATION' | 'BALANCED' | 'DISTRIBUTION' | 'DEFENSIVE';
 
 export type FactorKey = 'wma200' | 'fearGreed' | 'cbbc' | 'liquidity' | 'volatility';
@@ -32,6 +34,10 @@ export interface EngineInputs {
   solVol14d: number;
   /** SOL volatility baseline (historical avg). Used by Volatility Defense to detect spikes. */
   solVol14dBaseline?: number;
+  /** Real Yield Index (APY − inflation, %) for ETH — "Staking Booster" input. */
+  ethRyi?: number;
+  /** Real Yield Index (APY − inflation, %) for SOL — "Staking Booster" input. */
+  solRyi?: number;
 }
 
 export interface EngineResult {
@@ -47,6 +53,14 @@ export interface EngineResult {
   narrative: string[];
   /** True when DEFENSIVE mode is forced — buys frozen, alert raised. */
   defensiveLock: boolean;
+  /** RYI (Real Yield Index) Staking Booster breakdown for the satellite split. */
+  satelliteRyi: {
+    eth: number;
+    sol: number;
+    /** Allocation shift in pp (+ toward ETH, − toward SOL). */
+    shiftPp: number;
+    boosterApplied: boolean;
+  };
 }
 
 const BTC_VOL_DANGER = 4.5;   // % daily stdev → systemic stress
@@ -168,6 +182,17 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   const solVolRatio = solBaseline > 0 ? inputs.solVol14d / solBaseline : 1;
   const volDefenseApplied = solVolRatio > 1.15;
   if (volDefenseApplied) ethShare += 0.15;
+
+  // Rule 3 — RYI (Real Yield Index) "Staking Booster": a PROPORTIONAL shift on
+  // top of the CBBC quality bias / volatility defense. The satellite with the
+  // higher real yield (APY − inflation) gains allocation in proportion to the
+  // RYI gap (2 pp per 1 % of difference). Additive — nothing above is removed.
+  const ryiEth = inputs.ethRyi ?? 0;
+  const ryiSol = inputs.solRyi ?? 0;
+  const ryiShiftPp = ryiAllocationShiftPp(ryiEth, ryiSol); // + toward ETH, − toward SOL
+  ethShare += ryiShiftPp / 100;
+  const ryiBoosterApplied = Math.abs(ryiShiftPp) >= 0.5;
+
   ethShare = clamp(ethShare, 0.50, 0.95);
   const solShare = 1 - ethShare;
   const ethPct = Math.round(satelliteWeight * ethShare);
@@ -198,6 +223,12 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
   } else if (qualityBiasApplied) {
     narrative.push(`Quality Bias: ETH CBBC ${ethCbbc} > SOL CBBC ${solCbbc} → ETH dostáva +10 pp výhodu v satelite buckete.`);
   }
+  if (ryiBoosterApplied) {
+    const leader = ryiEth >= ryiSol ? 'ETH' : 'SOL';
+    const laggard = leader === 'ETH' ? 'SOL' : 'ETH';
+    const leaderRyi = Math.max(ryiEth, ryiSol);
+    narrative.push(`RYI Booster: ${leader} (Real Yield +${leaderRyi.toFixed(1)} %) posúva alokáciu o +${Math.abs(ryiShiftPp).toFixed(0)} pp voči ${laggard}.`);
+  }
 
   return {
     factors,
@@ -207,5 +238,11 @@ export function runCoreSatelliteEngine(inputs: EngineInputs): EngineResult {
     perToken: { btc: coreWeight, eth: ethPct, sol: solPct },
     narrative,
     defensiveLock,
+    satelliteRyi: {
+      eth: ryiEth,
+      sol: ryiSol,
+      shiftPp: ryiShiftPp,
+      boosterApplied: ryiBoosterApplied,
+    },
   };
 }

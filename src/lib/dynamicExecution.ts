@@ -444,3 +444,77 @@ export function resolveExecutionSplit(
   // Rule B — fair/discounted for a long-term investor: execute now via MARKET.
   return { marketUsd: total, dynUsd: 0, merged: true, routing: 'market' };
 }
+
+// ============================================================
+// CONFLUENCE OCTAGON → EXECUTION SPLIT (Market vs Dynamic Limit)
+// ============================================================
+//
+// The Confluence Octagon produces a 0..100 macro score per token (the average
+// of its 8 axes). That score dictates the execution split via a smooth SLIDING
+// SCALE (linear between two anchors — no hard IF/ELSE breakpoints):
+//
+//   • LOW score (capitulation / accumulation, ~10) → favour patient LIMIT
+//     orders to catch deep liquidation wicks     → 30 % Market / 70 % Limit.
+//   • HIGH score (uptrend / greed, ~80+)          → favour MARKET so we don't
+//     miss the run                                 → 100 % Market / 0 % Limit.
+//
+// Per-coin 14D volatility then applies a small bounded ± tilt on top of the
+// octagon base (higher vol → slightly more Market to grab liquidity), which
+// preserves the existing volatility indicator's influence.
+
+export const OCTAGON_LOW_SCORE = 10;
+export const OCTAGON_LOW_MARKET_PCT = 30;
+export const OCTAGON_HIGH_SCORE = 80;
+export const OCTAGON_HIGH_MARKET_PCT = 100;
+/** Volatility (14D daily stdev %) at which the volatility tilt is neutral. */
+export const VOL_BASELINE_PCT = 2.5;
+/** Max ± tilt (pp) that per-coin volatility can add on top of the octagon base. */
+export const VOL_TILT_MAX_PP = 10;
+
+function clampNum(v: number, lo: number, hi: number): number {
+  return Math.max(lo, Math.min(hi, v));
+}
+
+/**
+ * Smooth (linear) mapping from a 0..100 Confluence Octagon score to the base
+ * MARKET percentage of the execution split. Clamped to
+ * [OCTAGON_LOW_MARKET_PCT, OCTAGON_HIGH_MARKET_PCT] i.e. [30, 100].
+ */
+export function octagonMarketPct(octagonScore: number): number {
+  const s = clampNum(Number.isFinite(octagonScore) ? octagonScore : 50, 0, 100);
+  const slope = (OCTAGON_HIGH_MARKET_PCT - OCTAGON_LOW_MARKET_PCT) / (OCTAGON_HIGH_SCORE - OCTAGON_LOW_SCORE);
+  const raw = OCTAGON_LOW_MARKET_PCT + (s - OCTAGON_LOW_SCORE) * slope;
+  return clampNum(raw, OCTAGON_LOW_MARKET_PCT, OCTAGON_HIGH_MARKET_PCT);
+}
+
+export interface ExecutionSplitBreakdown {
+  marketPct: number;
+  limitPct: number;
+  octagonScore: number;
+  /** MARKET % contributed purely by the octagon score (before the vol tilt). */
+  octagonMarketPct: number;
+  /** Volatility tilt actually applied, in percentage points. */
+  volTiltPp: number;
+}
+
+/**
+ * Execution split (Market vs Dynamic Limit) for one coin. The base is dictated
+ * by the Confluence Octagon score (sliding scale); per-coin 14D volatility adds
+ * a bounded ± tilt. Result MARKET % is clamped to [30, 100].
+ */
+export function executionSplitFromOctagon(
+  octagonScore: number,
+  volatility30d: number = VOL_BASELINE_PCT,
+): ExecutionSplitBreakdown {
+  const base = octagonMarketPct(octagonScore);
+  const vol = Number.isFinite(volatility30d) ? volatility30d : VOL_BASELINE_PCT;
+  const volTilt = clampNum((vol - VOL_BASELINE_PCT) * 2, -VOL_TILT_MAX_PP, VOL_TILT_MAX_PP);
+  const marketPct = Math.round(clampNum(base + volTilt, OCTAGON_LOW_MARKET_PCT, OCTAGON_HIGH_MARKET_PCT));
+  return {
+    marketPct,
+    limitPct: 100 - marketPct,
+    octagonScore: Math.round(clampNum(Number.isFinite(octagonScore) ? octagonScore : 50, 0, 100)),
+    octagonMarketPct: Math.round(base),
+    volTiltPp: Math.round(volTilt),
+  };
+}
