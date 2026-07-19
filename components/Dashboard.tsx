@@ -12,6 +12,7 @@ import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
+import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
 
 export function Dashboard() {
@@ -85,6 +86,7 @@ export function Dashboard() {
               />
               <PortfolioChart endValue={totalBalance} loading={loading} />
               <AssetList assets={assets} loading={loading} />
+              <YieldTokensList />
               <AddAssetButton onClick={() => setIsEditModalOpen(true)} />
             </motion.div>
           )}
