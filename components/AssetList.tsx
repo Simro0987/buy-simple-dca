@@ -4,6 +4,11 @@ import { motion } from "framer-motion";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatCrypto, formatUnitPrice, formatUsd } from "@/lib/data";
 import type { LiveAsset } from "@/hooks/usePortfolio";
+import {
+  interactiveRow,
+  listContainerVariants,
+  listItemVariants,
+} from "@/lib/motion";
 
 const accentStyles = {
   orange: {
@@ -30,7 +35,7 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
     <motion.section
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.1, ease: "easeOut" }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className="space-y-3"
     >
       <div className="flex items-center justify-between px-1">
@@ -40,7 +45,12 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
         <span className="text-xs text-zinc-600">7D change</span>
       </div>
 
-      <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]">
+      <motion.div
+        variants={listContainerVariants}
+        initial="hidden"
+        animate="show"
+        className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]"
+      >
         {assets.map((asset, index) => {
           const styles = accentStyles[asset.accent];
           const isPositive = asset.change7d >= 0;
@@ -48,9 +58,8 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
           return (
             <motion.div
               key={asset.symbol}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.15 + index * 0.08 }}
+              variants={listItemVariants}
+              {...interactiveRow}
               className={`flex items-center gap-4 px-4 py-4 ${
                 index < assets.length - 1 ? "border-b border-white/5" : ""
               }`}
@@ -106,7 +115,7 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
             </motion.div>
           );
         })}
-      </div>
+      </motion.div>
     </motion.section>
   );
 }

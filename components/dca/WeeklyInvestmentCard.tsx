@@ -7,6 +7,7 @@ import {
   QUICK_AMOUNTS,
 } from "@/lib/dcaEngineConfig";
 import { formatUsd } from "@/lib/data";
+import { interactiveButton } from "@/lib/motion";
 
 interface WeeklyInvestmentCardProps {
   value: number;
@@ -55,18 +56,19 @@ export function WeeklyInvestmentCard({
 
         <div className="flex flex-wrap gap-2">
           {QUICK_AMOUNTS.map((amount) => (
-            <button
+            <motion.button
               key={amount}
               type="button"
               onClick={() => onChange(amount)}
-              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+              {...interactiveButton}
+              className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors ${
                 value === amount
                   ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-400"
                   : "border-white/10 bg-white/[0.03] text-zinc-400 hover:border-white/20 hover:text-zinc-200"
               }`}
             >
               {formatUsd(amount)}
-            </button>
+            </motion.button>
           ))}
         </div>
 

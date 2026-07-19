@@ -6,29 +6,38 @@ import {
   formatYieldBalance,
   yieldTokens,
 } from "@/lib/yieldTokensData";
+import {
+  interactiveRow,
+  listContainerVariants,
+  listItemVariants,
+} from "@/lib/motion";
 
 export function YieldTokensList() {
   return (
     <motion.section
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.15, ease: "easeOut" }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
       className="space-y-3"
     >
       <h2 className="px-1 text-xs font-semibold uppercase tracking-[0.2em] text-zinc-500">
         Yield Tokeny
       </h2>
 
-      <div className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]">
+      <motion.div
+        variants={listContainerVariants}
+        initial="hidden"
+        animate="show"
+        className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]"
+      >
         {yieldTokens.map((token, index) => {
           const isPositive = token.change7dUsd >= 0;
 
           return (
             <motion.div
               key={token.symbol}
-              initial={{ opacity: 0, x: -8 }}
-              animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.35, delay: 0.18 + index * 0.05 }}
+              variants={listItemVariants}
+              {...interactiveRow}
               className={`flex items-center gap-4 px-4 py-4 ${
                 index < yieldTokens.length - 1
                   ? "border-b border-zinc-800/50"
@@ -73,7 +82,7 @@ export function YieldTokensList() {
             </motion.div>
           );
         })}
-      </div>
+      </motion.div>
     </motion.section>
   );
 }

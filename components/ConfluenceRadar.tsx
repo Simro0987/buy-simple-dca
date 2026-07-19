@@ -9,12 +9,15 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { confluenceMetrics } from "@/lib/confluenceData";
+import { interactiveCard, listContainerVariants, listItemVariants } from "@/lib/motion";
 
 export function ConfluenceRadar() {
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      whileHover={interactiveCard.whileHover}
+      whileTap={interactiveCard.whileTap}
       transition={{ duration: 0.45, ease: "easeOut" }}
       className="relative overflow-hidden rounded-3xl border border-white/5 bg-[#111113] p-5"
     >
@@ -75,10 +78,16 @@ export function ConfluenceRadar() {
           </ResponsiveContainer>
         </div>
 
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <motion.div
+          variants={listContainerVariants}
+          initial="hidden"
+          animate="show"
+          className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"
+        >
           {confluenceMetrics.map((metric) => (
-            <div
+            <motion.div
               key={metric.subject}
+              variants={listItemVariants}
               className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2"
             >
               <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
@@ -87,9 +96,9 @@ export function ConfluenceRadar() {
               <p className="mt-0.5 text-sm font-bold text-emerald-400">
                 {metric.value}
               </p>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </motion.section>
   );

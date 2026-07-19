@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Home, Newspaper, PieChart, Repeat } from "lucide-react";
+import { interactiveButton } from "@/lib/motion";
 
 export type Tab = "home" | "news" | "portfolio" | "dca";
 
@@ -31,10 +32,11 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
           const Icon = tab.icon;
 
           return (
-            <button
+            <motion.button
               key={tab.id}
               type="button"
               onClick={() => onTabChange(tab.id)}
+              {...interactiveButton}
               className="group relative flex flex-col items-center gap-1 px-4 py-1"
               aria-current={isActive ? "page" : undefined}
             >
@@ -56,7 +58,7 @@ export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
               >
                 {tab.label}
               </span>
-            </button>
+            </motion.button>
           );
         })}
       </div>

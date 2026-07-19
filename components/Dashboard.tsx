@@ -14,6 +14,7 @@ import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
@@ -58,10 +59,7 @@ export function Dashboard() {
           {showHome && (
             <motion.div
               key="home"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+              {...pageTransition}
               className="space-y-8"
             >
               <ConfluenceRadar />
@@ -71,10 +69,7 @@ export function Dashboard() {
           {showPortfolio && (
             <motion.div
               key="portfolio"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+              {...pageTransition}
               className="space-y-8"
             >
               <HeroSection
@@ -92,25 +87,13 @@ export function Dashboard() {
           )}
 
           {showDca && (
-            <motion.div
-              key="dca"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-            >
+            <motion.div key="dca" {...pageTransition}>
               <DcaEngine prices={prices} loading={loading} />
             </motion.div>
           )}
 
           {showNews && (
-            <motion.div
-              key="news"
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -8 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
-            >
+            <motion.div key="news" {...pageTransition}>
               <NewsFeed />
             </motion.div>
           )}

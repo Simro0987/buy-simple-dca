@@ -11,6 +11,12 @@ import {
   type NewsCategory,
   type NewsTagVariant,
 } from "@/lib/newsData";
+import {
+  interactiveButton,
+  interactiveCard,
+  listContainerVariants,
+  listItemVariants,
+} from "@/lib/motion";
 
 const tagStyles: Record<
   NewsTagVariant,
@@ -40,12 +46,11 @@ const tagStyles: Record<
   },
 };
 
-function NewsCard({ article, index }: { article: NewsArticle; index: number }) {
+function NewsCard({ article }: { article: NewsArticle }) {
   return (
     <motion.article
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.35, delay: 0.1 + index * 0.06, ease: "easeOut" }}
+      variants={listItemVariants}
+      {...interactiveCard}
       className="relative rounded-3xl border border-white/5 bg-[#111113] p-4"
     >
       <span className="absolute right-4 top-4 flex h-2.5 w-2.5">
@@ -119,27 +124,34 @@ export function NewsFeed() {
         {newsFilters.map((filter) => {
           const isActive = activeFilter === filter.id;
           return (
-            <button
+            <motion.button
               key={filter.id}
               type="button"
               onClick={() => setActiveFilter(filter.id)}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-all ${
+              {...interactiveButton}
+              className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
                 isActive
                   ? "bg-emerald-900/60 text-emerald-400 shadow-[0_0_16px_rgba(6,78,59,0.4)]"
                   : "border border-white/5 bg-white/[0.03] text-zinc-500 hover:text-zinc-300"
               }`}
             >
               {filter.label}
-            </button>
+            </motion.button>
           );
         })}
       </div>
 
-      <div className="space-y-3">
-        {filteredArticles.map((article, index) => (
-          <NewsCard key={article.id} article={article} index={index} />
+      <motion.div
+        key={activeFilter}
+        variants={listContainerVariants}
+        initial="hidden"
+        animate="show"
+        className="space-y-3"
+      >
+        {filteredArticles.map((article) => (
+          <NewsCard key={article.id} article={article} />
         ))}
-      </div>
+      </motion.div>
     </motion.div>
   );
 }
