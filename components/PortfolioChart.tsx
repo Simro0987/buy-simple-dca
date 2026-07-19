@@ -11,9 +11,10 @@ import {
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
 import {
-  generatePortfolioHistory,
+  generatePortfolioHistoryFromActivity,
   type PortfolioHistoryPoint,
 } from "@/lib/chartData";
+import type { Transaction } from "@/lib/portfolioStorage";
 
 interface ChartTooltipProps {
   active?: boolean;
@@ -39,20 +40,22 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
 
 interface PortfolioChartProps {
   endValue?: number;
+  transactions?: Transaction[];
   loading?: boolean;
 }
 
 export function PortfolioChart({
   endValue = 5747.87,
+  transactions = [],
   loading = false,
 }: PortfolioChartProps) {
   const chartData = useMemo(
-    () => generatePortfolioHistory(3000, endValue),
-    [endValue],
+    () => generatePortfolioHistoryFromActivity(transactions, endValue),
+    [endValue, transactions],
   );
 
   const percentChange = useMemo(() => {
-    const start = chartData[0]?.value ?? 3000;
+    const start = chartData[0]?.value ?? endValue;
     if (!start) return 0;
     return ((endValue - start) / start) * 100;
   }, [chartData, endValue]);

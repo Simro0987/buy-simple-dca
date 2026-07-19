@@ -3,39 +3,48 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
+import { AddAssetModal } from "@/components/AddAssetModal";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { ConfluenceRadar } from "@/components/ConfluenceRadar";
 import { DcaEngine } from "@/components/dca/DcaEngine";
-import { EditHoldingsModal } from "@/components/EditHoldingsModal";
 import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
+import { PortfolioDonutChart } from "@/components/PortfolioDonutChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
+import { TransactionModal } from "@/components/TransactionModal";
 import { YieldTokensList } from "@/components/YieldTokensList";
+import type { LiveAsset } from "@/hooks/usePortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<LiveAsset | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const {
     assets,
-    holdings,
+    yieldAssets,
     transactions,
+    trackedAssets,
     totalBalance,
+    coreTotal,
+    yieldTotal,
     totalInvested,
     profitLoss,
     loading,
     isLive,
     prices,
-    updateHoldings,
+    addAsset,
+    recordTransaction,
     importPortfolio,
     recordDcaPurchase,
     portfolioData,
@@ -57,6 +66,33 @@ export function Dashboard() {
       return recorded;
     },
     [prices, recordDcaPurchase],
+  );
+
+  const handleOpenTransactions = useCallback((asset: LiveAsset) => {
+    setSelectedAsset(asset);
+  }, []);
+
+  const handleAddAsset = useCallback(
+    (input: Parameters<typeof addAsset>[0]) => {
+      const asset = addAsset(input);
+      if (asset) {
+        setToastMessage(`${asset.symbol} pridané do portfólia`);
+      }
+    },
+    [addAsset],
+  );
+
+  const handleRecordTransaction = useCallback(
+    (input: Parameters<typeof recordTransaction>[0]) => {
+      const success = recordTransaction(input);
+      if (success) {
+        setToastMessage(
+          input.type === "ADD" ? "Transakcia pridaná" : "Transakcia odstránená",
+        );
+      }
+      return success;
+    },
+    [recordTransaction],
   );
 
   return (
@@ -83,11 +119,7 @@ export function Dashboard() {
 
         <AnimatePresence mode="wait">
           {showHome && (
-            <motion.div
-              key="home"
-              {...pageTransition}
-              className="space-y-8"
-            >
+            <motion.div key="home" {...pageTransition} className="space-y-8">
               <ConfluenceRadar />
             </motion.div>
           )}
@@ -105,10 +137,31 @@ export function Dashboard() {
                 loading={loading}
                 isLive={isLive}
               />
-              <PortfolioChart endValue={totalBalance} loading={loading} />
-              <AssetList assets={assets} loading={loading} />
-              <YieldTokensList />
-              <AddAssetButton onClick={() => setIsEditModalOpen(true)} />
+
+              <div className="grid gap-4">
+                <PortfolioDonutChart
+                  coreTotal={coreTotal}
+                  yieldTotal={yieldTotal}
+                  loading={loading}
+                />
+                <PortfolioChart
+                  endValue={totalBalance}
+                  transactions={transactions}
+                  loading={loading}
+                />
+              </div>
+
+              <AssetList
+                assets={assets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <YieldTokensList
+                assets={yieldAssets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AddAssetButton onClick={() => setIsAddAssetOpen(true)} />
               <TransactionHistory transactions={transactions} />
             </motion.div>
           )}
@@ -133,11 +186,18 @@ export function Dashboard() {
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <EditHoldingsModal
-        open={isEditModalOpen}
-        holdings={holdings}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={updateHoldings}
+      <AddAssetModal
+        open={isAddAssetOpen}
+        onClose={() => setIsAddAssetOpen(false)}
+        onAdd={handleAddAsset}
+        existingCoingeckoIds={trackedAssets.map((asset) => asset.coingeckoId)}
+      />
+
+      <TransactionModal
+        open={Boolean(selectedAsset)}
+        asset={selectedAsset}
+        onClose={() => setSelectedAsset(null)}
+        onSubmit={handleRecordTransaction}
       />
 
       <SettingsModal

@@ -1,18 +1,21 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { formatUsd } from "@/lib/data";
-import {
-  formatYieldBalance,
-  yieldTokens,
-} from "@/lib/yieldTokensData";
-import {
-  interactiveRow,
-  listContainerVariants,
-  listItemVariants,
-} from "@/lib/motion";
+import { AssetRow } from "@/components/AssetRow";
+import type { LiveAsset } from "@/hooks/usePortfolio";
+import { listContainerVariants } from "@/lib/motion";
 
-export function YieldTokensList() {
+interface YieldTokensListProps {
+  assets: LiveAsset[];
+  loading?: boolean;
+  onOpenTransactions: (asset: LiveAsset) => void;
+}
+
+export function YieldTokensList({
+  assets,
+  loading = false,
+  onOpenTransactions,
+}: YieldTokensListProps) {
   return (
     <motion.section
       initial={{ opacity: 0, y: 16 }}
@@ -30,65 +33,17 @@ export function YieldTokensList() {
         animate="show"
         className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]"
       >
-        {yieldTokens.map((token, index) => {
-          const hasHistory = token.balance > 0 && token.totalSpent > 0;
-          const isPositive = token.pnlUsd >= 0;
-
-          return (
-            <motion.div
-              key={token.symbol}
-              variants={listItemVariants}
-              {...interactiveRow}
-              className={`flex items-center gap-4 px-4 py-4 ${
-                index < yieldTokens.length - 1
-                  ? "border-b border-zinc-800/50"
-                  : ""
-              }`}
-            >
-              <div
-                className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ring-2 ${token.ring} ${token.accent}`}
-              >
-                <span className="text-xs font-bold text-white">
-                  {token.symbol.slice(0, 1)}
-                </span>
-              </div>
-
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="font-semibold text-white">{token.symbol}</p>
-                  <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-400">
-                    EARNING
-                  </span>
-                </div>
-                <p className="mt-0.5 text-sm text-zinc-500">
-                  {formatYieldBalance(token.balance, token.symbol)}
-                </p>
-              </div>
-
-              <div className="text-right">
-                <p className="font-semibold text-white">
-                  {formatUsd(token.usdValue)}
-                </p>
-                {hasHistory ? (
-                  <p
-                    className={`mt-1 text-xs font-medium ${
-                      isPositive ? "text-emerald-400" : "text-rose-400"
-                    }`}
-                  >
-                    {isPositive ? "+" : "-"}
-                    {formatUsd(Math.abs(token.pnlUsd))}{" "}
-                    {isPositive ? "+" : "-"}
-                    {Math.abs(token.roiPercent).toFixed(1)}%
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs font-medium text-zinc-600">
-                    +$0.00 +0.0%
-                  </p>
-                )}
-              </div>
-            </motion.div>
-          );
-        })}
+        {assets.map((asset, index) => (
+          <AssetRow
+            key={asset.id}
+            asset={asset}
+            index={index}
+            total={assets.length}
+            loading={loading}
+            variant="yield"
+            onOpenTransactions={onOpenTransactions}
+          />
+        ))}
       </motion.div>
     </motion.section>
   );

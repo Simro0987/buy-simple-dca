@@ -11,9 +11,9 @@ import {
 const REFRESH_INTERVAL_MS = 60_000;
 
 const EMPTY_PRICES: CryptoPricesMap = {
-  BTC: { symbol: "BTC", price: 0, change7d: 0 },
-  ETH: { symbol: "ETH", price: 0, change7d: 0 },
-  SOL: { symbol: "SOL", price: 0, change7d: 0 },
+  BTC: { symbol: "BTC", coingeckoId: "bitcoin", price: 0, change7d: 0 },
+  ETH: { symbol: "ETH", coingeckoId: "ethereum", price: 0, change7d: 0 },
+  SOL: { symbol: "SOL", coingeckoId: "solana", price: 0, change7d: 0 },
 };
 
 export function useCryptoPrices() {
