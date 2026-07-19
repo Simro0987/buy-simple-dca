@@ -1,20 +1,11 @@
 import { AssetList } from "@/components/AssetList";
 import { BottomNav } from "@/components/BottomNav";
-import { DcaEngineCard } from "@/components/DcaEngineCard";
+import { DcaMoneyModePanel } from "@/components/dca/DcaMoneyModePanel";
 import { HeroSection } from "@/components/HeroSection";
 import { portfolioData } from "@/lib/data";
 
 export default function HomePage() {
-  const {
-    totalBalance,
-    realizedDeposit,
-    profitLoss,
-    fearGreedIndex,
-    fearGreedLabel,
-    moneyMode,
-    allocation,
-    assets,
-  } = portfolioData;
+  const { totalBalance, realizedDeposit, profitLoss, assets } = portfolioData;
 
   return (
     <div className="relative min-h-dvh bg-[#050505]">
@@ -48,12 +39,7 @@ export default function HomePage() {
             profitLoss={profitLoss}
           />
           <AssetList assets={assets} />
-          <DcaEngineCard
-            moneyMode={moneyMode}
-            fearGreedIndex={fearGreedIndex}
-            fearGreedLabel={fearGreedLabel}
-            allocation={allocation}
-          />
+          <DcaMoneyModePanel />
         </div>
       </main>
 
