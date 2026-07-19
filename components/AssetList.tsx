@@ -42,7 +42,7 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
         <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
           Core Pillars
         </h2>
-        <span className="text-xs text-zinc-600">7D change</span>
+        <span className="text-xs text-zinc-600">P&L / ROI</span>
       </div>
 
       <motion.div
@@ -53,7 +53,7 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
       >
         {assets.map((asset, index) => {
           const styles = accentStyles[asset.accent];
-          const isPositive = asset.change7d >= 0;
+          const isPositive = asset.pnlUsd >= 0;
 
           return (
             <motion.div
@@ -83,6 +83,8 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
                 <p className="mt-0.5 text-[10px] text-zinc-600">
                   {loading ? (
                     <PriceSkeleton className="inline-block h-3 w-16" />
+                  ) : asset.hasPurchaseHistory ? (
+                    <>Avg @ {formatUnitPrice(asset.avgBuyPrice)}</>
                   ) : (
                     <>@ {formatUnitPrice(asset.unitPrice)}</>
                   )}
@@ -99,16 +101,20 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
                 </p>
                 {loading ? (
                   <PriceSkeleton className="ml-auto mt-1 h-5 w-14" />
-                ) : (
+                ) : asset.hasPurchaseHistory ? (
                   <span
-                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                      isPositive
-                        ? "bg-emerald-400/10 text-emerald-400"
-                        : "bg-red-500/10 text-red-400"
+                    className={`mt-1 inline-block text-xs font-medium ${
+                      isPositive ? "text-emerald-400" : "text-rose-400"
                     }`}
                   >
-                    {isPositive ? "+" : ""}
-                    {asset.change7d.toFixed(2)}%
+                    {isPositive ? "+" : "-"}
+                    {formatUsd(Math.abs(asset.pnlUsd))}{" "}
+                    {isPositive ? "+" : "-"}
+                    {Math.abs(asset.roiPercent).toFixed(1)}%
+                  </span>
+                ) : (
+                  <span className="mt-1 inline-block text-xs font-medium text-zinc-600">
+                    —
                   </span>
                 )}
               </div>

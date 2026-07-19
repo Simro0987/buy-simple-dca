@@ -7,7 +7,7 @@ import { formatUsd } from "@/lib/data";
 
 interface HeroSectionProps {
   totalBalance: number;
-  realizedDeposit: number;
+  totalInvested: number;
   profitLoss: number;
   loading?: boolean;
   isLive?: boolean;
@@ -15,7 +15,7 @@ interface HeroSectionProps {
 
 export function HeroSection({
   totalBalance,
-  realizedDeposit,
+  totalInvested,
   profitLoss,
   loading = false,
   isLive = false,
@@ -46,20 +46,40 @@ export function HeroSection({
       </div>
 
       <div className="grid grid-cols-2 gap-3">
-        <div className="rounded-2xl border border-white/5 bg-[#111113] p-4">
-          <p className="text-xs font-medium text-zinc-500">Realizovaný vklad</p>
-          <p className="mt-1 text-lg font-semibold text-zinc-300">
-            {formatUsd(realizedDeposit, { showSign: true })}
+        <div className="rounded-2xl border border-white/10 bg-zinc-900/40 p-4 backdrop-blur-md">
+          <p className="text-xs font-medium text-zinc-500">Reálny vklad</p>
+          <p className="mt-1 text-lg font-semibold text-zinc-200">
+            {loading ? (
+              <PriceSkeleton className="h-6 w-24" />
+            ) : (
+              formatUsd(totalInvested)
+            )}
+          </p>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            Celkovo investované cez DCA
           </p>
         </div>
-        <div className="rounded-2xl border border-emerald-400/10 bg-emerald-400/5 p-4">
+        <div
+          className={`rounded-2xl border p-4 backdrop-blur-md ${
+            isProfit
+              ? "border-emerald-400/20 bg-emerald-400/5"
+              : "border-rose-400/20 bg-rose-400/5"
+          }`}
+        >
           <p className="text-xs font-medium text-zinc-500">Zisk / Strata</p>
           <p
             className={`mt-1 text-lg font-semibold ${
-              isProfit ? "text-emerald-400" : "text-red-400"
+              isProfit ? "text-emerald-400" : "text-rose-400"
             }`}
           >
-            {formatUsd(profitLoss, { showSign: true })}
+            {loading ? (
+              <PriceSkeleton className="h-6 w-24" />
+            ) : (
+              formatUsd(profitLoss, { showSign: true })
+            )}
+          </p>
+          <p className="mt-1 text-[10px] text-zinc-600">
+            Nerealizovaný P&L
           </p>
         </div>
       </div>

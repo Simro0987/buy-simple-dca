@@ -5,6 +5,7 @@ import { useCryptoPrices } from "@/hooks/useCryptoPrices";
 import type { PortfolioAsset } from "@/lib/data";
 import type { CryptoPricesMap, CryptoSymbol } from "@/lib/cryptoApi";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import { calculatePortfolioPnL } from "@/lib/pnlAnalytics";
 import {
   ASSET_DEFINITIONS,
   createTransactionId,
@@ -19,9 +20,14 @@ import { portfolioHoldings } from "@/lib/data";
 
 export interface LiveAsset extends PortfolioAsset {
   usdValue: number;
-  change7d: number;
   unitPrice: number;
+  avgBuyPrice: number;
+  pnlUsd: number;
+  roiPercent: number;
+  hasPurchaseHistory: boolean;
 }
+
+const CORE_SYMBOLS: CryptoSymbol[] = ["BTC", "ETH", "SOL"];
 
 export function usePortfolio() {
   const { prices, loading, error, isLive, lastUpdated } = useCryptoPrices();
@@ -96,21 +102,30 @@ export function usePortfolio() {
     [holdings, persistPortfolio, transactions],
   );
 
+  const pnl = useMemo(
+    () => calculatePortfolioPnL(transactions, holdings, prices, CORE_SYMBOLS),
+    [transactions, holdings, prices],
+  );
+
   const assets = useMemo<LiveAsset[]>(() => {
     return ASSET_DEFINITIONS.map((definition) => {
       const live = prices[definition.symbol];
       const unitPrice = live?.price ?? 0;
       const balance = holdings[definition.symbol];
+      const symbolPnl = pnl.bySymbol[definition.symbol];
 
       return {
         ...definition,
         balance,
         unitPrice,
         usdValue: balance * unitPrice,
-        change7d: live?.change7d ?? 0,
+        avgBuyPrice: symbolPnl.avgBuyPrice,
+        pnlUsd: symbolPnl.pnlUsd,
+        roiPercent: symbolPnl.roiPercent,
+        hasPurchaseHistory: symbolPnl.hasPurchaseHistory,
       };
     });
-  }, [holdings, prices]);
+  }, [holdings, prices, pnl.bySymbol]);
 
   const cryptoTotal = useMemo(
     () => assets.reduce((sum, asset) => sum + asset.usdValue, 0),
@@ -124,8 +139,10 @@ export function usePortfolio() {
     holdings,
     transactions,
     totalBalance,
-    realizedDeposit: portfolioHoldings.realizedDeposit,
-    profitLoss: portfolioHoldings.profitLoss,
+    totalInvested: pnl.totalInvested,
+    profitLoss: pnl.totalPnlUsd,
+    totalRoiPercent: pnl.totalRoiPercent,
+    pnl,
     loading: loading || !isHydrated,
     error,
     isLive,

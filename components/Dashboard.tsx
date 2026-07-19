@@ -30,7 +30,7 @@ export function Dashboard() {
     holdings,
     transactions,
     totalBalance,
-    realizedDeposit,
+    totalInvested,
     profitLoss,
     loading,
     isLive,
@@ -100,7 +100,7 @@ export function Dashboard() {
             >
               <HeroSection
                 totalBalance={totalBalance}
-                realizedDeposit={realizedDeposit}
+                totalInvested={totalInvested}
                 profitLoss={profitLoss}
                 loading={loading}
                 isLive={isLive}

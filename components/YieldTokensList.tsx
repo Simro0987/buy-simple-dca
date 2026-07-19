@@ -31,7 +31,8 @@ export function YieldTokensList() {
         className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]"
       >
         {yieldTokens.map((token, index) => {
-          const isPositive = token.change7dUsd >= 0;
+          const hasHistory = token.balance > 0 && token.totalSpent > 0;
+          const isPositive = token.pnlUsd >= 0;
 
           return (
             <motion.div
@@ -68,16 +69,22 @@ export function YieldTokensList() {
                 <p className="font-semibold text-white">
                   {formatUsd(token.usdValue)}
                 </p>
-                <p
-                  className={`mt-1 text-xs font-medium ${
-                    isPositive ? "text-emerald-400" : "text-red-400"
-                  }`}
-                >
-                  {isPositive ? "+" : ""}
-                  {formatUsd(token.change7dUsd)}{" "}
-                  {isPositive ? "+" : ""}
-                  {token.change7dPercent.toFixed(1)}%
-                </p>
+                {hasHistory ? (
+                  <p
+                    className={`mt-1 text-xs font-medium ${
+                      isPositive ? "text-emerald-400" : "text-rose-400"
+                    }`}
+                  >
+                    {isPositive ? "+" : "-"}
+                    {formatUsd(Math.abs(token.pnlUsd))}{" "}
+                    {isPositive ? "+" : "-"}
+                    {Math.abs(token.roiPercent).toFixed(1)}%
+                  </p>
+                ) : (
+                  <p className="mt-1 text-xs font-medium text-zinc-600">
+                    +$0.00 +0.0%
+                  </p>
+                )}
               </div>
             </motion.div>
           );
