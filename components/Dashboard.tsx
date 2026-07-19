@@ -12,6 +12,7 @@ import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
+import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import { pageTransition } from "@/lib/motion";
@@ -19,6 +20,7 @@ import { pageTransition } from "@/lib/motion";
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const {
     assets,
     holdings,
@@ -52,7 +54,10 @@ export function Dashboard() {
             </p>
             <p className="text-sm font-medium text-zinc-400">Terminal v2.0</p>
           </div>
-          <LiveIndicator isLive={isLive} loading={loading} />
+          <div className="flex items-center gap-2">
+            <SettingsButton onClick={() => setIsSettingsOpen(true)} />
+            <LiveIndicator isLive={isLive} loading={loading} />
+          </div>
         </header>
 
         <AnimatePresence mode="wait">
@@ -107,6 +112,13 @@ export function Dashboard() {
         holdings={holdings}
         onClose={() => setIsEditModalOpen(false)}
         onSave={updateHoldings}
+      />
+
+      <SettingsModal
+        open={isSettingsOpen}
+        holdings={holdings}
+        onClose={() => setIsSettingsOpen(false)}
+        onImport={updateHoldings}
       />
     </div>
   );
