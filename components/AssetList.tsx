@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { MaskedValue } from "@/components/MaskedValue";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatCrypto, formatUnitPrice, formatUsd } from "@/lib/data";
 import type { LiveAsset } from "@/hooks/usePortfolio";
@@ -9,6 +10,11 @@ import {
   listContainerVariants,
   listItemVariants,
 } from "@/lib/motion";
+import {
+  MASK_CRYPTO,
+  MASK_PNL,
+  MASK_USD,
+} from "@/lib/privacyStorage";
 
 const accentStyles = {
   orange: {
@@ -54,6 +60,9 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
         {assets.map((asset, index) => {
           const styles = accentStyles[asset.accent];
           const isPositive = asset.pnlUsd >= 0;
+          const pnlLabel = asset.hasPurchaseHistory
+            ? `${isPositive ? "+" : "-"}${formatUsd(Math.abs(asset.pnlUsd))} ${isPositive ? "+" : "-"}${Math.abs(asset.roiPercent).toFixed(1)}%`
+            : "—";
 
           return (
             <motion.div
@@ -78,15 +87,25 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
                   <p className="truncate text-xs text-zinc-500">{asset.name}</p>
                 </div>
                 <p className="text-sm text-zinc-400">
-                  {formatCrypto(asset.balance, asset.symbol)}
+                  {loading ? (
+                    <PriceSkeleton className="inline-block h-4 w-24" />
+                  ) : (
+                    <MaskedValue masked={MASK_CRYPTO}>
+                      {formatCrypto(asset.balance, asset.symbol)}
+                    </MaskedValue>
+                  )}
                 </p>
                 <p className="mt-0.5 text-[10px] text-zinc-600">
                   {loading ? (
                     <PriceSkeleton className="inline-block h-3 w-16" />
-                  ) : asset.hasPurchaseHistory ? (
-                    <>Avg @ {formatUnitPrice(asset.avgBuyPrice)}</>
                   ) : (
-                    <>@ {formatUnitPrice(asset.unitPrice)}</>
+                    <MaskedValue masked={MASK_USD}>
+                      {asset.hasPurchaseHistory ? (
+                        <>Avg @ {formatUnitPrice(asset.avgBuyPrice)}</>
+                      ) : (
+                        <>@ {formatUnitPrice(asset.unitPrice)}</>
+                      )}
+                    </MaskedValue>
                   )}
                 </p>
               </div>
@@ -96,22 +115,22 @@ export function AssetList({ assets, loading = false }: AssetListProps) {
                   {loading ? (
                     <PriceSkeleton className="ml-auto h-5 w-20" />
                   ) : (
-                    formatUsd(asset.usdValue)
+                    <MaskedValue masked={MASK_USD}>
+                      {formatUsd(asset.usdValue)}
+                    </MaskedValue>
                   )}
                 </p>
                 {loading ? (
                   <PriceSkeleton className="ml-auto mt-1 h-5 w-14" />
                 ) : asset.hasPurchaseHistory ? (
-                  <span
+                  <MaskedValue
+                    masked={MASK_PNL}
                     className={`mt-1 inline-block text-xs font-medium ${
                       isPositive ? "text-emerald-400" : "text-rose-400"
                     }`}
                   >
-                    {isPositive ? "+" : "-"}
-                    {formatUsd(Math.abs(asset.pnlUsd))}{" "}
-                    {isPositive ? "+" : "-"}
-                    {Math.abs(asset.roiPercent).toFixed(1)}%
-                  </span>
+                    {pnlLabel}
+                  </MaskedValue>
                 ) : (
                   <span className="mt-1 inline-block text-xs font-medium text-zinc-600">
                     —

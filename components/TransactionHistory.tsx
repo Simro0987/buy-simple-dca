@@ -1,12 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { MaskedValue } from "@/components/MaskedValue";
 import { formatUsd } from "@/lib/data";
 import type { Transaction } from "@/lib/portfolioStorage";
 import {
   listContainerVariants,
   listItemVariants,
 } from "@/lib/motion";
+import { MASK_CRYPTO, MASK_USD } from "@/lib/privacyStorage";
 
 const accentStyles = {
   BTC: {
@@ -106,10 +108,14 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
 
                 <div className="text-right">
                   <p className="text-sm font-bold text-emerald-400">
-                    {formatAmount(transaction.amount, transaction.symbol)}
+                    <MaskedValue masked={MASK_CRYPTO}>
+                      {formatAmount(transaction.amount, transaction.symbol)}
+                    </MaskedValue>
                   </p>
                   <p className="mt-0.5 text-xs text-zinc-500">
-                    {formatUsd(transaction.spentUsd)}
+                    <MaskedValue masked={MASK_USD}>
+                      {formatUsd(transaction.spentUsd)}
+                    </MaskedValue>
                   </p>
                 </div>
               </motion.div>

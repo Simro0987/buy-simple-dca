@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { MaskedValue } from "@/components/MaskedValue";
 import { formatUsd } from "@/lib/data";
 import {
   formatYieldBalance,
@@ -11,6 +12,11 @@ import {
   listContainerVariants,
   listItemVariants,
 } from "@/lib/motion";
+import {
+  MASK_CRYPTO,
+  MASK_PNL,
+  MASK_USD,
+} from "@/lib/privacyStorage";
 
 export function YieldTokensList() {
   return (
@@ -33,6 +39,9 @@ export function YieldTokensList() {
         {yieldTokens.map((token, index) => {
           const hasHistory = token.balance > 0 && token.totalSpent > 0;
           const isPositive = token.pnlUsd >= 0;
+          const pnlLabel = hasHistory
+            ? `${isPositive ? "+" : "-"}${formatUsd(Math.abs(token.pnlUsd))} ${isPositive ? "+" : "-"}${Math.abs(token.roiPercent).toFixed(1)}%`
+            : "+$0.00 +0.0%";
 
           return (
             <motion.div
@@ -61,30 +70,30 @@ export function YieldTokensList() {
                   </span>
                 </div>
                 <p className="mt-0.5 text-sm text-zinc-500">
-                  {formatYieldBalance(token.balance, token.symbol)}
+                  <MaskedValue masked={MASK_CRYPTO}>
+                    {formatYieldBalance(token.balance, token.symbol)}
+                  </MaskedValue>
                 </p>
               </div>
 
               <div className="text-right">
                 <p className="font-semibold text-white">
-                  {formatUsd(token.usdValue)}
+                  <MaskedValue masked={MASK_USD}>
+                    {formatUsd(token.usdValue)}
+                  </MaskedValue>
                 </p>
-                {hasHistory ? (
-                  <p
-                    className={`mt-1 text-xs font-medium ${
-                      isPositive ? "text-emerald-400" : "text-rose-400"
-                    }`}
-                  >
-                    {isPositive ? "+" : "-"}
-                    {formatUsd(Math.abs(token.pnlUsd))}{" "}
-                    {isPositive ? "+" : "-"}
-                    {Math.abs(token.roiPercent).toFixed(1)}%
-                  </p>
-                ) : (
-                  <p className="mt-1 text-xs font-medium text-zinc-600">
-                    +$0.00 +0.0%
-                  </p>
-                )}
+                <MaskedValue
+                  masked={MASK_PNL}
+                  className={`mt-1 inline-block text-xs font-medium ${
+                    hasHistory
+                      ? isPositive
+                        ? "text-emerald-400"
+                        : "text-rose-400"
+                      : "text-zinc-600"
+                  }`}
+                >
+                  {pnlLabel}
+                </MaskedValue>
               </div>
             </motion.div>
           );

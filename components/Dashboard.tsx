@@ -16,6 +16,7 @@ import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { YieldTokensList } from "@/components/YieldTokensList";
+import { PrivacyProvider } from "@/context/PrivacyContext";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
@@ -60,6 +61,7 @@ export function Dashboard() {
   );
 
   return (
+    <PrivacyProvider>
     <div className="relative min-h-dvh bg-[#050505]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-32 top-0 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
@@ -153,5 +155,6 @@ export function Dashboard() {
         onClose={() => setToastMessage(null)}
       />
     </div>
+    </PrivacyProvider>
   );
 }
