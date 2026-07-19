@@ -1,4 +1,4 @@
-import type { AssetCategory } from "@/lib/assetStyles";
+import type { AssetCategory } from "@/lib/portfolioStorage";
 
 export interface DcaTokenDefinition {
   symbol: string;

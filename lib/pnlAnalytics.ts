@@ -1,4 +1,3 @@
-import type { CryptoSymbol } from "@/lib/cryptoApi";
 import type { Transaction } from "@/lib/portfolioStorage";
 
 export interface SymbolPnL {
@@ -15,7 +14,7 @@ export interface PortfolioPnL {
   totalInvested: number;
   totalPnlUsd: number;
   totalRoiPercent: number;
-  bySymbol: Record<CryptoSymbol, SymbolPnL>;
+  bySymbol: Record<string, SymbolPnL>;
 }
 
 function emptySymbolPnL(symbol: string): SymbolPnL {
@@ -32,11 +31,15 @@ function emptySymbolPnL(symbol: string): SymbolPnL {
 
 export function calculateSymbolPnL(
   transactions: Transaction[],
-  symbol: CryptoSymbol,
+  symbol: string,
   balance: number,
   livePrice: number,
 ): SymbolPnL {
-  const symbolTx = transactions.filter((tx) => tx.symbol === symbol);
+  const symbolTx = transactions.filter(
+    (tx) =>
+      tx.symbol.toUpperCase() === symbol.toUpperCase() &&
+      tx.type !== "REMOVE",
+  );
 
   if (symbolTx.length === 0) {
     return emptySymbolPnL(symbol);
@@ -57,32 +60,36 @@ export function calculateSymbolPnL(
     totalBought,
     pnlUsd,
     roiPercent,
-    hasPurchaseHistory: true,
+    hasPurchaseHistory: totalSpent > 0,
   };
 }
 
 export function calculatePortfolioPnL(
   transactions: Transaction[],
-  holdings: Record<CryptoSymbol, number>,
-  prices: Record<CryptoSymbol, { price: number } | undefined>,
-  symbols: CryptoSymbol[],
+  balances: Record<string, number>,
+  prices: Record<string, { price: number } | undefined>,
+  symbols: string[],
 ): PortfolioPnL {
-  const bySymbol = {} as Record<CryptoSymbol, SymbolPnL>;
+  const bySymbol: Record<string, SymbolPnL> = {};
 
   for (const symbol of symbols) {
     bySymbol[symbol] = calculateSymbolPnL(
       transactions,
       symbol,
-      holdings[symbol],
+      balances[symbol] ?? 0,
       prices[symbol]?.price ?? 0,
     );
   }
 
-  const totalInvested = transactions.reduce((sum, tx) => sum + tx.spentUsd, 0);
+  const totalInvested = transactions
+    .filter((tx) => tx.type !== "REMOVE")
+    .reduce((sum, tx) => sum + tx.spentUsd, 0);
+
   const totalPnlUsd = symbols.reduce(
     (sum, symbol) => sum + bySymbol[symbol].pnlUsd,
     0,
   );
+
   const totalRoiPercent =
     totalInvested > 0 ? (totalPnlUsd / totalInvested) * 100 : 0;
 

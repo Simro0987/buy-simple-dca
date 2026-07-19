@@ -1,67 +1,110 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
+import { AddAssetModal } from "@/components/AddAssetModal";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { ConfluenceRadar } from "@/components/ConfluenceRadar";
 import { DcaEngine } from "@/components/dca/DcaEngine";
-import { EditHoldingsModal } from "@/components/EditHoldingsModal";
 import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
+import { PortfolioBubbleAllocation } from "@/components/PortfolioBubbleAllocation";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
-import { YieldTokensList } from "@/components/YieldTokensList";
+import { TransactionModal } from "@/components/TransactionModal";
+import type { LiveAsset } from "@/hooks/usePortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<LiveAsset | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
   const {
     assets,
-    holdings,
+    yieldAssets,
+    satelliteAssets,
+    allAssets,
     transactions,
+    trackedAssets,
     totalBalance,
     totalInvested,
     profitLoss,
     loading,
     isLive,
-    prices,
-    updateHoldings,
+    addAsset,
+    recordTransaction,
     importPortfolio,
     recordDcaPurchase,
+    resetAllData,
     portfolioData,
   } = usePortfolio();
+
+  const portfolioSymbols = useMemo(
+    () => allAssets.map((asset) => asset.symbol),
+    [allAssets],
+  );
 
   const showHome = activeTab === "home";
   const showPortfolio = activeTab === "portfolio";
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
 
-  const portfolioSymbols = ["BTC", "ETH", "SOL", "HYPE", "JUP", "PENDLE", "GMX", "AAVE", "MORPHO"];
-
   const handleRecordPurchase = useCallback(
     (plans: TokenExecutionPlan[]) => {
-      if (!prices) return false;
-
-      const recorded = recordDcaPurchase(plans, prices);
+      const recorded = recordDcaPurchase(plans);
       if (recorded) {
         setToastMessage("Záznam uložený");
       } else {
-        setToastMessage("Žiadny záznam — skontrolujte ceny a podporované tokeny");
+        setToastMessage(
+          "Žiadny záznam — token musí byť v portfóliu s platnou cenou",
+        );
       }
       return recorded;
     },
-    [prices, recordDcaPurchase],
+    [recordDcaPurchase],
   );
+
+  const handleOpenTransactions = useCallback((asset: LiveAsset) => {
+    setSelectedAsset(asset);
+  }, []);
+
+  const handleAddAsset = useCallback(
+    (input: Parameters<typeof addAsset>[0]) => {
+      const asset = addAsset(input);
+      if (asset) {
+        setToastMessage(`${asset.symbol} pridané do portfólia`);
+      }
+    },
+    [addAsset],
+  );
+
+  const handleRecordTransaction = useCallback(
+    (input: Parameters<typeof recordTransaction>[0]) => {
+      const success = recordTransaction(input);
+      if (success) {
+        setToastMessage(
+          input.type === "ADD" ? "Transakcia pridaná" : "Transakcia odstránená",
+        );
+      }
+      return success;
+    },
+    [recordTransaction],
+  );
+
+  const handleResetAllData = useCallback(() => {
+    resetAllData();
+    setToastMessage("Všetky dáta boli vymazané");
+  }, [resetAllData]);
 
   return (
     <div className="relative min-h-dvh bg-[#050505]">
@@ -87,11 +130,7 @@ export function Dashboard() {
 
         <AnimatePresence mode="wait">
           {showHome && (
-            <motion.div
-              key="home"
-              {...pageTransition}
-              className="space-y-8"
-            >
+            <motion.div key="home" {...pageTransition} className="space-y-8">
               <ConfluenceRadar />
             </motion.div>
           )}
@@ -109,10 +148,37 @@ export function Dashboard() {
                 loading={loading}
                 isLive={isLive}
               />
-              <PortfolioChart endValue={totalBalance} loading={loading} />
-              <AssetList assets={assets} loading={loading} />
-              <YieldTokensList />
-              <AddAssetButton onClick={() => setIsEditModalOpen(true)} />
+
+              <PortfolioChart
+                endValue={totalBalance}
+                transactions={transactions}
+                loading={loading}
+              />
+
+              <PortfolioBubbleAllocation
+                assets={allAssets}
+                loading={loading}
+              />
+
+              <AssetList
+                category="core"
+                assets={assets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AssetList
+                category="satellite"
+                assets={satelliteAssets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AssetList
+                category="yield"
+                assets={yieldAssets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AddAssetButton onClick={() => setIsAddAssetOpen(true)} />
               <TransactionHistory transactions={transactions} />
             </motion.div>
           )}
@@ -138,11 +204,18 @@ export function Dashboard() {
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <EditHoldingsModal
-        open={isEditModalOpen}
-        holdings={holdings}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={updateHoldings}
+      <AddAssetModal
+        open={isAddAssetOpen}
+        onClose={() => setIsAddAssetOpen(false)}
+        onAdd={handleAddAsset}
+        existingCoingeckoIds={trackedAssets.map((asset) => asset.coingeckoId)}
+      />
+
+      <TransactionModal
+        open={Boolean(selectedAsset)}
+        asset={selectedAsset}
+        onClose={() => setSelectedAsset(null)}
+        onSubmit={handleRecordTransaction}
       />
 
       <SettingsModal
@@ -150,6 +223,7 @@ export function Dashboard() {
         portfolioData={portfolioData}
         onClose={() => setIsSettingsOpen(false)}
         onImport={importPortfolio}
+        onResetAllData={handleResetAllData}
       />
 
       <Toast

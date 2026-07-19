@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { AlertTriangle, RefreshCw, ShoppingCart, Zap } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 import { CapitalPipelineSection } from "@/components/dca/CapitalPipelineSection";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { ExecutionPerformanceSection } from "@/components/dca/ExecutionPerformanceSection";
@@ -12,13 +12,11 @@ import { MarketRegimeSection } from "@/components/dca/MarketRegimeSection";
 import { MoneyModeHeader } from "@/components/dca/MoneyModeHeader";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
-import {
-  DEFAULT_WEEKLY_INVESTMENT,
-  type TokenExecutionPlan,
-} from "@/lib/dcaEngineConfig";
+import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { toExecutionPlans } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
+import { useAppStore } from "@/store/useAppStore";
 
 interface DcaEngineProps {
   portfolioSymbols?: string[];
@@ -33,10 +31,10 @@ export function DcaEngine({
   loading: externalLoading = false,
   onRecordPurchase,
 }: DcaEngineProps) {
-  const [weeklyAmount, setWeeklyAmount] = useState(DEFAULT_WEEKLY_INVESTMENT);
+  const weeklyAmount = useAppStore((state) => state.dcaSettings.weeklyBudget);
+  const setWeeklyBudget = useAppStore((state) => state.setWeeklyBudget);
 
   const { result, loading: engineLoading, error, refresh } = useDcaEngine({
-    weeklyBudget: weeklyAmount,
     portfolioSymbols,
     dcaTransactions,
   });
@@ -103,7 +101,10 @@ export function DcaEngine({
         </div>
       )}
 
-      <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyAmount} />
+      <WeeklyInvestmentCard
+        value={weeklyAmount}
+        onChange={setWeeklyBudget}
+      />
 
       {result && (
         <>

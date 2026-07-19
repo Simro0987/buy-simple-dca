@@ -1,0 +1,448 @@
+import { isDefiToken, getTokenBrandColor } from "@/lib/newsDefiBrands";
+import { generateDefiPatternImage } from "@/lib/newsDefiImage";
+
+export interface TokenImageRef {
+  symbol: string;
+  logoUrl?: string;
+  brandColor?: string;
+}
+
+const OG_IMAGE_PATTERNS = [
+  /<meta[^>]+property=["']og:image(?::secure_url)?["'][^>]+content=["']([^"']+)["']/i,
+  /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image(?::secure_url)?["']/i,
+  /<meta[^>]+name=["']twitter:image(?::src)?["'][^>]+content=["']([^"']+)["']/i,
+  /<meta[^>]+content=["']([^"']+)["'][^>]+name=["']twitter:image(?::src)?["']/i,
+];
+
+const SKIP_IMAGE_PATTERN =
+  /logo|icon|avatar|sprite|emoji|badge|pixel|tracking|1x1|spacer|placeholder|advert|banner-ad|svg/i;
+
+interface ParsedImage {
+  url: string;
+  width: number;
+  height: number;
+  area: number;
+}
+
+function isValidImageUrl(url: string | undefined): url is string {
+  if (!url) return false;
+  if (url.startsWith("data:")) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
+function resolveUrl(base: string, candidate: string): string {
+  try {
+    return new URL(candidate, base).href;
+  } catch {
+    return candidate;
+  }
+}
+
+function parseDimension(value: string | undefined): number {
+  if (!value) return 0;
+  const parsed = parseInt(value.replace(/[^\d]/g, ""), 10);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function parseSrcset(srcset: string): { url: string; width: number }[] {
+  return srcset
+    .split(",")
+    .map((part) => part.trim())
+    .map((part) => {
+      const [url, descriptor] = part.split(/\s+/);
+      const width = descriptor?.endsWith("w")
+        ? parseDimension(descriptor)
+        : 0;
+      return { url, width };
+    })
+    .filter((entry) => Boolean(entry.url));
+}
+
+function scoreImageCandidate(
+  url: string,
+  width: number,
+  height: number,
+): ParsedImage | null {
+  if (!isValidImageUrl(url)) return null;
+  if (SKIP_IMAGE_PATTERN.test(url)) return null;
+  if (/\.(svg|gif)(\?|$)/i.test(url)) return null;
+
+  const area =
+    width > 0 && height > 0
+      ? width * height
+      : width > 0
+        ? width * width
+        : 1200;
+  return { url, width, height, area };
+}
+
+export function extractLargestImagesFromHtml(
+  html: string,
+  baseUrl: string,
+): ParsedImage[] {
+  const candidates: ParsedImage[] = [];
+  const imgRegex = /<img\b[^>]*>/gi;
+  let match: RegExpExecArray | null;
+
+  while ((match = imgRegex.exec(html)) !== null) {
+    const tag = match[0];
+    const src = tag.match(/\bsrc=["']([^"']+)["']/i)?.[1];
+    const srcset = tag.match(/\bsrcset=["']([^"']+)["']/i)?.[1];
+    const width = parseDimension(tag.match(/\bwidth=["']?(\d+)/i)?.[1]);
+    const height = parseDimension(tag.match(/\bheight=["']?(\d+)/i)?.[1]);
+
+    if (srcset) {
+      const entries = parseSrcset(srcset).sort((a, b) => b.width - a.width);
+      const best = entries[0];
+      if (best) {
+        const candidate = scoreImageCandidate(
+          resolveUrl(baseUrl, best.url),
+          best.width || width,
+          height,
+        );
+        if (candidate) candidates.push(candidate);
+      }
+    }
+
+    if (src) {
+      const candidate = scoreImageCandidate(
+        resolveUrl(baseUrl, src),
+        width,
+        height,
+      );
+      if (candidate) candidates.push(candidate);
+    }
+  }
+
+  for (const pattern of OG_IMAGE_PATTERNS) {
+    const metaMatch = html.match(pattern);
+    if (metaMatch?.[1]) {
+      const candidate = scoreImageCandidate(
+        resolveUrl(baseUrl, metaMatch[1].trim()),
+        1200,
+        630,
+      );
+      if (candidate) candidates.push(candidate);
+    }
+  }
+
+  const unique = new Map<string, ParsedImage>();
+  for (const candidate of candidates) {
+    const existing = unique.get(candidate.url);
+    if (!existing || candidate.area > existing.area) {
+      unique.set(candidate.url, candidate);
+    }
+  }
+
+  return [...unique.values()].sort((a, b) => b.area - a.area);
+}
+
+async function fetchArticleHtml(articleUrl: string): Promise<string | undefined> {
+  if (!articleUrl) return undefined;
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(articleUrl, {
+      headers: {
+        "User-Agent": "EdgeTraderNewsBot/1.0",
+        Accept: "text/html,application/xhtml+xml",
+      },
+      signal: controller.signal,
+      next: { revalidate: 3600 },
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return undefined;
+    return response.text();
+  } catch {
+    return undefined;
+  }
+}
+
+export async function fetchLargestArticleImage(
+  articleUrl: string,
+): Promise<string | undefined> {
+  const html = await fetchArticleHtml(articleUrl);
+  if (!html) return undefined;
+
+  const images = extractLargestImagesFromHtml(html, articleUrl);
+  const best = images.find((image) => image.area >= 40_000) ?? images[0];
+  return best?.url;
+}
+
+export async function fetchBingNewsImage(
+  query: string,
+): Promise<string | undefined> {
+  const apiKey = process.env.BING_NEWS_API_KEY;
+  if (!apiKey) return undefined;
+
+  try {
+    const url = `https://api.bing.microsoft.com/v7.0/news/search?q=${encodeURIComponent(query)}&count=5&mkt=en-US&freshness=Week`;
+    const response = await fetch(url, {
+      headers: { "Ocp-Apim-Subscription-Key": apiKey },
+      next: { revalidate: 3600 },
+    });
+
+    if (!response.ok) return undefined;
+
+    const data = (await response.json()) as {
+      value?: Array<{
+        image?: { thumbnail?: { contentUrl?: string } };
+      }>;
+    };
+
+    for (const item of data.value ?? []) {
+      const imageUrl = item.image?.thumbnail?.contentUrl;
+      if (isValidImageUrl(imageUrl)) return imageUrl;
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+export async function fetchGoogleNewsImage(
+  query: string,
+): Promise<string | undefined> {
+  try {
+    const feedUrl = `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+    const response = await fetch(feedUrl, {
+      headers: { "User-Agent": "EdgeTraderNewsBot/1.0" },
+      next: { revalidate: 1800 },
+    });
+
+    if (!response.ok) return undefined;
+
+    const xml = await response.text();
+    const patterns = [
+      /<media:content[^>]*url=["']([^"']+)["']/i,
+      /<media:thumbnail[^>]*url=["']([^"']+)["']/i,
+      /<enclosure[^>]*url=["']([^"']+)["']/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = xml.match(pattern);
+      if (match?.[1] && isValidImageUrl(match[1])) {
+        return match[1];
+      }
+    }
+  } catch {
+    return undefined;
+  }
+
+  return undefined;
+}
+
+export async function fetchNewsSearchImage(
+  title: string,
+  tokens: string[] = [],
+): Promise<string | undefined> {
+  const tokenPart = tokens.slice(0, 2).join(" ");
+  const query = `${title} ${tokenPart} crypto`.trim();
+
+  const bingImage = await fetchBingNewsImage(query);
+  if (isValidImageUrl(bingImage)) return bingImage;
+
+  const googleImage = await fetchGoogleNewsImage(query);
+  if (isValidImageUrl(googleImage)) return googleImage;
+
+  return undefined;
+}
+
+export function generateIdenticonSvg(symbol: string): string {
+  const hash = symbol
+    .toUpperCase()
+    .split("")
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const hue = hash % 360;
+  const accent = `hsl(${hue}, 70%, 55%)`;
+  const accent2 = `hsl(${(hue + 40) % 360}, 65%, 45%)`;
+  const label = symbol.toUpperCase().slice(0, 4);
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
+  <rect width="640" height="360" fill="#050505"/>
+  <circle cx="320" cy="180" r="110" fill="${accent}" opacity="0.12"/>
+  <rect x="250" y="110" width="140" height="140" rx="28" fill="${accent2}" opacity="0.22"/>
+  <text x="320" y="192" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-size="48" font-weight="800">${label.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text>
+</svg>`;
+
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+export function generateTokenLogoPlaceholder(token: TokenImageRef): string {
+  if (token.logoUrl && isValidImageUrl(token.logoUrl) && !isDefiToken(token.symbol)) {
+    return token.logoUrl;
+  }
+  return generateIdenticonSvg(token.symbol);
+}
+
+export async function generateTokenImageFallback(
+  token: TokenImageRef,
+): Promise<string> {
+  if (isDefiToken(token.symbol) || token.logoUrl) {
+    return generateDefiPatternImage(token, token.brandColor ?? getTokenBrandColor(token.symbol));
+  }
+  return generateIdenticonSvg(token.symbol);
+}
+
+export function generateTokenFallbackImage(token: TokenImageRef): string {
+  return generateTokenLogoPlaceholder(token);
+}
+
+export async function fetchMetaImages(
+  articleUrl: string,
+): Promise<string | undefined> {
+  const html = await fetchArticleHtml(articleUrl);
+  if (!html) return undefined;
+
+  for (const pattern of OG_IMAGE_PATTERNS) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const resolved = resolveUrl(articleUrl, match[1].trim());
+      if (isValidImageUrl(resolved)) return resolved;
+    }
+  }
+
+  return undefined;
+}
+
+export async function fetchMicrolinkScreenshot(
+  articleUrl: string,
+): Promise<string | undefined> {
+  if (!articleUrl) return undefined;
+
+  try {
+    const apiUrl = `https://api.microlink.io/?url=${encodeURIComponent(articleUrl)}&screenshot=true&meta=false`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+
+    const response = await fetch(apiUrl, {
+      signal: controller.signal,
+      next: { revalidate: 86400 },
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return undefined;
+
+    const data = (await response.json()) as {
+      data?: { screenshot?: { url?: string } };
+    };
+    const screenshotUrl = data.data?.screenshot?.url;
+    return isValidImageUrl(screenshotUrl) ? screenshotUrl : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function resolveHeroImage(
+  article: {
+    url: string;
+    title: string;
+    imageUrl?: string;
+    tokens?: string[];
+  },
+  primaryToken?: TokenImageRef,
+): Promise<string> {
+  if (isValidImageUrl(article.imageUrl)) {
+    return article.imageUrl;
+  }
+
+  const metaImage = await fetchMetaImages(article.url);
+  if (isValidImageUrl(metaImage)) {
+    return metaImage;
+  }
+
+  const microlinkImage = await fetchMicrolinkScreenshot(article.url);
+  if (isValidImageUrl(microlinkImage)) {
+    return microlinkImage;
+  }
+
+  const largestImage = await fetchLargestArticleImage(article.url);
+  if (isValidImageUrl(largestImage)) {
+    return largestImage;
+  }
+
+  const newsSearchImage = await fetchNewsSearchImage(
+    article.title,
+    article.tokens ?? [],
+  );
+  if (isValidImageUrl(newsSearchImage)) {
+    return newsSearchImage;
+  }
+
+  if (primaryToken) {
+    return await generateTokenImageFallback(primaryToken);
+  }
+
+  return generateIdenticonSvg("CRYPTO");
+}
+
+export async function resolveArticleImage(
+  article: {
+    url: string;
+    title: string;
+    imageUrl?: string;
+    tokens?: string[];
+  },
+  primaryToken?: TokenImageRef,
+): Promise<string> {
+  if (isValidImageUrl(article.imageUrl)) {
+    return article.imageUrl;
+  }
+
+  const largestImage = await fetchLargestArticleImage(article.url);
+  if (isValidImageUrl(largestImage)) {
+    return largestImage;
+  }
+
+  const newsSearchImage = await fetchNewsSearchImage(
+    article.title,
+    article.tokens ?? [],
+  );
+  if (isValidImageUrl(newsSearchImage)) {
+    return newsSearchImage;
+  }
+
+  if (primaryToken) {
+    return await generateTokenImageFallback(primaryToken);
+  }
+
+  return generateIdenticonSvg("CRYPTO");
+}
+
+export async function resolveArticleImagesBatch(
+  articles: Array<{
+    url: string;
+    title: string;
+    imageUrl?: string;
+    tokens?: string[];
+    primaryToken?: TokenImageRef;
+  }>,
+  concurrency = 3,
+): Promise<string[]> {
+  const results: string[] = new Array(articles.length).fill("");
+  let index = 0;
+
+  async function worker() {
+    while (index < articles.length) {
+      const current = index++;
+      const article = articles[current];
+      results[current] = await resolveArticleImage(article, article.primaryToken);
+    }
+  }
+
+  const workers = Array.from(
+    { length: Math.min(concurrency, articles.length) },
+    () => worker(),
+  );
+  await Promise.all(workers);
+  return results;
+}

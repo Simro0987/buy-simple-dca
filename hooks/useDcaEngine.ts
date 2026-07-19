@@ -4,13 +4,13 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DcaMarketSnapshot } from "@/lib/dcaMarketData";
 import {
   computeMasterDcaEngine,
+  toExecutionPlans,
   type MasterDcaResult,
 } from "@/lib/masterDcaEngine";
-import { DEFAULT_WEEKLY_INVESTMENT } from "@/lib/dcaEngineConfig";
 import type { Transaction } from "@/lib/portfolioStorage";
+import { useAppStore } from "@/store/useAppStore";
 
 interface UseDcaEngineOptions {
-  weeklyBudget?: number;
   portfolioSymbols?: string[];
   dcaTransactions?: Transaction[];
 }
@@ -22,10 +22,12 @@ interface DcaApiResponse {
 }
 
 export function useDcaEngine({
-  weeklyBudget = DEFAULT_WEEKLY_INVESTMENT,
   portfolioSymbols = [],
   dcaTransactions = [],
 }: UseDcaEngineOptions = {}) {
+  const weeklyBudget = useAppStore((state) => state.dcaSettings.weeklyBudget);
+  const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
+
   const [snapshot, setSnapshot] = useState<DcaMarketSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -84,11 +86,18 @@ export function useDcaEngine({
     });
   }, [snapshot, weeklyBudget, portfolioSymbols, dcaTransactions]);
 
+  useEffect(() => {
+    if (result) {
+      setExecutionPlans(toExecutionPlans(result));
+    }
+  }, [result, setExecutionPlans]);
+
   return {
     result,
     snapshot,
     loading,
     error,
+    weeklyBudget,
     refresh: loadSnapshot,
   };
 }

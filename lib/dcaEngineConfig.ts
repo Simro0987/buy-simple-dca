@@ -1,4 +1,4 @@
-import type { AssetCategory } from "@/lib/assetStyles";
+import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
 
 export const DEFAULT_WEEKLY_INVESTMENT = 431;
