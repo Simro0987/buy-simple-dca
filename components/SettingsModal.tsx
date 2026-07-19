@@ -7,19 +7,19 @@ import {
   downloadPortfolioBackup,
   readBackupFile,
 } from "@/lib/portfolioBackup";
-import type { HoldingsMap } from "@/lib/portfolioStorage";
+import type { PortfolioData } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
 
 interface SettingsModalProps {
   open: boolean;
-  holdings: HoldingsMap;
+  portfolioData: PortfolioData;
   onClose: () => void;
-  onImport: (holdings: HoldingsMap) => void;
+  onImport: (data: PortfolioData) => void;
 }
 
 export function SettingsModal({
   open,
-  holdings,
+  portfolioData,
   onClose,
   onImport,
 }: SettingsModalProps) {
@@ -50,7 +50,7 @@ export function SettingsModal({
 
   const handleExport = () => {
     try {
-      downloadPortfolioBackup(holdings);
+      downloadPortfolioBackup(portfolioData);
       setStatus({
         type: "success",
         message: "Záloha bola úspešne stiahnutá do zariadenia.",

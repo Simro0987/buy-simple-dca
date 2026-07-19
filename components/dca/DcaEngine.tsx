@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Zap } from "lucide-react";
+import { ShoppingCart, Zap } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactors } from "@/components/dca/MarketRegimeFactors";
@@ -9,15 +9,22 @@ import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import {
   calculateWeeklyExecution,
   DEFAULT_WEEKLY_INVESTMENT,
+  type TokenExecutionPlan,
 } from "@/lib/dcaEngineConfig";
 import type { CryptoPricesMap } from "@/lib/cryptoApi";
+import { interactiveButton } from "@/lib/motion";
 
 interface DcaEngineProps {
   prices?: CryptoPricesMap;
   loading?: boolean;
+  onRecordPurchase: (plans: TokenExecutionPlan[]) => boolean;
 }
 
-export function DcaEngine({ prices, loading = false }: DcaEngineProps) {
+export function DcaEngine({
+  prices,
+  loading = false,
+  onRecordPurchase,
+}: DcaEngineProps) {
   const [weeklyAmount, setWeeklyAmount] = useState(DEFAULT_WEEKLY_INVESTMENT);
 
   const executionPlans = useMemo(
@@ -29,6 +36,10 @@ export function DcaEngine({ prices, loading = false }: DcaEngineProps) {
     () => executionPlans.reduce((sum, plan) => sum + plan.totalUsd, 0),
     [executionPlans],
   );
+
+  const handleRecordPurchase = () => {
+    onRecordPurchase(executionPlans);
+  };
 
   return (
     <div className="space-y-5">
@@ -72,6 +83,17 @@ export function DcaEngine({ prices, loading = false }: DcaEngineProps) {
         prices={prices}
         loading={loading}
       />
+
+      <motion.button
+        type="button"
+        onClick={handleRecordPurchase}
+        disabled={loading || totalDeployed <= 0}
+        {...interactiveButton}
+        className="flex w-full items-center justify-center gap-2 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4 text-base font-bold text-emerald-400 shadow-[0_0_32px_rgba(52,211,153,0.18)] transition-colors hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <ShoppingCart className="h-5 w-5" />
+        Zaznamenať nákup
+      </motion.button>
     </div>
   );
 }

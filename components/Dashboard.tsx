@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
@@ -13,17 +13,22 @@ import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
+import { Toast } from "@/components/Toast";
+import { TransactionHistory } from "@/components/TransactionHistory";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
   const {
     assets,
     holdings,
+    transactions,
     totalBalance,
     realizedDeposit,
     profitLoss,
@@ -31,12 +36,28 @@ export function Dashboard() {
     isLive,
     prices,
     updateHoldings,
+    importPortfolio,
+    recordDcaPurchase,
+    portfolioData,
   } = usePortfolio();
 
   const showHome = activeTab === "home";
   const showPortfolio = activeTab === "portfolio";
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
+
+  const handleRecordPurchase = useCallback(
+    (plans: TokenExecutionPlan[]) => {
+      if (!prices) return false;
+
+      const recorded = recordDcaPurchase(plans, prices);
+      if (recorded) {
+        setToastMessage("Záznam uložený");
+      }
+      return recorded;
+    },
+    [prices, recordDcaPurchase],
+  );
 
   return (
     <div className="relative min-h-dvh bg-[#050505]">
@@ -88,12 +109,17 @@ export function Dashboard() {
               <AssetList assets={assets} loading={loading} />
               <YieldTokensList />
               <AddAssetButton onClick={() => setIsEditModalOpen(true)} />
+              <TransactionHistory transactions={transactions} />
             </motion.div>
           )}
 
           {showDca && (
             <motion.div key="dca" {...pageTransition}>
-              <DcaEngine prices={prices} loading={loading} />
+              <DcaEngine
+                prices={prices}
+                loading={loading}
+                onRecordPurchase={handleRecordPurchase}
+              />
             </motion.div>
           )}
 
@@ -116,9 +142,15 @@ export function Dashboard() {
 
       <SettingsModal
         open={isSettingsOpen}
-        holdings={holdings}
+        portfolioData={portfolioData}
         onClose={() => setIsSettingsOpen(false)}
-        onImport={updateHoldings}
+        onImport={importPortfolio}
+      />
+
+      <Toast
+        message={toastMessage ?? ""}
+        visible={Boolean(toastMessage)}
+        onClose={() => setToastMessage(null)}
       />
     </div>
   );

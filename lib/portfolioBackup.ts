@@ -1,30 +1,28 @@
-import type { HoldingsMap } from "@/lib/portfolioStorage";
+import type { PortfolioData } from "@/lib/portfolioStorage";
 
-export const BACKUP_VERSION = 1;
+export const BACKUP_VERSION = 2;
 export const BACKUP_FILENAME = "portfolio-backup.json";
 
 export interface PortfolioBackup {
   version: number;
   exportedAt: string;
   app: string;
-  holdings: HoldingsMap;
+  holdings: PortfolioData["holdings"];
+  transactions: PortfolioData["transactions"];
 }
 
-export function createPortfolioBackup(holdings: HoldingsMap): PortfolioBackup {
+export function createPortfolioBackup(data: PortfolioData): PortfolioBackup {
   return {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     app: "Edge Trading",
-    holdings: {
-      BTC: holdings.BTC,
-      ETH: holdings.ETH,
-      SOL: holdings.SOL,
-    },
+    holdings: { ...data.holdings },
+    transactions: [...data.transactions],
   };
 }
 
-export function downloadPortfolioBackup(holdings: HoldingsMap): void {
-  const backup = createPortfolioBackup(holdings);
+export function downloadPortfolioBackup(data: PortfolioData): void {
+  const backup = createPortfolioBackup(data);
   const blob = new Blob([JSON.stringify(backup, null, 2)], {
     type: "application/json",
   });
@@ -36,7 +34,7 @@ export function downloadPortfolioBackup(holdings: HoldingsMap): void {
   URL.revokeObjectURL(url);
 }
 
-function isValidHoldings(value: unknown): value is HoldingsMap {
+function isValidHoldings(value: unknown): value is PortfolioData["holdings"] {
   if (!value || typeof value !== "object") return false;
 
   const record = value as Record<string, unknown>;
@@ -48,23 +46,50 @@ function isValidHoldings(value: unknown): value is HoldingsMap {
   });
 }
 
-export function parsePortfolioBackup(raw: string): HoldingsMap {
+function isValidTransactions(
+  value: unknown,
+): value is PortfolioData["transactions"] {
+  if (!Array.isArray(value)) return true;
+  return value.every((item) => {
+    if (!item || typeof item !== "object") return false;
+    const tx = item as Record<string, unknown>;
+    return (
+      typeof tx.id === "string" &&
+      typeof tx.date === "string" &&
+      (tx.symbol === "BTC" || tx.symbol === "ETH" || tx.symbol === "SOL") &&
+      typeof tx.amount === "number" &&
+      typeof tx.priceUsd === "number" &&
+      typeof tx.spentUsd === "number"
+    );
+  });
+}
+
+export function parsePortfolioBackup(raw: string): PortfolioData {
   const parsed = JSON.parse(raw) as Partial<PortfolioBackup> & {
     holdings?: unknown;
+    transactions?: unknown;
   };
 
   if (parsed.holdings && isValidHoldings(parsed.holdings)) {
-    return parsed.holdings;
+    return {
+      holdings: parsed.holdings,
+      transactions: isValidTransactions(parsed.transactions)
+        ? (parsed.transactions ?? [])
+        : [],
+    };
   }
 
   if (isValidHoldings(parsed)) {
-    return parsed;
+    return {
+      holdings: parsed,
+      transactions: [],
+    };
   }
 
   throw new Error("Neplatný formát zálohy. Očakávaný súbor portfolio-backup.json.");
 }
 
-export async function readBackupFile(file: File): Promise<HoldingsMap> {
+export async function readBackupFile(file: File): Promise<PortfolioData> {
   if (!file.name.endsWith(".json")) {
     throw new Error("Vyber prosím súbor vo formáte .json");
   }

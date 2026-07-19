@@ -3,13 +3,17 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCryptoPrices } from "@/hooks/useCryptoPrices";
 import type { PortfolioAsset } from "@/lib/data";
-import type { CryptoSymbol } from "@/lib/cryptoApi";
+import type { CryptoPricesMap, CryptoSymbol } from "@/lib/cryptoApi";
+import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import {
   ASSET_DEFINITIONS,
-  DEFAULT_HOLDINGS,
-  readHoldingsFromStorage,
-  writeHoldingsToStorage,
+  createTransactionId,
+  DEFAULT_PORTFOLIO,
+  readPortfolioFromStorage,
+  writePortfolioToStorage,
   type HoldingsMap,
+  type PortfolioData,
+  type Transaction,
 } from "@/lib/portfolioStorage";
 import { portfolioHoldings } from "@/lib/data";
 
@@ -21,21 +25,76 @@ export interface LiveAsset extends PortfolioAsset {
 
 export function usePortfolio() {
   const { prices, loading, error, isLive, lastUpdated } = useCryptoPrices();
-  const [holdings, setHoldings] = useState<HoldingsMap>(DEFAULT_HOLDINGS);
+  const [holdings, setHoldings] = useState<HoldingsMap>(DEFAULT_PORTFOLIO.holdings);
+  const [transactions, setTransactions] = useState<Transaction[]>(
+    DEFAULT_PORTFOLIO.transactions,
+  );
   const [isHydrated, setIsHydrated] = useState(false);
 
+  const persistPortfolio = useCallback((data: PortfolioData) => {
+    setHoldings(data.holdings);
+    setTransactions(data.transactions);
+    writePortfolioToStorage(data);
+  }, []);
+
   useEffect(() => {
-    const stored = readHoldingsFromStorage();
+    const stored = readPortfolioFromStorage();
     if (stored) {
-      setHoldings(stored);
+      setHoldings(stored.holdings);
+      setTransactions(stored.transactions);
     }
     setIsHydrated(true);
   }, []);
 
-  const updateHoldings = useCallback((next: HoldingsMap) => {
-    setHoldings(next);
-    writeHoldingsToStorage(next);
-  }, []);
+  const updateHoldings = useCallback(
+    (next: HoldingsMap) => {
+      persistPortfolio({ holdings: next, transactions });
+    },
+    [persistPortfolio, transactions],
+  );
+
+  const importPortfolio = useCallback(
+    (data: PortfolioData) => {
+      persistPortfolio(data);
+    },
+    [persistPortfolio],
+  );
+
+  const recordDcaPurchase = useCallback(
+    (plans: TokenExecutionPlan[], priceMap: CryptoPricesMap) => {
+      const newTransactions: Transaction[] = [];
+      const nextHoldings: HoldingsMap = { ...holdings };
+
+      for (const plan of plans) {
+        const unitPrice = priceMap[plan.symbol]?.price ?? 0;
+        if (unitPrice <= 0 || plan.totalUsd <= 0) continue;
+
+        const amount = plan.totalUsd / unitPrice;
+        nextHoldings[plan.symbol] += amount;
+
+        newTransactions.push({
+          id: createTransactionId(),
+          date: new Date().toISOString(),
+          symbol: plan.symbol,
+          amount,
+          priceUsd: unitPrice,
+          spentUsd: plan.totalUsd,
+          type: "DCA",
+        });
+      }
+
+      if (newTransactions.length === 0) return false;
+
+      const nextTransactions = [...newTransactions, ...transactions];
+      persistPortfolio({
+        holdings: nextHoldings,
+        transactions: nextTransactions,
+      });
+
+      return true;
+    },
+    [holdings, persistPortfolio, transactions],
+  );
 
   const assets = useMemo<LiveAsset[]>(() => {
     return ASSET_DEFINITIONS.map((definition) => {
@@ -63,6 +122,7 @@ export function usePortfolio() {
   return {
     assets,
     holdings,
+    transactions,
     totalBalance,
     realizedDeposit: portfolioHoldings.realizedDeposit,
     profitLoss: portfolioHoldings.profitLoss,
@@ -73,7 +133,10 @@ export function usePortfolio() {
     prices,
     isHydrated,
     updateHoldings,
+    importPortfolio,
+    recordDcaPurchase,
+    portfolioData: { holdings, transactions } satisfies PortfolioData,
   };
 }
 
-export type { HoldingsMap, CryptoSymbol };
+export type { HoldingsMap, CryptoSymbol, Transaction, PortfolioData };
