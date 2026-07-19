@@ -6,8 +6,17 @@ import { MarketRegimeSection } from "@/components/dca/MarketRegimeSection";
 import { MoneyModeHeader } from "@/components/dca/MoneyModeHeader";
 import { TokenAllocationList } from "@/components/dca/TokenAllocationList";
 import { dcaEngineData } from "@/lib/dcaData";
+import type { CryptoPricesMap } from "@/lib/cryptoApi";
 
-export function DcaMoneyModePanel() {
+interface DcaMoneyModePanelProps {
+  prices?: CryptoPricesMap;
+  loading?: boolean;
+}
+
+export function DcaMoneyModePanel({
+  prices,
+  loading = false,
+}: DcaMoneyModePanelProps) {
   const { moneyMode, score, marketRegime, factors, tokenAllocations } =
     dcaEngineData;
 
@@ -40,7 +49,11 @@ export function DcaMoneyModePanel() {
           investmentAmount={marketRegime.investmentAmount}
         />
         <FactorPills factors={factors} />
-        <TokenAllocationList tokens={tokenAllocations} />
+        <TokenAllocationList
+          tokens={tokenAllocations}
+          prices={prices}
+          loading={loading}
+        />
       </div>
     </motion.section>
   );

@@ -1,7 +1,42 @@
-export const portfolioData = {
-  totalBalance: 5747.87,
+export type AssetAccent = "orange" | "purple" | "cyan";
+
+export interface PortfolioAsset {
+  symbol: string;
+  name: string;
+  balance: number;
+  accent: AssetAccent;
+}
+
+export const portfolioHoldings = {
+  cashUsd: 632.26,
   realizedDeposit: -85.21,
   profitLoss: 5833.08,
+  assets: [
+    {
+      symbol: "BTC",
+      name: "Bitcoin",
+      balance: 0.0482,
+      accent: "orange" as const,
+    },
+    {
+      symbol: "ETH",
+      name: "Ethereum",
+      balance: 0.612,
+      accent: "purple" as const,
+    },
+    {
+      symbol: "SOL",
+      name: "Solana",
+      balance: 4.28,
+      accent: "cyan" as const,
+    },
+  ],
+};
+
+/** @deprecated Use portfolioHoldings for static data; live values come from usePortfolio */
+export const portfolioData = {
+  ...portfolioHoldings,
+  totalBalance: 0,
   fearGreedIndex: 27,
   fearGreedLabel: "Fear",
   moneyMode: "CAPITULATION",
@@ -11,32 +46,11 @@ export const portfolioData = {
     { symbol: "SOL", percent: 10, color: "#22d3ee" },
     { symbol: "CASH", percent: 11, color: "#52525b" },
   ],
-  assets: [
-    {
-      symbol: "BTC",
-      name: "Bitcoin",
-      balance: 0.0482,
-      usdValue: 3103.85,
-      change7d: 4.82,
-      accent: "orange" as const,
-    },
-    {
-      symbol: "ETH",
-      name: "Ethereum",
-      balance: 0.612,
-      usdValue: 1436.97,
-      change7d: -2.14,
-      accent: "purple" as const,
-    },
-    {
-      symbol: "SOL",
-      name: "Solana",
-      balance: 4.28,
-      usdValue: 574.79,
-      change7d: 8.37,
-      accent: "cyan" as const,
-    },
-  ],
+  assets: portfolioHoldings.assets.map((asset) => ({
+    ...asset,
+    usdValue: 0,
+    change7d: 0,
+  })),
 };
 
 export function formatUsd(value: number, options?: { showSign?: boolean }) {
@@ -55,4 +69,17 @@ export function formatUsd(value: number, options?: { showSign?: boolean }) {
 export function formatCrypto(value: number, symbol: string) {
   const decimals = symbol === "BTC" ? 4 : symbol === "ETH" ? 3 : 2;
   return `${value.toFixed(decimals)} ${symbol}`;
+}
+
+export function formatUnitPrice(value: number) {
+  if (value >= 1000) {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  }
+
+  return formatUsd(value);
 }

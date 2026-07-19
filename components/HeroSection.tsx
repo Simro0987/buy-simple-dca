@@ -1,18 +1,24 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { LiveIndicator } from "@/components/LiveIndicator";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
 
 interface HeroSectionProps {
   totalBalance: number;
   realizedDeposit: number;
   profitLoss: number;
+  loading?: boolean;
+  isLive?: boolean;
 }
 
 export function HeroSection({
   totalBalance,
   realizedDeposit,
   profitLoss,
+  loading = false,
+  isLive = false,
 }: HeroSectionProps) {
   const isProfit = profitLoss >= 0;
 
@@ -24,11 +30,18 @@ export function HeroSection({
       className="space-y-6"
     >
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
-          Moje portfólio — USD
-        </p>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-medium uppercase tracking-[0.2em] text-zinc-500">
+            Moje portfólio — USD
+          </p>
+          <LiveIndicator isLive={isLive} loading={loading} compact />
+        </div>
         <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl">
-          {formatUsd(totalBalance)}
+          {loading ? (
+            <PriceSkeleton className="h-12 w-56 sm:h-14 sm:w-64" />
+          ) : (
+            formatUsd(totalBalance)
+          )}
         </h1>
       </div>
 

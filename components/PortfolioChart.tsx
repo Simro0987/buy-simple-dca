@@ -1,12 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { useMemo } from "react";
 import {
   Area,
   AreaChart,
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
 import {
   generatePortfolioHistory,
@@ -35,9 +37,26 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
   );
 }
 
-const chartData = generatePortfolioHistory();
+interface PortfolioChartProps {
+  endValue?: number;
+  loading?: boolean;
+}
 
-export function PortfolioChart() {
+export function PortfolioChart({
+  endValue = 5747.87,
+  loading = false,
+}: PortfolioChartProps) {
+  const chartData = useMemo(
+    () => generatePortfolioHistory(3000, endValue),
+    [endValue],
+  );
+
+  const percentChange = useMemo(() => {
+    const start = chartData[0]?.value ?? 3000;
+    if (!start) return 0;
+    return ((endValue - start) / start) * 100;
+  }, [chartData, endValue]);
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -53,11 +72,20 @@ export function PortfolioChart() {
           <p className="text-sm font-medium text-zinc-400">30-day history</p>
         </div>
         <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-400">
-          +91.6%
+          {loading ? (
+            <PriceSkeleton className="inline-block h-3 w-12" />
+          ) : (
+            `${percentChange >= 0 ? "+" : ""}${percentChange.toFixed(1)}%`
+          )}
         </span>
       </div>
 
-      <div className="h-48 w-full">
+      <div className="relative h-48 w-full">
+        {loading && (
+          <div className="absolute inset-0 z-10 flex items-center justify-center rounded-2xl bg-[#111113]/60 backdrop-blur-[1px]">
+            <PriceSkeleton className="h-40 w-full rounded-2xl" />
+          </div>
+        )}
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart
             data={chartData}

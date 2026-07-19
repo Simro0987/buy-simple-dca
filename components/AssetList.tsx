@@ -1,45 +1,31 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { formatCrypto, formatUsd } from "@/lib/data";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
+import { formatCrypto, formatUnitPrice, formatUsd } from "@/lib/data";
+import type { LiveAsset } from "@/hooks/usePortfolio";
 
-type Accent = "orange" | "purple" | "cyan";
-
-interface Asset {
-  symbol: string;
-  name: string;
-  balance: number;
-  usdValue: number;
-  change7d: number;
-  accent: Accent;
-}
-
-const accentStyles: Record<
-  Accent,
-  { ring: string; bg: string; text: string }
-> = {
+const accentStyles = {
   orange: {
     ring: "ring-orange-500/30",
     bg: "bg-orange-500",
-    text: "text-orange-500",
   },
   purple: {
     ring: "ring-purple-400/30",
     bg: "bg-purple-500",
-    text: "text-purple-400",
   },
   cyan: {
     ring: "ring-cyan-400/30",
     bg: "bg-gradient-to-br from-cyan-400 to-purple-500",
-    text: "text-cyan-400",
   },
-};
+} as const;
 
 interface AssetListProps {
-  assets: Asset[];
+  assets: LiveAsset[];
+  loading?: boolean;
 }
 
-export function AssetList({ assets }: AssetListProps) {
+export function AssetList({ assets, loading = false }: AssetListProps) {
   return (
     <motion.section
       initial={{ opacity: 0, y: 16 }}
@@ -85,22 +71,37 @@ export function AssetList({ assets }: AssetListProps) {
                 <p className="text-sm text-zinc-400">
                   {formatCrypto(asset.balance, asset.symbol)}
                 </p>
+                <p className="mt-0.5 text-[10px] text-zinc-600">
+                  {loading ? (
+                    <PriceSkeleton className="inline-block h-3 w-16" />
+                  ) : (
+                    <>@ {formatUnitPrice(asset.unitPrice)}</>
+                  )}
+                </p>
               </div>
 
               <div className="text-right">
                 <p className="font-semibold text-white">
-                  {formatUsd(asset.usdValue)}
+                  {loading ? (
+                    <PriceSkeleton className="ml-auto h-5 w-20" />
+                  ) : (
+                    formatUsd(asset.usdValue)
+                  )}
                 </p>
-                <span
-                  className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                    isPositive
-                      ? "bg-emerald-400/10 text-emerald-400"
-                      : "bg-red-500/10 text-red-400"
-                  }`}
-                >
-                  {isPositive ? "+" : ""}
-                  {asset.change7d.toFixed(2)}%
-                </span>
+                {loading ? (
+                  <PriceSkeleton className="ml-auto mt-1 h-5 w-14" />
+                ) : (
+                  <span
+                    className={`mt-1 inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                      isPositive
+                        ? "bg-emerald-400/10 text-emerald-400"
+                        : "bg-red-500/10 text-red-400"
+                    }`}
+                  >
+                    {isPositive ? "+" : ""}
+                    {asset.change7d.toFixed(2)}%
+                  </span>
+                )}
               </div>
             </motion.div>
           );

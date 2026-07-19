@@ -1,11 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { formatUsd } from "@/lib/data";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
+import { formatUnitPrice, formatUsd } from "@/lib/data";
 import {
   tokenAccentStyles,
   type TokenAccent,
 } from "@/lib/dcaData";
+import type { CryptoPricesMap } from "@/lib/cryptoApi";
 
 interface TokenAllocation {
   symbol: string;
@@ -19,9 +21,15 @@ interface TokenAllocation {
 
 interface TokenAllocationListProps {
   tokens: TokenAllocation[];
+  prices?: CryptoPricesMap;
+  loading?: boolean;
 }
 
-export function TokenAllocationList({ tokens }: TokenAllocationListProps) {
+export function TokenAllocationList({
+  tokens,
+  prices,
+  loading = false,
+}: TokenAllocationListProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -50,6 +58,8 @@ export function TokenAllocationList({ tokens }: TokenAllocationListProps) {
           const styles = tokenAccentStyles[token.accent];
           const marketWidth = (token.weight * token.marketShare) / 100;
           const limitWidth = (token.weight * token.limitShare) / 100;
+          const unitPrice =
+            prices?.[token.symbol as keyof CryptoPricesMap]?.price ?? 0;
 
           return (
             <motion.div
@@ -71,11 +81,22 @@ export function TokenAllocationList({ tokens }: TokenAllocationListProps) {
                       {token.symbol}
                     </p>
                     <p className="text-[10px] text-zinc-500">{token.name}</p>
+                    <p className="mt-0.5 text-[10px] text-zinc-600">
+                      {loading ? (
+                        <PriceSkeleton className="inline-block h-3 w-20" />
+                      ) : (
+                        <>Live @ {formatUnitPrice(unitPrice)}</>
+                      )}
+                    </p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className={`text-sm font-bold ${styles.text}`}>
-                    {formatUsd(token.amount)}
+                    {loading ? (
+                      <PriceSkeleton className="ml-auto h-5 w-16" />
+                    ) : (
+                      formatUsd(token.amount)
+                    )}
                   </p>
                   <p className="text-[10px] text-zinc-500">
                     váha {token.weight}%
@@ -103,11 +124,19 @@ export function TokenAllocationList({ tokens }: TokenAllocationListProps) {
               <div className="mt-2 flex justify-between text-[9px] font-medium text-zinc-600">
                 <span>
                   Market {token.marketShare}% ·{" "}
-                  {formatUsd(token.amount * (token.marketShare / 100))}
+                  {loading ? (
+                    <PriceSkeleton className="inline-block h-3 w-12 align-middle" />
+                  ) : (
+                    formatUsd(token.amount * (token.marketShare / 100))
+                  )}
                 </span>
                 <span>
                   Limit {token.limitShare}% ·{" "}
-                  {formatUsd(token.amount * (token.limitShare / 100))}
+                  {loading ? (
+                    <PriceSkeleton className="inline-block h-3 w-12 align-middle" />
+                  ) : (
+                    formatUsd(token.amount * (token.limitShare / 100))
+                  )}
                 </span>
               </div>
             </motion.div>

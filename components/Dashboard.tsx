@@ -6,13 +6,22 @@ import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { DcaMoneyModePanel } from "@/components/dca/DcaMoneyModePanel";
 import { HeroSection } from "@/components/HeroSection";
+import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
-import { portfolioData } from "@/lib/data";
+import { usePortfolio } from "@/hooks/usePortfolio";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
-  const { totalBalance, realizedDeposit, profitLoss, assets } = portfolioData;
+  const {
+    assets,
+    totalBalance,
+    realizedDeposit,
+    profitLoss,
+    loading,
+    isLive,
+    prices,
+  } = usePortfolio();
 
   const showPortfolio = activeTab === "portfolio" || activeTab === "home";
   const showDca = activeTab === "dca";
@@ -34,13 +43,7 @@ export function Dashboard() {
             </p>
             <p className="text-sm font-medium text-zinc-400">Terminal v2.0</p>
           </div>
-          <div className="flex items-center gap-2 rounded-full border border-white/5 bg-[#111113] px-3 py-1.5">
-            <span className="relative flex h-2 w-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
-            </span>
-            <span className="text-xs font-medium text-emerald-400">Live</span>
-          </div>
+          <LiveIndicator isLive={isLive} loading={loading} />
         </header>
 
         <AnimatePresence mode="wait">
@@ -57,9 +60,11 @@ export function Dashboard() {
                 totalBalance={totalBalance}
                 realizedDeposit={realizedDeposit}
                 profitLoss={profitLoss}
+                loading={loading}
+                isLive={isLive}
               />
-              <PortfolioChart />
-              <AssetList assets={assets} />
+              <PortfolioChart endValue={totalBalance} loading={loading} />
+              <AssetList assets={assets} loading={loading} />
             </motion.div>
           )}
 
@@ -71,7 +76,7 @@ export function Dashboard() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
             >
-              <DcaMoneyModePanel />
+              <DcaMoneyModePanel prices={prices} loading={loading} />
             </motion.div>
           )}
 
