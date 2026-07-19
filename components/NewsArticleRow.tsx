@@ -93,7 +93,7 @@ export function NewsArticleRow({
           )}
           {isMarketStatus && (
             <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-300">
-              Trhový status
+              Market Status
             </span>
           )}
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400">

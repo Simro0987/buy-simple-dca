@@ -1,6 +1,10 @@
+import { isDefiToken, getTokenBrandColor } from "@/lib/newsDefiBrands";
+import { generateDefiPatternImage } from "@/lib/newsDefiImage";
+
 export interface TokenImageRef {
   symbol: string;
   logoUrl?: string;
+  brandColor?: string;
 }
 
 const OG_IMAGE_PATTERNS = [
@@ -274,8 +278,17 @@ export function generateIdenticonSvg(symbol: string): string {
 }
 
 export function generateTokenLogoPlaceholder(token: TokenImageRef): string {
-  if (token.logoUrl && isValidImageUrl(token.logoUrl)) {
+  if (token.logoUrl && isValidImageUrl(token.logoUrl) && !isDefiToken(token.symbol)) {
     return token.logoUrl;
+  }
+  return generateIdenticonSvg(token.symbol);
+}
+
+export async function generateTokenImageFallback(
+  token: TokenImageRef,
+): Promise<string> {
+  if (isDefiToken(token.symbol) || token.logoUrl) {
+    return generateDefiPatternImage(token, token.brandColor ?? getTokenBrandColor(token.symbol));
   }
   return generateIdenticonSvg(token.symbol);
 }
@@ -366,7 +379,7 @@ export async function resolveHeroImage(
   }
 
   if (primaryToken) {
-    return generateTokenLogoPlaceholder(primaryToken);
+    return await generateTokenImageFallback(primaryToken);
   }
 
   return generateIdenticonSvg("CRYPTO");
@@ -399,7 +412,7 @@ export async function resolveArticleImage(
   }
 
   if (primaryToken) {
-    return generateTokenLogoPlaceholder(primaryToken);
+    return await generateTokenImageFallback(primaryToken);
   }
 
   return generateIdenticonSvg("CRYPTO");

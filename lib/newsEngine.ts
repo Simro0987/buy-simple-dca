@@ -9,6 +9,7 @@ import {
   rankArticles,
   selectHeroCandidate,
 } from "@/lib/newsRanking";
+import { getTokenBrandColor } from "@/lib/newsDefiBrands";
 import { fetchCryptoPanicForPortfolio } from "@/lib/newsCryptoPanic";
 import {
   createMarketStatusItems,
@@ -310,6 +311,46 @@ function buildCoinGeckoTokenFeedUrl(token: PortfolioTokenInput): string {
   return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
 }
 
+function buildDefiantTokenFeedUrl(token: PortfolioTokenInput): string {
+  const query = `${token.symbol} ${token.name} site:thedefiant.io`;
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+}
+
+function enrichItemWithToken(
+  item: RawNewsItem,
+  token: PortfolioTokenInput,
+): RawNewsItem {
+  return {
+    ...item,
+    tokens: [...new Set([...item.tokens, token.symbol.toUpperCase()])],
+  };
+}
+
+function enrichDefiSourceItems(
+  items: RawNewsItem[],
+  portfolioTokens: PortfolioTokenInput[],
+): RawNewsItem[] {
+  return items.map((item) => {
+    const text = `${item.title} ${item.summary}`.toLowerCase();
+    const matched = portfolioTokens
+      .filter((token) => {
+        const symbol = escapeRegex(token.symbol.toLowerCase());
+        const name = escapeRegex(token.name.toLowerCase());
+        return (
+          new RegExp(`\\b${symbol}\\b`, "i").test(text) ||
+          (token.name.length >= 3 &&
+            new RegExp(`\\b${name}\\b`, "i").test(text))
+        );
+      })
+      .map((token) => token.symbol.toUpperCase());
+
+    return {
+      ...item,
+      tokens: [...new Set([...item.tokens, ...matched])],
+    };
+  });
+}
+
 async function fetchTokenKeywordFeeds(
   portfolioTokens: PortfolioTokenInput[],
 ): Promise<RawNewsItem[]> {
@@ -323,24 +364,21 @@ async function fetchTokenKeywordFeeds(
         "news.google.com",
         4,
         tokens,
-      ).then((items) =>
-        items.map((item) => ({
-          ...item,
-          tokens: [...new Set([...item.tokens, token.symbol.toUpperCase()])],
-        })),
-      ),
+      ).then((items) => items.map((item) => enrichItemWithToken(item, token))),
       fetchFeed(
         buildCoinGeckoTokenFeedUrl(token),
         `CoinGecko · ${token.symbol}`,
         "coingecko.com",
         3,
         tokens,
-      ).then((items) =>
-        items.map((item) => ({
-          ...item,
-          tokens: [...new Set([...item.tokens, token.symbol.toUpperCase()])],
-        })),
-      ),
+      ).then((items) => items.map((item) => enrichItemWithToken(item, token))),
+      fetchFeed(
+        buildDefiantTokenFeedUrl(token),
+        `The Defiant · ${token.symbol}`,
+        "thedefiant.io",
+        3,
+        tokens,
+      ).then((items) => items.map((item) => enrichItemWithToken(item, token))),
     ]),
   );
 
@@ -493,14 +531,14 @@ export async function aggregateNews(
 
   const allItems = [
     ...feedResults.flat(),
-    ...defiFeedResults.flat(),
+    ...enrichDefiSourceItems(defiFeedResults.flat(), tokens),
     ...tokenFeedResults,
     ...cryptoPanicItems,
     ...supabaseItems,
   ];
 
   const deduped = deduplicateArticles(allItems);
-  const marketStatusItems = createMarketStatusItems(tokens, deduped, marketData);
+  const marketStatusItems = await createMarketStatusItems(tokens, deduped, marketData);
   const withMarketStatus = [...deduped, ...marketStatusItems];
   const portfolioRelevant = filterForPortfolio(withMarketStatus, tokens);
   const pool = portfolioRelevant.length >= 8 ? portfolioRelevant : withMarketStatus;
@@ -514,13 +552,22 @@ export async function aggregateNews(
 
   const imageInputs = top.map((item) => {
     const primaryToken = findPrimaryToken(item.tokens, tokens);
+    const marketCoin = primaryToken
+      ? marketData.get(primaryToken.symbol.toUpperCase())
+      : undefined;
+    const logoUrl = primaryToken?.logoUrl || marketCoin?.image;
+
     return {
       url: item.url,
       title: item.title,
       imageUrl: item.imageUrl,
       tokens: item.tokens,
       primaryToken: primaryToken
-        ? ({ symbol: primaryToken.symbol, logoUrl: primaryToken.logoUrl } satisfies TokenImageRef)
+        ? ({
+            symbol: primaryToken.symbol,
+            logoUrl,
+            brandColor: getTokenBrandColor(primaryToken.symbol),
+          } satisfies TokenImageRef)
         : undefined,
     };
   });
@@ -533,6 +580,10 @@ export async function aggregateNews(
     const classification = classifyArticle(item.title);
     const primaryToken = findPrimaryToken(item.tokens, tokens);
 
+    const marketCoin = primaryToken
+      ? marketData.get(primaryToken.symbol.toUpperCase())
+      : undefined;
+
     return {
       id: item.id,
       title,
@@ -544,7 +595,12 @@ export async function aggregateNews(
       publishedAt: item.publishedAt,
       imageUrl: resolvedImages[index],
       tokens: item.tokens,
-      primaryToken,
+      primaryToken: primaryToken
+        ? {
+            ...primaryToken,
+            logoUrl: primaryToken.logoUrl || marketCoin?.image,
+          }
+        : undefined,
       relevanceScore: item.relevanceScore,
       isMarketStatus: item.id.startsWith("market-status-"),
       ...classification,
@@ -571,7 +627,10 @@ export async function aggregateNews(
       heroPrimaryToken
         ? {
             symbol: heroPrimaryToken.symbol,
-            logoUrl: heroPrimaryToken.logoUrl,
+            logoUrl:
+              heroPrimaryToken.logoUrl ||
+              marketData.get(heroPrimaryToken.symbol.toUpperCase())?.image,
+            brandColor: getTokenBrandColor(heroPrimaryToken.symbol),
           }
         : undefined,
     );

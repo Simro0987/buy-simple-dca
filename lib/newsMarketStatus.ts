@@ -1,6 +1,7 @@
 import type { PortfolioTokenInput, RawNewsItem } from "@/lib/newsEngine";
+import { getTokenBrandColor } from "@/lib/newsDefiBrands";
+import { generateDefiPatternImage } from "@/lib/newsDefiImage";
 import { getSourceFaviconUrl } from "@/lib/newsSources";
-import { generateTokenLogoPlaceholder } from "@/lib/newsImageHandler";
 
 interface CoinMarketData {
   symbol: string;
@@ -65,11 +66,11 @@ export function hasRecentNewsForToken(
   );
 }
 
-export function createMarketStatusItems(
+export async function createMarketStatusItems(
   portfolioTokens: PortfolioTokenInput[],
   existingItems: RawNewsItem[],
   marketData: Map<string, CoinMarketData>,
-): RawNewsItem[] {
+): Promise<RawNewsItem[]> {
   const items: RawNewsItem[] = [];
 
   for (const token of portfolioTokens) {
@@ -83,22 +84,23 @@ export function createMarketStatusItems(
     const changeLabel =
       change >= 0 ? `+${change.toFixed(2)}%` : `${change.toFixed(2)}%`;
     const logoUrl = token.logoUrl || market.image;
+    const brandColor = getTokenBrandColor(symbol);
+
+    const imageUrl = await generateDefiPatternImage(
+      { symbol: token.symbol, logoUrl },
+      brandColor,
+    );
 
     items.push({
       id: `market-status-${symbol}`,
-      title: `${symbol}: Posledný status z trhu`,
+      title: `${symbol}: Market Status`,
       summary: `Aktuálna cena ${formatUsd(market.current_price)} · 24h zmena ${changeLabel}. Žiadne nové správy za posledných 24h.`,
       url: `https://www.coingecko.com/en/coins/${market.id}`,
       source: "CoinGecko Market",
       sourceDomain: "coingecko.com",
       sourceLogoUrl: getSourceFaviconUrl("coingecko.com"),
       publishedAt: new Date().toISOString(),
-      imageUrl:
-        logoUrl ||
-        generateTokenLogoPlaceholder({
-          symbol: token.symbol,
-          logoUrl: token.logoUrl,
-        }),
+      imageUrl,
       tokens: [symbol],
     });
   }
