@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
+import { ConfluenceRadar } from "@/components/ConfluenceRadar";
 import { DcaEngine } from "@/components/dca/DcaEngine";
 import { EditHoldingsModal } from "@/components/EditHoldingsModal";
 import { HeroSection } from "@/components/HeroSection";
@@ -28,7 +29,8 @@ export function Dashboard() {
     updateHoldings,
   } = usePortfolio();
 
-  const showPortfolio = activeTab === "portfolio" || activeTab === "home";
+  const showHome = activeTab === "home";
+  const showPortfolio = activeTab === "portfolio";
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
 
@@ -52,6 +54,19 @@ export function Dashboard() {
         </header>
 
         <AnimatePresence mode="wait">
+          {showHome && (
+            <motion.div
+              key="home"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className="space-y-8"
+            >
+              <ConfluenceRadar />
+            </motion.div>
+          )}
+
           {showPortfolio && (
             <motion.div
               key="portfolio"
