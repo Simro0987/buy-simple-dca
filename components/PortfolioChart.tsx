@@ -1,0 +1,111 @@
+"use client";
+
+import { motion } from "framer-motion";
+import {
+  Area,
+  AreaChart,
+  ResponsiveContainer,
+  Tooltip,
+} from "recharts";
+import { formatUsd } from "@/lib/data";
+import {
+  generatePortfolioHistory,
+  type PortfolioHistoryPoint,
+} from "@/lib/chartData";
+
+interface ChartTooltipProps {
+  active?: boolean;
+  payload?: { payload: PortfolioHistoryPoint }[];
+}
+
+function ChartTooltip({ active, payload }: ChartTooltipProps) {
+  if (!active || !payload?.length) return null;
+
+  const point = payload[0].payload;
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-zinc-900/80 px-4 py-3 shadow-xl backdrop-blur-md">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+        {point.label}
+      </p>
+      <p className="mt-0.5 text-lg font-bold tracking-tight text-emerald-400">
+        {formatUsd(point.value)}
+      </p>
+    </div>
+  );
+}
+
+const chartData = generatePortfolioHistory();
+
+export function PortfolioChart() {
+  return (
+    <motion.section
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.45, delay: 0.08, ease: "easeOut" }}
+      className="rounded-3xl border border-white/5 bg-[#111113] p-4"
+    >
+      <div className="mb-3 flex items-center justify-between px-1">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+            Performance
+          </p>
+          <p className="text-sm font-medium text-zinc-400">30-day history</p>
+        </div>
+        <span className="rounded-full bg-emerald-400/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-400">
+          +91.6%
+        </span>
+      </div>
+
+      <div className="h-48 w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <AreaChart
+            data={chartData}
+            margin={{ top: 8, right: 4, left: 4, bottom: 0 }}
+          >
+            <defs>
+              <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#34d399" stopOpacity={0.35} />
+                <stop offset="60%" stopColor="#34d399" stopOpacity={0.08} />
+                <stop offset="100%" stopColor="#000000" stopOpacity={0} />
+              </linearGradient>
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            <Tooltip
+              content={<ChartTooltip />}
+              cursor={{
+                stroke: "rgba(52, 211, 153, 0.25)",
+                strokeWidth: 1,
+                strokeDasharray: "4 4",
+              }}
+            />
+
+            <Area
+              type="monotone"
+              dataKey="value"
+              stroke="#34d399"
+              strokeWidth={2.5}
+              fill="url(#portfolioGradient)"
+              filter="url(#glow)"
+              dot={false}
+              activeDot={{
+                r: 5,
+                fill: "#34d399",
+                stroke: "#050505",
+                strokeWidth: 2,
+                className: "drop-shadow-[0_0_8px_rgba(52,211,153,0.8)]",
+              }}
+            />
+          </AreaChart>
+        </ResponsiveContainer>
+      </div>
+    </motion.section>
+  );
+}

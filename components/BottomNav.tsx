@@ -3,10 +3,11 @@
 import { motion } from "framer-motion";
 import { Home, Newspaper, PieChart, Repeat } from "lucide-react";
 
-type Tab = "home" | "news" | "portfolio" | "dca";
+export type Tab = "home" | "news" | "portfolio" | "dca";
 
 interface BottomNavProps {
-  activeTab?: Tab;
+  activeTab: Tab;
+  onTabChange: (tab: Tab) => void;
 }
 
 const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
@@ -16,7 +17,7 @@ const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "dca", label: "DCA", icon: Repeat },
 ];
 
-export function BottomNav({ activeTab = "portfolio" }: BottomNavProps) {
+export function BottomNav({ activeTab, onTabChange }: BottomNavProps) {
   return (
     <motion.nav
       initial={{ opacity: 0, y: 24 }}
@@ -33,6 +34,7 @@ export function BottomNav({ activeTab = "portfolio" }: BottomNavProps) {
             <button
               key={tab.id}
               type="button"
+              onClick={() => onTabChange(tab.id)}
               className="group relative flex flex-col items-center gap-1 px-4 py-1"
               aria-current={isActive ? "page" : undefined}
             >
