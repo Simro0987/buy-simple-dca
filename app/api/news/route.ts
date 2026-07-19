@@ -1,22 +1,18 @@
 import { NextResponse } from "next/server";
 import { aggregateNews } from "@/lib/newsEngine";
-import { generateHeroImageUrl } from "@/lib/newsHeroImage";
 
 export const revalidate = 900;
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
-    const articles = await aggregateNews();
+    const { searchParams } = new URL(request.url);
+    const symbols =
+      searchParams.get("symbols")?.split(",").filter(Boolean) ?? [];
 
-    let heroImageUrl: string | undefined;
-    const hero = articles[0];
-    if (hero) {
-      heroImageUrl = hero.imageUrl ?? (await generateHeroImageUrl(hero.title));
-    }
+    const articles = await aggregateNews(symbols);
 
     return NextResponse.json({
       success: true,
-      heroImageUrl,
       articles,
       fetchedAt: new Date().toISOString(),
     });

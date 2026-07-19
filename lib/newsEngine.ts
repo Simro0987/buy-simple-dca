@@ -75,13 +75,36 @@ function extractImageFromBlock(block: string): string | undefined {
   return undefined;
 }
 
-function detectTokens(text: string): string[] {
+function detectTokens(text: string, extraSymbols: string[] = []): string[] {
   const upper = text.toUpperCase();
   const found = new Set<string>();
-  if (/\bBTC\b/.test(upper) || /\bBITCOIN\b/.test(upper)) found.add("BTC");
-  if (/\bETH\b/.test(upper) || /\bETHEREUM\b/.test(upper)) found.add("ETH");
-  if (/\bSOL\b/.test(upper) || /\bSOLANA\b/.test(upper)) found.add("SOL");
+
+  const rules: [string, RegExp][] = [
+    ["BTC", /\b(BTC|BITCOIN)\b/],
+    ["ETH", /\b(ETH|ETHEREUM|ETHER)\b/],
+    ["SOL", /\b(SOL|SOLANA)\b/],
+    ["LINK", /\b(LINK|CHAINLINK)\b/],
+    ["AAVE", /\bAAVE\b/],
+    ["GMX", /\bGMX\b/],
+    ["JUP", /\b(JUP|JUPITER)\b/],
+    ["PENDLE", /\bPENDLE\b/],
+    ["MORPHO", /\bMORPHO\b/],
+    ["HYPE", /\b(HYPE|HYPERLIQUID)\b/],
+  ];
+
+  for (const [symbol, pattern] of rules) {
+    if (pattern.test(upper)) found.add(symbol);
+  }
+
+  for (const symbol of extraSymbols) {
+    const normalized = symbol.toUpperCase();
+    if (new RegExp(`\\b${normalized}\\b`).test(upper)) {
+      found.add(normalized);
+    }
+  }
+
   if (/\bDEFI\b/.test(upper)) found.add("DeFi");
+
   return [...found];
 }
 
@@ -226,10 +249,13 @@ async function translateBatch(texts: string[]): Promise<string[]> {
   return Promise.all(texts.map((text) => translateText(text)));
 }
 
-export async function fetchSupabaseNews(): Promise<RawNewsItem[]> {
+export async function fetchSupabaseNews(symbols: string[] = []): Promise<RawNewsItem[]> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
   if (!supabaseUrl || !supabaseKey) return [];
+
+  const coinFilter =
+    symbols.length > 0 ? symbols.join(",") : "BTC,ETH,SOL";
 
   try {
     const response = await fetch(`${supabaseUrl}/functions/v1/crypto-news`, {
@@ -239,7 +265,7 @@ export async function fetchSupabaseNews(): Promise<RawNewsItem[]> {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        currencies: "BTC,ETH,SOL",
+        currencies: coinFilter,
         kind: "news",
         lang: "sk",
       }),
@@ -287,14 +313,16 @@ export async function fetchSupabaseNews(): Promise<RawNewsItem[]> {
   }
 }
 
-export async function aggregateNews(): Promise<NewsArticle[]> {
+export async function aggregateNews(
+  portfolioSymbols: string[] = [],
+): Promise<NewsArticle[]> {
   const feedResults = await Promise.all(
     NEWS_SOURCES.map((source) =>
       fetchFeed(source.feedUrl, source.name, source.domain, source.maxItems),
     ),
   );
 
-  const supabaseItems = await fetchSupabaseNews();
+  const supabaseItems = await fetchSupabaseNews(portfolioSymbols);
   const allItems = [...feedResults.flat(), ...supabaseItems];
 
   const seen = new Set<string>();

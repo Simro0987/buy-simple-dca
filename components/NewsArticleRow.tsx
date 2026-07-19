@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { ExternalLink } from "lucide-react";
-import type { NewsArticle } from "@/lib/newsEngine";
+import type { SmartNewsArticle } from "@/lib/newsTokenFilter";
+import { TokenBadgeList } from "@/components/TokenBadge";
 import { listItemVariants } from "@/lib/motion";
 
 function formatRelativeTime(date: string) {
@@ -17,10 +18,14 @@ function formatRelativeTime(date: string) {
 }
 
 interface NewsArticleRowProps {
-  article: NewsArticle;
+  article: SmartNewsArticle;
+  showTokenBadges?: boolean;
 }
 
-export function NewsArticleRow({ article }: NewsArticleRowProps) {
+export function NewsArticleRow({
+  article,
+  showTokenBadges = false,
+}: NewsArticleRowProps) {
   return (
     <motion.a
       href={article.url}
@@ -78,6 +83,11 @@ export function NewsArticleRow({ article }: NewsArticleRowProps) {
           <p className="mt-1 line-clamp-1 text-xs text-zinc-500">
             {article.summary}
           </p>
+        )}
+        {showTokenBadges && article.matchedTokens.length > 0 && (
+          <div className="mt-2">
+            <TokenBadgeList tokens={article.matchedTokens} />
+          </div>
         )}
       </div>
 

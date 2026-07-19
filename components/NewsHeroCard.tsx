@@ -3,7 +3,8 @@
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { ExternalLink, Zap } from "lucide-react";
-import type { NewsArticle } from "@/lib/newsEngine";
+import type { SmartNewsArticle } from "@/lib/newsTokenFilter";
+import { TokenBadgeList } from "@/components/TokenBadge";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 
 function formatRelativeTime(date: string) {
@@ -17,15 +18,17 @@ function formatRelativeTime(date: string) {
 }
 
 interface NewsHeroCardProps {
-  article: NewsArticle | null;
+  article: SmartNewsArticle | null;
   imageUrl?: string;
   loading?: boolean;
+  showTokenBadges?: boolean;
 }
 
 export function NewsHeroCard({
   article,
   imageUrl,
   loading = false,
+  showTokenBadges = false,
 }: NewsHeroCardProps) {
   if (loading) {
     return <PriceSkeleton className="h-72 w-full rounded-3xl" />;
@@ -99,6 +102,11 @@ export function NewsHeroCard({
           <p className="mt-2 line-clamp-2 text-sm leading-relaxed text-zinc-400">
             {article.summary}
           </p>
+        )}
+        {showTokenBadges && article.matchedTokens.length > 0 && (
+          <div className="mt-3">
+            <TokenBadgeList tokens={article.matchedTokens} max={4} />
+          </div>
         )}
       </div>
     </motion.a>

@@ -1,15 +1,19 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Loader2, RefreshCw, Zap } from "lucide-react";
+import { Loader2, RefreshCw, Wallet, Zap } from "lucide-react";
 import { NewsArticleRow } from "@/components/NewsArticleRow";
 import { NewsHeroCard } from "@/components/NewsHeroCard";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { useNewsFeed } from "@/hooks/useNewsFeed";
+import { usePortfolio } from "@/hooks/usePortfolio";
 import { listContainerVariants } from "@/lib/motion";
 
 export function NewsFeed() {
+  const { allAssets } = usePortfolio();
   const {
+    mode,
+    setMode,
     heroArticle,
     listArticles,
     heroImageUrl,
@@ -17,10 +21,11 @@ export function NewsFeed() {
     error,
     lastUpdated,
     refresh,
-    articles,
-  } = useNewsFeed();
+    matchedCount,
+    portfolioTokens,
+  } = useNewsFeed(allAssets);
 
-  const flashCount = articles.filter((a) => a.isFlash).length;
+  const flashCount = listArticles.filter((a) => a.isFlash).length;
 
   return (
     <motion.div
@@ -32,10 +37,10 @@ export function NewsFeed() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-white">
-            Novinky
+            Smart Feed
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Multi-source feed · preložené do slovenčiny
+            Správy podľa tvojich držaných tokenov · slovenčina
           </p>
           {lastUpdated && !loading && (
             <p className="mt-1 text-[10px] text-zinc-600">
@@ -44,6 +49,9 @@ export function NewsFeed() {
                 hour: "2-digit",
                 minute: "2-digit",
               })}
+              {mode === "portfolio" && (
+                <> · {matchedCount} relevantných správ</>
+              )}
             </p>
           )}
         </div>
@@ -70,21 +78,66 @@ export function NewsFeed() {
         </div>
       </div>
 
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/5 bg-[#111113] p-1">
+        <button
+          type="button"
+          onClick={() => setMode("portfolio")}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+            mode === "portfolio"
+              ? "bg-emerald-400/15 text-emerald-400"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          <Wallet className="h-3.5 w-3.5" />
+          Moje tokeny
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("all")}
+          className={`rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+            mode === "all"
+              ? "bg-white/10 text-white"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          Všetky novinky
+        </button>
+      </div>
+
       {error && (
         <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-300">
           {error}
         </div>
       )}
 
+      {mode === "portfolio" && portfolioTokens.length === 0 && !loading && (
+        <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+          Pridaj tokeny do portfólia, aby Smart Feed vedel filtrovať relevantné
+          správy.
+        </div>
+      )}
+
+      {mode === "portfolio" &&
+        portfolioTokens.length > 0 &&
+        matchedCount === 0 &&
+        !loading && (
+          <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+            Momentálne žiadne správy pre tvoje tokeny (
+            {portfolioTokens.map((t) => t.symbol).join(", ")}). Skús „Všetky
+            novinky“.
+          </div>
+        )}
+
       <NewsHeroCard
         article={heroArticle}
         imageUrl={heroImageUrl ?? heroArticle?.imageUrl}
         loading={loading}
+        showTokenBadges={mode === "portfolio"}
       />
 
       <div className="space-y-2">
         <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-          Najnovšie správy
+          {mode === "portfolio" ? "Relevantné správy" : "Najnovšie správy"}
         </p>
 
         {loading ? (
@@ -101,7 +154,11 @@ export function NewsFeed() {
             className="space-y-2"
           >
             {listArticles.map((article) => (
-              <NewsArticleRow key={article.id} article={article} />
+              <NewsArticleRow
+                key={article.id}
+                article={article}
+                showTokenBadges={mode === "portfolio"}
+              />
             ))}
           </motion.div>
         )}
