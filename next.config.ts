@@ -68,6 +68,16 @@ const nextConfig: NextConfig = {
         hostname: "**.amazonaws.com",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "cdn.microlink.io",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
+        hostname: "**.microlink.io",
+        pathname: "/**",
+      },
     ],
     dangerouslyAllowSVG: true,
     contentDispositionType: "attachment",

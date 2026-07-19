@@ -1,6 +1,7 @@
 import { deduplicateArticles } from "@/lib/newsDeduplication";
 import {
   resolveArticleImagesBatch,
+  resolveHeroImage,
   type TokenImageRef,
 } from "@/lib/newsImageHandler";
 import {
@@ -508,6 +509,30 @@ export async function aggregateNews(
 
   const hero = selectHeroCandidate(articlesWithImages, tokens, marketCapRanks);
   const heroArticleId = hero?.id ?? articlesWithImages[0]?.id ?? null;
+
+  if (hero) {
+    const heroPrimaryToken = findPrimaryToken(hero.tokens, tokens);
+    const heroImage = await resolveHeroImage(
+      {
+        url: hero.url,
+        title: hero.title,
+        imageUrl: hero.imageUrl,
+        tokens: hero.tokens,
+      },
+      heroPrimaryToken
+        ? {
+            symbol: heroPrimaryToken.symbol,
+            logoUrl: heroPrimaryToken.logoUrl,
+          }
+        : undefined,
+    );
+
+    for (const article of articlesWithImages) {
+      if (article.id === hero.id) {
+        article.imageUrl = heroImage;
+      }
+    }
+  }
 
   const sorted = [...articlesWithImages].sort(
     (a, b) => b.relevanceScore - a.relevanceScore,

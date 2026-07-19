@@ -130,11 +130,26 @@ export function selectHeroArticle(
   return ranked[0];
 }
 
+export function articleMatchesToken(
+  article: SmartNewsArticle,
+  symbol: string,
+): boolean {
+  const normalized = symbol.toUpperCase();
+  return (
+    article.matchedTokens.some(
+      (token) => token.symbol.toUpperCase() === normalized,
+    ) ||
+    article.tokens.some((token) => token.toUpperCase() === normalized) ||
+    article.primaryToken?.symbol.toUpperCase() === normalized
+  );
+}
+
 export function buildSmartFeed(
   articles: NewsArticle[],
   portfolioTokens: PortfolioTokenRef[],
   mode: "portfolio" | "all",
   heroArticleId?: string | null,
+  selectedToken?: string | null,
 ): {
   hero: SmartNewsArticle | null;
   list: SmartNewsArticle[];
@@ -145,8 +160,14 @@ export function buildSmartFeed(
   );
 
   const filtered = enriched.filter((article) => article.matchedTokens.length > 0);
-  const feed = mode === "portfolio" ? filtered : enriched;
-  const hero = selectHeroArticle(enriched, portfolioTokens, heroArticleId);
+  let feed = mode === "portfolio" ? filtered : enriched;
+
+  if (selectedToken) {
+    feed = feed.filter((article) => articleMatchesToken(article, selectedToken));
+  }
+
+  const heroPool = selectedToken ? feed : enriched;
+  const hero = selectHeroArticle(heroPool, portfolioTokens, heroArticleId);
   const list = [...feed]
     .filter((article) => article.id !== hero?.id)
     .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));

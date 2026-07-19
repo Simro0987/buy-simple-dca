@@ -1,19 +1,33 @@
 import { NextResponse } from "next/server";
-import { generateHeroImageUrl } from "@/lib/newsHeroImage";
+import { resolveHeroImage } from "@/lib/newsImageHandler";
 
 export async function POST(request: Request) {
   try {
-    const body = (await request.json()) as { title?: string };
-    const title = body.title?.trim();
+    const body = (await request.json()) as {
+      title?: string;
+      url?: string;
+      tokens?: string[];
+      symbol?: string;
+    };
 
-    if (!title) {
+    const title = body.title?.trim();
+    const url = body.url?.trim();
+
+    if (!url) {
       return NextResponse.json(
-        { success: false, error: "Title is required" },
+        { success: false, error: "URL is required" },
         { status: 400 },
       );
     }
 
-    const imageUrl = await generateHeroImageUrl(title);
+    const imageUrl = await resolveHeroImage(
+      {
+        url,
+        title: title ?? "",
+        tokens: body.tokens ?? [],
+      },
+      body.symbol ? { symbol: body.symbol } : undefined,
+    );
 
     return NextResponse.json({ success: true, imageUrl });
   } catch (error) {

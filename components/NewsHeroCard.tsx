@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Image from "next/image";
 import { ExternalLink, Zap } from "lucide-react";
@@ -30,6 +31,42 @@ export function NewsHeroCard({
   loading = false,
   showTokenBadges = false,
 }: NewsHeroCardProps) {
+  const [displayImage, setDisplayImage] = useState<string | undefined>();
+  const [imageLoading, setImageLoading] = useState(false);
+
+  useEffect(() => {
+    setDisplayImage(imageUrl ?? article?.imageUrl);
+  }, [imageUrl, article?.imageUrl, article?.id]);
+
+  const resolveFallbackImage = async () => {
+    if (!article?.url || imageLoading) return;
+    setImageLoading(true);
+
+    try {
+      const response = await fetch("/api/news/hero-image", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          url: article.url,
+          title: article.title,
+          tokens: article.tokens,
+          symbol: article.matchedTokens[0]?.symbol ?? article.primaryToken?.symbol,
+        }),
+      });
+      const data = (await response.json()) as {
+        success: boolean;
+        imageUrl?: string;
+      };
+      if (data.imageUrl) {
+        setDisplayImage(data.imageUrl);
+      }
+    } catch {
+      // Keep existing fallback
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
   if (loading) {
     return <PriceSkeleton className="h-72 w-full rounded-3xl" />;
   }
@@ -42,7 +79,6 @@ export function NewsHeroCard({
     );
   }
 
-  const heroImage = imageUrl ?? article.imageUrl;
   const primaryToken = article.matchedTokens[0];
 
   return (
@@ -56,14 +92,25 @@ export function NewsHeroCard({
       className="group relative block overflow-hidden rounded-3xl border border-white/10 bg-[#111113]"
     >
       <div className="relative h-52 w-full overflow-hidden sm:h-60">
-        <Image
-          src={heroImage}
-          alt={article.title}
-          fill
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-          unoptimized
-          priority
-        />
+        {displayImage ? (
+          <Image
+            src={displayImage}
+            alt={article.title}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
+            unoptimized
+            priority
+            onError={() => {
+              void resolveFallbackImage();
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-[#050505] via-[#111113] to-emerald-950/40">
+            {imageLoading && (
+              <span className="text-xs text-zinc-500">Načítavam obrázok…</span>
+            )}
+          </div>
+        )}
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent" />
 
         <div className="absolute left-4 top-4 h-8 w-8 overflow-hidden rounded-full bg-black/60 ring-2 ring-white/15">

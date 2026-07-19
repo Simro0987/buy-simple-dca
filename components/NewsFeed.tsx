@@ -1,9 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, RefreshCw, Wallet, Zap } from "lucide-react";
 import { NewsArticleRow } from "@/components/NewsArticleRow";
 import { NewsHeroCard } from "@/components/NewsHeroCard";
+import { NewsTokenChips } from "@/components/NewsTokenChips";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { useNewsFeed } from "@/hooks/useNewsFeed";
 import { usePortfolio } from "@/hooks/usePortfolio";
@@ -14,6 +15,8 @@ export function NewsFeed() {
   const {
     mode,
     setMode,
+    selectedToken,
+    setSelectedToken,
     heroArticle,
     listArticles,
     heroImageUrl,
@@ -26,6 +29,7 @@ export function NewsFeed() {
   } = useNewsFeed(allAssets);
 
   const flashCount = listArticles.filter((a) => a.isFlash).length;
+  const visibleCount = listArticles.length + (heroArticle ? 1 : 0);
 
   return (
     <motion.div
@@ -50,7 +54,11 @@ export function NewsFeed() {
                 minute: "2-digit",
               })}
               {mode === "portfolio" && (
-                <> · {matchedCount} relevantných správ</>
+                <>
+                  {" "}
+                  · {selectedToken ? visibleCount : matchedCount} relevantných
+                  správ
+                </>
               )}
             </p>
           )}
@@ -104,6 +112,14 @@ export function NewsFeed() {
         </button>
       </div>
 
+      {portfolioTokens.length > 0 && (
+        <NewsTokenChips
+          tokens={portfolioTokens}
+          selectedToken={selectedToken}
+          onSelect={setSelectedToken}
+        />
+      )}
+
       {error && (
         <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-300">
           {error}
@@ -120,7 +136,8 @@ export function NewsFeed() {
       {mode === "portfolio" &&
         portfolioTokens.length > 0 &&
         matchedCount === 0 &&
-        !loading && (
+        !loading &&
+        !selectedToken && (
           <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
             Momentálne žiadne správy pre tvoje tokeny (
             {portfolioTokens.map((t) => t.symbol).join(", ")}). Skús „Všetky
@@ -128,16 +145,36 @@ export function NewsFeed() {
           </div>
         )}
 
-      <NewsHeroCard
-        article={heroArticle}
-        imageUrl={heroImageUrl ?? heroArticle?.imageUrl}
-        loading={loading}
-        showTokenBadges={mode === "portfolio"}
-      />
+      {selectedToken && visibleCount === 0 && !loading && (
+        <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+          Žiadne správy pre {selectedToken}. Skús iný token alebo „Všetky“.
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${mode}-${selectedToken ?? "all"}-hero`}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <NewsHeroCard
+            article={heroArticle}
+            imageUrl={heroImageUrl ?? heroArticle?.imageUrl}
+            loading={loading}
+            showTokenBadges={mode === "portfolio"}
+          />
+        </motion.div>
+      </AnimatePresence>
 
       <div className="space-y-2">
         <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-          {mode === "portfolio" ? "Relevantné správy" : "Najnovšie správy"}
+          {selectedToken
+            ? `Správy · ${selectedToken}`
+            : mode === "portfolio"
+              ? "Relevantné správy"
+              : "Najnovšie správy"}
         </p>
 
         {loading ? (
@@ -147,20 +184,24 @@ export function NewsFeed() {
             ))}
           </div>
         ) : (
-          <motion.div
-            variants={listContainerVariants}
-            initial="hidden"
-            animate="show"
-            className="space-y-2"
-          >
-            {listArticles.map((article) => (
-              <NewsArticleRow
-                key={article.id}
-                article={article}
-                showTokenBadges={mode === "portfolio"}
-              />
-            ))}
-          </motion.div>
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${mode}-${selectedToken ?? "all"}-list`}
+              variants={listContainerVariants}
+              initial="hidden"
+              animate="show"
+              exit={{ opacity: 0, y: -8 }}
+              className="space-y-2"
+            >
+              {listArticles.map((article) => (
+                <NewsArticleRow
+                  key={article.id}
+                  article={article}
+                  showTokenBadges={mode === "portfolio"}
+                />
+              ))}
+            </motion.div>
+          </AnimatePresence>
         )}
       </div>
     </motion.div>

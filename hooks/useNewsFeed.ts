@@ -34,6 +34,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [mode, setMode] = useState<NewsFeedMode>("portfolio");
+  const [selectedToken, setSelectedToken] = useState<string | null>(null);
 
   const portfolioTokens = useMemo(
     () => portfolioAssets.map(toPortfolioTokenRef),
@@ -92,13 +93,22 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   }, [loadNews]);
 
   const smartFeed = useMemo(
-    () => buildSmartFeed(articles, portfolioTokens, mode, heroArticleId),
-    [articles, portfolioTokens, mode, heroArticleId],
+    () =>
+      buildSmartFeed(
+        articles,
+        portfolioTokens,
+        mode,
+        heroArticleId,
+        selectedToken,
+      ),
+    [articles, portfolioTokens, mode, heroArticleId, selectedToken],
   );
 
   return {
     mode,
     setMode,
+    selectedToken,
+    setSelectedToken,
     articles,
     portfolioTokens,
     heroArticle: smartFeed.hero,

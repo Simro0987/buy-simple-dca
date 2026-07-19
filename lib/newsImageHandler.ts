@@ -276,6 +276,94 @@ export function generateTokenFallbackImage(token: TokenImageRef): string {
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
 
+export async function fetchMetaImages(
+  articleUrl: string,
+): Promise<string | undefined> {
+  const html = await fetchArticleHtml(articleUrl);
+  if (!html) return undefined;
+
+  for (const pattern of OG_IMAGE_PATTERNS) {
+    const match = html.match(pattern);
+    if (match?.[1]) {
+      const resolved = resolveUrl(articleUrl, match[1].trim());
+      if (isValidImageUrl(resolved)) return resolved;
+    }
+  }
+
+  return undefined;
+}
+
+export async function fetchMicrolinkScreenshot(
+  articleUrl: string,
+): Promise<string | undefined> {
+  if (!articleUrl) return undefined;
+
+  try {
+    const apiUrl = `https://api.microlink.io/?url=${encodeURIComponent(articleUrl)}&screenshot=true&meta=false`;
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12_000);
+
+    const response = await fetch(apiUrl, {
+      signal: controller.signal,
+      next: { revalidate: 86400 },
+    });
+    clearTimeout(timeout);
+
+    if (!response.ok) return undefined;
+
+    const data = (await response.json()) as {
+      data?: { screenshot?: { url?: string } };
+    };
+    const screenshotUrl = data.data?.screenshot?.url;
+    return isValidImageUrl(screenshotUrl) ? screenshotUrl : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function resolveHeroImage(
+  article: {
+    url: string;
+    title: string;
+    imageUrl?: string;
+    tokens?: string[];
+  },
+  primaryToken?: TokenImageRef,
+): Promise<string> {
+  if (isValidImageUrl(article.imageUrl)) {
+    return article.imageUrl;
+  }
+
+  const metaImage = await fetchMetaImages(article.url);
+  if (isValidImageUrl(metaImage)) {
+    return metaImage;
+  }
+
+  const microlinkImage = await fetchMicrolinkScreenshot(article.url);
+  if (isValidImageUrl(microlinkImage)) {
+    return microlinkImage;
+  }
+
+  const largestImage = await fetchLargestArticleImage(article.url);
+  if (isValidImageUrl(largestImage)) {
+    return largestImage;
+  }
+
+  const newsSearchImage = await fetchNewsSearchImage(
+    article.title,
+    article.tokens ?? [],
+  );
+  if (isValidImageUrl(newsSearchImage)) {
+    return newsSearchImage;
+  }
+
+  if (primaryToken) {
+    return generateTokenFallbackImage(primaryToken);
+  }
+
+  return generateTokenFallbackImage({ symbol: "CRYPTO" });
+}
+
 export async function resolveArticleImage(
   article: {
     url: string;
