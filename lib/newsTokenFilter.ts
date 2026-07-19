@@ -111,14 +111,20 @@ function relevanceScore(
 export function selectHeroArticle(
   articles: SmartNewsArticle[],
   portfolioTokens: PortfolioTokenRef[],
+  heroArticleId?: string | null,
 ): SmartNewsArticle | null {
   if (articles.length === 0) return null;
+
+  if (heroArticleId) {
+    const serverHero = articles.find((article) => article.id === heroArticleId);
+    if (serverHero) return serverHero;
+  }
 
   const topHolding = getTopHolding(portfolioTokens);
   const ranked = [...articles].sort(
     (a, b) =>
-      relevanceScore(b, topHolding) - relevanceScore(a, topHolding) ||
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime(),
+      (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0) ||
+      relevanceScore(b, topHolding) - relevanceScore(a, topHolding),
   );
 
   return ranked[0];
@@ -128,6 +134,7 @@ export function buildSmartFeed(
   articles: NewsArticle[],
   portfolioTokens: PortfolioTokenRef[],
   mode: "portfolio" | "all",
+  heroArticleId?: string | null,
 ): {
   hero: SmartNewsArticle | null;
   list: SmartNewsArticle[];
@@ -139,8 +146,10 @@ export function buildSmartFeed(
 
   const filtered = enriched.filter((article) => article.matchedTokens.length > 0);
   const feed = mode === "portfolio" ? filtered : enriched;
-  const hero = selectHeroArticle(enriched, portfolioTokens);
-  const list = feed.filter((article) => article.id !== hero?.id);
+  const hero = selectHeroArticle(enriched, portfolioTokens, heroArticleId);
+  const list = [...feed]
+    .filter((article) => article.id !== hero?.id)
+    .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
 
   return { hero, list, filtered };
 }

@@ -6,7 +6,6 @@ import type { NewsArticle } from "@/lib/newsEngine";
 import {
   buildSmartFeed,
   type PortfolioTokenRef,
-  type SmartNewsArticle,
 } from "@/lib/newsTokenFilter";
 
 export type NewsFeedMode = "portfolio" | "all";
@@ -14,6 +13,7 @@ export type NewsFeedMode = "portfolio" | "all";
 interface NewsFeedResponse {
   success: boolean;
   articles: NewsArticle[];
+  heroArticleId?: string | null;
   error?: string;
   fetchedAt?: string;
 }
@@ -29,6 +29,7 @@ function toPortfolioTokenRef(asset: LiveAsset): PortfolioTokenRef {
 
 export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
+  const [heroArticleId, setHeroArticleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -67,6 +68,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
       }
 
       setArticles(data.articles ?? []);
+      setHeroArticleId(data.heroArticleId ?? null);
       setLastUpdated(
         data.fetchedAt ? new Date(data.fetchedAt) : new Date(),
       );
@@ -75,6 +77,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
         err instanceof Error ? err.message : "Chyba pri načítaní správ",
       );
       setArticles([]);
+      setHeroArticleId(null);
     } finally {
       setLoading(false);
     }
@@ -89,8 +92,8 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   }, [loadNews]);
 
   const smartFeed = useMemo(
-    () => buildSmartFeed(articles, portfolioTokens, mode),
-    [articles, portfolioTokens, mode],
+    () => buildSmartFeed(articles, portfolioTokens, mode, heroArticleId),
+    [articles, portfolioTokens, mode, heroArticleId],
   );
 
   return {

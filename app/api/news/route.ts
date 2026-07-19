@@ -35,17 +35,18 @@ export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const portfolioTokens = parsePortfolioTokens(searchParams);
-    const articles = await aggregateNews(portfolioTokens);
+    const { articles, heroArticleId } = await aggregateNews(portfolioTokens);
 
     return NextResponse.json({
       success: true,
       articles,
+      heroArticleId,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";
     return NextResponse.json(
-      { success: false, error: message, articles: [] },
+      { success: false, error: message, articles: [], heroArticleId: null },
       { status: 500 },
     );
   }

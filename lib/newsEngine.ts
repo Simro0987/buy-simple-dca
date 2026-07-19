@@ -1,7 +1,13 @@
+import { deduplicateArticles } from "@/lib/newsDeduplication";
 import {
   resolveArticleImagesBatch,
   type TokenImageRef,
 } from "@/lib/newsImageHandler";
+import {
+  fetchMarketCapRanks,
+  rankArticles,
+  selectHeroCandidate,
+} from "@/lib/newsRanking";
 import { NEWS_SOURCES, getSourceFaviconUrl } from "@/lib/newsSources";
 
 export type NewsImpact = "high" | "medium" | "low";
@@ -38,6 +44,7 @@ export interface NewsArticle {
   imageUrl: string;
   tokens: string[];
   primaryToken?: PortfolioTokenInput;
+  relevanceScore: number;
   impact: NewsImpact;
   sentiment: NewsSentiment;
   isFlash: boolean;
@@ -417,27 +424,11 @@ function filterForPortfolio(
   );
 }
 
-function scoreRelevance(
-  item: RawNewsItem,
-  portfolioTokens: PortfolioTokenInput[],
-): number {
-  const allowed = new Set(
-    portfolioTokens.map((token) => token.symbol.toUpperCase()),
-  );
-  const matches = item.tokens.filter((token) =>
-    allowed.has(token.toUpperCase()),
-  ).length;
-
-  const ageHours =
-    (Date.now() - new Date(item.publishedAt).getTime()) / 3_600_000;
-
-  return matches * 100 + Math.max(0, 48 - ageHours);
-}
-
 export async function aggregateNews(
   portfolioTokens: PortfolioTokenInput[] = [],
-): Promise<NewsArticle[]> {
+): Promise<{ articles: NewsArticle[]; heroArticleId: string | null }> {
   const tokens = portfolioTokens.length > 0 ? portfolioTokens : DEFAULT_PORTFOLIO;
+  const marketCapRanks = await fetchMarketCapRanks(tokens);
 
   const [feedResults, tokenFeedResults, supabaseItems] = await Promise.all([
     Promise.all(
@@ -461,26 +452,12 @@ export async function aggregateNews(
     ...supabaseItems,
   ];
 
-  const seen = new Set<string>();
-  const unique = allItems.filter((item) => {
-    const key = item.title.toLowerCase().slice(0, 50);
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  const deduped = deduplicateArticles(allItems);
+  const portfolioRelevant = filterForPortfolio(deduped, tokens);
+  const pool = portfolioRelevant.length >= 8 ? portfolioRelevant : deduped;
+  const ranked = rankArticles(pool, tokens, marketCapRanks);
+  const top = ranked.slice(0, 30);
 
-  const portfolioRelevant = filterForPortfolio(unique, tokens);
-  const pool = portfolioRelevant.length >= 8 ? portfolioRelevant : unique;
-
-  pool.sort((a, b) => {
-    const relevanceDiff = scoreRelevance(b, tokens) - scoreRelevance(a, tokens);
-    if (relevanceDiff !== 0) return relevanceDiff;
-    return (
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
-  });
-
-  const top = pool.slice(0, 30);
   const titles = await translateBatch(top.map((item) => item.title));
   const summaries = await translateBatch(
     top.map((item) => item.summary || item.title),
@@ -492,6 +469,7 @@ export async function aggregateNews(
       url: item.url,
       title: item.title,
       imageUrl: item.imageUrl,
+      tokens: item.tokens,
       primaryToken: primaryToken
         ? ({ symbol: primaryToken.symbol, logoUrl: primaryToken.logoUrl } satisfies TokenImageRef)
         : undefined,
@@ -518,19 +496,22 @@ export async function aggregateNews(
       imageUrl: resolvedImages[index],
       tokens: item.tokens,
       primaryToken,
+      relevanceScore: item.relevanceScore,
       ...classification,
     };
   });
 
-  articles.sort((a, b) => {
-    if (a.isFlash !== b.isFlash) return a.isFlash ? -1 : 1;
-    const impactOrder = { high: 0, medium: 1, low: 2 };
-    const impactDiff = impactOrder[a.impact] - impactOrder[b.impact];
-    if (impactDiff !== 0) return impactDiff;
-    return (
-      new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime()
-    );
-  });
+  const articlesWithImages = articles.map((article, index) => ({
+    ...article,
+    imageUrl: resolvedImages[index],
+  }));
 
-  return articles;
+  const hero = selectHeroCandidate(articlesWithImages, tokens, marketCapRanks);
+  const heroArticleId = hero?.id ?? articlesWithImages[0]?.id ?? null;
+
+  const sorted = [...articlesWithImages].sort(
+    (a, b) => b.relevanceScore - a.relevanceScore,
+  );
+
+  return { articles: sorted, heroArticleId };
 }

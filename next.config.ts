@@ -60,6 +60,11 @@ const nextConfig: NextConfig = {
       },
       {
         protocol: "https",
+        hostname: "**.bing.net",
+        pathname: "/**",
+      },
+      {
+        protocol: "https",
         hostname: "**.amazonaws.com",
         pathname: "/**",
       },
