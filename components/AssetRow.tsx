@@ -6,7 +6,7 @@ import Image from "next/image";
 import { useState } from "react";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import type { LiveAsset } from "@/hooks/usePortfolio";
-import { getCoreAccentStyles, getYieldAccentStyles } from "@/lib/assetStyles";
+import { getCategoryDotClass, getCategoryStyles } from "@/lib/assetStyles";
 import { formatCrypto, formatUsd } from "@/lib/data";
 import { interactiveRow } from "@/lib/motion";
 import type { Transaction } from "@/lib/portfolioStorage";
@@ -32,7 +32,6 @@ interface AssetRowProps {
   index: number;
   total: number;
   loading?: boolean;
-  variant?: "core" | "yield";
   onOpenTransactions: (asset: LiveAsset) => void;
 }
 
@@ -41,26 +40,20 @@ export function AssetRow({
   index,
   total,
   loading = false,
-  variant = "core",
   onOpenTransactions,
 }: AssetRowProps) {
   const [expanded, setExpanded] = useState(false);
-  const styles =
-    variant === "core"
-      ? getCoreAccentStyles(asset.accent)
-      : getYieldAccentStyles(index);
+  const categoryStyles = getCategoryStyles(asset.category);
 
   const isPositive = asset.pnlUsd >= 0;
   const pnlLabel = asset.hasPurchaseHistory
     ? `${isPositive ? "+" : "-"}${formatUsd(Math.abs(asset.pnlUsd))} ${isPositive ? "+" : "-"}${Math.abs(asset.roiPercent).toFixed(1)}%`
-    : variant === "yield"
+    : asset.category === "yield"
       ? "+$0.00 +0.0%"
       : "—";
 
   return (
-    <div
-      className={index < total - 1 ? "border-b border-white/5" : ""}
-    >
+    <div className={index < total - 1 ? "border-b border-white/5" : ""}>
       <motion.div
         {...interactiveRow}
         className="flex items-center gap-3 px-4 py-4"
@@ -81,7 +74,7 @@ export function AssetRow({
               />
             ) : (
               <div
-                className={`flex h-full w-full items-center justify-center ${styles.bg} ring-2 ${styles.ring}`}
+                className={`flex h-full w-full items-center justify-center ${categoryStyles.bg} ring-2 ${categoryStyles.ring}`}
               >
                 <span className="text-xs font-bold text-white">
                   {asset.symbol.slice(0, 1)}
@@ -92,9 +85,13 @@ export function AssetRow({
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 shrink-0 rounded-full ${getCategoryDotClass(asset.category)}`}
+                aria-hidden
+              />
               <p className="font-semibold text-white">{asset.symbol}</p>
               <p className="truncate text-xs text-zinc-500">{asset.name}</p>
-              {variant === "yield" && (
+              {asset.category === "yield" && (
                 <span className="rounded-full bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-emerald-400">
                   EARNING
                 </span>
@@ -120,7 +117,7 @@ export function AssetRow({
           </p>
           {loading ? (
             <PriceSkeleton className="ml-auto mt-1 h-5 w-14" />
-          ) : asset.hasPurchaseHistory || variant === "yield" ? (
+          ) : asset.hasPurchaseHistory || asset.category === "yield" ? (
             <span
               className={`mt-1 inline-block text-xs font-medium ${
                 isPositive ? "text-emerald-400" : "text-rose-400"

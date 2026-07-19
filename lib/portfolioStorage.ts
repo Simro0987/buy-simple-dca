@@ -1,10 +1,10 @@
 import type { AssetAccent } from "@/lib/data";
-import { getAccentForIndex } from "@/lib/assetStyles";
+import { getAccentForIndex, resolveAssetCategory } from "@/lib/assetStyles";
 
 export const HOLDINGS_STORAGE_KEY = "edge-trader-holdings";
 export const PORTFOLIO_STORAGE_KEY = "edge-trader-portfolio";
 
-export type AssetCategory = "core" | "yield";
+export type AssetCategory = "core" | "yield" | "satellite";
 export type TransactionType = "DCA" | "ADD" | "REMOVE";
 
 /** @deprecated Legacy fixed trio — kept for DCA engine compatibility */
@@ -57,6 +57,9 @@ export const DEFAULT_CORE_ASSETS: AssetDefinition[] = [
     accent: "orange",
     category: "core",
   },
+];
+
+export const DEFAULT_SATELLITE_ASSETS: AssetDefinition[] = [
   {
     symbol: "ETH",
     name: "Ethereum",
@@ -64,7 +67,7 @@ export const DEFAULT_CORE_ASSETS: AssetDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/279/small/ethereum.png",
     accent: "purple",
-    category: "core",
+    category: "satellite",
   },
   {
     symbol: "SOL",
@@ -73,7 +76,7 @@ export const DEFAULT_CORE_ASSETS: AssetDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/4128/small/solana.png",
     accent: "cyan",
-    category: "core",
+    category: "satellite",
   },
 ];
 
@@ -143,12 +146,15 @@ export const DEFAULT_YIELD_ASSETS: AssetDefinition[] = [
   },
 ];
 
-export const ASSET_DEFINITIONS = DEFAULT_CORE_ASSETS;
+export const ASSET_DEFINITIONS = [
+  ...DEFAULT_CORE_ASSETS,
+  ...DEFAULT_SATELLITE_ASSETS,
+];
 
 const LEGACY_DEFAULT_HOLDINGS: HoldingsMap = {
-  BTC: 0.0482,
-  ETH: 0.612,
-  SOL: 4.28,
+  BTC: 0,
+  ETH: 0,
+  SOL: 0,
 };
 
 export function createAssetId(): string {
@@ -191,6 +197,16 @@ export function createDefaultPortfolio(): PortfolioData {
         accent: asset.accent ?? getAccentForIndex(index),
       }),
     ),
+    ...DEFAULT_SATELLITE_ASSETS.map((asset, index) =>
+      createTrackedAsset({
+        symbol: asset.symbol,
+        name: asset.name,
+        coingeckoId: asset.coingeckoId,
+        logoUrl: asset.logoUrl,
+        category: asset.category,
+        accent: asset.accent ?? getAccentForIndex(index + 1),
+      }),
+    ),
     ...DEFAULT_YIELD_ASSETS.map((asset) =>
       createTrackedAsset({
         symbol: asset.symbol,
@@ -202,31 +218,18 @@ export function createDefaultPortfolio(): PortfolioData {
     ),
   ];
 
-  const coreBySymbol = Object.fromEntries(
-    assets
-      .filter((asset) => asset.category === "core")
-      .map((asset) => [asset.symbol, asset]),
-  );
+  return { version: 3, assets, transactions: [] };
+}
 
-  const transactions: Transaction[] = (
-    Object.keys(LEGACY_DEFAULT_HOLDINGS) as LegacyCryptoSymbol[]
-  )
-    .filter((symbol) => LEGACY_DEFAULT_HOLDINGS[symbol] > 0)
-    .map((symbol) => {
-      const asset = coreBySymbol[symbol];
-      return {
-        id: createTransactionId(),
-        date: new Date().toISOString(),
-        assetId: asset.id,
-        symbol: asset.symbol,
-        amount: LEGACY_DEFAULT_HOLDINGS[symbol],
-        priceUsd: 0,
-        spentUsd: 0,
-        type: "ADD" as const,
-      };
-    });
-
-  return { version: 3, assets, transactions };
+export function resetAllPortfolioData(
+  existing?: PortfolioData,
+): PortfolioData {
+  const base = existing ?? createDefaultPortfolio();
+  return {
+    version: 3,
+    assets: base.assets,
+    transactions: [],
+  };
 }
 
 export function computeBalanceFromTransactions(
@@ -245,11 +248,11 @@ export function computeHoldingsMap(
   assets: TrackedAsset[],
   transactions: Transaction[],
 ): HoldingsMap {
-  const coreAssets = assets.filter((asset) => asset.category === "core");
   const map: HoldingsMap = { BTC: 0, ETH: 0, SOL: 0 };
+  const dcaSymbols: LegacyCryptoSymbol[] = ["BTC", "ETH", "SOL"];
 
-  for (const asset of coreAssets) {
-    if (asset.symbol in map) {
+  for (const asset of assets) {
+    if (dcaSymbols.includes(asset.symbol as LegacyCryptoSymbol)) {
       map[asset.symbol as LegacyCryptoSymbol] = computeBalanceFromTransactions(
         asset.id,
         transactions,
@@ -344,7 +347,7 @@ function normalizeAssets(value: unknown): TrackedAsset[] {
           typeof raw.logoUrl === "string"
             ? raw.logoUrl
             : `https://assets.coingecko.com/coins/images/1/small/bitcoin.png`,
-        category: raw.category === "yield" ? "yield" : "core",
+        category: resolveAssetCategory(raw.symbol, raw.category),
         accent: raw.accent,
       });
     })
@@ -359,9 +362,11 @@ function migrateLegacyHoldingsToTransactions(
   existingTransactions: Transaction[],
 ): Transaction[] {
   const txs = [...existingTransactions];
-  const coreAssets = assets.filter((asset) => asset.category === "core");
+  const dcaAssets = assets.filter((asset) =>
+    ["BTC", "ETH", "SOL"].includes(asset.symbol),
+  );
 
-  for (const asset of coreAssets) {
+  for (const asset of dcaAssets) {
     const symbol = asset.symbol as LegacyCryptoSymbol;
     const legacyBalance = holdings[symbol] ?? 0;
     if (legacyBalance <= 0) continue;

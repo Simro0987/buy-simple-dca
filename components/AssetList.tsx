@@ -3,19 +3,30 @@
 import { motion } from "framer-motion";
 import { AssetRow } from "@/components/AssetRow";
 import type { LiveAsset } from "@/hooks/usePortfolio";
+import { getCategoryLabel, getCategoryStyles } from "@/lib/assetStyles";
+import type { AssetCategory } from "@/lib/portfolioStorage";
 import { listContainerVariants } from "@/lib/motion";
 
 interface AssetListProps {
+  title?: string;
+  category: AssetCategory;
   assets: LiveAsset[];
   loading?: boolean;
   onOpenTransactions: (asset: LiveAsset) => void;
 }
 
 export function AssetList({
+  title,
+  category,
   assets,
   loading = false,
   onOpenTransactions,
 }: AssetListProps) {
+  const styles = getCategoryStyles(category);
+  const heading = title ?? getCategoryLabel(category).toUpperCase();
+
+  if (assets.length === 0) return null;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 16 }}
@@ -24,10 +35,15 @@ export function AssetList({
       className="space-y-3"
     >
       <div className="flex items-center justify-between px-1">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-zinc-400">
-          Core Pillars
-        </h2>
-        <span className="text-xs text-zinc-600">P&L / ROI</span>
+        <div className="flex items-center gap-2">
+          <span className={`h-2.5 w-2.5 rounded-full ${styles.dot}`} />
+          <h2 className={`text-sm font-semibold uppercase tracking-wider ${styles.label}`}>
+            {heading}
+          </h2>
+        </div>
+        {category !== "satellite" && (
+          <span className="text-xs text-zinc-600">P&L / ROI</span>
+        )}
       </div>
 
       <motion.div
@@ -43,7 +59,6 @@ export function AssetList({
             index={index}
             total={assets.length}
             loading={loading}
-            variant="core"
             onOpenTransactions={onOpenTransactions}
           />
         ))}

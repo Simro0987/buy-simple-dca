@@ -11,13 +11,12 @@ import { DcaEngine } from "@/components/dca/DcaEngine";
 import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
+import { PortfolioBubbleAllocation } from "@/components/PortfolioBubbleAllocation";
 import { PortfolioChart } from "@/components/PortfolioChart";
-import { PortfolioDonutChart } from "@/components/PortfolioDonutChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { TransactionModal } from "@/components/TransactionModal";
-import { YieldTokensList } from "@/components/YieldTokensList";
 import type { LiveAsset } from "@/hooks/usePortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -33,11 +32,11 @@ export function Dashboard() {
   const {
     assets,
     yieldAssets,
+    satelliteAssets,
+    allAssets,
     transactions,
     trackedAssets,
     totalBalance,
-    coreTotal,
-    yieldTotal,
     totalInvested,
     profitLoss,
     loading,
@@ -47,6 +46,7 @@ export function Dashboard() {
     recordTransaction,
     importPortfolio,
     recordDcaPurchase,
+    resetAllData,
     portfolioData,
   } = usePortfolio();
 
@@ -95,6 +95,11 @@ export function Dashboard() {
     [recordTransaction],
   );
 
+  const handleResetAllData = useCallback(() => {
+    resetAllData();
+    setToastMessage("Všetky dáta boli vymazané");
+  }, [resetAllData]);
+
   return (
     <div className="relative min-h-dvh bg-[#050505]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
@@ -138,26 +143,29 @@ export function Dashboard() {
                 isLive={isLive}
               />
 
-              <div className="grid gap-4">
-                <PortfolioDonutChart
-                  coreTotal={coreTotal}
-                  yieldTotal={yieldTotal}
-                  loading={loading}
-                />
-                <PortfolioChart
-                  endValue={totalBalance}
-                  transactions={transactions}
-                  loading={loading}
-                />
-              </div>
+              <PortfolioBubbleAllocation assets={allAssets} loading={loading} />
+
+              <PortfolioChart
+                endValue={totalBalance}
+                transactions={transactions}
+                loading={loading}
+              />
 
               <AssetList
+                category="core"
                 assets={assets}
                 loading={loading}
                 onOpenTransactions={handleOpenTransactions}
               />
-              <YieldTokensList
+              <AssetList
+                category="yield"
                 assets={yieldAssets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AssetList
+                category="satellite"
+                assets={satelliteAssets}
                 loading={loading}
                 onOpenTransactions={handleOpenTransactions}
               />
@@ -205,6 +213,7 @@ export function Dashboard() {
         portfolioData={portfolioData}
         onClose={() => setIsSettingsOpen(false)}
         onImport={importPortfolio}
+        onResetAllData={handleResetAllData}
       />
 
       <Toast

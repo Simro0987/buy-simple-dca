@@ -9,6 +9,7 @@ import {
   type DynamicPricesMap,
 } from "@/lib/cryptoApi";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import { resolveAssetCategory } from "@/lib/assetStyles";
 import { calculatePortfolioPnL } from "@/lib/pnlAnalytics";
 import {
   computeBalanceFromTransactions,
@@ -18,6 +19,7 @@ import {
   createTransactionId,
   findAssetByCoingeckoId,
   readPortfolioFromStorage,
+  resetAllPortfolioData,
   writePortfolioToStorage,
   type AssetCategory,
   type HoldingsMap,
@@ -212,6 +214,11 @@ export function usePortfolio() {
     [allAssets],
   );
 
+  const satelliteAssets = useMemo(
+    () => allAssets.filter((asset) => asset.category === "satellite"),
+    [allAssets],
+  );
+
   const cryptoTotal = useMemo(
     () => allAssets.reduce((sum, asset) => sum + asset.usdValue, 0),
     [allAssets],
@@ -227,6 +234,11 @@ export function usePortfolio() {
     [yieldAssets],
   );
 
+  const satelliteTotal = useMemo(
+    () => satelliteAssets.reduce((sum, asset) => sum + asset.usdValue, 0),
+    [satelliteAssets],
+  );
+
   const totalBalance = cryptoTotal + portfolioHoldings.cashUsd;
 
   const addAsset = useCallback(
@@ -237,10 +249,8 @@ export function usePortfolio() {
       );
       if (existing) return existing;
 
-      const coreSymbols = ["BTC", "ETH", "SOL"];
       const category =
-        input.category ??
-        (coreSymbols.includes(input.symbol.toUpperCase()) ? "core" : "yield");
+        input.category ?? resolveAssetCategory(input.symbol);
 
       const nextAsset = createTrackedAsset({
         symbol: input.symbol,
@@ -307,9 +317,9 @@ export function usePortfolio() {
     (next: HoldingsMap) => {
       const transactions = [...portfolio.transactions];
 
-      for (const asset of portfolio.assets.filter((item) => item.category === "core")) {
-        const symbol = asset.symbol;
-        if (!CORE_SYMBOLS.includes(symbol)) continue;
+      for (const symbol of CORE_SYMBOLS) {
+        const asset = portfolio.assets.find((item) => item.symbol === symbol);
+        if (!asset) continue;
 
         const target = next[symbol as keyof HoldingsMap] ?? 0;
         const current = computeBalanceFromTransactions(asset.id, transactions);
@@ -340,7 +350,7 @@ export function usePortfolio() {
 
       for (const plan of plans) {
         const asset = portfolio.assets.find(
-          (item) => item.symbol === plan.symbol && item.category === "core",
+          (item) => item.symbol === plan.symbol,
         );
         const unitPrice = priceMap[plan.symbol]?.price ?? 0;
         if (!asset || unitPrice <= 0 || plan.totalUsd <= 0) continue;
@@ -370,9 +380,14 @@ export function usePortfolio() {
     [persistPortfolio, portfolio],
   );
 
+  const resetAllData = useCallback(() => {
+    persistPortfolio(resetAllPortfolioData(portfolio));
+  }, [persistPortfolio, portfolio]);
+
   return {
     assets: coreAssets,
     yieldAssets,
+    satelliteAssets,
     allAssets,
     holdings,
     transactions: portfolio.transactions,
@@ -380,6 +395,7 @@ export function usePortfolio() {
     totalBalance,
     coreTotal,
     yieldTotal,
+    satelliteTotal,
     totalInvested: pnl.totalInvested,
     profitLoss: pnl.totalPnlUsd,
     totalRoiPercent: pnl.totalRoiPercent,
@@ -396,6 +412,7 @@ export function usePortfolio() {
     updateHoldings,
     importPortfolio,
     recordDcaPurchase,
+    resetAllData,
     portfolioData: portfolio,
     refreshPrices: loadDynamicPrices,
   };
