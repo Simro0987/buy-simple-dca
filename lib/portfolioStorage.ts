@@ -3,6 +3,8 @@ import { getAccentForIndex, resolveAssetCategory } from "@/lib/assetStyles";
 
 export const HOLDINGS_STORAGE_KEY = "edge-trader-holdings";
 export const PORTFOLIO_STORAGE_KEY = "edge-trader-portfolio";
+export const PORTFOLIO_SCHEMA_VERSION_KEY = "edge-trader-portfolio-schema-version";
+export const CURRENT_PORTFOLIO_SCHEMA_VERSION = 5;
 
 export type AssetCategory = "core" | "yield" | "satellite";
 export type TransactionType = "DCA" | "ADD" | "REMOVE";
@@ -139,8 +141,7 @@ export const DEFAULT_YIELD_ASSETS: AssetDefinition[] = [
     symbol: "MORPHO",
     name: "Morpho",
     coingeckoId: "morpho",
-    logoUrl:
-      "https://assets.coingecko.com/coins/images/29837/small/morpho.png",
+    logoUrl: "/icons/morpho.svg",
     accent: "cyan",
     category: "yield",
   },
@@ -221,15 +222,57 @@ export function createDefaultPortfolio(): PortfolioData {
   return { version: 3, assets, transactions: [] };
 }
 
-export function resetAllPortfolioData(
+export function resetPortfolioData(
   existing?: PortfolioData,
 ): PortfolioData {
   const base = existing ?? createDefaultPortfolio();
-  return {
+  const data: PortfolioData = {
     version: 3,
-    assets: base.assets,
+    assets: base.assets.map((asset) =>
+      asset.symbol === "MORPHO"
+        ? { ...asset, logoUrl: "/icons/morpho.svg" }
+        : asset,
+    ),
     transactions: [],
   };
+
+  if (typeof window !== "undefined") {
+    window.localStorage.setItem(
+      HOLDINGS_STORAGE_KEY,
+      JSON.stringify({ BTC: 0, ETH: 0, SOL: 0 }),
+    );
+  }
+
+  return data;
+}
+
+/** @deprecated Use resetPortfolioData */
+export function resetAllPortfolioData(
+  existing?: PortfolioData,
+): PortfolioData {
+  return resetPortfolioData(existing);
+}
+
+export function applyPortfolioLaunchReset(): PortfolioData {
+  if (typeof window === "undefined") {
+    return createDefaultPortfolio();
+  }
+
+  const storedVersion = Number(
+    window.localStorage.getItem(PORTFOLIO_SCHEMA_VERSION_KEY) ?? 0,
+  );
+
+  if (storedVersion < CURRENT_PORTFOLIO_SCHEMA_VERSION) {
+    const reset = resetPortfolioData();
+    writePortfolioToStorage(reset);
+    window.localStorage.setItem(
+      PORTFOLIO_SCHEMA_VERSION_KEY,
+      String(CURRENT_PORTFOLIO_SCHEMA_VERSION),
+    );
+    return reset;
+  }
+
+  return readPortfolioFromStorage() ?? resetPortfolioData();
 }
 
 export function computeBalanceFromTransactions(

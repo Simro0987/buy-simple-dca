@@ -19,7 +19,8 @@ import {
   createTransactionId,
   findAssetByCoingeckoId,
   readPortfolioFromStorage,
-  resetAllPortfolioData,
+  resetPortfolioData,
+  applyPortfolioLaunchReset,
   writePortfolioToStorage,
   type AssetCategory,
   type HoldingsMap,
@@ -79,10 +80,8 @@ export function usePortfolio() {
   }, []);
 
   useEffect(() => {
-    const stored = readPortfolioFromStorage();
-    if (stored) {
-      setPortfolio(stored);
-    }
+    const data = applyPortfolioLaunchReset();
+    setPortfolio(data);
     setIsHydrated(true);
   }, []);
 
@@ -131,13 +130,14 @@ export function usePortfolio() {
         portfolio.transactions,
       );
       const unitPrice = getAssetPrice(asset);
+      const apiLogo = dynamicPrices[asset.coingeckoId]?.image;
 
       return {
         id: asset.id,
         symbol: asset.symbol,
         name: asset.name,
         coingeckoId: asset.coingeckoId,
-        logoUrl: asset.logoUrl,
+        logoUrl: apiLogo ?? asset.logoUrl,
         category: asset.category,
         accent: asset.accent ?? "cyan",
         balance,
@@ -150,7 +150,7 @@ export function usePortfolio() {
         transactions: assetTransactions,
       };
     },
-    [getAssetPrice, portfolio.transactions],
+    [getAssetPrice, portfolio.transactions, dynamicPrices],
   );
 
   const holdings = useMemo(
@@ -381,7 +381,7 @@ export function usePortfolio() {
   );
 
   const resetAllData = useCallback(() => {
-    persistPortfolio(resetAllPortfolioData(portfolio));
+    persistPortfolio(resetPortfolioData(portfolio));
   }, [persistPortfolio, portfolio]);
 
   return {

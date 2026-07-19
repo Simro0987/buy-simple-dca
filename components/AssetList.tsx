@@ -36,8 +36,14 @@ export function AssetList({
     >
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
-          <span className={`h-2.5 w-2.5 rounded-full ${styles.dot}`} />
-          <h2 className={`text-sm font-semibold uppercase tracking-wider ${styles.label}`}>
+          <span
+            className="h-2.5 w-2.5 rounded-full"
+            style={{ backgroundColor: styles.color }}
+          />
+          <h2
+            className="text-sm font-semibold uppercase tracking-wider"
+            style={{ color: styles.color }}
+          >
             {heading}
           </h2>
         </div>

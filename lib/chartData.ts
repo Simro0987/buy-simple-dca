@@ -1,64 +1,95 @@
 import type { Transaction } from "@/lib/portfolioStorage";
 
+export type ChartTimeframe = "24h" | "7d" | "30d" | "3m" | "1y" | "ALL";
+
 export interface PortfolioHistoryPoint {
   date: string;
   label: string;
   value: number;
 }
 
-export function generatePortfolioHistory(
-  startValue = 3000,
-  endValue = 5747.87,
-  days = 30,
-): PortfolioHistoryPoint[] {
-  const data: PortfolioHistoryPoint[] = [];
-  const now = new Date();
+export const TIMEFRAME_LABELS: Record<ChartTimeframe, string> = {
+  "24h": "24h",
+  "7d": "7d",
+  "30d": "30d",
+  "3m": "3m",
+  "1y": "1y",
+  ALL: "ALL",
+};
 
-  for (let i = days - 1; i >= 0; i--) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i);
+const TIMEFRAME_MS: Record<ChartTimeframe, number | null> = {
+  "24h": 24 * 60 * 60 * 1000,
+  "7d": 7 * 24 * 60 * 60 * 1000,
+  "30d": 30 * 24 * 60 * 60 * 1000,
+  "3m": 90 * 24 * 60 * 60 * 1000,
+  "1y": 365 * 24 * 60 * 60 * 1000,
+  ALL: null,
+};
 
-    const progress = (days - 1 - i) / (days - 1);
-    const base = startValue + (endValue - startValue) * progress;
-    const wave = Math.sin(i * 1.1) * 72 + Math.cos(i * 0.6) * 38;
-    const value = Math.round((base + wave) * 100) / 100;
+const TIMEFRAME_POINTS: Record<ChartTimeframe, number> = {
+  "24h": 24,
+  "7d": 7,
+  "30d": 30,
+  "3m": 30,
+  "1y": 52,
+  ALL: 60,
+};
 
-    data.push({
-      date: date.toISOString().split("T")[0],
-      label: date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
-      value,
+function formatLabel(date: Date, timeframe: ChartTimeframe): string {
+  if (timeframe === "24h") {
+    return date.toLocaleTimeString("sk-SK", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   }
 
-  data[data.length - 1].value = endValue;
-  return data;
+  if (timeframe === "1y" || timeframe === "ALL") {
+    return date.toLocaleDateString("sk-SK", {
+      month: "short",
+      day: "numeric",
+    });
+  }
+
+  return date.toLocaleDateString("sk-SK", {
+    month: "short",
+    day: "numeric",
+  });
 }
 
-export function generatePortfolioHistoryFromActivity(
+function getInvestedAtTime(
+  timeline: { time: number; value: number }[],
+  targetTime: number,
+): number {
+  let invested = 0;
+  for (const point of timeline) {
+    if (point.time <= targetTime) {
+      invested = point.value;
+    }
+  }
+  return invested;
+}
+
+export function generatePortfolioHistoryForTimeframe(
   transactions: Transaction[],
   currentValue: number,
-  days = 30,
+  timeframe: ChartTimeframe,
 ): PortfolioHistoryPoint[] {
-  if (currentValue <= 0) {
-    return generatePortfolioHistory(0, 0, days);
-  }
+  const now = Date.now();
+  const rangeMs = TIMEFRAME_MS[timeframe];
+  const pointCount = TIMEFRAME_POINTS[timeframe];
+  const startTime =
+    rangeMs === null
+      ? transactions.length > 0
+        ? Math.min(
+            ...transactions.map((tx) => new Date(tx.date).getTime()),
+            now - 30 * 24 * 60 * 60 * 1000,
+          )
+        : now - 30 * 24 * 60 * 60 * 1000
+      : now - rangeMs;
 
   const sorted = [...transactions]
     .filter((tx) => tx.type !== "REMOVE")
     .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-
-  const totalInvested = sorted.reduce(
-    (sum, tx) => sum + (tx.spentUsd > 0 ? tx.spentUsd : 0),
-    0,
-  );
-
-  const startValue = Math.max(totalInvested * 0.85, currentValue * 0.55, 1);
-  const now = new Date();
-  const startDate = new Date(now);
-  startDate.setDate(startDate.getDate() - (days - 1));
 
   const investedTimeline: { time: number; value: number }[] = [];
   let running = 0;
@@ -70,34 +101,36 @@ export function generatePortfolioHistoryFromActivity(
     });
   }
 
+  const totalInvested = running;
+  const startValue = Math.max(
+    totalInvested > 0 ? totalInvested * 0.9 : 0,
+    currentValue > 0 ? currentValue * 0.5 : 0,
+  );
+
   const points: PortfolioHistoryPoint[] = [];
+  const step = (now - startTime) / Math.max(pointCount - 1, 1);
 
-  for (let i = 0; i < days; i++) {
-    const date = new Date(startDate);
-    date.setDate(date.getDate() + i);
-    const dayTime = date.getTime();
-
-    let investedAtDay = 0;
-    for (const point of investedTimeline) {
-      if (point.time <= dayTime + 86_400_000) {
-        investedAtDay = point.value;
-      }
-    }
-
-    const progress = i / (days - 1);
-    const baseline = Math.max(investedAtDay, startValue);
-    const value = baseline + (currentValue - baseline) * progress;
+  for (let i = 0; i < pointCount; i++) {
+    const time = startTime + step * i;
+    const date = new Date(time);
+    const investedAtPoint = getInvestedAtTime(investedTimeline, time);
+    const progress = pointCount > 1 ? i / (pointCount - 1) : 1;
+    const baseline = Math.max(investedAtPoint, startValue);
+    const value =
+      currentValue <= 0
+        ? 0
+        : baseline + (currentValue - baseline) * progress;
 
     points.push({
-      date: date.toISOString().split("T")[0],
-      label: date.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
+      date: date.toISOString(),
+      label: formatLabel(date, timeframe),
       value: Math.round(value * 100) / 100,
     });
   }
 
-  points[points.length - 1].value = currentValue;
+  if (points.length > 0) {
+    points[points.length - 1].value = currentValue;
+  }
+
   return points;
 }

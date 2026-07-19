@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { LiveAsset } from "@/hooks/usePortfolio";
-import { getCategoryStyles } from "@/lib/assetStyles";
+import { CATEGORY_DISPLAY_ORDER, getCategoryStyles } from "@/lib/assetStyles";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 
 interface PortfolioBubbleAllocationProps {
@@ -30,15 +30,15 @@ export function PortfolioBubbleAllocation({
     <motion.section
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.45, delay: 0.04, ease: "easeOut" }}
+      transition={{ duration: 0.45, delay: 0.12, ease: "easeOut" }}
       className="rounded-3xl border border-white/5 bg-[#111113] p-4"
     >
       <div className="mb-4 px-1">
         <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-          Portfólio Allocation
+          DISTRIBÚCIA
         </p>
         <p className="text-sm font-medium text-zinc-400">
-          Podiel jednotlivých tokenov
+          Podiel tokenov v portfóliu
         </p>
       </div>
 
@@ -63,11 +63,18 @@ export function PortfolioBubbleAllocation({
               >
                 <div
                   className={`rounded-full ${styles.bubble} ${styles.bubbleGlow} transition-transform hover:scale-105`}
-                  style={{ width: size, height: size }}
+                  style={{
+                    width: size,
+                    height: size,
+                    backgroundColor: styles.color,
+                  }}
                   title={`${bubble.symbol} — ${bubble.percent.toFixed(1)}%`}
                 />
                 <p className="text-xs font-bold text-white">{bubble.symbol}</p>
-                <p className={`text-[10px] font-semibold ${styles.label}`}>
+                <p
+                  className="text-[10px] font-semibold"
+                  style={{ color: styles.color }}
+                >
                   {bubble.percent.toFixed(1)}%
                 </p>
               </div>
@@ -77,18 +84,21 @@ export function PortfolioBubbleAllocation({
       )}
 
       <div className="mt-4 flex flex-wrap justify-center gap-4 border-t border-white/5 pt-3">
-        {(["core", "yield", "satellite"] as const).map((category) => {
+        {CATEGORY_DISPLAY_ORDER.map((category) => {
           const styles = getCategoryStyles(category);
           const label =
             category === "core"
               ? "Core"
               : category === "yield"
                 ? "Yield"
-                : "Satellites";
+                : "Satellite";
 
           return (
             <div key={category} className="flex items-center gap-2">
-              <span className={`h-2 w-2 rounded-full ${styles.dot}`} />
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ backgroundColor: styles.color }}
+              />
               <span className="text-[10px] font-medium uppercase tracking-wide text-zinc-500">
                 {label}
               </span>

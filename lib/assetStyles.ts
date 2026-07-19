@@ -1,39 +1,53 @@
 import type { AssetAccent } from "@/lib/data";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 
+export const CATEGORY_COLORS = {
+  core: "#F7931A",
+  satellite: "#8B5CF6",
+  yield: "#10B981",
+} as const;
+
 export interface CategoryStyles {
+  color: string;
   dot: string;
   ring: string;
   bg: string;
   bubble: string;
   bubbleGlow: string;
   label: string;
+  chartStroke: string;
 }
 
 const CATEGORY_STYLES: Record<AssetCategory, CategoryStyles> = {
   core: {
-    dot: "bg-orange-400",
-    ring: "ring-orange-500/30",
-    bg: "bg-orange-500",
-    bubble: "bg-gradient-to-br from-orange-400 to-amber-500",
-    bubbleGlow: "shadow-[0_0_24px_rgba(251,146,60,0.35)]",
-    label: "text-orange-400",
-  },
-  yield: {
-    dot: "bg-emerald-400",
-    ring: "ring-emerald-500/30",
-    bg: "bg-emerald-500",
-    bubble: "bg-gradient-to-br from-emerald-400 to-teal-500",
-    bubbleGlow: "shadow-[0_0_24px_rgba(52,211,153,0.35)]",
-    label: "text-emerald-400",
+    color: CATEGORY_COLORS.core,
+    dot: "bg-[#F7931A]",
+    ring: "ring-[#F7931A]/30",
+    bg: "bg-[#F7931A]",
+    bubble: "bg-[#F7931A]",
+    bubbleGlow: "shadow-[0_0_24px_rgba(247,147,26,0.4)]",
+    label: "text-[#F7931A]",
+    chartStroke: CATEGORY_COLORS.core,
   },
   satellite: {
-    dot: "bg-violet-400",
-    ring: "ring-violet-500/30",
-    bg: "bg-gradient-to-br from-violet-500 to-blue-500",
-    bubble: "bg-gradient-to-br from-violet-400 to-blue-500",
-    bubbleGlow: "shadow-[0_0_24px_rgba(139,92,246,0.35)]",
-    label: "text-violet-400",
+    color: CATEGORY_COLORS.satellite,
+    dot: "bg-[#8B5CF6]",
+    ring: "ring-[#8B5CF6]/30",
+    bg: "bg-[#8B5CF6]",
+    bubble: "bg-[#8B5CF6]",
+    bubbleGlow: "shadow-[0_0_24px_rgba(139,92,246,0.4)]",
+    label: "text-[#8B5CF6]",
+    chartStroke: CATEGORY_COLORS.satellite,
+  },
+  yield: {
+    color: CATEGORY_COLORS.yield,
+    dot: "bg-[#10B981]",
+    ring: "ring-[#10B981]/30",
+    bg: "bg-[#10B981]",
+    bubble: "bg-[#10B981]",
+    bubbleGlow: "shadow-[0_0_24px_rgba(16,185,129,0.4)]",
+    label: "text-[#10B981]",
+    chartStroke: CATEGORY_COLORS.yield,
   },
 };
 
@@ -47,8 +61,18 @@ const ACCENT_PALETTE: { accent: AssetAccent; ring: string; bg: string }[] = [
   },
 ];
 
+export const CATEGORY_DISPLAY_ORDER: AssetCategory[] = [
+  "core",
+  "satellite",
+  "yield",
+];
+
 export function getCategoryStyles(category: AssetCategory): CategoryStyles {
   return CATEGORY_STYLES[category];
+}
+
+export function getCategoryColor(category: AssetCategory): string {
+  return CATEGORY_COLORS[category];
 }
 
 export function getCategoryDotClass(category: AssetCategory): string {
@@ -58,7 +82,7 @@ export function getCategoryDotClass(category: AssetCategory): string {
 export function getCategoryLabel(category: AssetCategory): string {
   if (category === "core") return "Core";
   if (category === "yield") return "Yield";
-  return "Satellites";
+  return "Satellite";
 }
 
 export function getCoreAccentStyles(accent: AssetAccent) {

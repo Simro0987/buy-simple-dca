@@ -5,6 +5,7 @@ export interface CryptoPrice {
   coingeckoId: string;
   price: number;
   change7d: number;
+  image?: string;
 }
 
 export type CryptoPricesMap = Record<CryptoSymbol, CryptoPrice>;
@@ -75,6 +76,7 @@ export async function fetchCoinGeckoPricesByIds(
       {
         id: string;
         symbol: string;
+        image: string;
         current_price: number;
         price_change_percentage_7d_in_currency?: number;
       }[]
@@ -88,6 +90,7 @@ export async function fetchCoinGeckoPricesByIds(
         coingeckoId: coin.id,
         price: coin.current_price ?? 0,
         change7d: coin.price_change_percentage_7d_in_currency ?? 0,
+        image: coin.image,
       };
     }
   }

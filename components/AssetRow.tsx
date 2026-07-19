@@ -2,8 +2,8 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { ChevronDown, MoreVertical } from "lucide-react";
-import Image from "next/image";
 import { useState } from "react";
+import { AssetLogo } from "@/components/AssetLogo";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import type { LiveAsset } from "@/hooks/usePortfolio";
 import { getCategoryDotClass, getCategoryStyles } from "@/lib/assetStyles";
@@ -63,30 +63,19 @@ export function AssetRow({
           onClick={() => setExpanded((value) => !value)}
           className="flex min-w-0 flex-1 items-center gap-3 text-left"
         >
-          <div className="relative h-11 w-11 shrink-0 overflow-hidden rounded-full ring-2 ring-white/10">
-            {asset.logoUrl ? (
-              <Image
-                src={asset.logoUrl}
-                alt={asset.name}
-                fill
-                className="object-cover"
-                unoptimized
-              />
-            ) : (
-              <div
-                className={`flex h-full w-full items-center justify-center ${categoryStyles.bg} ring-2 ${categoryStyles.ring}`}
-              >
-                <span className="text-xs font-bold text-white">
-                  {asset.symbol.slice(0, 1)}
-                </span>
-              </div>
-            )}
-          </div>
+          <AssetLogo
+            symbol={asset.symbol}
+            name={asset.name}
+            logoUrl={asset.logoUrl}
+            category={asset.category}
+            size={44}
+          />
 
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
               <span
                 className={`h-2 w-2 shrink-0 rounded-full ${getCategoryDotClass(asset.category)}`}
+                style={{ backgroundColor: categoryStyles.color }}
                 aria-hidden
               />
               <p className="font-semibold text-white">{asset.symbol}</p>

@@ -143,11 +143,14 @@ export function Dashboard() {
                 isLive={isLive}
               />
 
-              <PortfolioBubbleAllocation assets={allAssets} loading={loading} />
-
               <PortfolioChart
                 endValue={totalBalance}
                 transactions={transactions}
+                loading={loading}
+              />
+
+              <PortfolioBubbleAllocation
+                assets={allAssets}
                 loading={loading}
               />
 
@@ -158,14 +161,14 @@ export function Dashboard() {
                 onOpenTransactions={handleOpenTransactions}
               />
               <AssetList
-                category="yield"
-                assets={yieldAssets}
+                category="satellite"
+                assets={satelliteAssets}
                 loading={loading}
                 onOpenTransactions={handleOpenTransactions}
               />
               <AssetList
-                category="satellite"
-                assets={satelliteAssets}
+                category="yield"
+                assets={yieldAssets}
                 loading={loading}
                 onOpenTransactions={handleOpenTransactions}
               />
