@@ -1,15 +1,41 @@
 import { NextResponse } from "next/server";
-import { aggregateNews } from "@/lib/newsEngine";
+import { aggregateNews, type PortfolioTokenInput } from "@/lib/newsEngine";
 
 export const revalidate = 900;
+
+function parsePortfolioTokens(searchParams: URLSearchParams): PortfolioTokenInput[] {
+  const tokensParam = searchParams.get("tokens");
+  if (tokensParam) {
+    try {
+      const parsed = JSON.parse(tokensParam) as PortfolioTokenInput[];
+      if (Array.isArray(parsed)) {
+        return parsed
+          .filter((token) => token?.symbol)
+          .map((token) => ({
+            symbol: String(token.symbol).toUpperCase(),
+            name: String(token.name || token.symbol),
+            logoUrl: token.logoUrl,
+          }));
+      }
+    } catch {
+      // Fall through to symbols param
+    }
+  }
+
+  const symbols =
+    searchParams.get("symbols")?.split(",").filter(Boolean) ?? [];
+
+  return symbols.map((symbol) => ({
+    symbol: symbol.toUpperCase(),
+    name: symbol,
+  }));
+}
 
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
-    const symbols =
-      searchParams.get("symbols")?.split(",").filter(Boolean) ?? [];
-
-    const articles = await aggregateNews(symbols);
+    const portfolioTokens = parsePortfolioTokens(searchParams);
+    const articles = await aggregateNews(portfolioTokens);
 
     return NextResponse.json({
       success: true,

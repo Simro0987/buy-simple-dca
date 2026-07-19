@@ -14,7 +14,6 @@ export type NewsFeedMode = "portfolio" | "all";
 interface NewsFeedResponse {
   success: boolean;
   articles: NewsArticle[];
-  heroImageUrl?: string;
   error?: string;
   fetchedAt?: string;
 }
@@ -30,7 +29,6 @@ function toPortfolioTokenRef(asset: LiveAsset): PortfolioTokenRef {
 
 export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
-  const [heroImageUrl, setHeroImageUrl] = useState<string | undefined>();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -41,8 +39,15 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     [portfolioAssets],
   );
 
-  const symbolsParam = useMemo(
-    () => portfolioTokens.map((token) => token.symbol).join(","),
+  const tokensParam = useMemo(
+    () =>
+      JSON.stringify(
+        portfolioTokens.map((token) => ({
+          symbol: token.symbol,
+          name: token.name,
+          logoUrl: token.logoUrl,
+        })),
+      ),
     [portfolioTokens],
   );
 
@@ -51,8 +56,8 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     setError(null);
 
     try {
-      const query = symbolsParam
-        ? `?symbols=${encodeURIComponent(symbolsParam)}`
+      const query = portfolioTokens.length
+        ? `?tokens=${encodeURIComponent(tokensParam)}`
         : "";
       const response = await fetch(`/api/news${query}`, { cache: "no-store" });
       const data = (await response.json()) as NewsFeedResponse;
@@ -62,7 +67,6 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
       }
 
       setArticles(data.articles ?? []);
-      setHeroImageUrl(data.heroImageUrl);
       setLastUpdated(
         data.fetchedAt ? new Date(data.fetchedAt) : new Date(),
       );
@@ -74,7 +78,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     } finally {
       setLoading(false);
     }
-  }, [symbolsParam]);
+  }, [portfolioTokens.length, tokensParam]);
 
   useEffect(() => {
     void loadNews();
@@ -89,43 +93,6 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     [articles, portfolioTokens, mode],
   );
 
-  const resolveHeroImage = useCallback(
-    async (hero: SmartNewsArticle | null) => {
-      if (!hero) return undefined;
-      if (hero.imageUrl) return hero.imageUrl;
-      if (heroImageUrl && hero.id === smartFeed.hero?.id) return heroImageUrl;
-
-      try {
-        const response = await fetch("/api/news/hero-image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title: hero.title }),
-        });
-        const data = (await response.json()) as {
-          success: boolean;
-          imageUrl?: string;
-        };
-        return data.imageUrl;
-      } catch {
-        return undefined;
-      }
-    },
-    [heroImageUrl, smartFeed.hero?.id],
-  );
-
-  const [resolvedHeroImage, setResolvedHeroImage] = useState<string | undefined>();
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const image = await resolveHeroImage(smartFeed.hero);
-      if (!cancelled) setResolvedHeroImage(image);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [smartFeed.hero, resolveHeroImage]);
-
   return {
     mode,
     setMode,
@@ -134,7 +101,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     heroArticle: smartFeed.hero,
     listArticles: smartFeed.list,
     matchedCount: smartFeed.filtered.length,
-    heroImageUrl: resolvedHeroImage ?? smartFeed.hero?.imageUrl,
+    heroImageUrl: smartFeed.hero?.imageUrl,
     loading,
     error,
     lastUpdated,

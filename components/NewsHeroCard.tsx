@@ -42,6 +42,9 @@ export function NewsHeroCard({
     );
   }
 
+  const heroImage = imageUrl ?? article.imageUrl;
+  const primaryToken = article.matchedTokens[0];
+
   return (
     <motion.a
       href={article.url}
@@ -53,22 +56,46 @@ export function NewsHeroCard({
       className="group relative block overflow-hidden rounded-3xl border border-white/10 bg-[#111113]"
     >
       <div className="relative h-52 w-full overflow-hidden sm:h-60">
-        {imageUrl ? (
-          <Image
-            src={imageUrl}
-            alt={article.title}
-            fill
-            className="object-cover transition-transform duration-500 group-hover:scale-105"
-            unoptimized
-            priority
-          />
-        ) : (
-          <div className="h-full w-full bg-gradient-to-br from-[#050505] via-[#111113] to-emerald-950/40" />
-        )}
+        <Image
+          src={heroImage}
+          alt={article.title}
+          fill
+          className="object-cover transition-transform duration-500 group-hover:scale-105"
+          unoptimized
+          priority
+        />
         <div className="absolute inset-0 bg-gradient-to-t from-[#050505] via-[#050505]/60 to-transparent" />
 
+        <div className="absolute left-4 top-4 h-8 w-8 overflow-hidden rounded-full bg-black/60 ring-2 ring-white/15">
+          <Image
+            src={article.sourceLogoUrl}
+            alt={article.source}
+            fill
+            className="object-cover"
+            unoptimized
+          />
+        </div>
+
+        {primaryToken && (
+          <div className="absolute right-4 top-4 h-8 w-8 overflow-hidden rounded-full bg-black/70 ring-2 ring-white/20">
+            {primaryToken.logoUrl ? (
+              <Image
+                src={primaryToken.logoUrl}
+                alt={primaryToken.symbol}
+                fill
+                className="object-cover"
+                unoptimized
+              />
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-[10px] font-bold text-white">
+                {primaryToken.symbol.slice(0, 2)}
+              </span>
+            )}
+          </div>
+        )}
+
         {article.isFlash && (
-          <span className="absolute left-4 top-4 inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-yellow-400">
+          <span className="absolute bottom-4 left-4 inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/15 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-yellow-400">
             <Zap className="h-3 w-3 fill-yellow-400" />
             Flash
           </span>
@@ -77,15 +104,6 @@ export function NewsHeroCard({
 
       <div className="relative p-5">
         <div className="mb-3 flex items-center gap-2">
-          <div className="relative h-6 w-6 overflow-hidden rounded-full ring-1 ring-white/10">
-            <Image
-              src={article.sourceLogoUrl}
-              alt={article.source}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-          </div>
           <span className="rounded-full border border-white/10 bg-white/5 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-zinc-300">
             {article.source}
           </span>

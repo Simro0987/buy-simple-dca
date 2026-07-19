@@ -34,6 +34,24 @@ export function getMatchedTokens(
   article: NewsArticle,
   portfolioTokens: PortfolioTokenRef[],
 ): PortfolioTokenRef[] {
+  const detected = new Set(
+    (article.tokens ?? []).map((token) => token.toUpperCase()),
+  );
+
+  const byDetected = portfolioTokens.filter((token) =>
+    detected.has(token.symbol.toUpperCase()),
+  );
+  if (byDetected.length > 0) return byDetected;
+
+  if (article.primaryToken) {
+    const primary = portfolioTokens.find(
+      (token) =>
+        token.symbol.toUpperCase() ===
+        article.primaryToken?.symbol.toUpperCase(),
+    );
+    if (primary) return [primary];
+  }
+
   const text = `${article.title} ${article.summary}`;
   return portfolioTokens.filter((token) => tokenAppearsInText(text, token));
 }

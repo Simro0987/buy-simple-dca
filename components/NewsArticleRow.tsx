@@ -26,6 +26,8 @@ export function NewsArticleRow({
   article,
   showTokenBadges = false,
 }: NewsArticleRowProps) {
+  const primaryToken = article.matchedTokens[0];
+
   return (
     <motion.a
       href={article.url}
@@ -35,40 +37,45 @@ export function NewsArticleRow({
       className="group flex gap-3 rounded-2xl border border-white/5 bg-[#111113] p-3 transition hover:border-white/10 hover:bg-[#161618]"
     >
       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-900 ring-1 ring-white/10">
-        {article.imageUrl ? (
+        <Image
+          src={article.imageUrl}
+          alt={article.title}
+          fill
+          className="object-cover"
+          unoptimized
+        />
+
+        <div className="absolute left-1 top-1 h-5 w-5 overflow-hidden rounded-full ring-1 ring-black/50">
           <Image
-            src={article.imageUrl}
-            alt={article.title}
+            src={article.sourceLogoUrl}
+            alt={article.source}
             fill
             className="object-cover"
             unoptimized
           />
-        ) : (
-          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-zinc-900 to-zinc-800">
-            <div className="relative h-6 w-6 overflow-hidden rounded-full">
+        </div>
+
+        {primaryToken && (
+          <div className="absolute right-1 top-1 h-5 w-5 overflow-hidden rounded-full bg-black/70 ring-1 ring-white/20">
+            {primaryToken.logoUrl ? (
               <Image
-                src={article.sourceLogoUrl}
-                alt={article.source}
+                src={primaryToken.logoUrl}
+                alt={primaryToken.symbol}
                 fill
                 className="object-cover"
                 unoptimized
               />
-            </div>
+            ) : (
+              <span className="flex h-full w-full items-center justify-center text-[7px] font-bold text-white">
+                {primaryToken.symbol.slice(0, 2)}
+              </span>
+            )}
           </div>
         )}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex flex-wrap items-center gap-2">
-          <div className="relative h-4 w-4 overflow-hidden rounded-full">
-            <Image
-              src={article.sourceLogoUrl}
-              alt={article.source}
-              fill
-              className="object-cover"
-              unoptimized
-            />
-          </div>
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400">
             {article.source}
           </span>
