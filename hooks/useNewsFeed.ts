@@ -14,6 +14,7 @@ interface NewsFeedResponse {
   success: boolean;
   articles: NewsArticle[];
   heroArticleId?: string | null;
+  flashArticleId?: string | null;
   error?: string;
   fetchedAt?: string;
 }
@@ -30,6 +31,7 @@ function toPortfolioTokenRef(asset: LiveAsset): PortfolioTokenRef {
 export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   const [articles, setArticles] = useState<NewsArticle[]>([]);
   const [heroArticleId, setHeroArticleId] = useState<string | null>(null);
+  const [flashArticleId, setFlashArticleId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -44,13 +46,14 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   const tokensParam = useMemo(
     () =>
       JSON.stringify(
-        portfolioTokens.map((token) => ({
-          symbol: token.symbol,
-          name: token.name,
-          logoUrl: token.logoUrl,
+        portfolioAssets.map((asset) => ({
+          symbol: asset.symbol,
+          name: asset.name,
+          logoUrl: asset.logoUrl,
+          coingeckoId: asset.coingeckoId,
         })),
       ),
-    [portfolioTokens],
+    [portfolioAssets],
   );
 
   const loadNews = useCallback(async () => {
@@ -70,6 +73,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
 
       setArticles(data.articles ?? []);
       setHeroArticleId(data.heroArticleId ?? null);
+      setFlashArticleId(data.flashArticleId ?? null);
       setLastUpdated(
         data.fetchedAt ? new Date(data.fetchedAt) : new Date(),
       );
@@ -79,6 +83,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
       );
       setArticles([]);
       setHeroArticleId(null);
+      setFlashArticleId(null);
     } finally {
       setLoading(false);
     }
@@ -100,8 +105,9 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
         mode,
         heroArticleId,
         selectedToken,
+        flashArticleId,
       ),
-    [articles, portfolioTokens, mode, heroArticleId, selectedToken],
+    [articles, portfolioTokens, mode, heroArticleId, selectedToken, flashArticleId],
   );
 
   return {
@@ -111,6 +117,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     setSelectedToken,
     articles,
     portfolioTokens,
+    flashArticleId,
     heroArticle: smartFeed.hero,
     listArticles: smartFeed.list,
     flashArticles: smartFeed.flashArticles,

@@ -21,16 +21,19 @@ function formatRelativeTime(date: string) {
 interface NewsArticleRowProps {
   article: SmartNewsArticle;
   showTokenBadges?: boolean;
+  flashArticleId?: string | null;
   onFlashClick?: (article: SmartNewsArticle) => void;
 }
 
 export function NewsArticleRow({
   article,
   showTokenBadges = false,
+  flashArticleId = null,
   onFlashClick,
 }: NewsArticleRowProps) {
   const primaryToken = article.matchedTokens[0];
-  const isFlash = isFlashAlertArticle(article);
+  const isFlash = isFlashAlertArticle(article, flashArticleId);
+  const isMarketStatus = article.isMarketStatus;
 
   const content = (
     <>
@@ -87,6 +90,11 @@ export function NewsArticleRow({
               <Zap className="h-2.5 w-2.5 fill-yellow-400" />
               Flash Alert
             </motion.span>
+          )}
+          {isMarketStatus && (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-emerald-300">
+              Trhový status
+            </span>
           )}
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400">
             {article.source}
@@ -146,8 +154,8 @@ export function NewsArticleRow({
       rel="noopener noreferrer"
       variants={listItemVariants}
       className={`group flex gap-3 rounded-2xl border p-3 transition ${
-        isFlash
-          ? "border-yellow-400/30 bg-[#14120a] hover:bg-[#1a170c]"
+        isMarketStatus
+          ? "border-emerald-400/20 bg-emerald-400/5 hover:bg-emerald-400/10"
           : "border-white/5 bg-[#111113] hover:border-white/10 hover:bg-[#161618]"
       }`}
     >

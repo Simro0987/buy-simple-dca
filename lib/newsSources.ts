@@ -56,12 +56,22 @@ export const NEWS_SOURCES: NewsSource[] = [
     feedUrl: "https://feeds.bloomberg.com/crypto/news.rss",
     maxItems: 5,
   },
+];
+
+export const DEFI_NEWS_SOURCES: NewsSource[] = [
   {
-    id: "defillama",
-    name: "DeFiLlama",
-    domain: "defillama.com",
-    feedUrl: "https://dlnews.com/arc/outboundfeeds/rss/",
-    maxItems: 5,
+    id: "dlnews",
+    name: "DeFiLlama News",
+    domain: "dlnews.com",
+    feedUrl: "https://www.dlnews.com/arc/outboundfeeds/rss/",
+    maxItems: 8,
+  },
+  {
+    id: "thedefiant",
+    name: "The Defiant",
+    domain: "thedefiant.io",
+    feedUrl: "https://thedefiant.io/api/feed",
+    maxItems: 8,
   },
 ];
 

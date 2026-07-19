@@ -9,7 +9,13 @@ import {
   rankArticles,
   selectHeroCandidate,
 } from "@/lib/newsRanking";
-import { NEWS_SOURCES, getSourceFaviconUrl } from "@/lib/newsSources";
+import { fetchCryptoPanicForPortfolio } from "@/lib/newsCryptoPanic";
+import {
+  createMarketStatusItems,
+  fetchCoinGeckoMarketData,
+} from "@/lib/newsMarketStatus";
+import { selectFlashArticleId } from "@/lib/newsFlashAlert";
+import { NEWS_SOURCES, DEFI_NEWS_SOURCES, getSourceFaviconUrl } from "@/lib/newsSources";
 
 export type NewsImpact = "high" | "medium" | "low";
 export type NewsSentiment = "bullish" | "bearish" | "neutral";
@@ -18,6 +24,7 @@ export interface PortfolioTokenInput {
   symbol: string;
   name: string;
   logoUrl?: string;
+  coingeckoId?: string;
 }
 
 export interface RawNewsItem {
@@ -49,6 +56,7 @@ export interface NewsArticle {
   impact: NewsImpact;
   sentiment: NewsSentiment;
   isFlash: boolean;
+  isMarketStatus?: boolean;
 }
 
 const DEFAULT_PORTFOLIO: PortfolioTokenInput[] = [
@@ -297,31 +305,43 @@ function buildTokenSearchFeedUrl(token: PortfolioTokenInput): string {
   return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
 }
 
+function buildCoinGeckoTokenFeedUrl(token: PortfolioTokenInput): string {
+  const query = `${token.symbol} ${token.name} site:coingecko.com`;
+  return `https://news.google.com/rss/search?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en`;
+}
+
 async function fetchTokenKeywordFeeds(
   portfolioTokens: PortfolioTokenInput[],
 ): Promise<RawNewsItem[]> {
   const tokens = portfolioTokens.length > 0 ? portfolioTokens : DEFAULT_PORTFOLIO;
 
   const results = await Promise.all(
-    tokens.map(async (token) => {
-      const feedUrl = buildTokenSearchFeedUrl(token);
-      const items = await fetchFeed(
-        feedUrl,
+    tokens.flatMap((token) => [
+      fetchFeed(
+        buildTokenSearchFeedUrl(token),
         `Google · ${token.symbol}`,
         "news.google.com",
         4,
         tokens,
-      );
-      return items.map((item) => ({
-        ...item,
-        tokens: detectTokens(
-          `${item.title} ${item.summary}`,
-          tokens,
-        ).includes(token.symbol.toUpperCase())
-          ? [...new Set([...item.tokens, token.symbol.toUpperCase()])]
-          : [...new Set([...item.tokens, token.symbol.toUpperCase()])],
-      }));
-    }),
+      ).then((items) =>
+        items.map((item) => ({
+          ...item,
+          tokens: [...new Set([...item.tokens, token.symbol.toUpperCase()])],
+        })),
+      ),
+      fetchFeed(
+        buildCoinGeckoTokenFeedUrl(token),
+        `CoinGecko · ${token.symbol}`,
+        "coingecko.com",
+        3,
+        tokens,
+      ).then((items) =>
+        items.map((item) => ({
+          ...item,
+          tokens: [...new Set([...item.tokens, token.symbol.toUpperCase()])],
+        })),
+      ),
+    ]),
   );
 
   return results.flat();
@@ -427,11 +447,22 @@ function filterForPortfolio(
 
 export async function aggregateNews(
   portfolioTokens: PortfolioTokenInput[] = [],
-): Promise<{ articles: NewsArticle[]; heroArticleId: string | null }> {
+): Promise<{
+  articles: NewsArticle[];
+  heroArticleId: string | null;
+  flashArticleId: string | null;
+}> {
   const tokens = portfolioTokens.length > 0 ? portfolioTokens : DEFAULT_PORTFOLIO;
   const marketCapRanks = await fetchMarketCapRanks(tokens);
 
-  const [feedResults, tokenFeedResults, supabaseItems] = await Promise.all([
+  const [
+    feedResults,
+    defiFeedResults,
+    tokenFeedResults,
+    cryptoPanicItems,
+    supabaseItems,
+    marketData,
+  ] = await Promise.all([
     Promise.all(
       NEWS_SOURCES.map((source) =>
         fetchFeed(
@@ -443,21 +474,38 @@ export async function aggregateNews(
         ),
       ),
     ),
+    Promise.all(
+      DEFI_NEWS_SOURCES.map((source) =>
+        fetchFeed(
+          source.feedUrl,
+          source.name,
+          source.domain,
+          source.maxItems,
+          tokens,
+        ),
+      ),
+    ),
     fetchTokenKeywordFeeds(tokens),
+    fetchCryptoPanicForPortfolio(tokens),
     fetchSupabaseNews(tokens),
+    fetchCoinGeckoMarketData(tokens),
   ]);
 
   const allItems = [
     ...feedResults.flat(),
+    ...defiFeedResults.flat(),
     ...tokenFeedResults,
+    ...cryptoPanicItems,
     ...supabaseItems,
   ];
 
   const deduped = deduplicateArticles(allItems);
-  const portfolioRelevant = filterForPortfolio(deduped, tokens);
-  const pool = portfolioRelevant.length >= 8 ? portfolioRelevant : deduped;
+  const marketStatusItems = createMarketStatusItems(tokens, deduped, marketData);
+  const withMarketStatus = [...deduped, ...marketStatusItems];
+  const portfolioRelevant = filterForPortfolio(withMarketStatus, tokens);
+  const pool = portfolioRelevant.length >= 8 ? portfolioRelevant : withMarketStatus;
   const ranked = rankArticles(pool, tokens, marketCapRanks);
-  const top = ranked.slice(0, 30);
+  const top = ranked.slice(0, 40);
 
   const titles = await translateBatch(top.map((item) => item.title));
   const summaries = await translateBatch(
@@ -498,6 +546,7 @@ export async function aggregateNews(
       tokens: item.tokens,
       primaryToken,
       relevanceScore: item.relevanceScore,
+      isMarketStatus: item.id.startsWith("market-status-"),
       ...classification,
     };
   });
@@ -538,5 +587,7 @@ export async function aggregateNews(
     (a, b) => b.relevanceScore - a.relevanceScore,
   );
 
-  return { articles: sorted, heroArticleId };
+  const flashArticleId = selectFlashArticleId(sorted);
+
+  return { articles: sorted, heroArticleId, flashArticleId };
 }

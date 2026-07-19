@@ -81,6 +81,10 @@ export function computeRelevanceScore(
   portfolioTokens: PortfolioTokenInput[],
   marketCapRanks: Map<string, number>,
 ): number {
+  if (item.id.startsWith("market-status-")) {
+    return 55;
+  }
+
   const allowed = new Set(
     portfolioTokens.map((token) => token.symbol.toUpperCase()),
   );

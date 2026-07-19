@@ -253,27 +253,35 @@ export async function fetchNewsSearchImage(
   return undefined;
 }
 
-export function generateTokenFallbackImage(token: TokenImageRef): string {
-  const symbol = token.symbol.toUpperCase().slice(0, 6);
-  const accentHue =
-    symbol.split("").reduce((acc, ch) => acc + ch.charCodeAt(0), 0) % 360;
-  const accent = `hsl(${accentHue}, 75%, 55%)`;
+export function generateIdenticonSvg(symbol: string): string {
+  const hash = symbol
+    .toUpperCase()
+    .split("")
+    .reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+  const hue = hash % 360;
+  const accent = `hsl(${hue}, 70%, 55%)`;
+  const accent2 = `hsl(${(hue + 40) % 360}, 65%, 45%)`;
+  const label = symbol.toUpperCase().slice(0, 4);
 
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 360" width="640" height="360">
-  <defs>
-    <radialGradient id="glow" cx="50%" cy="45%" r="55%">
-      <stop offset="0%" stop-color="${accent}" stop-opacity="0.35"/>
-      <stop offset="100%" stop-color="#000000" stop-opacity="0"/>
-    </radialGradient>
-  </defs>
   <rect width="640" height="360" fill="#050505"/>
-  <rect width="640" height="360" fill="url(#glow)"/>
-  <circle cx="320" cy="150" r="56" fill="${accent}" opacity="0.15"/>
-  <text x="320" y="168" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-size="42" font-weight="800">${symbol.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text>
-  <text x="320" y="250" text-anchor="middle" fill="${accent}" font-family="system-ui,sans-serif" font-size="14" font-weight="600" letter-spacing="4">EDGE TRADER</text>
+  <circle cx="320" cy="180" r="110" fill="${accent}" opacity="0.12"/>
+  <rect x="250" y="110" width="140" height="140" rx="28" fill="${accent2}" opacity="0.22"/>
+  <text x="320" y="192" text-anchor="middle" fill="#ffffff" font-family="system-ui,sans-serif" font-size="48" font-weight="800">${label.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</text>
 </svg>`;
 
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
+export function generateTokenLogoPlaceholder(token: TokenImageRef): string {
+  if (token.logoUrl && isValidImageUrl(token.logoUrl)) {
+    return token.logoUrl;
+  }
+  return generateIdenticonSvg(token.symbol);
+}
+
+export function generateTokenFallbackImage(token: TokenImageRef): string {
+  return generateTokenLogoPlaceholder(token);
 }
 
 export async function fetchMetaImages(
@@ -358,10 +366,10 @@ export async function resolveHeroImage(
   }
 
   if (primaryToken) {
-    return generateTokenFallbackImage(primaryToken);
+    return generateTokenLogoPlaceholder(primaryToken);
   }
 
-  return generateTokenFallbackImage({ symbol: "CRYPTO" });
+  return generateIdenticonSvg("CRYPTO");
 }
 
 export async function resolveArticleImage(
@@ -391,10 +399,10 @@ export async function resolveArticleImage(
   }
 
   if (primaryToken) {
-    return generateTokenFallbackImage(primaryToken);
+    return generateTokenLogoPlaceholder(primaryToken);
   }
 
-  return generateTokenFallbackImage({ symbol: "CRYPTO" });
+  return generateIdenticonSvg("CRYPTO");
 }
 
 export async function resolveArticleImagesBatch(

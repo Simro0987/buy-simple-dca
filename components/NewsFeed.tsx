@@ -25,6 +25,7 @@ export function NewsFeed() {
     flashArticles,
     regularArticles,
     heroImageUrl,
+    flashArticleId,
     loading,
     error,
     lastUpdated,
@@ -208,6 +209,7 @@ export function NewsFeed() {
                   key={article.id}
                   article={article}
                   showTokenBadges={mode === "portfolio"}
+                  flashArticleId={flashArticleId}
                   onFlashClick={handleFlashClick}
                 />
               ))}
@@ -231,6 +233,7 @@ export function NewsFeed() {
                   key={article.id}
                   article={article}
                   showTokenBadges={mode === "portfolio"}
+                  flashArticleId={flashArticleId}
                 />
               ))}
             </motion.div>

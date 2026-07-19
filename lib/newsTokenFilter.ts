@@ -87,7 +87,9 @@ export function getTopHolding(
 function isGlobalMainTokenFlash(
   article: SmartNewsArticle,
   portfolioTokens: PortfolioTokenRef[],
+  flashArticleId: string | null,
 ): boolean {
+  if (!isFlashAlertArticle(article, flashArticleId)) return false;
   const mainToken = getTopHolding(portfolioTokens);
   if (!mainToken) return false;
   return articleMatchesToken(article, mainToken.symbol);
@@ -98,6 +100,7 @@ function applyTokenFilterWithFlash(
   enriched: SmartNewsArticle[],
   selectedToken: string,
   portfolioTokens: PortfolioTokenRef[],
+  flashArticleId: string | null,
 ): SmartNewsArticle[] {
   const seen = new Set<string>();
   const result: SmartNewsArticle[] = [];
@@ -109,12 +112,15 @@ function applyTokenFilterWithFlash(
     }
   };
 
-  for (const article of enriched) {
-    if (!isFlashAlertArticle(article)) continue;
-    if (articleMatchesToken(article, selectedToken)) {
-      add(article);
-    } else if (isGlobalMainTokenFlash(article, portfolioTokens)) {
-      add(article);
+  if (flashArticleId) {
+    const flashArticle = enriched.find((article) => article.id === flashArticleId);
+    if (flashArticle) {
+      if (
+        articleMatchesToken(flashArticle, selectedToken) ||
+        isGlobalMainTokenFlash(flashArticle, portfolioTokens, flashArticleId)
+      ) {
+        add(flashArticle);
+      }
     }
   }
 
@@ -127,7 +133,10 @@ function applyTokenFilterWithFlash(
   return result;
 }
 
-function splitFlashAndRegular(articles: SmartNewsArticle[]): {
+function splitFlashAndRegular(
+  articles: SmartNewsArticle[],
+  flashArticleId: string | null,
+): {
   flashArticles: SmartNewsArticle[];
   regularArticles: SmartNewsArticle[];
 } {
@@ -135,7 +144,7 @@ function splitFlashAndRegular(articles: SmartNewsArticle[]): {
   const regularArticles: SmartNewsArticle[] = [];
 
   for (const article of articles) {
-    if (isFlashAlertArticle(article)) {
+    if (isFlashAlertArticle(article, flashArticleId)) {
       flashArticles.push(article);
     } else {
       regularArticles.push(article);
@@ -146,7 +155,7 @@ function splitFlashAndRegular(articles: SmartNewsArticle[]): {
     (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0);
 
   return {
-    flashArticles: flashArticles.sort(sortByScore),
+    flashArticles: flashArticles.sort(sortByScore).slice(0, 1),
     regularArticles: regularArticles.sort(sortByScore),
   };
 }
@@ -218,6 +227,7 @@ export function buildSmartFeed(
   mode: "portfolio" | "all",
   heroArticleId?: string | null,
   selectedToken?: string | null,
+  flashArticleId?: string | null,
 ): {
   hero: SmartNewsArticle | null;
   list: SmartNewsArticle[];
@@ -229,20 +239,36 @@ export function buildSmartFeed(
     enrichArticleWithMatches(article, portfolioTokens),
   );
 
-  const filtered = enriched.filter((article) => article.matchedTokens.length > 0);
+  const filtered = enriched.filter(
+    (article) => article.matchedTokens.length > 0 || article.isMarketStatus,
+  );
   let feed = mode === "portfolio" ? filtered : enriched;
 
   if (selectedToken) {
-    feed = applyTokenFilterWithFlash(feed, enriched, selectedToken, portfolioTokens);
+    feed = applyTokenFilterWithFlash(
+      feed,
+      enriched,
+      selectedToken,
+      portfolioTokens,
+      flashArticleId ?? null,
+    );
   }
 
   const heroPool = selectedToken ? feed : enriched;
   const hero = selectHeroArticle(heroPool, portfolioTokens, heroArticleId);
   const listWithoutHero = [...feed]
     .filter((article) => article.id !== hero?.id)
-    .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
+    .sort((a, b) => {
+      const aFlash = isFlashAlertArticle(a, flashArticleId ?? null) ? 1 : 0;
+      const bFlash = isFlashAlertArticle(b, flashArticleId ?? null) ? 1 : 0;
+      if (aFlash !== bFlash) return bFlash - aFlash;
+      return (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0);
+    });
 
-  const { flashArticles, regularArticles } = splitFlashAndRegular(listWithoutHero);
+  const { flashArticles, regularArticles } = splitFlashAndRegular(
+    listWithoutHero,
+    flashArticleId ?? null,
+  );
 
   return {
     hero,
