@@ -11,26 +11,6 @@ export const portfolioHoldings = {
   cashUsd: 632.26,
   realizedDeposit: -85.21,
   profitLoss: 5833.08,
-  assets: [
-    {
-      symbol: "BTC",
-      name: "Bitcoin",
-      balance: 0.0482,
-      accent: "orange" as const,
-    },
-    {
-      symbol: "ETH",
-      name: "Ethereum",
-      balance: 0.612,
-      accent: "purple" as const,
-    },
-    {
-      symbol: "SOL",
-      name: "Solana",
-      balance: 4.28,
-      accent: "cyan" as const,
-    },
-  ],
 };
 
 /** @deprecated Use portfolioHoldings for static data; live values come from usePortfolio */
@@ -46,11 +26,7 @@ export const portfolioData = {
     { symbol: "SOL", percent: 10, color: "#22d3ee" },
     { symbol: "CASH", percent: 11, color: "#52525b" },
   ],
-  assets: portfolioHoldings.assets.map((asset) => ({
-    ...asset,
-    usdValue: 0,
-    change7d: 0,
-  })),
+  assets: [],
 };
 
 export function formatUsd(value: number, options?: { showSign?: boolean }) {

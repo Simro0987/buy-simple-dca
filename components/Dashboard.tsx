@@ -2,9 +2,11 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useState } from "react";
+import { AddAssetButton } from "@/components/AddAssetButton";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { DcaMoneyModePanel } from "@/components/dca/DcaMoneyModePanel";
+import { EditHoldingsModal } from "@/components/EditHoldingsModal";
 import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
@@ -13,14 +15,17 @@ import { usePortfolio } from "@/hooks/usePortfolio";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const {
     assets,
+    holdings,
     totalBalance,
     realizedDeposit,
     profitLoss,
     loading,
     isLive,
     prices,
+    updateHoldings,
   } = usePortfolio();
 
   const showPortfolio = activeTab === "portfolio" || activeTab === "home";
@@ -65,6 +70,7 @@ export function Dashboard() {
               />
               <PortfolioChart endValue={totalBalance} loading={loading} />
               <AssetList assets={assets} loading={loading} />
+              <AddAssetButton onClick={() => setIsEditModalOpen(true)} />
             </motion.div>
           )}
 
@@ -95,6 +101,13 @@ export function Dashboard() {
       </main>
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
+
+      <EditHoldingsModal
+        open={isEditModalOpen}
+        holdings={holdings}
+        onClose={() => setIsEditModalOpen(false)}
+        onSave={updateHoldings}
+      />
     </div>
   );
 }

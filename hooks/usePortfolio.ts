@@ -1,9 +1,17 @@
 "use client";
 
-import { useMemo } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCryptoPrices } from "@/hooks/useCryptoPrices";
-import { portfolioHoldings, type PortfolioAsset } from "@/lib/data";
+import type { PortfolioAsset } from "@/lib/data";
 import type { CryptoSymbol } from "@/lib/cryptoApi";
+import {
+  ASSET_DEFINITIONS,
+  DEFAULT_HOLDINGS,
+  readHoldingsFromStorage,
+  writeHoldingsToStorage,
+  type HoldingsMap,
+} from "@/lib/portfolioStorage";
+import { portfolioHoldings } from "@/lib/data";
 
 export interface LiveAsset extends PortfolioAsset {
   usdValue: number;
@@ -13,20 +21,37 @@ export interface LiveAsset extends PortfolioAsset {
 
 export function usePortfolio() {
   const { prices, loading, error, isLive, lastUpdated } = useCryptoPrices();
+  const [holdings, setHoldings] = useState<HoldingsMap>(DEFAULT_HOLDINGS);
+  const [isHydrated, setIsHydrated] = useState(false);
+
+  useEffect(() => {
+    const stored = readHoldingsFromStorage();
+    if (stored) {
+      setHoldings(stored);
+    }
+    setIsHydrated(true);
+  }, []);
+
+  const updateHoldings = useCallback((next: HoldingsMap) => {
+    setHoldings(next);
+    writeHoldingsToStorage(next);
+  }, []);
 
   const assets = useMemo<LiveAsset[]>(() => {
-    return portfolioHoldings.assets.map((asset) => {
-      const live = prices[asset.symbol as CryptoSymbol];
+    return ASSET_DEFINITIONS.map((definition) => {
+      const live = prices[definition.symbol];
       const unitPrice = live?.price ?? 0;
+      const balance = holdings[definition.symbol];
 
       return {
-        ...asset,
+        ...definition,
+        balance,
         unitPrice,
-        usdValue: asset.balance * unitPrice,
+        usdValue: balance * unitPrice,
         change7d: live?.change7d ?? 0,
       };
     });
-  }, [prices]);
+  }, [holdings, prices]);
 
   const cryptoTotal = useMemo(
     () => assets.reduce((sum, asset) => sum + asset.usdValue, 0),
@@ -37,13 +62,18 @@ export function usePortfolio() {
 
   return {
     assets,
+    holdings,
     totalBalance,
     realizedDeposit: portfolioHoldings.realizedDeposit,
     profitLoss: portfolioHoldings.profitLoss,
-    loading,
+    loading: loading || !isHydrated,
     error,
     isLive,
     lastUpdated,
     prices,
+    isHydrated,
+    updateHoldings,
   };
 }
+
+export type { HoldingsMap, CryptoSymbol };
