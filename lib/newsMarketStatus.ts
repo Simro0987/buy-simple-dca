@@ -2,6 +2,7 @@ import type { PortfolioTokenInput, RawNewsItem } from "@/lib/newsEngine";
 import { getTokenBrandColor } from "@/lib/newsDefiBrands";
 import { generateDefiPatternImage } from "@/lib/newsDefiImage";
 import { getSourceFaviconUrl } from "@/lib/newsSources";
+import { fetchMarketDataRace } from "@/lib/market-data/fetchMarketData";
 
 interface CoinMarketData {
   symbol: string;
@@ -18,22 +19,32 @@ export async function fetchCoinGeckoMarketData(
   const map = new Map<string, CoinMarketData>();
   if (portfolioTokens.length === 0) return map;
 
-  const ids = portfolioTokens
-    .map((token) => token.coingeckoId)
-    .filter(Boolean) as string[];
-
-  const symbols = portfolioTokens.map((t) => t.symbol.toLowerCase()).join(",");
-  const query = ids.length
-    ? `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids.join(",")}&price_change_percentage=24h`
-    : `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${symbols}&price_change_percentage=24h`;
+  const tokens = portfolioTokens.map((token) => ({
+    symbol: token.symbol,
+    coingeckoId: token.coingeckoId ?? token.symbol.toLowerCase(),
+    name: token.name,
+  }));
 
   try {
-    const response = await fetch(query, { next: { revalidate: 300 } });
-    if (!response.ok) return map;
+    const { prices, degraded } = await fetchMarketDataRace(tokens);
+    if (degraded) return map;
 
-    const data = (await response.json()) as CoinMarketData[];
-    for (const coin of data) {
-      map.set(coin.symbol.toUpperCase(), coin);
+    for (const token of portfolioTokens) {
+      const entry =
+        prices[token.coingeckoId ?? ""] ??
+        Object.values(prices).find(
+          (p) => p.symbol === token.symbol.toUpperCase(),
+        );
+      if (!entry || entry.price <= 0) continue;
+
+      map.set(token.symbol.toUpperCase(), {
+        symbol: entry.symbol,
+        name: entry.name ?? token.name,
+        current_price: entry.price,
+        price_change_percentage_24h: entry.change24h,
+        image: entry.image,
+        id: entry.coingeckoId,
+      });
     }
   } catch {
     return map;

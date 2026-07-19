@@ -1,5 +1,6 @@
 import { getSourceTrustScore } from "@/lib/newsDeduplication";
 import type { PortfolioTokenInput, RawNewsItem } from "@/lib/newsEngine";
+import { fetchMarketDataRace } from "@/lib/market-data/fetchMarketData";
 
 const FALLBACK_MARKET_CAP_RANK: Record<string, number> = {
   BTC: 1,
@@ -39,21 +40,20 @@ export async function fetchMarketCapRanks(
   if (!symbols) return ranks;
 
   try {
-    const response = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&symbols=${symbols}&per_page=250`,
-      { next: { revalidate: 3600 } },
-    );
+    const tokens = portfolioTokens.map((token) => ({
+      symbol: token.symbol,
+      coingeckoId: token.coingeckoId ?? token.symbol.toLowerCase(),
+      name: token.name,
+    }));
+    const { prices } = await fetchMarketDataRace(tokens);
 
-    if (!response.ok) return ranks;
-
-    const data = (await response.json()) as Array<{
-      symbol: string;
-      market_cap_rank?: number;
-    }>;
-
-    for (const coin of data) {
-      if (coin.market_cap_rank) {
-        ranks.set(coin.symbol.toUpperCase(), coin.market_cap_rank);
+    for (const token of portfolioTokens) {
+      const symbol = token.symbol.toUpperCase();
+      const entry =
+        prices[token.coingeckoId ?? ""] ??
+        Object.values(prices).find((p) => p.symbol === symbol);
+      if (entry?.marketCapRank) {
+        ranks.set(symbol, entry.marketCapRank);
       }
     }
   } catch {

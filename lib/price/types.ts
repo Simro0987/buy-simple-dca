@@ -8,6 +8,7 @@ export interface NormalizedTokenPrice {
   change24h: number;
   change7d: number;
   marketCap: number;
+  marketCapRank?: number;
   image?: string;
   source: PriceSource;
   fetchedAt: string;

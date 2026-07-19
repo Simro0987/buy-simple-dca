@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 import type { CryptoPrice, CryptoPricesMap, CryptoSymbol } from "@/lib/cryptoApi";
 import type { DynamicPricesMap } from "@/lib/cryptoApi";
-import type { NormalizedTokenPrice } from "@/lib/price/types";
+import type { MarketDataApiResponse } from "@/lib/cryptoApi";
 import { useAppStore } from "@/src/store/useAppStore";
 
 const EMPTY_CORE: CryptoPricesMap = {
@@ -13,17 +13,27 @@ const EMPTY_CORE: CryptoPricesMap = {
   SOL: { symbol: "SOL", coingeckoId: "solana", price: 0, change7d: 0 },
 };
 
-interface PricesApiResponse {
-  success: boolean;
-  prices?: Record<string, NormalizedTokenPrice>;
-  core?: Record<CryptoSymbol, NormalizedTokenPrice>;
-  source?: string;
-  degraded?: boolean;
-  fetchedAt?: string;
-  error?: string;
+async function fetchMarketData(
+  coingeckoIds?: string[],
+  symbols?: string[],
+): Promise<MarketDataApiResponse> {
+  const params = new URLSearchParams();
+  if (coingeckoIds?.length) {
+    params.set("ids", coingeckoIds.join(","));
+    if (symbols?.length) params.set("symbols", symbols.join(","));
+  }
+  const query = params.toString();
+  const res = await fetch(`/api/market-data${query ? `?${query}` : ""}`);
+  return res.json() as Promise<MarketDataApiResponse>;
 }
 
-function toCryptoPrice(entry: NormalizedTokenPrice): CryptoPrice {
+function toCryptoPrice(entry: {
+  symbol: string;
+  coingeckoId: string;
+  price: number;
+  change7d: number;
+  image?: string;
+}): CryptoPrice {
   return {
     symbol: entry.symbol,
     coingeckoId: entry.coingeckoId,
@@ -33,35 +43,21 @@ function toCryptoPrice(entry: NormalizedTokenPrice): CryptoPrice {
   };
 }
 
-async function fetchPricesFromProxy(
-  coingeckoIds?: string[],
-  symbols?: string[],
-): Promise<PricesApiResponse> {
-  const params = new URLSearchParams();
-  if (coingeckoIds?.length) {
-    params.set("ids", coingeckoIds.join(","));
-    if (symbols?.length) params.set("symbols", symbols.join(","));
-  }
-  const query = params.toString();
-  const res = await fetch(`/api/prices${query ? `?${query}` : ""}`, {
-    cache: "no-store",
-  });
-  return res.json() as Promise<PricesApiResponse>;
-}
-
 export function useCryptoPrices() {
   const setApiStatus = useAppStore((s) => s.setApiStatus);
 
   const query = useQuery({
-    queryKey: ["prices", "core"],
-    queryFn: () => fetchPricesFromProxy(),
+    queryKey: ["market-data", "core"],
+    queryFn: () => fetchMarketData(),
     refetchInterval: 60_000,
   });
 
   useEffect(() => {
     if (!query.data) return;
     setApiStatus("prices", {
-      source: (query.data.source as "coingecko" | "mobula" | "coinmarketcap") ?? "unknown",
+      source:
+        (query.data.source as "coingecko" | "mobula" | "coinmarketcap") ??
+        "unknown",
       healthy: query.data.success && !query.data.degraded,
       degraded: Boolean(query.data.degraded),
       message: query.data.error ?? null,
@@ -81,7 +77,7 @@ export function useCryptoPrices() {
     prices,
     loading: query.isLoading,
     error: query.error instanceof Error ? query.error.message : null,
-    isLive: query.isSuccess && !query.data?.degraded,
+    isLive: query.isSuccess && !query.data?.degraded && prices.BTC.price > 0,
     lastUpdated: query.dataUpdatedAt ? new Date(query.dataUpdatedAt) : null,
     getPrice: (symbol: CryptoSymbol) => prices[symbol],
     refresh: () => void query.refetch(),
@@ -98,8 +94,8 @@ export function usePortfolioPriceQuery(
   const key = coingeckoIds.join(",");
 
   const query = useQuery({
-    queryKey: ["prices", "portfolio", key],
-    queryFn: () => fetchPricesFromProxy(coingeckoIds, symbols),
+    queryKey: ["market-data", "portfolio", key],
+    queryFn: () => fetchMarketData(coingeckoIds, symbols),
     enabled: coingeckoIds.length > 0,
     refetchInterval: 60_000,
   });
@@ -107,7 +103,9 @@ export function usePortfolioPriceQuery(
   useEffect(() => {
     if (!query.data) return;
     setApiStatus("prices", {
-      source: (query.data.source as "coingecko" | "mobula" | "coinmarketcap") ?? "unknown",
+      source:
+        (query.data.source as "coingecko" | "mobula" | "coinmarketcap") ??
+        "unknown",
       healthy: query.data.success && !query.data.degraded,
       degraded: Boolean(query.data.degraded),
       message: query.data.error ?? null,

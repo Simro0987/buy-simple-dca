@@ -5,6 +5,7 @@ export interface CryptoPrice {
   coingeckoId: string;
   price: number;
   change7d: number;
+  change24h?: number;
   image?: string;
 }
 
@@ -19,8 +20,35 @@ export interface CoinGeckoSearchCoin {
   large: string;
 }
 
-export interface CoinGeckoSearchResult {
-  coins: CoinGeckoSearchCoin[];
+export interface MarketDataApiResponse {
+  success: boolean;
+  prices?: Record<
+    string,
+    {
+      symbol: string;
+      coingeckoId: string;
+      price: number;
+      change24h: number;
+      change7d: number;
+      image?: string;
+    }
+  >;
+  core?: Record<
+    CryptoSymbol,
+    {
+      symbol: string;
+      coingeckoId: string;
+      price: number;
+      change24h: number;
+      change7d: number;
+      image?: string;
+    }
+  >;
+  coins?: CoinGeckoSearchCoin[];
+  source?: string;
+  degraded?: boolean;
+  error?: string;
+  fetchedAt?: string;
 }
 
 const COINGECKO_ID_MAP: Record<string, CryptoSymbol> = {
@@ -29,20 +57,40 @@ const COINGECKO_ID_MAP: Record<string, CryptoSymbol> = {
   solana: "SOL",
 };
 
-const BINANCE_SYMBOL_MAP: Record<CryptoSymbol, string> = {
-  BTC: "BTCUSDT",
-  ETH: "ETHUSDT",
-  SOL: "SOLUSDT",
-};
-
 const CORE_COINGECKO_IDS = ["bitcoin", "ethereum", "solana"];
 
-async function fetchJson<T>(url: string): Promise<T> {
-  const response = await fetch(url, { cache: "no-store" });
-  if (!response.ok) {
-    throw new Error(`Request failed (${response.status})`);
+async function fetchMarketDataApi(
+  coingeckoIds?: string[],
+  symbols?: string[],
+): Promise<MarketDataApiResponse> {
+  const params = new URLSearchParams();
+  if (coingeckoIds?.length) {
+    params.set("ids", coingeckoIds.join(","));
+    if (symbols?.length) params.set("symbols", symbols.join(","));
   }
-  return response.json() as Promise<T>;
+  const query = params.toString();
+  const response = await fetch(`/api/market-data${query ? `?${query}` : ""}`, {
+    cache: "no-store",
+  });
+  return response.json() as Promise<MarketDataApiResponse>;
+}
+
+function mapToCryptoPrice(entry: {
+  symbol: string;
+  coingeckoId: string;
+  price: number;
+  change7d: number;
+  change24h?: number;
+  image?: string;
+}): CryptoPrice {
+  return {
+    symbol: entry.symbol,
+    coingeckoId: entry.coingeckoId,
+    price: entry.price,
+    change7d: entry.change7d,
+    change24h: entry.change24h,
+    image: entry.image,
+  };
 }
 
 export async function searchCoinGecko(
@@ -51,125 +99,67 @@ export async function searchCoinGecko(
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  const data = await fetchJson<CoinGeckoSearchResult>(
-    `https://api.coingecko.com/api/v3/search?query=${encodeURIComponent(trimmed)}`,
+  const data = await fetch(
+    `/api/market-data?action=search&query=${encodeURIComponent(trimmed)}`,
+    { cache: "no-store" },
   );
-
-  return (data.coins ?? []).slice(0, 12);
+  const json = (await data.json()) as MarketDataApiResponse;
+  return json.coins ?? [];
 }
 
 export async function fetchCoinGeckoPricesByIds(
   ids: string[],
+  symbols?: string[],
 ): Promise<DynamicPricesMap> {
   const uniqueIds = [...new Set(ids.filter(Boolean))];
   if (uniqueIds.length === 0) return {};
 
-  const chunks: string[][] = [];
-  for (let i = 0; i < uniqueIds.length; i += 50) {
-    chunks.push(uniqueIds.slice(i, i + 50));
+  const sym =
+    symbols ??
+    uniqueIds.map((id) => {
+      const entry = Object.entries(COINGECKO_ID_MAP).find(([k]) => k === id);
+      return entry?.[1] ?? id.slice(0, 4).toUpperCase();
+    });
+
+  const data = await fetchMarketDataApi(uniqueIds, sym);
+  if (!data.success || !data.prices) {
+    throw new Error(data.error ?? "Market data fetch failed");
   }
 
   const prices: DynamicPricesMap = {};
-
-  for (const chunk of chunks) {
-    const data = await fetchJson<
-      {
-        id: string;
-        symbol: string;
-        image: string;
-        current_price: number;
-        price_change_percentage_7d_in_currency?: number;
-      }[]
-    >(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${chunk.join(",")}&price_change_percentage=7d`,
-    );
-
-    for (const coin of data) {
-      prices[coin.id] = {
-        symbol: coin.symbol.toUpperCase(),
-        coingeckoId: coin.id,
-        price: coin.current_price ?? 0,
-        change7d: coin.price_change_percentage_7d_in_currency ?? 0,
-        image: coin.image,
-      };
-    }
+  for (const [id, entry] of Object.entries(data.prices)) {
+    prices[id] = mapToCryptoPrice(entry);
   }
-
   return prices;
 }
 
 export async function fetchCoinGeckoPrices(): Promise<CryptoPricesMap> {
-  const dynamic = await fetchCoinGeckoPricesByIds(CORE_COINGECKO_IDS);
-  const prices = {} as CryptoPricesMap;
+  const data = await fetchMarketDataApi(CORE_COINGECKO_IDS, ["BTC", "ETH", "SOL"]);
+  if (!data.success || !data.core) {
+    throw new Error(data.error ?? "Core market data fetch failed");
+  }
 
+  const prices = {} as CryptoPricesMap;
   for (const [id, symbol] of Object.entries(COINGECKO_ID_MAP)) {
-    const entry = dynamic[id];
+    const entry = data.prices?.[id] ?? data.core[symbol];
     if (!entry) continue;
-    prices[symbol] = { ...entry, symbol };
+    prices[symbol] = { ...mapToCryptoPrice(entry), symbol };
   }
 
   if (!prices.BTC || !prices.ETH || !prices.SOL) {
-    throw new Error("CoinGecko response missing required assets");
+    throw new Error("Market data response missing required assets");
   }
 
   return prices;
 }
 
-export async function fetchBinancePrices(): Promise<CryptoPricesMap> {
-  const entries = await Promise.all(
-    (Object.keys(BINANCE_SYMBOL_MAP) as CryptoSymbol[]).map(async (symbol) => {
-      const response = await fetch(
-        `https://api.binance.com/api/v3/ticker/24hr?symbol=${BINANCE_SYMBOL_MAP[symbol]}`,
-        { cache: "no-store" },
-      );
-
-      if (!response.ok) {
-        throw new Error(`Binance request failed for ${symbol}`);
-      }
-
-      const data = (await response.json()) as {
-        lastPrice: string;
-        priceChangePercent: string;
-      };
-
-      const coingeckoId =
-        symbol === "BTC"
-          ? "bitcoin"
-          : symbol === "ETH"
-            ? "ethereum"
-            : "solana";
-
-      return {
-        symbol,
-        coingeckoId,
-        price: Number(data.lastPrice),
-        change7d: Number(data.priceChangePercent),
-      } satisfies CryptoPrice;
-    }),
-  );
-
-  return Object.fromEntries(entries.map((entry) => [entry.symbol, entry])) as CryptoPricesMap;
-}
-
 export async function fetchCryptoPrices(): Promise<CryptoPricesMap> {
-  try {
-    return await fetchCoinGeckoPrices();
-  } catch {
-    return fetchBinancePrices();
-  }
+  return fetchCoinGeckoPrices();
 }
 
 export async function fetchPortfolioPrices(
   coingeckoIds: string[],
+  symbols?: string[],
 ): Promise<DynamicPricesMap> {
-  try {
-    return await fetchCoinGeckoPricesByIds(coingeckoIds);
-  } catch {
-    const core = await fetchCryptoPrices();
-    const fallback: DynamicPricesMap = {};
-    for (const price of Object.values(core)) {
-      fallback[price.coingeckoId] = price;
-    }
-    return fallback;
-  }
+  return fetchCoinGeckoPricesByIds(coingeckoIds, symbols);
 }

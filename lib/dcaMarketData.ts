@@ -1,5 +1,5 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
-import { fetchPricesMultiSource } from "@/lib/price/multiSourceFetcher";
+import { fetchMarketDataRace } from "@/lib/market-data/fetchMarketData";
 
 export interface DcaTokenDefinition {
   symbol: string;
@@ -235,7 +235,7 @@ async function fetchTokenMarketCaps(
   if (tokens.length === 0) return result;
 
   try {
-    const { prices } = await fetchPricesMultiSource(
+    const { prices } = await fetchMarketDataRace(
       tokens.map((t) => ({
         symbol: t.symbol,
         coingeckoId: t.coingeckoId,
