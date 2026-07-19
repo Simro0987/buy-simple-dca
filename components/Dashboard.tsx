@@ -6,6 +6,7 @@ import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { DcaMoneyModePanel } from "@/components/dca/DcaMoneyModePanel";
 import { HeroSection } from "@/components/HeroSection";
+import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { portfolioData } from "@/lib/data";
 
@@ -15,6 +16,7 @@ export function Dashboard() {
 
   const showPortfolio = activeTab === "portfolio" || activeTab === "home";
   const showDca = activeTab === "dca";
+  const showNews = activeTab === "news";
 
   return (
     <div className="relative min-h-dvh bg-[#050505]">
@@ -73,22 +75,15 @@ export function Dashboard() {
             </motion.div>
           )}
 
-          {activeTab === "news" && (
+          {showNews && (
             <motion.div
               key="news"
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
-              className="flex min-h-[50dvh] flex-col items-center justify-center rounded-3xl border border-white/5 bg-[#111113] p-8 text-center"
             >
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-zinc-600">
-                Coming Soon
-              </p>
-              <p className="mt-2 text-lg font-bold text-white">Crypto News Feed</p>
-              <p className="mt-1 text-sm text-zinc-500">
-                High-impact market signals arriving in the next release.
-              </p>
+              <NewsFeed />
             </motion.div>
           )}
         </AnimatePresence>
