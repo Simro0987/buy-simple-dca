@@ -5,7 +5,7 @@ import { useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
-import { DcaMoneyModePanel } from "@/components/dca/DcaMoneyModePanel";
+import { DcaEngine } from "@/components/dca/DcaEngine";
 import { EditHoldingsModal } from "@/components/EditHoldingsModal";
 import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
@@ -82,7 +82,7 @@ export function Dashboard() {
               exit={{ opacity: 0, y: -8 }}
               transition={{ duration: 0.25, ease: "easeOut" }}
             >
-              <DcaMoneyModePanel prices={prices} loading={loading} />
+              <DcaEngine prices={prices} loading={loading} />
             </motion.div>
           )}
 
