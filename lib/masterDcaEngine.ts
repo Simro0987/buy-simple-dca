@@ -75,11 +75,11 @@ export interface MasterDcaResult {
 }
 
 const FACTOR_WEIGHTS = {
-  value: 0.25,
-  sentiment: 0.2,
-  momentum: 0.2,
+  value: 0.22,
+  trend: 0.22,
+  sentiment: 0.18,
+  momentum: 0.18,
   risk: 0.2,
-  liquidity: 0.15,
 } as const;
 
 const CONFIDENCE_MULTIPLIERS: Record<ConfidenceLevel, number> = {
@@ -125,13 +125,10 @@ function scoreRisk(atrPct: number, cbbcScore: number): number {
   return Math.round((volScore + cbbcScore) / 2);
 }
 
-function scoreLiquidity(marketCap: number): { score: number; status: string } {
-  if (marketCap >= 500_000_000_000) return { score: 95, status: "Mega Cap" };
-  if (marketCap >= 50_000_000_000) return { score: 85, status: "Large Cap" };
-  if (marketCap >= 5_000_000_000) return { score: 70, status: "Mid Cap" };
-  if (marketCap >= 500_000_000) return { score: 55, status: "Small Cap" };
-  if (marketCap > 0) return { score: 40, status: "Micro Cap" };
-  return { score: 30, status: "Unknown" };
+function scoreTrend(distance200wPct: number, mayer: number): number {
+  const wmaTrend = clamp(50 - distance200wPct * 1.1, 0, 100);
+  const mayerTrend = clamp(100 - (mayer - 1) * 40, 0, 100);
+  return Math.round((wmaTrend + mayerTrend) / 2);
 }
 
 function resolveMoneyMode(fg: number, score: number): MoneyMode {
@@ -322,7 +319,7 @@ export function computeMasterDcaEngine(input: {
   );
   const cbbc = scoreCbbc(marketData.btc.mayerMultiple);
   const riskScore = scoreRisk(marketData.btc.atr14d, cbbc.score);
-  const liq = scoreLiquidity(tokens.BTC?.marketCap ?? 0);
+  const trendScore = scoreTrend(distance200w, marketData.btc.mayerMultiple);
 
   const factors: FactorScore[] = [
     {
@@ -336,6 +333,18 @@ export function computeMasterDcaEngine(input: {
             ? "Extended"
             : "Fair",
       weight: FACTOR_WEIGHTS.value,
+    },
+    {
+      id: "trend",
+      name: "Trend",
+      score: trendScore,
+      status:
+        distance200w < 0
+          ? "Akumulácia"
+          : distance200w > 20
+            ? "Rast"
+            : "Neutrál",
+      weight: FACTOR_WEIGHTS.trend,
     },
     {
       id: "sentiment",
@@ -362,13 +371,6 @@ export function computeMasterDcaEngine(input: {
       score: riskScore,
       status: `ATR ${marketData.btc.atr14d.toFixed(1)}% · ${cbbc.status}`,
       weight: FACTOR_WEIGHTS.risk,
-    },
-    {
-      id: "liquidity",
-      name: "Likvidita",
-      score: liq.score,
-      status: liq.status,
-      weight: FACTOR_WEIGHTS.liquidity,
     },
   ];
 

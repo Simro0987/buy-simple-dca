@@ -3,6 +3,8 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useMemo, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
+import { ApiStatusBanner } from "@/components/ApiStatusBanner";
+import { SwapPanel } from "@/components/SwapPanel";
 import { AddAssetModal } from "@/components/AddAssetModal";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
@@ -58,6 +60,7 @@ export function Dashboard() {
   const showPortfolio = activeTab === "portfolio";
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
+  const showSwap = activeTab === "swap";
 
   const handleRecordPurchase = useCallback(
     (plans: TokenExecutionPlan[]) => {
@@ -128,6 +131,8 @@ export function Dashboard() {
           </div>
         </header>
 
+        <ApiStatusBanner />
+
         <AnimatePresence mode="wait">
           {showHome && (
             <motion.div key="home" {...pageTransition} className="space-y-8">
@@ -197,6 +202,11 @@ export function Dashboard() {
           {showNews && (
             <motion.div key="news" {...pageTransition}>
               <NewsFeed />
+            </motion.div>
+          )}
+          {showSwap && (
+            <motion.div key="swap" {...pageTransition}>
+              <SwapPanel />
             </motion.div>
           )}
         </AnimatePresence>

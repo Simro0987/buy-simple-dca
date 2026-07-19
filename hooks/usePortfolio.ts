@@ -1,13 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 import type { PortfolioAsset } from "@/lib/data";
 import { portfolioHoldings } from "@/lib/data";
-import {
-  fetchPortfolioPrices,
-  type CryptoPricesMap,
-  type DynamicPricesMap,
-} from "@/lib/cryptoApi";
+import type { CryptoPricesMap, DynamicPricesMap } from "@/lib/cryptoApi";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { resolveAssetCategory } from "@/lib/assetStyles";
 import { calculatePortfolioPnL } from "@/lib/pnlAnalytics";
@@ -25,8 +21,11 @@ import {
   type Transaction,
   type TransactionType,
 } from "@/lib/portfolioStorage";
-import { useCryptoPrices } from "@/hooks/useCryptoPrices";
-import { useAppStore } from "@/store/useAppStore";
+import {
+  useCryptoPrices,
+  usePortfolioPriceQuery,
+} from "@/hooks/useCryptoPrices";
+import { useAppStore } from "@/src/store/useAppStore";
 
 export interface LiveAsset extends PortfolioAsset {
   id: string;
@@ -68,9 +67,7 @@ export function usePortfolio() {
   const isHydrated = useAppStore((state) => state.isPortfolioHydrated);
   const hydratePortfolio = useAppStore((state) => state.hydratePortfolio);
   const setPortfolioData = useAppStore((state) => state.setPortfolioData);
-
-  const [dynamicPrices, setDynamicPrices] = useState<DynamicPricesMap>({});
-  const [pricesLoading, setPricesLoading] = useState(true);
+  const setPortfolioAssets = useAppStore((state) => state.setPortfolioAssets);
 
   const persistPortfolio = useCallback(
     (data: PortfolioData) => {
@@ -88,30 +85,15 @@ export function usePortfolio() {
     [portfolio.assets],
   );
 
-  const loadDynamicPrices = useCallback(async () => {
-    if (coingeckoIds.length === 0) {
-      setDynamicPrices({});
-      setPricesLoading(false);
-      return;
-    }
+  const symbols = useMemo(
+    () => portfolio.assets.map((asset) => asset.symbol),
+    [portfolio.assets],
+  );
 
-    try {
-      const next = await fetchPortfolioPrices(coingeckoIds);
-      setDynamicPrices(next);
-    } catch {
-      // Keep previous prices on failure
-    } finally {
-      setPricesLoading(false);
-    }
-  }, [coingeckoIds]);
-
-  useEffect(() => {
-    void loadDynamicPrices();
-    const interval = setInterval(() => {
-      void loadDynamicPrices();
-    }, 60_000);
-    return () => clearInterval(interval);
-  }, [loadDynamicPrices]);
+  const { dynamicPrices, loading: pricesLoading } = usePortfolioPriceQuery(
+    coingeckoIds,
+    symbols,
+  );
 
   const getAssetPrice = useCallback(
     (asset: TrackedAsset) =>
@@ -201,6 +183,10 @@ export function usePortfolio() {
       );
     });
   }, [buildLiveAsset, pnl.bySymbol, portfolio.assets, portfolio.transactions]);
+
+  useEffect(() => {
+    setPortfolioAssets(allAssets);
+  }, [allAssets, setPortfolioAssets]);
 
   const coreAssets = useMemo(
     () => allAssets.filter((asset) => asset.category === "core"),
@@ -415,7 +401,6 @@ export function usePortfolio() {
     recordDcaPurchase,
     resetAllData,
     portfolioData: portfolio,
-    refreshPrices: loadDynamicPrices,
   };
 }
 

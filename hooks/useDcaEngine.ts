@@ -8,7 +8,7 @@ import {
   type MasterDcaResult,
 } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore } from "@/src/store/useAppStore";
 
 interface UseDcaEngineOptions {
   portfolioSymbols?: string[];
@@ -19,14 +19,24 @@ interface DcaApiResponse {
   success: boolean;
   snapshot?: DcaMarketSnapshot;
   error?: string;
+  fetchedAt?: string;
+  degraded?: boolean;
 }
 
 export function useDcaEngine({
-  portfolioSymbols = [],
+  portfolioSymbols: portfolioSymbolsProp,
   dcaTransactions = [],
 }: UseDcaEngineOptions = {}) {
-  const weeklyBudget = useAppStore((state) => state.dcaSettings.weeklyBudget);
+  const weeklyBudget = useAppStore((state) => state.dcaPlan.weeklyBudget);
+  const portfolioAssets = useAppStore((state) => state.portfolioAssets);
   const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
+  const setDcaResult = useAppStore((state) => state.setDcaResult);
+  const setApiStatus = useAppStore((state) => state.setApiStatus);
+
+  const portfolioSymbols = useMemo(() => {
+    if (portfolioSymbolsProp?.length) return portfolioSymbolsProp;
+    return portfolioAssets.map((asset) => asset.symbol);
+  }, [portfolioSymbolsProp, portfolioAssets]);
 
   const [snapshot, setSnapshot] = useState<DcaMarketSnapshot | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,12 +61,27 @@ export function useDcaEngine({
         throw new Error(json.error ?? "Failed to load DCA market data");
       }
       setSnapshot(json.snapshot);
+      setApiStatus("dca", {
+        source: "aggregated",
+        healthy: !json.snapshot.degraded,
+        degraded: Boolean(json.snapshot.degraded),
+        message: json.error ?? null,
+        lastCheck: json.fetchedAt ?? new Date().toISOString(),
+      });
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error");
+      const message = err instanceof Error ? err.message : "Unknown error";
+      setError(message);
+      setApiStatus("dca", {
+        source: "aggregated",
+        healthy: false,
+        degraded: true,
+        message,
+        lastCheck: new Date().toISOString(),
+      });
     } finally {
       setLoading(false);
     }
-  }, [symbolsKey, portfolioSymbols]);
+  }, [portfolioSymbols, setApiStatus, symbolsKey]);
 
   useEffect(() => {
     void loadSnapshot();
@@ -88,9 +113,10 @@ export function useDcaEngine({
 
   useEffect(() => {
     if (result) {
+      setDcaResult(result);
       setExecutionPlans(toExecutionPlans(result));
     }
-  }, [result, setExecutionPlans]);
+  }, [result, setDcaResult, setExecutionPlans]);
 
   return {
     result,

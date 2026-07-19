@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { PwaRegister } from "@/components/PwaRegister";
+import { QueryProvider } from "@/components/QueryProvider";
 import "./globals.css";
 
 const inter = Inter({
@@ -58,8 +59,10 @@ export default function RootLayout({
   return (
     <html lang="sk" className={`${inter.variable} h-full antialiased`}>
       <body className="min-h-full">
-        <PwaRegister />
-        {children}
+        <QueryProvider>
+          <PwaRegister />
+          {children}
+        </QueryProvider>
       </body>
     </html>
   );

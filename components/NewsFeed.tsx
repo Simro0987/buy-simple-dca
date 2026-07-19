@@ -10,12 +10,12 @@ import { NewsHeroCard } from "@/components/NewsHeroCard";
 import { NewsTokenChips } from "@/components/NewsTokenChips";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { useNewsFeed } from "@/hooks/useNewsFeed";
-import { usePortfolio } from "@/hooks/usePortfolio";
+import { usePortfolioAssets } from "@/src/store/useAppStore";
 import type { SmartNewsArticle } from "@/lib/newsTokenFilter";
 import { listContainerVariants } from "@/lib/motion";
 
 export function NewsFeed() {
-  const { allAssets } = usePortfolio();
+  const portfolioAssets = usePortfolioAssets();
   const {
     mode,
     setMode,
@@ -32,7 +32,7 @@ export function NewsFeed() {
     refresh,
     matchedCount,
     portfolioTokens,
-  } = useNewsFeed(allAssets);
+  } = useNewsFeed(portfolioAssets);
 
   const [flashModalArticle, setFlashModalArticle] =
     useState<SmartNewsArticle | null>(null);

@@ -16,7 +16,7 @@ import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { toExecutionPlans } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore } from "@/src/store/useAppStore";
 
 interface DcaEngineProps {
   portfolioSymbols?: string[];
@@ -31,7 +31,7 @@ export function DcaEngine({
   loading: externalLoading = false,
   onRecordPurchase,
 }: DcaEngineProps) {
-  const weeklyAmount = useAppStore((state) => state.dcaSettings.weeklyBudget);
+  const weeklyAmount = useAppStore((state) => state.dcaPlan.weeklyBudget);
   const setWeeklyBudget = useAppStore((state) => state.setWeeklyBudget);
 
   const { result, loading: engineLoading, error, refresh } = useDcaEngine({

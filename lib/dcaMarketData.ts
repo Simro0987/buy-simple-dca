@@ -1,4 +1,5 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
+import { fetchPricesMultiSource } from "@/lib/price/multiSourceFetcher";
 
 export interface DcaTokenDefinition {
   symbol: string;
@@ -218,7 +219,6 @@ async function fetchMarketDataService(): Promise<MarketDataServicePayload> {
 async function fetchTokenMarketCaps(
   tokens: DcaTokenDefinition[],
 ): Promise<Record<string, TokenMarketSnapshot>> {
-  const ids = [...new Set(tokens.map((t) => t.coingeckoId))].join(",");
   const result: Record<string, TokenMarketSnapshot> = {};
 
   for (const token of tokens) {
@@ -232,34 +232,27 @@ async function fetchTokenMarketCaps(
     };
   }
 
-  if (!ids) return result;
+  if (tokens.length === 0) return result;
 
   try {
-    const res = await fetch(
-      `https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&ids=${ids}&price_change_percentage=24h`,
-      { cache: "no-store" },
+    const { prices } = await fetchPricesMultiSource(
+      tokens.map((t) => ({
+        symbol: t.symbol,
+        coingeckoId: t.coingeckoId,
+        name: t.name,
+      })),
     );
-    if (!res.ok) return result;
 
-    const data = (await res.json()) as Array<{
-      id: string;
-      symbol: string;
-      current_price: number;
-      market_cap: number;
-      price_change_percentage_24h_in_currency?: number;
-      image: string;
-    }>;
-
-    for (const coin of data) {
-      const token = tokens.find((t) => t.coingeckoId === coin.id);
-      if (!token) continue;
+    for (const token of tokens) {
+      const entry = prices[token.coingeckoId];
+      if (!entry || entry.price <= 0) continue;
       result[token.symbol] = {
         symbol: token.symbol,
-        price: coin.current_price ?? 0,
-        change24h: coin.price_change_percentage_24h_in_currency ?? 0,
-        marketCap: coin.market_cap ?? 0,
-        image: coin.image || token.logoUrl,
-        hasLiveData: (coin.current_price ?? 0) > 0,
+        price: entry.price,
+        change24h: entry.change24h,
+        marketCap: entry.marketCap,
+        image: entry.image || token.logoUrl,
+        hasLiveData: true,
       };
     }
   } catch {

@@ -7,7 +7,7 @@ import {
   buildSmartFeed,
   type PortfolioTokenRef,
 } from "@/lib/newsTokenFilter";
-import { useAppStore } from "@/store/useAppStore";
+import { useAppStore } from "@/src/store/useAppStore";
 
 interface NewsFeedResponse {
   success: boolean;
@@ -36,6 +36,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
   const setNewsArticles = useAppStore((state) => state.setNewsArticles);
   const setNewsLoading = useAppStore((state) => state.setNewsLoading);
   const setNewsError = useAppStore((state) => state.setNewsError);
+  const setApiStatus = useAppStore((state) => state.setApiStatus);
 
   const portfolioTokens = useMemo(
     () => portfolioAssets.map(toPortfolioTokenRef),
@@ -76,6 +77,13 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
         flashArticleId: data.flashArticleId ?? null,
         fetchedAt: data.fetchedAt,
       });
+      setApiStatus("news", {
+        source: "aggregated",
+        healthy: true,
+        degraded: false,
+        message: null,
+        lastCheck: data.fetchedAt ?? new Date().toISOString(),
+      });
     } catch (err) {
       setNewsError(
         err instanceof Error ? err.message : "Chyba pri načítaní správ",
@@ -85,6 +93,14 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
         heroArticleId: null,
         flashArticleId: null,
       });
+      setApiStatus("news", {
+        source: "aggregated",
+        healthy: false,
+        degraded: true,
+        message:
+          err instanceof Error ? err.message : "Chyba pri načítaní správ",
+        lastCheck: new Date().toISOString(),
+      });
     }
   }, [
     portfolioTokens.length,
@@ -92,6 +108,7 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     setNewsArticles,
     setNewsError,
     setNewsLoading,
+    setApiStatus,
   ]);
 
   useEffect(() => {
