@@ -1,4 +1,5 @@
 import type { NewsArticle } from "@/lib/newsEngine";
+import { isFlashAlertArticle } from "@/lib/newsFlashAlert";
 
 export interface PortfolioTokenRef {
   symbol: string;
@@ -83,6 +84,73 @@ export function getTopHolding(
   return [...portfolioTokens].sort((a, b) => b.usdValue - a.usdValue)[0];
 }
 
+function isGlobalMainTokenFlash(
+  article: SmartNewsArticle,
+  portfolioTokens: PortfolioTokenRef[],
+): boolean {
+  const mainToken = getTopHolding(portfolioTokens);
+  if (!mainToken) return false;
+  return articleMatchesToken(article, mainToken.symbol);
+}
+
+function applyTokenFilterWithFlash(
+  feed: SmartNewsArticle[],
+  enriched: SmartNewsArticle[],
+  selectedToken: string,
+  portfolioTokens: PortfolioTokenRef[],
+): SmartNewsArticle[] {
+  const seen = new Set<string>();
+  const result: SmartNewsArticle[] = [];
+
+  const add = (article: SmartNewsArticle) => {
+    if (!seen.has(article.id)) {
+      seen.add(article.id);
+      result.push(article);
+    }
+  };
+
+  for (const article of enriched) {
+    if (!isFlashAlertArticle(article)) continue;
+    if (articleMatchesToken(article, selectedToken)) {
+      add(article);
+    } else if (isGlobalMainTokenFlash(article, portfolioTokens)) {
+      add(article);
+    }
+  }
+
+  for (const article of feed) {
+    if (articleMatchesToken(article, selectedToken)) {
+      add(article);
+    }
+  }
+
+  return result;
+}
+
+function splitFlashAndRegular(articles: SmartNewsArticle[]): {
+  flashArticles: SmartNewsArticle[];
+  regularArticles: SmartNewsArticle[];
+} {
+  const flashArticles: SmartNewsArticle[] = [];
+  const regularArticles: SmartNewsArticle[] = [];
+
+  for (const article of articles) {
+    if (isFlashAlertArticle(article)) {
+      flashArticles.push(article);
+    } else {
+      regularArticles.push(article);
+    }
+  }
+
+  const sortByScore = (a: SmartNewsArticle, b: SmartNewsArticle) =>
+    (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0);
+
+  return {
+    flashArticles: flashArticles.sort(sortByScore),
+    regularArticles: regularArticles.sort(sortByScore),
+  };
+}
+
 function relevanceScore(
   article: SmartNewsArticle,
   topHolding: PortfolioTokenRef | null,
@@ -153,6 +221,8 @@ export function buildSmartFeed(
 ): {
   hero: SmartNewsArticle | null;
   list: SmartNewsArticle[];
+  flashArticles: SmartNewsArticle[];
+  regularArticles: SmartNewsArticle[];
   filtered: SmartNewsArticle[];
 } {
   const enriched = articles.map((article) =>
@@ -163,14 +233,22 @@ export function buildSmartFeed(
   let feed = mode === "portfolio" ? filtered : enriched;
 
   if (selectedToken) {
-    feed = feed.filter((article) => articleMatchesToken(article, selectedToken));
+    feed = applyTokenFilterWithFlash(feed, enriched, selectedToken, portfolioTokens);
   }
 
   const heroPool = selectedToken ? feed : enriched;
   const hero = selectHeroArticle(heroPool, portfolioTokens, heroArticleId);
-  const list = [...feed]
+  const listWithoutHero = [...feed]
     .filter((article) => article.id !== hero?.id)
     .sort((a, b) => (b.relevanceScore ?? 0) - (a.relevanceScore ?? 0));
 
-  return { hero, list, filtered };
+  const { flashArticles, regularArticles } = splitFlashAndRegular(listWithoutHero);
+
+  return {
+    hero,
+    list: listWithoutHero,
+    flashArticles,
+    regularArticles,
+    filtered,
+  };
 }

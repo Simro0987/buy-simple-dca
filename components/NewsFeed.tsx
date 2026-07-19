@@ -1,13 +1,17 @@
 "use client";
 
+import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { Loader2, RefreshCw, Wallet, Zap } from "lucide-react";
+import { FlashAlertModal } from "@/components/FlashAlertModal";
 import { NewsArticleRow } from "@/components/NewsArticleRow";
+import { NewsFeedSeparator } from "@/components/NewsFeedSeparator";
 import { NewsHeroCard } from "@/components/NewsHeroCard";
 import { NewsTokenChips } from "@/components/NewsTokenChips";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { useNewsFeed } from "@/hooks/useNewsFeed";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import type { SmartNewsArticle } from "@/lib/newsTokenFilter";
 import { listContainerVariants } from "@/lib/motion";
 
 export function NewsFeed() {
@@ -18,7 +22,8 @@ export function NewsFeed() {
     selectedToken,
     setSelectedToken,
     heroArticle,
-    listArticles,
+    flashArticles,
+    regularArticles,
     heroImageUrl,
     loading,
     error,
@@ -28,8 +33,15 @@ export function NewsFeed() {
     portfolioTokens,
   } = useNewsFeed(allAssets);
 
-  const flashCount = listArticles.filter((a) => a.isFlash).length;
-  const visibleCount = listArticles.length + (heroArticle ? 1 : 0);
+  const [flashModalArticle, setFlashModalArticle] =
+    useState<SmartNewsArticle | null>(null);
+
+  const visibleCount =
+    flashArticles.length + regularArticles.length + (heroArticle ? 1 : 0);
+
+  const handleFlashClick = (article: SmartNewsArticle) => {
+    setFlashModalArticle(article);
+  };
 
   return (
     <motion.div
@@ -64,10 +76,10 @@ export function NewsFeed() {
           )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          {flashCount > 0 && (
+          {flashArticles.length > 0 && (
             <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-yellow-400">
               <Zap className="h-3 w-3 fill-yellow-400" />
-              {flashCount} flash
+              {flashArticles.length} flash
             </span>
           )}
           <button
@@ -169,13 +181,11 @@ export function NewsFeed() {
       </AnimatePresence>
 
       <div className="space-y-2">
-        <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-          {selectedToken
-            ? `Správy · ${selectedToken}`
-            : mode === "portfolio"
-              ? "Relevantné správy"
-              : "Najnovšie správy"}
-        </p>
+        {flashArticles.length > 0 && (
+          <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-yellow-500/80">
+            Flash Alert
+          </p>
+        )}
 
         {loading ? (
           <div className="space-y-2">
@@ -193,7 +203,30 @@ export function NewsFeed() {
               exit={{ opacity: 0, y: -8 }}
               className="space-y-2"
             >
-              {listArticles.map((article) => (
+              {flashArticles.map((article) => (
+                <NewsArticleRow
+                  key={article.id}
+                  article={article}
+                  showTokenBadges={mode === "portfolio"}
+                  onFlashClick={handleFlashClick}
+                />
+              ))}
+
+              {flashArticles.length > 0 && regularArticles.length > 0 && (
+                <NewsFeedSeparator />
+              )}
+
+              {regularArticles.length > 0 && flashArticles.length === 0 && (
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+                  {selectedToken
+                    ? `Správy · ${selectedToken}`
+                    : mode === "portfolio"
+                      ? "Relevantné správy"
+                      : "Najnovšie správy"}
+                </p>
+              )}
+
+              {regularArticles.map((article) => (
                 <NewsArticleRow
                   key={article.id}
                   article={article}
@@ -204,6 +237,12 @@ export function NewsFeed() {
           </AnimatePresence>
         )}
       </div>
+
+      <FlashAlertModal
+        article={flashModalArticle}
+        open={flashModalArticle !== null}
+        onClose={() => setFlashModalArticle(null)}
+      />
     </motion.div>
   );
 }

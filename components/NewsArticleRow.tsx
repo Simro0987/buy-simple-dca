@@ -2,8 +2,9 @@
 
 import { motion } from "framer-motion";
 import Image from "next/image";
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Zap } from "lucide-react";
 import type { SmartNewsArticle } from "@/lib/newsTokenFilter";
+import { isFlashAlertArticle } from "@/lib/newsFlashAlert";
 import { TokenBadgeList } from "@/components/TokenBadge";
 import { listItemVariants } from "@/lib/motion";
 
@@ -20,22 +21,19 @@ function formatRelativeTime(date: string) {
 interface NewsArticleRowProps {
   article: SmartNewsArticle;
   showTokenBadges?: boolean;
+  onFlashClick?: (article: SmartNewsArticle) => void;
 }
 
 export function NewsArticleRow({
   article,
   showTokenBadges = false,
+  onFlashClick,
 }: NewsArticleRowProps) {
   const primaryToken = article.matchedTokens[0];
+  const isFlash = isFlashAlertArticle(article);
 
-  return (
-    <motion.a
-      href={article.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      variants={listItemVariants}
-      className="group flex gap-3 rounded-2xl border border-white/5 bg-[#111113] p-3 transition hover:border-white/10 hover:bg-[#161618]"
-    >
+  const content = (
+    <>
       <div className="relative h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-zinc-900 ring-1 ring-white/10">
         <Image
           src={article.imageUrl}
@@ -76,6 +74,20 @@ export function NewsArticleRow({
 
       <div className="min-w-0 flex-1">
         <div className="mb-1 flex flex-wrap items-center gap-2">
+          {isFlash && (
+            <motion.span
+              animate={{ opacity: [1, 0.35, 1] }}
+              transition={{
+                repeat: Infinity,
+                duration: 1.1,
+                ease: "easeInOut",
+              }}
+              className="inline-flex items-center gap-1 rounded-full border border-yellow-400/40 bg-yellow-400/15 px-2 py-0.5 text-[8px] font-bold uppercase tracking-wider text-yellow-300"
+            >
+              <Zap className="h-2.5 w-2.5 fill-yellow-400" />
+              Flash Alert
+            </motion.span>
+          )}
           <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-400">
             {article.source}
           </span>
@@ -98,7 +110,48 @@ export function NewsArticleRow({
         )}
       </div>
 
-      <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-700 transition group-hover:text-zinc-400" />
+      {!isFlash && (
+        <ExternalLink className="mt-1 h-3.5 w-3.5 shrink-0 text-zinc-700 transition group-hover:text-zinc-400" />
+      )}
+    </>
+  );
+
+  if (isFlash && onFlashClick) {
+    return (
+      <motion.button
+        type="button"
+        onClick={() => onFlashClick(article)}
+        variants={listItemVariants}
+        animate={{
+          boxShadow: [
+            "0 0 0 1px rgba(250,204,21,0.35), 0 0 14px rgba(250,204,21,0.12)",
+            "0 0 0 2px rgba(250,204,21,0.75), 0 0 24px rgba(250,204,21,0.28)",
+            "0 0 0 1px rgba(250,204,21,0.35), 0 0 14px rgba(250,204,21,0.12)",
+          ],
+        }}
+        transition={{
+          boxShadow: { repeat: Infinity, duration: 1.6, ease: "easeInOut" },
+        }}
+        className="group flex w-full gap-3 rounded-2xl border border-yellow-400/30 bg-[#14120a] p-3 text-left transition hover:bg-[#1a170c]"
+      >
+        {content}
+      </motion.button>
+    );
+  }
+
+  return (
+    <motion.a
+      href={article.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      variants={listItemVariants}
+      className={`group flex gap-3 rounded-2xl border p-3 transition ${
+        isFlash
+          ? "border-yellow-400/30 bg-[#14120a] hover:bg-[#1a170c]"
+          : "border-white/5 bg-[#111113] hover:border-white/10 hover:bg-[#161618]"
+      }`}
+    >
+      {content}
     </motion.a>
   );
 }

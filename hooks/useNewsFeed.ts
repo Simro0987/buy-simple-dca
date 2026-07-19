@@ -113,6 +113,8 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
     portfolioTokens,
     heroArticle: smartFeed.hero,
     listArticles: smartFeed.list,
+    flashArticles: smartFeed.flashArticles,
+    regularArticles: smartFeed.regularArticles,
     matchedCount: smartFeed.filtered.length,
     heroImageUrl: smartFeed.hero?.imageUrl,
     loading,
