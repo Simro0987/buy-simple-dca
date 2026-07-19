@@ -72,16 +72,20 @@ export function usePortfolio() {
       const nextHoldings: HoldingsMap = { ...holdings };
 
       for (const plan of plans) {
-        const unitPrice = priceMap[plan.symbol]?.price ?? 0;
+        const symbol = plan.symbol as CryptoSymbol;
+        if (!(symbol in nextHoldings)) continue;
+
+        const unitPrice =
+          priceMap[symbol]?.price ?? plan.spotPrice ?? 0;
         if (unitPrice <= 0 || plan.totalUsd <= 0) continue;
 
         const amount = plan.totalUsd / unitPrice;
-        nextHoldings[plan.symbol] += amount;
+        nextHoldings[symbol] += amount;
 
         newTransactions.push({
           id: createTransactionId(),
           date: new Date().toISOString(),
-          symbol: plan.symbol,
+          symbol,
           amount,
           priceUsd: unitPrice,
           spentUsd: plan.totalUsd,

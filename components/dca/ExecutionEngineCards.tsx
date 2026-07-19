@@ -1,11 +1,11 @@
 "use client";
 
 import { motion } from "framer-motion";
+import Image from "next/image";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
-import { tokenAccentStyles } from "@/lib/dcaData";
+import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
-import type { CryptoPricesMap } from "@/lib/cryptoApi";
 import {
   interactiveCard,
   listContainerVariants,
@@ -14,13 +14,11 @@ import {
 
 interface ExecutionEngineCardsProps {
   plans: TokenExecutionPlan[];
-  prices?: CryptoPricesMap;
   loading?: boolean;
 }
 
 export function ExecutionEngineCards({
   plans,
-  prices,
   loading = false,
 }: ExecutionEngineCardsProps) {
   return (
@@ -46,8 +44,8 @@ export function ExecutionEngineCards({
         className="space-y-3"
       >
         {plans.map((plan) => {
-          const styles = tokenAccentStyles[plan.accent];
-          const unitPrice = prices?.[plan.symbol]?.price ?? 0;
+          const catStyles = getCategoryStyles(plan.category);
+          const unitPrice = plan.spotPrice;
 
           return (
             <motion.article
@@ -59,18 +57,57 @@ export function ExecutionEngineCards({
               <div className="mb-4 flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
                   <div
-                    className={`flex h-10 w-10 items-center justify-center rounded-full text-xs font-bold text-white ring-2 ${styles.icon}`}
+                    className={`relative flex h-10 w-10 items-center justify-center overflow-hidden rounded-full ring-2 ${catStyles.ring}`}
+                    style={{ backgroundColor: `${catStyles.color}20` }}
                   >
-                    {plan.symbol.slice(0, 1)}
+                    {plan.logoUrl ? (
+                      <Image
+                        src={plan.logoUrl}
+                        alt={plan.symbol}
+                        width={28}
+                        height={28}
+                        className="rounded-full"
+                        unoptimized
+                      />
+                    ) : (
+                      <span
+                        className="text-xs font-bold"
+                        style={{ color: catStyles.color }}
+                      >
+                        {plan.symbol.slice(0, 1)}
+                      </span>
+                    )}
                   </div>
                   <div>
-                    <p className="text-base font-bold text-white">
-                      {plan.symbol}
-                    </p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-base font-bold text-white">
+                        {plan.symbol}
+                      </p>
+                      <span
+                        className="rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase"
+                        style={{
+                          color: catStyles.color,
+                          backgroundColor: `${catStyles.color}15`,
+                        }}
+                      >
+                        {plan.category}
+                      </span>
+                      {plan.yieldMergeActive && (
+                        <span className="rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-emerald-400">
+                          Merge
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-zinc-500">{plan.name}</p>
                     <p className="mt-0.5 text-[10px] text-zinc-600">
                       {loading ? (
                         <PriceSkeleton className="inline-block h-3 w-20" />
+                      ) : plan.marketStatusFallback ? (
+                        <span className="text-amber-400/80">
+                          Market Status ·{" "}
+                          {plan.change24h >= 0 ? "+" : ""}
+                          {plan.change24h.toFixed(1)}% 24h
+                        </span>
                       ) : (
                         <>Live @ {formatUnitPrice(unitPrice)}</>
                       )}
@@ -81,7 +118,10 @@ export function ExecutionEngineCards({
                   <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
                     Týždenný podiel
                   </p>
-                  <p className={`text-lg font-bold ${styles.text}`}>
+                  <p
+                    className="text-lg font-bold"
+                    style={{ color: catStyles.color }}
+                  >
                     {plan.weightPercent}%
                   </p>
                   <p className="text-sm font-semibold text-white">
@@ -131,8 +171,24 @@ export function ExecutionEngineCards({
                   <p className="mt-1 text-base font-bold text-white">
                     {formatUsd(plan.limitUsd)}
                   </p>
+                  {plan.limitPrice > 0 && (
+                    <p className="mt-0.5 text-[10px] text-orange-400/70">
+                      @ {formatUnitPrice(plan.limitPrice)}
+                    </p>
+                  )}
                 </div>
               </div>
+
+              {plan.limitShare > 0 && plan.whyLimit && (
+                <div className="mt-3 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+                  <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                    Prečo limit?
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                    {plan.whyLimit}
+                  </p>
+                </div>
+              )}
             </motion.article>
           );
         })}

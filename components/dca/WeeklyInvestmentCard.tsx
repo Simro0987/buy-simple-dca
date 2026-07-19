@@ -2,10 +2,8 @@
 
 import { motion } from "framer-motion";
 import { Anchor } from "lucide-react";
-import {
-  ANCHOR_SPLIT,
-  QUICK_AMOUNTS,
-} from "@/lib/dcaEngineConfig";
+import { QUICK_AMOUNTS } from "@/lib/dcaEngineConfig";
+import { ALL_DCA_TOKENS } from "@/lib/dcaMarketData";
 import { formatUsd } from "@/lib/data";
 import { interactiveButton } from "@/lib/motion";
 
@@ -78,8 +76,9 @@ export function WeeklyInvestmentCard({
             Anchor Split
           </span>
           <span className="text-[11px] font-bold text-white">
-            BTC {ANCHOR_SPLIT.BTC}% · ETH {ANCHOR_SPLIT.ETH}% · SOL{" "}
-            {ANCHOR_SPLIT.SOL}%
+            {ALL_DCA_TOKENS.filter((t) => t.category !== "yield")
+              .map((t) => `${t.symbol} ${t.weightPercent}%`)
+              .join(" · ")}
           </span>
         </div>
       </div>

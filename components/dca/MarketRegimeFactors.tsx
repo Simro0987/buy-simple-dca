@@ -1,22 +1,19 @@
 "use client";
 
 import { motion } from "framer-motion";
+import type { FactorScore } from "@/lib/masterDcaEngine";
 import {
-  MARKET_REGIME_FACTORS,
-  type RegimeFactor,
-  type RegimeSignal,
+  factorToRegimeDisplay,
+  type RegimeFactorDisplay,
 } from "@/lib/dcaEngineConfig";
 
-const dotColors: Record<RegimeSignal, string> = {
+const dotColors = {
   bullish: "bg-emerald-400",
   neutral: "bg-orange-400",
   bearish: "bg-orange-500",
-};
+} as const;
 
-const signalStyles: Record<
-  RegimeSignal,
-  { ring: string; bg: string; text: string; glow: string }
-> = {
+const signalStyles = {
   bullish: {
     ring: "ring-emerald-400/40",
     bg: "bg-emerald-400/10",
@@ -35,18 +32,20 @@ const signalStyles: Record<
     text: "text-orange-500",
     glow: "shadow-[0_0_16px_rgba(249,115,22,0.2)]",
   },
-};
+} as const;
 
 function FactorOrb({
   factor,
   index,
 }: {
-  factor: RegimeFactor;
+  factor: RegimeFactorDisplay;
   index: number;
 }) {
   const styles = signalStyles[factor.signal];
   const displayLabel =
-    factor.id === "fng" ? `${factor.label} (${factor.value})` : factor.label;
+    factor.id === "sentiment"
+      ? `${factor.label} (${factor.value})`
+      : factor.label;
 
   return (
     <motion.div
@@ -68,7 +67,7 @@ function FactorOrb({
       <p className="text-center text-[9px] font-bold uppercase leading-tight tracking-wide text-zinc-400">
         {displayLabel}
       </p>
-      {factor.id !== "fng" && (
+      {factor.id !== "sentiment" && (
         <p className={`text-[9px] font-semibold uppercase ${styles.text}`}>
           {factor.value}
         </p>
@@ -77,7 +76,21 @@ function FactorOrb({
   );
 }
 
-export function MarketRegimeFactors() {
+interface MarketRegimeFactorsProps {
+  factors: FactorScore[];
+  confluenceScore: number;
+  loading?: boolean;
+}
+
+export function MarketRegimeFactors({
+  factors,
+  confluenceScore,
+  loading = false,
+}: MarketRegimeFactorsProps) {
+  const displayFactors = factors.map((f) =>
+    factorToRegimeDisplay(f.id, f.name, f.score, f.status),
+  );
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -85,17 +98,28 @@ export function MarketRegimeFactors() {
       transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
       className="rounded-3xl border border-white/5 bg-[#111113] p-5"
     >
-      <div className="mb-5">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-          Master Dynamic Allocation
-        </p>
-        <h3 className="mt-1 text-sm font-bold text-white">
-          5 Faktorov trhového režimu
-        </h3>
+      <div className="mb-5 flex items-end justify-between">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+            Master Dynamic Allocation
+          </p>
+          <h3 className="mt-1 text-sm font-bold text-white">
+            5-Factor Octagon Engine
+          </h3>
+        </div>
+        <div className="text-right">
+          <p className="text-[9px] font-medium uppercase tracking-wider text-zinc-600">
+            Confluence
+          </p>
+          <p className="text-xl font-black text-emerald-400">
+            {loading ? "—" : confluenceScore}
+            <span className="text-sm font-medium text-zinc-600">/100</span>
+          </p>
+        </div>
       </div>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-        {MARKET_REGIME_FACTORS.map((factor, index) => (
+        {displayFactors.map((factor, index) => (
           <FactorOrb key={factor.id} factor={factor} index={index} />
         ))}
       </div>

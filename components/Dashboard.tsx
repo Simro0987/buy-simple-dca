@@ -46,6 +46,8 @@ export function Dashboard() {
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
 
+  const portfolioSymbols = ["BTC", "ETH", "SOL", "HYPE", "JUP", "PENDLE", "GMX", "AAVE", "MORPHO"];
+
   const handleRecordPurchase = useCallback(
     (plans: TokenExecutionPlan[]) => {
       if (!prices) return false;
@@ -53,6 +55,8 @@ export function Dashboard() {
       const recorded = recordDcaPurchase(plans, prices);
       if (recorded) {
         setToastMessage("Záznam uložený");
+      } else {
+        setToastMessage("Žiadny záznam — skontrolujte ceny a podporované tokeny");
       }
       return recorded;
     },
@@ -116,7 +120,8 @@ export function Dashboard() {
           {showDca && (
             <motion.div key="dca" {...pageTransition}>
               <DcaEngine
-                prices={prices}
+                portfolioSymbols={portfolioSymbols}
+                dcaTransactions={transactions}
                 loading={loading}
                 onRecordPurchase={handleRecordPurchase}
               />
