@@ -8,9 +8,9 @@ export interface PortfolioAsset {
 }
 
 export const portfolioHoldings = {
-  cashUsd: 632.26,
-  realizedDeposit: -85.21,
-  profitLoss: 5833.08,
+  cashUsd: 0,
+  realizedDeposit: 0,
+  profitLoss: 0,
 };
 
 /** @deprecated Use portfolioHoldings for static data; live values come from usePortfolio */
