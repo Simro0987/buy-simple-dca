@@ -2,8 +2,14 @@
 
 import { motion } from "framer-motion";
 import { LiveIndicator } from "@/components/LiveIndicator";
+import { MaskedValue } from "@/components/MaskedValue";
+import { PrivacyToggle } from "@/components/PrivacyToggle";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
+import {
+  MASK_USD,
+  MASK_USD_SIGNED,
+} from "@/lib/privacyStorage";
 
 interface HeroSectionProps {
   totalBalance: number;
@@ -36,13 +42,18 @@ export function HeroSection({
           </p>
           <LiveIndicator isLive={isLive} loading={loading} compact />
         </div>
-        <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl">
-          {loading ? (
-            <PriceSkeleton className="h-12 w-56 sm:h-14 sm:w-64" />
-          ) : (
-            formatUsd(totalBalance)
-          )}
-        </h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-5xl font-bold tracking-tight text-white sm:text-6xl">
+            {loading ? (
+              <PriceSkeleton className="h-12 w-56 sm:h-14 sm:w-64" />
+            ) : (
+              <MaskedValue masked={MASK_USD}>
+                {formatUsd(totalBalance)}
+              </MaskedValue>
+            )}
+          </h1>
+          <PrivacyToggle />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">
@@ -52,7 +63,9 @@ export function HeroSection({
             {loading ? (
               <PriceSkeleton className="h-6 w-24" />
             ) : (
-              formatUsd(totalInvested)
+              <MaskedValue masked={MASK_USD}>
+                {formatUsd(totalInvested)}
+              </MaskedValue>
             )}
           </p>
           <p className="mt-1 text-[10px] text-zinc-600">
@@ -75,7 +88,9 @@ export function HeroSection({
             {loading ? (
               <PriceSkeleton className="h-6 w-24" />
             ) : (
-              formatUsd(profitLoss, { showSign: true })
+              <MaskedValue masked={MASK_USD_SIGNED}>
+                {formatUsd(profitLoss, { showSign: true })}
+              </MaskedValue>
             )}
           </p>
           <p className="mt-1 text-[10px] text-zinc-600">

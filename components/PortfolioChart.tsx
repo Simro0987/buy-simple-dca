@@ -8,8 +8,10 @@ import {
   ResponsiveContainer,
   Tooltip,
 } from "recharts";
+import { MaskedValue } from "@/components/MaskedValue";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
+import { MASK_PERCENT, MASK_USD } from "@/lib/privacyStorage";
 import {
   generatePortfolioHistory,
   type PortfolioHistoryPoint,
@@ -31,7 +33,7 @@ function ChartTooltip({ active, payload }: ChartTooltipProps) {
         {point.label}
       </p>
       <p className="mt-0.5 text-lg font-bold tracking-tight text-emerald-400">
-        {formatUsd(point.value)}
+        <MaskedValue masked={MASK_USD}>{formatUsd(point.value)}</MaskedValue>
       </p>
     </div>
   );
@@ -75,7 +77,9 @@ export function PortfolioChart({
           {loading ? (
             <PriceSkeleton className="inline-block h-3 w-12" />
           ) : (
-            `${percentChange >= 0 ? "+" : ""}${percentChange.toFixed(1)}%`
+            <MaskedValue masked={MASK_PERCENT}>
+              {`${percentChange >= 0 ? "+" : ""}${percentChange.toFixed(1)}%`}
+            </MaskedValue>
           )}
         </span>
       </div>
