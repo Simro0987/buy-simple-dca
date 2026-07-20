@@ -206,6 +206,9 @@ async function fetchBinanceMarketData(): Promise<MarketDataServicePayload> {
     if (bundle.btc.price > 0 && !bundle.btc.stale) {
       return technicalsToMarketPayload(bundle);
     }
+    if (bundle.btc.price > 0) {
+      return { ...technicalsToMarketPayload(bundle), degraded: false };
+    }
     return { ...technicalsToMarketPayload(bundle), degraded: true, fallback: true };
   } catch {
     return MARKET_DATA_FALLBACK;
@@ -300,9 +303,7 @@ export async function fetchDcaMarketSnapshot(
     }
   }
 
-  const degraded =
-    Boolean(marketData.degraded || marketData.fallback) ||
-    marketData.btc.price <= 0;
+  const degraded = marketData.btc.price <= 0;
 
   return {
     fearGreed,

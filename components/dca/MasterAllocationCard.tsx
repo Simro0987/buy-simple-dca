@@ -53,27 +53,13 @@ export function MasterAllocationCard({
       transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
       className="rounded-2xl border border-white/5 bg-[#0d0d0f] p-5"
     >
-      <div className="mb-4 flex items-end justify-between gap-3">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-            Master Dynamic Allocation
-          </p>
-          <h3 className="mt-1 text-sm font-bold text-white">
-            5-Factor Engine
-          </h3>
-        </div>
-        <p className="text-[10px] font-medium text-zinc-600">
-          vážený = {confluenceScore}
-        </p>
-      </div>
-
-      <div className="flex items-end justify-between gap-3">
+      <div className="mb-3">
         <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
           5 Faktorov • Váhy podľa režimu
         </p>
       </div>
 
-      <div className="-mx-1 mt-3 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
         {factors.map((factor, index) => {
           const Icon = FACTOR_ICONS[factor.id] ?? Gauge;
           const weightPct = Math.round(factor.weight * 100);

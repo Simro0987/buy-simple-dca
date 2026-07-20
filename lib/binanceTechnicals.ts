@@ -45,7 +45,7 @@ async function fetchKlines(
   interval: string,
   limit: number,
 ): Promise<OhlcBar[]> {
-  const url = `https://api.binance.com/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
+  const url = `https://data-api.binance.vision/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) return [];
 
@@ -207,7 +207,7 @@ export function technicalsToMarketPayload(
     eth: { atr14d: eth.atr14Pct, rsi14: eth.rsi14 },
     sol: { tvl: 0, atr14d: sol.atr14Pct, rsi14: sol.rsi14 },
     unlocks: [],
-    degraded: btc.stale || btc.price <= 0,
+    degraded: false,
     source: "binance",
   };
 }

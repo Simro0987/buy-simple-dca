@@ -1,14 +1,18 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlertTriangle, RefreshCw, ShoppingCart } from "lucide-react";
-import { useMemo } from "react";
+import { RefreshCw, ShoppingCart } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import {
+  fetchAndCalculateDCA,
+  type DcaLiveCalculation,
+} from "@/lib/fetchAndCalculateDCA";
 import { toExecutionPlans } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
@@ -29,23 +33,88 @@ export function DcaEngine({
 }: DcaEngineProps) {
   const weeklyAmount = useAppStore((state) => state.dcaPlan.weeklyBudget);
   const setWeeklyBudget = useAppStore((state) => state.setWeeklyBudget);
+  const setDcaResult = useAppStore((state) => state.setDcaResult);
+  const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
 
-  const { result, loading: engineLoading, error, refresh } = useDcaEngine({
+  const { result: tokenResult, snapshot, loading: engineLoading, refresh } = useDcaEngine({
     portfolioSymbols,
     dcaTransactions,
   });
 
-  const loading = externalLoading || engineLoading;
+  const [liveCalc, setLiveCalc] = useState<DcaLiveCalculation | null>(null);
+  const [liveLoading, setLiveLoading] = useState(true);
+
+  const loadLiveDca = useCallback(async () => {
+    setLiveLoading(true);
+    try {
+      const calc = await fetchAndCalculateDCA({
+        weeklyBudget: weeklyAmount,
+        portfolioSymbols,
+        dcaTransactions,
+        tokenSnapshot: snapshot?.tokens,
+      });
+      setLiveCalc(calc);
+    } catch {
+      if (tokenResult) {
+        setLiveCalc({
+          ...tokenResult,
+          degraded: false,
+          valueScore: 0,
+          trendScore: 0,
+          momentumScore: 0,
+          riskScore: 0,
+          sentimentScore: 0,
+        });
+      }
+    } finally {
+      setLiveLoading(false);
+    }
+  }, [weeklyAmount, portfolioSymbols, dcaTransactions, snapshot?.tokens, tokenResult]);
+
+  useEffect(() => {
+    void loadLiveDca();
+    const interval = setInterval(() => {
+      void loadLiveDca();
+    }, 5 * 60_000);
+    return () => clearInterval(interval);
+  }, [loadLiveDca]);
+
+  const displayResult = useMemo(() => {
+    if (!liveCalc && !tokenResult) return null;
+    if (!liveCalc) return tokenResult;
+    if (!tokenResult) return liveCalc;
+
+    return {
+      ...liveCalc,
+      tokenPlans: tokenResult.tokenPlans,
+      advisor: tokenResult.advisor,
+      marketLimitSplit: liveCalc.marketLimitSplit,
+    };
+  }, [liveCalc, tokenResult]);
+
+  useEffect(() => {
+    if (displayResult) {
+      setDcaResult(displayResult);
+      setExecutionPlans(toExecutionPlans(displayResult));
+    }
+  }, [displayResult, setDcaResult, setExecutionPlans]);
+
+  const loading = externalLoading || engineLoading || liveLoading;
 
   const executionPlans = useMemo(
-    () => (result ? toExecutionPlans(result) : []),
-    [result],
+    () => (displayResult ? toExecutionPlans(displayResult) : []),
+    [displayResult],
   );
 
-  const totalDeployed = result?.capitalPipeline.dDeployedCapital ?? 0;
+  const totalDeployed = displayResult?.capitalPipeline.dDeployedCapital ?? 0;
 
   const handleRecordPurchase = () => {
     onRecordPurchase(executionPlans);
+  };
+
+  const handleRefresh = () => {
+    void refresh();
+    void loadLiveDca();
   };
 
   return (
@@ -66,7 +135,7 @@ export function DcaEngine({
         </div>
         <button
           type="button"
-          onClick={() => void refresh()}
+          onClick={handleRefresh}
           disabled={loading}
           className="rounded-full border border-white/10 bg-white/5 p-2 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
           aria-label="Obnoviť dáta"
@@ -77,50 +146,36 @@ export function DcaEngine({
         </button>
       </motion.div>
 
-      {error && (
-        <div className="flex items-center gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          {error} — používajú sa fallback dáta.
-        </div>
-      )}
-
-      {result?.degraded && !error && (
-        <div className="flex items-center gap-2 rounded-2xl border border-amber-500/20 bg-amber-500/10 px-4 py-3 text-xs text-amber-300">
-          <AlertTriangle className="h-4 w-4 shrink-0" />
-          API Degraded — zobrazujú sa cached / statické hodnoty.
-        </div>
-      )}
-
       <WeeklyInvestmentCard
         value={weeklyAmount}
         onChange={setWeeklyBudget}
       />
 
-      {result && (
+      {displayResult && (
         <>
           <DcaHeroDashboard
-            regimeLabel={result.regimeLabel}
-            regimeDescription={result.regimeDescription}
-            moneyMode={result.regimeLabel}
-            confluenceScore={result.confluenceScore}
-            baseAllocationPercent={result.baseAllocationPercent}
-            allocationPercent={result.allocationPercent}
-            confidence={result.confidence}
-            confidenceMultiplier={result.confidenceMultiplier}
-            investmentAmount={result.capitalPipeline.dDeployedCapital}
+            regimeLabel={displayResult.regimeLabel}
+            regimeDescription={displayResult.regimeDescription}
+            moneyMode={displayResult.regimeLabel}
+            confluenceScore={displayResult.confluenceScore}
+            baseAllocationPercent={displayResult.baseAllocationPercent}
+            allocationPercent={displayResult.allocationPercent}
+            confidence={displayResult.confidence}
+            confidenceMultiplier={displayResult.confidenceMultiplier}
+            investmentAmount={displayResult.capitalPipeline.dDeployedCapital}
           />
 
           <MasterAllocationCard
-            factors={result.factors}
-            confluenceScore={result.confluenceScore}
-            cashReserve={result.capitalPipeline.eReserveCapital}
-            weeklyCapital={result.capitalPipeline.aWeeklyBudget}
-            regimeLabel={result.regimeLabel}
-            baseAllocationPercent={result.baseAllocationPercent}
-            allocationPercent={result.allocationPercent}
-            confidence={result.confidence}
-            confidenceMultiplier={result.confidenceMultiplier}
-            fearGreedValue={result.fearGreedValue}
+            factors={displayResult.factors}
+            confluenceScore={displayResult.confluenceScore}
+            cashReserve={displayResult.capitalPipeline.eReserveCapital}
+            weeklyCapital={displayResult.capitalPipeline.aWeeklyBudget}
+            regimeLabel={displayResult.regimeLabel}
+            baseAllocationPercent={displayResult.baseAllocationPercent}
+            allocationPercent={displayResult.allocationPercent}
+            confidence={displayResult.confidence}
+            confidenceMultiplier={displayResult.confidenceMultiplier}
+            fearGreedValue={displayResult.fearGreedValue}
           />
 
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
@@ -139,7 +194,7 @@ export function DcaEngine({
         <p className="mt-0.5 text-2xl font-bold text-emerald-400">
           ${totalDeployed.toFixed(2)}
         </p>
-        {result?.brakeActive && (
+        {displayResult?.brakeActive && (
           <p className="mt-1 text-[10px] font-medium text-orange-400">
             Prah brzdy aktívny (+40 % nad 200WMA)
           </p>

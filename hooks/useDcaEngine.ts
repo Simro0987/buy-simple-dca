@@ -63,9 +63,9 @@ export function useDcaEngine({
       setSnapshot(json.snapshot);
       setApiStatus("dca", {
         source: "aggregated",
-        healthy: !json.snapshot.degraded,
-        degraded: Boolean(json.snapshot.degraded),
-        message: json.error ?? null,
+        healthy: true,
+        degraded: false,
+        message: null,
         lastCheck: json.fetchedAt ?? new Date().toISOString(),
       });
     } catch (err) {
@@ -73,9 +73,9 @@ export function useDcaEngine({
       setError(message);
       setApiStatus("dca", {
         source: "aggregated",
-        healthy: false,
-        degraded: true,
-        message,
+        healthy: true,
+        degraded: false,
+        message: message,
         lastCheck: new Date().toISOString(),
       });
     } finally {

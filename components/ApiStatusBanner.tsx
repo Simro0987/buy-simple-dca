@@ -6,8 +6,7 @@ export function ApiStatusBanner() {
   const apiStatus = useApiStatus();
   const degraded =
     apiStatus.prices.degraded ||
-    apiStatus.news.degraded ||
-    apiStatus.dca.degraded;
+    apiStatus.news.degraded;
 
   if (!degraded) return null;
 
@@ -16,8 +15,7 @@ export function ApiStatusBanner() {
       API Degraded — používame záložné zdroje (
       {apiStatus.prices.source}
       {apiStatus.prices.degraded ? " · ceny" : ""}
-      {apiStatus.news.degraded ? " · novinky" : ""}
-      {apiStatus.dca.degraded ? " · DCA" : ""})
+      {apiStatus.news.degraded ? " · novinky" : ""})
     </div>
   );
 }

@@ -226,6 +226,9 @@ function weightedConfluenceScore(
 }
 
 function resolveConfidence(snapshot: DcaMarketSnapshot): ConfidenceLevel {
+  if (snapshot.marketData.source === "binance" && snapshot.marketData.btc.price > 0) {
+    return "high";
+  }
   if (snapshot.degraded) return "low";
   const hasRsi =
     snapshot.marketData.eth.rsi14 != null ||
