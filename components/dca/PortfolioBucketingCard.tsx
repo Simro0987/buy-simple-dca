@@ -1,22 +1,21 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Check, Shield, X } from "lucide-react";
-import { useMemo } from "react";
+import { Check, Loader2, Shield, X } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
-import {
-  computePortfolioBucketing,
-  type PortfolioBucketingResult,
-  type TokenAllocationRow,
-  type YieldAltcoinRow,
-  type YieldExcludedRow,
+import type {
+  PortfolioBucketingResult,
+  TokenAllocationRow,
+  YieldAltcoinRow,
+  YieldExcludedRow,
 } from "@/lib/dcaPortfolioBucketing";
-import type { MasterTokenPlan } from "@/lib/masterDcaEngine";
 
 interface PortfolioBucketingCardProps {
-  deployedCapital: number;
-  tokenPlans: MasterTokenPlan[];
+  bucketing: PortfolioBucketingResult | null;
+  loading?: boolean;
+  metricsError?: string | null;
 }
 
 const listTransition = {
@@ -231,13 +230,23 @@ function MultiColorSplitBar({
 }
 
 export function PortfolioBucketingCard({
-  deployedCapital,
-  tokenPlans,
+  bucketing,
+  loading = false,
+  metricsError = null,
 }: PortfolioBucketingCardProps) {
-  const bucketing = useMemo(
-    () => computePortfolioBucketing({ deployedCapital, tokenPlans }),
-    [deployedCapital, tokenPlans],
-  );
+  if (!bucketing) {
+    return (
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="rounded-2xl border border-white/5 bg-[#0d0d0f] p-5"
+      >
+        <PriceSkeleton className="h-8 w-full rounded-xl" />
+        <PriceSkeleton className="mt-4 h-4 w-full rounded-lg" />
+        <PriceSkeleton className="mt-3 h-3.5 w-full rounded-full" />
+      </motion.section>
+    );
+  }
 
   return (
     <motion.section
@@ -307,9 +316,23 @@ export function PortfolioBucketingCard({
       </div>
 
       <div className="mt-6 border-t border-white/5 pt-5">
-        <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          Yield • High-Conviction
-        </p>
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            Yield • High-Conviction
+          </p>
+          {loading && (
+            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500 transition-all duration-700">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Načítavam live metriky…
+            </span>
+          )}
+        </div>
+
+        {metricsError && !loading && (
+          <p className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[10px] text-rose-400/90 transition-all duration-700">
+            {metricsError} — filter používa posledné dostupné dáta.
+          </p>
+        )}
 
         <div className="space-y-4">
           <div>

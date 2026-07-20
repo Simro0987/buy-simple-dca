@@ -1,3 +1,5 @@
+import { DCA_YIELD_TOKENS } from "@/lib/dcaMarketData";
+
 export const YIELD_FILTER_THRESHOLDS = {
   rsiMax: 50,
   sma14FloorPct: -10,
@@ -22,6 +24,8 @@ export interface YieldTokenMetrics {
   sma14: number;
   priceVsSma14Pct: number;
   fundamentalScore: number;
+  live?: boolean;
+  fetchedAt?: string;
 }
 
 export interface YieldFilterEvaluation extends YieldTokenMetrics {
@@ -38,46 +42,11 @@ export interface YieldAllocationRow extends YieldFilterEvaluation {
   shareOfYieldPercent: number;
 }
 
-export const YIELD_ALTCOIN_UNIVERSE: {
-  symbol: string;
-  name: string;
-  tag: string;
-}[] = [
-  { symbol: "HYPE", name: "Hyperliquid", tag: "ARB" },
-  { symbol: "JUP", name: "Jupiter", tag: "SOL" },
-  { symbol: "AAVE", name: "Aave", tag: "ETH" },
-  { symbol: "MORPHO", name: "Morpho", tag: "ETH" },
-  { symbol: "LINK", name: "Chainlink", tag: "ETH" },
-  { symbol: "GMX", name: "GMX", tag: "ARB" },
-  { symbol: "PENDLE", name: "Pendle", tag: "ETH" },
-];
-
-function symbolSeed(symbol: string): number {
-  return symbol.split("").reduce((acc, char) => acc + char.charCodeAt(0), 0);
-}
-
-/** Deterministic mock metrics until live RSI / SMA14 / fundamental feeds are wired. */
-export function mockYieldTokenMetrics(
-  coin: (typeof YIELD_ALTCOIN_UNIVERSE)[number],
-): YieldTokenMetrics {
-  const seed = symbolSeed(coin.symbol);
-  const rsi = 20 + ((seed * 7) % 71);
-  const fundamentalScore = 25 + ((seed * 13) % 76);
-  const priceVsSma14Pct = -25 + ((seed * 11) % 41);
-  const sma14 = 100;
-  const price = sma14 * (1 + priceVsSma14Pct / 100);
-
-  return {
-    symbol: coin.symbol,
-    name: coin.name,
-    tag: coin.tag,
-    rsi,
-    price,
-    sma14,
-    priceVsSma14Pct: Math.round(priceVsSma14Pct * 10) / 10,
-    fundamentalScore,
-  };
-}
+export const YIELD_ALTCOIN_UNIVERSE = DCA_YIELD_TOKENS.map((token) => ({
+  symbol: token.symbol,
+  name: token.name,
+  tag: token.chainTag,
+}));
 
 function evaluateConditions(metrics: YieldTokenMetrics): YieldFilterCondition[] {
   const { rsiMax, sma14FloorPct, fundamentalMin } = YIELD_FILTER_THRESHOLDS;
@@ -111,14 +80,46 @@ function evaluateConditions(metrics: YieldTokenMetrics): YieldFilterCondition[] 
   ];
 }
 
-export function evaluateYieldToken(
+function buildUnavailableEvaluation(
   coin: (typeof YIELD_ALTCOIN_UNIVERSE)[number],
 ): YieldFilterEvaluation {
-  const metrics = mockYieldTokenMetrics(coin);
+  const unavailableDetail = "Live dáta nedostupné (Binance)";
+  return {
+    symbol: coin.symbol,
+    name: coin.name,
+    tag: coin.tag,
+    rsi: 0,
+    price: 0,
+    sma14: 0,
+    priceVsSma14Pct: 0,
+    fundamentalScore: 0,
+    live: false,
+    conditions: [
+      { id: "rsi", passed: false, detail: unavailableDetail },
+      { id: "sma14", passed: false, detail: unavailableDetail },
+      { id: "fundamental", passed: false, detail: unavailableDetail },
+    ],
+    filtersPassedCount: 0,
+    passed: false,
+    failureReasons: [unavailableDetail],
+    convictionScore: 0,
+  };
+}
+
+export function evaluateYieldToken(
+  coin: (typeof YIELD_ALTCOIN_UNIVERSE)[number],
+  metrics: YieldTokenMetrics | null | undefined,
+): YieldFilterEvaluation {
+  if (!metrics) {
+    return buildUnavailableEvaluation(coin);
+  }
+
   const conditions = evaluateConditions(metrics);
   const filtersPassedCount = conditions.filter((c) => c.passed).length;
   const passed = filtersPassedCount === 3;
-  const failureReasons = conditions.filter((c) => !c.passed).map((c) => c.detail);
+  const failureReasons = conditions
+    .filter((c) => !c.passed)
+    .map((c) => c.detail);
 
   return {
     ...metrics,
@@ -170,11 +171,16 @@ export function distributeYieldExponential(
   });
 }
 
-export function buildYieldFilterAllocations(yieldBudgetUsd: number): {
+export function buildYieldFilterAllocations(
+  yieldBudgetUsd: number,
+  metricsMap: Record<string, YieldTokenMetrics>,
+): {
   conviction: YieldAllocationRow[];
   excluded: YieldFilterEvaluation[];
 } {
-  const evaluations = YIELD_ALTCOIN_UNIVERSE.map(evaluateYieldToken);
+  const evaluations = YIELD_ALTCOIN_UNIVERSE.map((coin) =>
+    evaluateYieldToken(coin, metricsMap[coin.symbol]),
+  );
   const passed = evaluations.filter((e) => e.passed);
   const excluded = evaluations.filter((e) => !e.passed);
   const conviction = distributeYieldExponential(yieldBudgetUsd, passed);

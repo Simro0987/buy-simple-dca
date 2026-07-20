@@ -51,7 +51,11 @@ export const DCA_SATELLITE_TOKENS: DcaTokenDefinition[] = [
   },
 ];
 
-export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
+export interface YieldFilterTokenDefinition extends DcaTokenDefinition {
+  chainTag: string;
+}
+
+export const DCA_YIELD_TOKENS: YieldFilterTokenDefinition[] = [
   {
     symbol: "HYPE",
     name: "Hyperliquid",
@@ -60,6 +64,8 @@ export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/50882/small/hyperliquid.jpg",
     weightPercent: 2,
+    binanceSymbol: "HYPEUSDT",
+    chainTag: "ARB",
   },
   {
     symbol: "JUP",
@@ -69,6 +75,8 @@ export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/34188/small/jup.png",
     weightPercent: 2,
+    binanceSymbol: "JUPUSDT",
+    chainTag: "SOL",
   },
   {
     symbol: "PENDLE",
@@ -78,6 +86,8 @@ export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/15069/small/Pendle_Logo_Normal-03.png",
     weightPercent: 2,
+    binanceSymbol: "PENDLEUSDT",
+    chainTag: "ETH",
   },
   {
     symbol: "GMX",
@@ -87,6 +97,8 @@ export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/18323/small/arbit.png",
     weightPercent: 2,
+    binanceSymbol: "GMXUSDT",
+    chainTag: "ARB",
   },
   {
     symbol: "AAVE",
@@ -96,6 +108,8 @@ export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
     logoUrl:
       "https://assets.coingecko.com/coins/images/12645/small/aave-token-round.png",
     weightPercent: 2,
+    binanceSymbol: "AAVEUSDT",
+    chainTag: "ETH",
   },
   {
     symbol: "MORPHO",
@@ -104,6 +118,19 @@ export const DCA_YIELD_TOKENS: DcaTokenDefinition[] = [
     category: "yield",
     logoUrl: "/icons/morpho.svg",
     weightPercent: 1,
+    binanceSymbol: "MORPHOUSDT",
+    chainTag: "ETH",
+  },
+  {
+    symbol: "LINK",
+    name: "Chainlink",
+    coingeckoId: "chainlink",
+    category: "yield",
+    logoUrl:
+      "https://assets.coingecko.com/coins/images/877/small/chainlink-new-logo.png",
+    weightPercent: 1,
+    binanceSymbol: "LINKUSDT",
+    chainTag: "ETH",
   },
 ];
 

@@ -6,7 +6,7 @@ import {
 import type { Transaction } from "@/lib/portfolioStorage";
 import { buildMarketTechnicals } from "@/lib/dcaScoringEngine";
 import type { OhlcBar } from "@/lib/dcaTechnicalIndicators";
-import { computeUltimateDca } from "@/lib/ultimateDcaEngine";
+import { computeUltimateDca, type MacroRegime } from "@/lib/ultimateDcaEngine";
 
 type RawKline = [number, string, string, string, string, string, ...unknown[]];
 
@@ -158,6 +158,7 @@ function buildSnapshot(
 
 export interface DcaLiveCalculation extends MasterDcaResult {
   finalScoreRaw: number;
+  macroRegime: MacroRegime;
 }
 
 export async function fetchAndCalculateDCA(input: {
@@ -230,6 +231,7 @@ export async function fetchAndCalculateDCA(input: {
             : "NEUTRAL",
     confluenceScore: ultimate.finalScoreDisplay,
     finalScoreRaw: ultimate.finalScoreRaw,
+    macroRegime: ultimate.regime,
     factors: ultimate.factors,
     baseAllocationPercent: ultimate.baseAllocationDisplay,
     allocationPercent: ultimate.allocationDisplay,

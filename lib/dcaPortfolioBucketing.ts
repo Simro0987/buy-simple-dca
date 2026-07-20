@@ -1,3 +1,7 @@
+import {
+  computeDynamicBucketRatios,
+  getBucketBadgeTitle,
+} from "@/lib/dcaBucketRatios";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { MasterTokenPlan } from "@/lib/masterDcaEngine";
 import {
@@ -6,7 +10,9 @@ import {
   YIELD_ALTCOIN_UNIVERSE,
   type YieldAllocationRow,
   type YieldFilterEvaluation,
+  type YieldTokenMetrics,
 } from "@/lib/dcaYieldFilter";
+import type { MacroRegime } from "@/lib/ultimateDcaEngine";
 
 export interface PortfolioBucket {
   category: AssetCategory;
@@ -45,9 +51,9 @@ export interface PortfolioBucketingResult {
   spilloverActive: boolean;
   spilloverAmount: number;
   narrativeBullets: string[];
+  bucketRatios: { core: number; satellite: number; yield: number };
+  liveDataReady: boolean;
 }
-
-const ETH_SATELLITE_SHARE = 0.7;
 
 const BUCKET_META: Record<
   AssetCategory,
@@ -79,13 +85,24 @@ function pctOf(part: number, total: number): number {
   return Math.round((part / total) * 1000) / 10;
 }
 
-function sumCategory(
-  plans: MasterTokenPlan[],
-  category: AssetCategory,
-): number {
-  return plans
-    .filter((p) => p.category === category)
-    .reduce((sum, p) => sum + p.totalUsd, 0);
+function resolveSatelliteSplit(tokenPlans: MasterTokenPlan[]): {
+  ethShare: number;
+  solShare: number;
+} {
+  const ethPlan = tokenPlans.find((plan) => plan.symbol === "ETH");
+  const solPlan = tokenPlans.find((plan) => plan.symbol === "SOL");
+  const ethWeight = ethPlan?.weightPercent ?? 25;
+  const solWeight = solPlan?.weightPercent ?? 10;
+  const total = ethWeight + solWeight;
+
+  if (total <= 0) {
+    return { ethShare: 0.7, solShare: 0.3 };
+  }
+
+  return {
+    ethShare: ethWeight / total,
+    solShare: solWeight / total,
+  };
 }
 
 function buildBuckets(
@@ -123,6 +140,8 @@ function buildBuckets(
 }
 
 function buildNarrative(input: {
+  regimeLabel: string;
+  finalScore: number;
   corePercent: number;
   satPercent: number;
   yieldPercent: number;
@@ -130,21 +149,28 @@ function buildNarrative(input: {
   convictionCount: number;
   spilloverActive: boolean;
   spilloverAmount: number;
+  liveDataReady: boolean;
 }): string[] {
   const bullets = [
-    `Alokácia BTC nastavená na ${input.corePercent}% vďaka 200WMA a F&G.`,
-    `Vyvážený režim — ${Math.round(input.corePercent)}/${Math.round(input.satPercent)} split medzi Core a satelitmi.`,
-    "Quality Bias: ETH CBBC > SOL → ETH +10 pp v satellite buckete.",
-    `Yield kôš ${input.yieldPercent}% — filter 3/3, váha skóre^2.5 (${formatUsdShort(input.yieldAmount)}).`,
+    `Alokácia BTC ${input.corePercent}% — režim ${input.regimeLabel}, Final Score ${Math.round(input.finalScore)}.`,
+    `Dynamický split ${Math.round(input.corePercent)}/${Math.round(input.satPercent)}/${Math.round(input.yieldPercent)} (Core/Sat/Yield) z live režimu a skóre.`,
+    "Quality Bias: ETH CBBC > SOL → ETH váha z tokenPlans v satellite buckete.",
+    `Yield kôš ${input.yieldPercent}% — live filter 3/3, váha skóre^2.5 (${formatUsdShort(input.yieldAmount)}).`,
   ];
+
+  if (input.liveDataReady) {
+    bullets.push(
+      "Yield metriky: Binance RSI(14), SMA14 odchýlka, fundament (volume trend + RSI + SMA).",
+    );
+  }
 
   if (input.spilloverActive) {
     bullets.push(
-      `Spillover: ${formatUsdShort(input.spilloverAmount)} z Yield sa vrátilo do CORE/SAT (${input.convictionCount}/7 prešlo filtrom).`,
+      `Spillover: ${formatUsdShort(input.spilloverAmount)} z Yield sa vrátilo do CORE/SAT (${input.convictionCount}/${YIELD_ALTCOIN_UNIVERSE.length} prešlo filtrom).`,
     );
   } else if (input.convictionCount > 0) {
     bullets.push(
-      `${input.convictionCount} altcoinov prešlo filtrom 3/3 — exponenciálna distribúcia podľa fundamentu^2.5.`,
+      `${input.convictionCount} altcoinov prešlo live filtrom 3/3 — exponenciálna distribúcia podľa fundamentu^2.5.`,
     );
   }
 
@@ -158,14 +184,28 @@ function formatUsdShort(value: number): string {
 export function computePortfolioBucketing(input: {
   deployedCapital: number;
   tokenPlans: MasterTokenPlan[];
+  regime: MacroRegime;
+  regimeLabel: string;
+  finalScore: number;
+  yieldMetrics: Record<string, YieldTokenMetrics>;
 }): PortfolioBucketingResult {
-  const { deployedCapital, tokenPlans } = input;
+  const {
+    deployedCapital,
+    tokenPlans,
+    regime,
+    regimeLabel,
+    finalScore,
+    yieldMetrics,
+  } = input;
 
-  const rawCore = sumCategory(tokenPlans, "core");
-  const rawSat = sumCategory(tokenPlans, "satellite");
-  const rawYield = sumCategory(tokenPlans, "yield");
+  const bucketRatios = computeDynamicBucketRatios(regime, finalScore);
+  const liveDataReady = Object.keys(yieldMetrics).length > 0;
 
-  const yieldAltcoins = buildYieldFilterAllocations(rawYield);
+  const rawCore = roundUsd((deployedCapital * bucketRatios.core) / 100);
+  const rawSat = roundUsd((deployedCapital * bucketRatios.satellite) / 100);
+  const rawYield = roundUsd((deployedCapital * bucketRatios.yield) / 100);
+
+  const yieldAltcoins = buildYieldFilterAllocations(rawYield, yieldMetrics);
 
   const spillover = applyYieldSpillover({
     coreUsd: rawCore,
@@ -184,7 +224,8 @@ export function computePortfolioBucketing(input: {
   const satBucket = buckets.find((b) => b.category === "satellite")!;
   const yieldBucket = buckets.find((b) => b.category === "yield")!;
 
-  const ethAmount = roundUsd(satBucket.amountUsd * ETH_SATELLITE_SHARE);
+  const { ethShare, solShare } = resolveSatelliteSplit(tokenPlans);
+  const ethAmount = roundUsd(satBucket.amountUsd * ethShare);
   const solAmount = roundUsd(satBucket.amountUsd - ethAmount);
 
   const coreToken: TokenAllocationRow = {
@@ -218,7 +259,7 @@ export function computePortfolioBucketing(input: {
   const badgeSubtitle = `Core ${Math.round(coreBucket.percent)}% • Sat ${Math.round(satBucket.percent)}% • Yield ${Math.round(yieldBucket.percent)}%`;
 
   return {
-    badgeTitle: "BALANCED • Vyvážená alokácia",
+    badgeTitle: getBucketBadgeTitle(regime),
     badgeSubtitle,
     buckets,
     coreToken,
@@ -228,7 +269,11 @@ export function computePortfolioBucketing(input: {
     yieldAltcoinCount: YIELD_ALTCOIN_UNIVERSE.length,
     spilloverActive: spillover.spilloverActive,
     spilloverAmount: spillover.spilloverAmount,
+    bucketRatios,
+    liveDataReady,
     narrativeBullets: buildNarrative({
+      regimeLabel,
+      finalScore,
       corePercent: coreBucket.percent,
       satPercent: satBucket.percent,
       yieldPercent: yieldBucket.percent,
@@ -236,6 +281,7 @@ export function computePortfolioBucketing(input: {
       convictionCount: yieldAltcoins.conviction.length,
       spilloverActive: spillover.spilloverActive,
       spilloverAmount: spillover.spilloverAmount,
+      liveDataReady,
     }),
   };
 }
