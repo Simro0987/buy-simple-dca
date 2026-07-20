@@ -74,6 +74,7 @@ export interface MasterDcaResult {
   regimeKey: RegimeKey;
   regimeLabel: string;
   regimeDescription: string;
+  fearGreedValue: number;
   advisor: ExecutionAdvisor;
   degraded: boolean;
 }
@@ -602,6 +603,7 @@ export function computeMasterDcaEngine(input: {
     regimeKey,
     regimeLabel,
     regimeDescription,
+    fearGreedValue: fearGreed.value,
     advisor,
     degraded,
   };

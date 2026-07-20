@@ -2,44 +2,56 @@
 
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown } from "lucide-react";
-import { CapitalPipelineSection } from "@/components/dca/CapitalPipelineSection";
-import { ExecutionPerformanceSection } from "@/components/dca/ExecutionPerformanceSection";
-import { MarketRegimeFactors } from "@/components/dca/MarketRegimeFactors";
-import type {
-  CapitalPipeline,
-  ExecutionAdvisor,
-  FactorScore,
-} from "@/lib/masterDcaEngine";
+import { ChevronDown, Info } from "lucide-react";
+import { buildAllocationExplanation } from "@/lib/dcaAllocationExplanation";
+import type { ConfidenceLevel, FactorScore } from "@/lib/masterDcaEngine";
 
 interface DcaAllocationAccordionProps {
-  pipeline: CapitalPipeline;
+  regimeLabel: string;
+  confluenceScore: number;
+  baseAllocationPercent: number;
+  allocationPercent: number;
+  confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   factors: FactorScore[];
-  confluenceScore: number;
-  advisor: ExecutionAdvisor;
-  loading?: boolean;
+  fearGreedValue: number;
 }
 
 export function DcaAllocationAccordion({
-  pipeline,
+  regimeLabel,
+  confluenceScore,
+  baseAllocationPercent,
+  allocationPercent,
+  confidence,
   confidenceMultiplier,
   factors,
-  confluenceScore,
-  advisor,
-  loading = false,
+  fearGreedValue,
 }: DcaAllocationAccordionProps) {
   const [open, setOpen] = useState(false);
 
+  const explanation = buildAllocationExplanation({
+    regimeLabel,
+    confluenceScore,
+    baseAllocationPercent,
+    allocationPercent,
+    confidence,
+    confidenceMultiplier,
+    factors,
+    fearGreedValue,
+  });
+
   return (
-    <div className="rounded-2xl border border-white/5 bg-[#0d0d0f]">
+    <div>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left"
+        className="flex w-full items-center justify-between gap-3 py-1 text-left"
         aria-expanded={open}
       >
-        <span className="text-sm font-semibold text-zinc-200">
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-zinc-200">
+          <span className="flex h-5 w-5 items-center justify-center rounded-full border border-zinc-600 text-zinc-400">
+            <Info className="h-3 w-3" />
+          </span>
           Prečo táto alokácia?
         </span>
         <ChevronDown
@@ -56,18 +68,9 @@ export function DcaAllocationAccordion({
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <div className="space-y-4 border-t border-white/5 px-4 pb-4 pt-3">
-              <CapitalPipelineSection
-                pipeline={pipeline}
-                confidenceMultiplier={confidenceMultiplier}
-              />
-              <MarketRegimeFactors
-                factors={factors}
-                confluenceScore={confluenceScore}
-                loading={loading}
-              />
-              <ExecutionPerformanceSection advisor={advisor} />
-            </div>
+            <p className="mt-3 whitespace-pre-line text-[11px] leading-relaxed text-zinc-500">
+              {explanation}
+            </p>
           </motion.div>
         )}
       </AnimatePresence>

@@ -3,10 +3,9 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, RefreshCw, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
-import { DcaAllocationAccordion } from "@/components/dca/DcaAllocationAccordion";
 import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
-import { FactorPills } from "@/components/dca/FactorPills";
+import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -111,18 +110,17 @@ export function DcaEngine({
             investmentAmount={result.capitalPipeline.dDeployedCapital}
           />
 
-          <FactorPills
+          <MasterAllocationCard
             factors={result.factors}
             confluenceScore={result.confluenceScore}
-          />
-
-          <DcaAllocationAccordion
-            pipeline={result.capitalPipeline}
+            cashReserve={result.capitalPipeline.eReserveCapital}
+            weeklyCapital={result.capitalPipeline.aWeeklyBudget}
+            regimeLabel={result.regimeLabel}
+            baseAllocationPercent={result.baseAllocationPercent}
+            allocationPercent={result.allocationPercent}
+            confidence={result.confidence}
             confidenceMultiplier={result.confidenceMultiplier}
-            factors={result.factors}
-            confluenceScore={result.confluenceScore}
-            advisor={result.advisor}
-            loading={loading}
+            fearGreedValue={result.fearGreedValue}
           />
 
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
