@@ -1,5 +1,9 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import { fetchMarketDataRace } from "@/lib/market-data/fetchMarketData";
+import {
+  fetchBinanceTechnicals,
+  technicalsToMarketPayload,
+} from "@/lib/binanceTechnicals";
 
 export interface DcaTokenDefinition {
   symbol: string;
@@ -122,14 +126,17 @@ export interface MarketDataServicePayload {
     ma200wStale: boolean;
     mayerMultiple: number;
     ma200d: number;
+    ema50?: number;
     price: number;
     atr14d: number;
+    rsi14?: number;
   };
   eth: { atr14d: number; rsi14: number | null };
   sol: { tvl: number; atr14d: number; rsi14: number | null };
   unlocks: Array<{ symbol: string; pct: number; date: string }>;
   degraded?: boolean;
   fallback?: boolean;
+  source?: "binance" | "supabase";
 }
 
 export interface TokenMarketSnapshot {
@@ -193,24 +200,13 @@ async function fetchFearGreed(): Promise<FearGreedData> {
   }
 }
 
-async function fetchMarketDataService(): Promise<MarketDataServicePayload> {
-  const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.VITE_SUPABASE_PUBLISHABLE_KEY;
-  if (!supabaseUrl || !supabaseKey) return MARKET_DATA_FALLBACK;
-
+async function fetchBinanceMarketData(): Promise<MarketDataServicePayload> {
   try {
-    const res = await fetch(
-      `${supabaseUrl}/functions/v1/market-data-service`,
-      {
-        headers: {
-          Authorization: `Bearer ${supabaseKey}`,
-          apikey: supabaseKey,
-        },
-        cache: "no-store",
-      },
-    );
-    if (!res.ok) return MARKET_DATA_FALLBACK;
-    return (await res.json()) as MarketDataServicePayload;
+    const bundle = await fetchBinanceTechnicals();
+    if (bundle.btc.price > 0 && !bundle.btc.stale) {
+      return technicalsToMarketPayload(bundle);
+    }
+    return { ...technicalsToMarketPayload(bundle), degraded: true, fallback: true };
   } catch {
     return MARKET_DATA_FALLBACK;
   }
@@ -293,18 +289,20 @@ export async function fetchDcaMarketSnapshot(
 
   const [fearGreed, marketData, tokens] = await Promise.all([
     fetchFearGreed(),
-    fetchMarketDataService(),
+    fetchBinanceMarketData(),
     fetchTokenMarketCaps(activeTokens),
   ]);
 
-  if (marketData.btc.price > 0 && tokens.BTC) {
-    tokens.BTC.price = marketData.btc.price;
-    tokens.BTC.hasLiveData = true;
+  if (marketData.btc.price > 0) {
+    if (tokens.BTC) {
+      tokens.BTC.price = marketData.btc.price;
+      tokens.BTC.hasLiveData = true;
+    }
   }
 
   const degraded =
     Boolean(marketData.degraded || marketData.fallback) ||
-    !tokens.BTC?.hasLiveData;
+    marketData.btc.price <= 0;
 
   return {
     fearGreed,

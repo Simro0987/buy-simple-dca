@@ -57,10 +57,13 @@ export interface MasterTokenPlan {
   atr14d: number | null;
 }
 
+export type RegimeKey = "BULL" | "BEAR" | "SIDEWAYS" | "PANIC" | "EUFÓRIA";
+
 export interface MasterDcaResult {
   moneyMode: MoneyMode;
   confluenceScore: number;
   factors: FactorScore[];
+  baseAllocationPercent: number;
   allocationPercent: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
@@ -68,19 +71,28 @@ export interface MasterDcaResult {
   tokenPlans: MasterTokenPlan[];
   marketLimitSplit: { market: number; limit: number };
   brakeActive: boolean;
+  regimeKey: RegimeKey;
   regimeLabel: string;
   regimeDescription: string;
   advisor: ExecutionAdvisor;
   degraded: boolean;
 }
 
-const FACTOR_WEIGHTS = {
-  value: 0.22,
-  trend: 0.22,
-  sentiment: 0.18,
-  momentum: 0.18,
-  risk: 0.2,
-} as const;
+type FactorWeightMap = {
+  value: number;
+  trend: number;
+  sentiment: number;
+  momentum: number;
+  risk: number;
+};
+
+const REGIME_WEIGHTS: Record<RegimeKey, FactorWeightMap> = {
+  BULL: { value: 0.18, trend: 0.28, sentiment: 0.16, momentum: 0.18, risk: 0.2 },
+  BEAR: { value: 0.3, trend: 0.18, sentiment: 0.22, momentum: 0.15, risk: 0.15 },
+  SIDEWAYS: { value: 0.22, trend: 0.22, sentiment: 0.18, momentum: 0.18, risk: 0.2 },
+  PANIC: { value: 0.32, trend: 0.15, sentiment: 0.25, momentum: 0.13, risk: 0.15 },
+  EUFÓRIA: { value: 0.15, trend: 0.25, sentiment: 0.2, momentum: 0.15, risk: 0.25 },
+};
 
 const CONFIDENCE_MULTIPLIERS: Record<ConfidenceLevel, number> = {
   high: 1.0,
@@ -103,13 +115,20 @@ function scoreSentiment(fearGreed: number): number {
   return clamp(100 - fearGreed, 0, 100);
 }
 
-function scoreMomentum(rsi: number | null, price: number, ma200d: number): number {
+function scoreMomentum(
+  rsi: number | null,
+  price: number,
+  ema50: number,
+  ema200: number,
+): number {
   const rsiScore = rsi != null ? clamp(100 - rsi, 0, 100) : 50;
-  const smaScore =
-    ma200d > 0 && price > 0
-      ? clamp(50 - ((price - ma200d) / ma200d) * 100, 0, 100)
+  const emaScore =
+    ema200 > 0 && price > 0
+      ? clamp(50 - ((price - ema200) / ema200) * 80, 0, 100)
       : 50;
-  return Math.round((rsiScore + smaScore) / 2);
+  const crossScore =
+    ema50 > 0 && ema200 > 0 ? (ema50 < ema200 ? 68 : 38) : 50;
+  return Math.round((rsiScore + emaScore + crossScore) / 3);
 }
 
 function scoreCbbc(mayer: number): { score: number; status: string } {
@@ -131,11 +150,78 @@ function scoreTrend(distance200wPct: number, mayer: number): number {
   return Math.round((wmaTrend + mayerTrend) / 2);
 }
 
-function resolveMoneyMode(fg: number, score: number): MoneyMode {
-  if (fg <= 25 || score < 25) return "CAPITULATION";
-  if (fg >= 75 || score > 85) return "EUPHORIA";
-  if (fg <= 45 || score < 50) return "ACCUMULATION";
-  return "NEUTRAL";
+function resolveRegime(
+  fg: number,
+  score: number,
+): { key: RegimeKey; label: string; description: string; moneyMode: MoneyMode } {
+  if (fg <= 20 || (fg <= 25 && score < 20)) {
+    return {
+      key: "PANIC",
+      label: "PANIC",
+      description: "Panický výpredaj",
+      moneyMode: "CAPITULATION",
+    };
+  }
+  if (fg <= 35 || score < 30) {
+    return {
+      key: "BEAR",
+      label: "BEAR",
+      description: "Medvedí trend — akumulácia",
+      moneyMode: "CAPITULATION",
+    };
+  }
+  if (fg >= 85 || (fg >= 75 && score > 90)) {
+    return {
+      key: "EUFÓRIA",
+      label: "EUFÓRIA",
+      description: "Euforia — defenzívna alokácia",
+      moneyMode: "EUPHORIA",
+    };
+  }
+  if (fg >= 70 || score > 80) {
+    return {
+      key: "BULL",
+      label: "BULL",
+      description: "Býčí trend — znížená alokácia",
+      moneyMode: "EUPHORIA",
+    };
+  }
+  if (fg <= 50 && score < 55) {
+    return {
+      key: "BEAR",
+      label: "BEAR",
+      description: "Akumulačná zóna",
+      moneyMode: "ACCUMULATION",
+    };
+  }
+  return {
+    key: "SIDEWAYS",
+    label: "SIDEWAYS",
+    description: "Bočný pohyb",
+    moneyMode: "NEUTRAL",
+  };
+}
+
+function getFactorWeights(regime: RegimeKey): FactorWeightMap {
+  return REGIME_WEIGHTS[regime];
+}
+
+function weightedConfluenceScore(
+  factors: Array<{ id: string; score: number }>,
+  weights: FactorWeightMap,
+): number {
+  const entries = [
+    { score: factors.find((f) => f.id === "value")?.score ?? 50, w: weights.value },
+    { score: factors.find((f) => f.id === "trend")?.score ?? 50, w: weights.trend },
+    { score: factors.find((f) => f.id === "sentiment")?.score ?? 50, w: weights.sentiment },
+    { score: factors.find((f) => f.id === "momentum")?.score ?? 50, w: weights.momentum },
+    { score: factors.find((f) => f.id === "risk")?.score ?? 50, w: weights.risk },
+  ];
+  const totalWeight = entries.reduce((sum, e) => sum + e.w, 0);
+  if (totalWeight <= 0) return 50;
+  return Math.round(
+    entries.reduce((sum, e) => sum + e.score * e.w, 0) / totalWeight,
+  );
 }
 
 function resolveConfidence(snapshot: DcaMarketSnapshot): ConfidenceLevel {
@@ -147,25 +233,25 @@ function resolveConfidence(snapshot: DcaMarketSnapshot): ConfidenceLevel {
   return "high";
 }
 
-function computeAllocationPercent(
+function computeBaseAllocation(
   score: number,
   fearGreed: number,
   brakeActive: boolean,
 ): number {
-  let alloc = 82 - score * 0.62;
-  alloc = clamp(alloc, 22, 80);
+  let base = 82 - score * 0.62;
+  base = clamp(base, 22, 80);
 
   if (fearGreed <= 25 && score < 15) {
-    alloc = 85;
+    base = 80;
   } else if (fearGreed >= 75 && score > 90) {
-    alloc = 20;
+    base = 22;
   }
 
   if (brakeActive) {
-    alloc *= 0.5;
+    base *= 0.5;
   }
 
-  return Math.round(alloc * 10) / 10;
+  return Math.round(base * 10) / 10;
 }
 
 function matrixSplit(fearGreed: number): { market: number; limit: number } {
@@ -312,16 +398,19 @@ export function computeMasterDcaEngine(input: {
 
   const valueScore = scoreValue(distance200w);
   const sentimentScore = scoreSentiment(fearGreed.value);
+  const btcRsi = marketData.btc.rsi14 ?? marketData.eth.rsi14;
+  const ema50 = marketData.btc.ema50 ?? 0;
   const momentumScore = scoreMomentum(
-    marketData.eth.rsi14,
+    btcRsi,
     btcPrice,
+    ema50,
     marketData.btc.ma200d,
   );
   const cbbc = scoreCbbc(marketData.btc.mayerMultiple);
   const riskScore = scoreRisk(marketData.btc.atr14d, cbbc.score);
   const trendScore = scoreTrend(distance200w, marketData.btc.mayerMultiple);
 
-  const factors: FactorScore[] = [
+  const rawFactors = [
     {
       id: "value",
       name: "Value",
@@ -332,7 +421,6 @@ export function computeMasterDcaEngine(input: {
           : distance200w > 20
             ? "Extended"
             : "Fair",
-      weight: FACTOR_WEIGHTS.value,
     },
     {
       id: "trend",
@@ -344,14 +432,12 @@ export function computeMasterDcaEngine(input: {
           : distance200w > 20
             ? "Rast"
             : "Neutrál",
-      weight: FACTOR_WEIGHTS.trend,
     },
     {
       id: "sentiment",
       name: "Sentiment",
       score: Math.round(sentimentScore),
       status: fearGreed.classification,
-      weight: FACTOR_WEIGHTS.sentiment,
     },
     {
       id: "momentum",
@@ -363,40 +449,50 @@ export function computeMasterDcaEngine(input: {
           : momentumScore <= 40
             ? "Overbought"
             : "Neutral",
-      weight: FACTOR_WEIGHTS.momentum,
     },
     {
       id: "risk",
       name: "Risk",
       score: riskScore,
       status: `ATR ${marketData.btc.atr14d.toFixed(1)}% · ${cbbc.status}`,
-      weight: FACTOR_WEIGHTS.risk,
     },
   ];
 
-  const confluenceScore = Math.round(
-    factors.reduce((sum, f) => sum + f.score * f.weight, 0) /
-      Object.values(FACTOR_WEIGHTS).reduce((a, b) => a + b, 0),
+  const preliminaryScore = Math.round(
+    rawFactors.reduce((sum, f) => sum + f.score, 0) / rawFactors.length,
   );
+  const preliminaryRegime = resolveRegime(fearGreed.value, preliminaryScore);
+  let activeWeights = getFactorWeights(preliminaryRegime.key);
+  let confluenceScore = weightedConfluenceScore(rawFactors, activeWeights);
+  const resolvedRegime = resolveRegime(fearGreed.value, confluenceScore);
+
+  if (resolvedRegime.key !== preliminaryRegime.key) {
+    activeWeights = getFactorWeights(resolvedRegime.key);
+    confluenceScore = weightedConfluenceScore(rawFactors, activeWeights);
+  }
+
+  const factors: FactorScore[] = rawFactors.map((f) => ({
+    ...f,
+    weight: activeWeights[f.id as keyof FactorWeightMap],
+  }));
 
   const confidence = resolveConfidence(snapshot);
   const confidenceMultiplier = CONFIDENCE_MULTIPLIERS[confidence];
 
-  let allocationPercent = computeAllocationPercent(
+  const baseAllocationPercent = computeBaseAllocation(
     confluenceScore,
     fearGreed.value,
     brakeActive,
   );
-  allocationPercent =
-    Math.round(allocationPercent * confidenceMultiplier * 10) / 10;
-  allocationPercent = clamp(allocationPercent, 22, 85);
+  const allocationPercent =
+    Math.round(baseAllocationPercent * confidenceMultiplier * 10) / 10;
 
   const deployedCapital =
     Math.round(weeklyBudget * (allocationPercent / 100) * 100) / 100;
   const reserveCapital =
     Math.round((weeklyBudget - deployedCapital) * 100) / 100;
 
-  const moneyMode = resolveMoneyMode(fearGreed.value, confluenceScore);
+  const moneyMode = resolvedRegime.moneyMode;
   const baseSplit = matrixSplit(fearGreed.value);
 
   const activeTokens = resolveActiveDcaTokens(portfolioSymbols);
@@ -472,23 +568,8 @@ export function computeMasterDcaEngine(input: {
     };
   });
 
-  const regimeLabel =
-    moneyMode === "CAPITULATION"
-      ? "BEAR"
-      : moneyMode === "EUPHORIA"
-        ? "BULL"
-        : moneyMode === "ACCUMULATION"
-          ? "ACCUM"
-          : "NEUTRAL";
-
-  const regimeDescription =
-    moneyMode === "CAPITULATION"
-      ? "Medvedí trend — agresívna akumulácia"
-      : moneyMode === "EUPHORIA"
-        ? "Euforia — defenzívna alokácia"
-        : moneyMode === "ACCUMULATION"
-          ? "Akumulačná zóna"
-          : "Neutrálny režim";
+  const { key: regimeKey, label: regimeLabel, description: regimeDescription } =
+    resolvedRegime;
 
   const currentPrices: Record<string, number> = {};
   for (const [sym, t] of Object.entries(tokens)) {
@@ -504,6 +585,7 @@ export function computeMasterDcaEngine(input: {
     moneyMode,
     confluenceScore,
     factors,
+    baseAllocationPercent,
     allocationPercent,
     confidence,
     confidenceMultiplier,
@@ -517,6 +599,7 @@ export function computeMasterDcaEngine(input: {
     tokenPlans,
     marketLimitSplit: baseSplit,
     brakeActive,
+    regimeKey,
     regimeLabel,
     regimeDescription,
     advisor,

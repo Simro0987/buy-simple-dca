@@ -1,15 +1,12 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlertTriangle, RefreshCw, ShoppingCart, Zap } from "lucide-react";
+import { AlertTriangle, RefreshCw, ShoppingCart } from "lucide-react";
 import { useMemo } from "react";
-import { CapitalPipelineSection } from "@/components/dca/CapitalPipelineSection";
+import { DcaAllocationAccordion } from "@/components/dca/DcaAllocationAccordion";
+import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
-import { ExecutionPerformanceSection } from "@/components/dca/ExecutionPerformanceSection";
 import { FactorPills } from "@/components/dca/FactorPills";
-import { MarketRegimeFactors } from "@/components/dca/MarketRegimeFactors";
-import { MarketRegimeSection } from "@/components/dca/MarketRegimeSection";
-import { MoneyModeHeader } from "@/components/dca/MoneyModeHeader";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -65,26 +62,20 @@ export function DcaEngine({
             DCA & Dynamic Execution
           </p>
           <h2 className="text-xl font-bold text-white">
-            Master DCA Engine
+            DCA Execution Engine
           </h2>
         </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refresh()}
-            disabled={loading}
-            className="rounded-full border border-white/10 bg-white/5 p-2 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
-            aria-label="Obnoviť dáta"
-          >
-            <RefreshCw
-              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-            />
-          </button>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.15)]">
-            <Zap className="h-3 w-3 fill-emerald-400" />
-            Money Mode
-          </span>
-        </div>
+        <button
+          type="button"
+          onClick={() => void refresh()}
+          disabled={loading}
+          className="rounded-full border border-white/10 bg-white/5 p-2 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
+          aria-label="Obnoviť dáta"
+        >
+          <RefreshCw
+            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+          />
+        </button>
       </motion.div>
 
       {error && (
@@ -108,41 +99,33 @@ export function DcaEngine({
 
       {result && (
         <>
-          <MoneyModeHeader
-            mode={result.moneyMode}
-            score={result.confluenceScore}
-          />
-
-          <MarketRegimeSection
-            label={result.regimeLabel}
-            description={result.regimeDescription}
-            finalScore={result.confluenceScore}
+          <DcaHeroDashboard
+            regimeLabel={result.regimeLabel}
+            regimeDescription={result.regimeDescription}
+            moneyMode={result.regimeLabel}
+            confluenceScore={result.confluenceScore}
+            baseAllocationPercent={result.baseAllocationPercent}
             allocationPercent={result.allocationPercent}
+            confidence={result.confidence}
+            confidenceMultiplier={result.confidenceMultiplier}
             investmentAmount={result.capitalPipeline.dDeployedCapital}
           />
 
-          <CapitalPipelineSection
-            pipeline={result.capitalPipeline}
-            confidenceMultiplier={result.confidenceMultiplier}
-          />
-
-          <MarketRegimeFactors
+          <FactorPills
             factors={result.factors}
             confluenceScore={result.confluenceScore}
+          />
+
+          <DcaAllocationAccordion
+            pipeline={result.capitalPipeline}
+            confidenceMultiplier={result.confidenceMultiplier}
+            factors={result.factors}
+            confluenceScore={result.confluenceScore}
+            advisor={result.advisor}
             loading={loading}
           />
 
-          <FactorPills
-            factors={result.factors.map((f) => ({
-              name: f.name,
-              score: f.score,
-              status: f.status,
-            }))}
-          />
-
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
-
-          <ExecutionPerformanceSection advisor={result.advisor} />
         </>
       )}
 
