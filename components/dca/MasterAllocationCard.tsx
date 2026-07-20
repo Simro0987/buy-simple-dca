@@ -10,6 +10,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { DcaAllocationAccordion } from "@/components/dca/DcaAllocationAccordion";
+import { useCountUp } from "@/hooks/useCountUp";
 import { formatUsd } from "@/lib/data";
 import type { ConfidenceLevel, FactorScore } from "@/lib/masterDcaEngine";
 
@@ -34,6 +35,50 @@ const FACTOR_ICONS: Record<string, LucideIcon> = {
   risk: Shield,
 };
 
+function FactorPill({
+  factor,
+  index,
+}: {
+  factor: FactorScore;
+  index: number;
+}) {
+  const Icon = FACTOR_ICONS[factor.id] ?? Gauge;
+  const weightPct = Math.round(factor.weight * 100);
+  const animatedScore = useCountUp(factor.score, 700);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.94 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3, delay: 0.12 + index * 0.04 }}
+      className="flex min-w-[108px] shrink-0 flex-col rounded-2xl border border-emerald-400/20 bg-[#0a0a0c] px-3 py-3"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <Icon className="h-3.5 w-3.5 text-emerald-400/70" />
+        <span className="text-sm font-bold tabular-nums text-emerald-400 transition-all duration-700 ease-out">
+          {Math.round(animatedScore)}
+        </span>
+      </div>
+
+      <div className="mt-2.5">
+        <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-300">
+          {factor.name}
+        </p>
+        <p className="mt-0.5 text-[9px] font-medium text-zinc-600">
+          w {weightPct}%
+        </p>
+      </div>
+
+      <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
+        <div
+          className="h-full rounded-full bg-emerald-400 transition-all duration-700 ease-out"
+          style={{ width: `${factor.score}%` }}
+        />
+      </div>
+    </motion.div>
+  );
+}
+
 export function MasterAllocationCard({
   factors,
   confluenceScore,
@@ -46,6 +91,9 @@ export function MasterAllocationCard({
   confidenceMultiplier,
   fearGreedValue,
 }: MasterAllocationCardProps) {
+  const animatedReserve = useCountUp(cashReserve, 700);
+  const animatedCapital = useCountUp(weeklyCapital, 700);
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 8 }}
@@ -58,49 +106,14 @@ export function MasterAllocationCard({
       </p>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-        {factors.map((factor, index) => {
-          const Icon = FACTOR_ICONS[factor.id] ?? Gauge;
-          const weightPct = Math.round(factor.weight * 100);
-
-          return (
-            <motion.div
-              key={factor.id}
-              initial={{ opacity: 0, scale: 0.94 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ duration: 0.3, delay: 0.12 + index * 0.04 }}
-              className="flex min-w-[108px] shrink-0 flex-col rounded-2xl border border-emerald-400/20 bg-[#0a0a0c] px-3 py-3"
-            >
-              <div className="flex items-center justify-between gap-2">
-                <Icon className="h-3.5 w-3.5 text-emerald-400/70" />
-                <span className="text-sm font-bold text-emerald-400">
-                  {factor.score}
-                </span>
-              </div>
-
-              <div className="mt-2.5">
-                <p className="text-[10px] font-bold uppercase tracking-wide text-zinc-300">
-                  {factor.name}
-                </p>
-                <p className="mt-0.5 text-[9px] font-medium text-zinc-600">
-                  w {weightPct}%
-                </p>
-              </div>
-
-              <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
-                <div
-                  className="h-full rounded-full bg-emerald-400 transition-all duration-700 ease-out"
-                  style={{ width: `${factor.score}%` }}
-                />
-              </div>
-            </motion.div>
-          );
-        })}
+        {factors.map((factor, index) => (
+          <FactorPill key={factor.id} factor={factor} index={index} />
+        ))}
       </div>
 
       <p className="mt-3 text-[10px] leading-relaxed text-zinc-600">
-        Váhy: Value 30% • Trend 20% • Sentiment 20% • Momentum 15% • Risk 15%.
-        Režim sa určuje z makro-metrik s 3% hysteréziou (CAPITULATION / BEAR /
-        SIDEWAYS / BULL / EUPHORIA).
+        Lineárna interpolácia: Value (−40%…+40% vs SMA200) • Trend (EMA50 vs
+        SMA200) • Sentiment & Momentum & Risk priamo z F&G / RSI / ATR.
       </p>
 
       <div className="mt-5 flex gap-4">
@@ -108,16 +121,16 @@ export function MasterAllocationCard({
           <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             Hotovosť rezerva
           </p>
-          <p className="mt-1 text-2xl font-bold text-white">
-            {formatUsd(cashReserve)}
+          <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
+            {formatUsd(animatedReserve)}
           </p>
         </div>
         <div className="flex-1 text-right">
           <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
             Týždenný kapitál
           </p>
-          <p className="mt-1 text-2xl font-bold text-white">
-            {formatUsd(weeklyCapital)}
+          <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
+            {formatUsd(animatedCapital)}
           </p>
         </div>
       </div>

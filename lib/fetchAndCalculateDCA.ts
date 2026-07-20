@@ -4,11 +4,9 @@ import {
   type MasterDcaResult,
 } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
-import {
-  buildMacroIndicators,
-  computeUltimateDca,
-  type OhlcBar,
-} from "@/lib/ultimateDcaEngine";
+import { buildMarketTechnicals } from "@/lib/dcaScoringEngine";
+import type { OhlcBar } from "@/lib/dcaTechnicalIndicators";
+import { computeUltimateDca } from "@/lib/ultimateDcaEngine";
 
 type RawKline = [number, string, string, string, string, string, ...unknown[]];
 
@@ -119,11 +117,7 @@ function buildSnapshot(
   weeklyCloses: number[],
   fearGreed: FearGreedData,
 ): DcaMarketSnapshot {
-  const indicators = buildMacroIndicators(
-    dailyBars,
-    weeklyCloses,
-    fearGreed.value,
-  );
+  const indicators = buildMarketTechnicals(dailyBars, weeklyCloses);
 
   return {
     fearGreed,
@@ -136,8 +130,8 @@ function buildSnapshot(
         ma200w: indicators.wma200w,
         ma200wStale: false,
         mayerMultiple:
-          indicators.ema200 > 0
-            ? indicators.price / indicators.ema200
+          indicators.sma200d > 0
+            ? indicators.price / indicators.sma200d
             : 1,
         atr14d: indicators.atr14Pct,
         rsi14: indicators.rsi14,

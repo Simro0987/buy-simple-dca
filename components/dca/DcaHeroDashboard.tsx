@@ -94,8 +94,8 @@ export function DcaHeroDashboard({
               Final Score
             </p>
             <p className="mt-2 flex items-baseline gap-1">
-              <span className="text-5xl font-black leading-none text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.35)]">
-                {Math.round(animatedScore)}
+              <span className="text-5xl font-black tabular-nums leading-none text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.35)] transition-all duration-700 ease-out">
+                {animatedScore.toFixed(1)}
               </span>
               <span className="text-lg font-medium text-zinc-600">/100</span>
             </p>
@@ -114,7 +114,7 @@ export function DcaHeroDashboard({
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-zinc-500">
               Alokácia
             </p>
-            <p className="mt-2 text-5xl font-black leading-none text-white">
+            <p className="mt-2 text-5xl font-black tabular-nums leading-none text-white transition-all duration-700 ease-out">
               {animatedAllocation.toFixed(1)}%
             </p>
             <p className="mt-2 text-[11px] text-zinc-500">
