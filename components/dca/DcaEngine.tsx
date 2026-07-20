@@ -6,6 +6,7 @@ import { useEffect, useMemo } from "react";
 import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
+import { PortfolioBucketingCard } from "@/components/dca/PortfolioBucketingCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import { useDcaLiveEngine } from "@/hooks/useDcaLiveEngine";
@@ -138,6 +139,11 @@ export function DcaEngine({
             dynamicSlope={displayResult.dynamicSlope}
             confidence={displayResult.confidence}
             confidenceMultiplier={displayResult.confidenceMultiplier}
+          />
+
+          <PortfolioBucketingCard
+            deployedCapital={displayResult.capitalPipeline.dDeployedCapital}
+            tokenPlans={displayResult.tokenPlans}
           />
 
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
