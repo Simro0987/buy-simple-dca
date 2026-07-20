@@ -1,5 +1,12 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { MasterTokenPlan } from "@/lib/masterDcaEngine";
+import {
+  applyYieldSpillover,
+  buildYieldFilterAllocations,
+  YIELD_ALTCOIN_UNIVERSE,
+  type YieldAllocationRow,
+  type YieldFilterEvaluation,
+} from "@/lib/dcaYieldFilter";
 
 export interface PortfolioBucket {
   category: AssetCategory;
@@ -20,14 +27,8 @@ export interface TokenAllocationRow {
   textClass: string;
 }
 
-export interface YieldAltcoinRow {
-  symbol: string;
-  tag: string;
-  rsi: number;
-  passed: boolean;
-  amountUsd: number;
-  shareOfYieldPercent: number;
-}
+export type YieldAltcoinRow = YieldAllocationRow;
+export type YieldExcludedRow = YieldFilterEvaluation;
 
 export interface PortfolioBucketingResult {
   badgeTitle: string;
@@ -36,29 +37,17 @@ export interface PortfolioBucketingResult {
   coreToken: TokenAllocationRow;
   satelliteTokens: TokenAllocationRow[];
   yieldAltcoins: {
-    conviction: YieldAltcoinRow[];
-    excluded: YieldAltcoinRow[];
+    conviction: YieldAllocationRow[];
+    excluded: YieldFilterEvaluation[];
   };
   yieldBucketAmount: number;
   yieldAltcoinCount: number;
+  spilloverActive: boolean;
+  spilloverAmount: number;
   narrativeBullets: string[];
 }
 
-/** Test yield universe — RSI mocked until live feeds are wired. */
-const YIELD_ALTCOIN_UNIVERSE: { symbol: string; name: string; tag: string }[] =
-  [
-    { symbol: "HYPE", name: "Hyperliquid", tag: "ARB" },
-    { symbol: "JUP", name: "Jupiter", tag: "SOL" },
-    { symbol: "AAVE", name: "Aave", tag: "ETH" },
-    { symbol: "MORPHO", name: "Morpho", tag: "ETH" },
-    { symbol: "LINK", name: "Chainlink", tag: "ETH" },
-    { symbol: "GMX", name: "GMX", tag: "ARB" },
-    { symbol: "PENDLE", name: "Pendle", tag: "ETH" },
-  ];
-
-const RSI_OVERSOLD_THRESHOLD = 50;
 const ETH_SATELLITE_SHARE = 0.7;
-const SOL_SATELLITE_SHARE = 0.3;
 
 const BUCKET_META: Record<
   AssetCategory,
@@ -81,14 +70,6 @@ const BUCKET_META: Record<
   },
 };
 
-/** Deterministic mock RSI (20–90) per symbol until live RSI is connected. */
-export function mockYieldRsi(symbol: string): number {
-  const seed = symbol
-    .split("")
-    .reduce((acc, char) => acc + char.charCodeAt(0), 0);
-  return 20 + ((seed * 7) % 71);
-}
-
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
 }
@@ -109,26 +90,23 @@ function sumCategory(
 
 function buildBuckets(
   deployedCapital: number,
-  plans: MasterTokenPlan[],
+  amounts: { core: number; satellite: number; yield: number },
 ): PortfolioBucket[] {
-  const coreUsd = sumCategory(plans, "core");
-  const satUsd = sumCategory(plans, "satellite");
-  const yieldUsd = sumCategory(plans, "yield");
-
   const subtitles: Record<AssetCategory, string> = {
     core: "BTC",
     satellite: "ETH+SOL",
     yield: `${YIELD_ALTCOIN_UNIVERSE.length} ALT`,
   };
 
+  const categoryAmounts: Record<AssetCategory, number> = {
+    core: amounts.core,
+    satellite: amounts.satellite,
+    yield: amounts.yield,
+  };
+
   return (["core", "satellite", "yield"] as AssetCategory[]).map(
     (category) => {
-      const amountUsd =
-        category === "core"
-          ? coreUsd
-          : category === "satellite"
-            ? satUsd
-            : yieldUsd;
+      const amountUsd = roundUsd(categoryAmounts[category]);
       const meta = BUCKET_META[category];
 
       return {
@@ -136,7 +114,7 @@ function buildBuckets(
         label: meta.label,
         subtitle: subtitles[category],
         percent: pctOf(amountUsd, deployedCapital),
-        amountUsd: roundUsd(amountUsd),
+        amountUsd,
         barClass: meta.barClass,
         textClass: meta.textClass,
       };
@@ -144,57 +122,33 @@ function buildBuckets(
   );
 }
 
-function buildYieldAllocations(yieldBucketUsd: number): {
-  conviction: YieldAltcoinRow[];
-  excluded: YieldAltcoinRow[];
-} {
-  const rows: YieldAltcoinRow[] = YIELD_ALTCOIN_UNIVERSE.map((coin) => {
-    const rsi = mockYieldRsi(coin.symbol);
-    const passed = rsi < RSI_OVERSOLD_THRESHOLD;
-    return {
-      symbol: coin.symbol,
-      tag: coin.tag,
-      rsi,
-      passed,
-      amountUsd: 0,
-      shareOfYieldPercent: 0,
-    };
-  });
-
-  const conviction = rows.filter((r) => r.passed);
-  const excluded = rows.filter((r) => !r.passed);
-  const perCoin =
-    conviction.length > 0
-      ? roundUsd(yieldBucketUsd / conviction.length)
-      : 0;
-
-  conviction.forEach((row) => {
-    row.amountUsd = perCoin;
-    row.shareOfYieldPercent =
-      yieldBucketUsd > 0
-        ? Math.round((perCoin / yieldBucketUsd) * 1000) / 10
-        : 0;
-  });
-
-  return { conviction, excluded };
-}
-
-function buildNarrative(
-  buckets: PortfolioBucket[],
-  corePercent: number,
-  satPercent: number,
-  yieldPercent: number,
-): string[] {
-  const core = buckets.find((b) => b.category === "core");
-  const sat = buckets.find((b) => b.category === "satellite");
-  const yld = buckets.find((b) => b.category === "yield");
-
-  return [
-    `Alokácia BTC nastavená na ${corePercent}% vďaka 200WMA a F&G.`,
-    `Vyvážený režim — ${Math.round(corePercent)}/${Math.round(satPercent)} split medzi Core a satelitmi.`,
+function buildNarrative(input: {
+  corePercent: number;
+  satPercent: number;
+  yieldPercent: number;
+  yieldAmount: number;
+  convictionCount: number;
+  spilloverActive: boolean;
+  spilloverAmount: number;
+}): string[] {
+  const bullets = [
+    `Alokácia BTC nastavená na ${input.corePercent}% vďaka 200WMA a F&G.`,
+    `Vyvážený režim — ${Math.round(input.corePercent)}/${Math.round(input.satPercent)} split medzi Core a satelitmi.`,
     "Quality Bias: ETH CBBC > SOL → ETH +10 pp v satellite buckete.",
-    `Yield kôš ${yieldPercent}% — plynulá derivácia z 5 faktorov (${formatUsdShort(yld?.amountUsd ?? 0)}).`,
+    `Yield kôš ${input.yieldPercent}% — filter 3/3, váha skóre^2.5 (${formatUsdShort(input.yieldAmount)}).`,
   ];
+
+  if (input.spilloverActive) {
+    bullets.push(
+      `Spillover: ${formatUsdShort(input.spilloverAmount)} z Yield sa vrátilo do CORE/SAT (${input.convictionCount}/7 prešlo filtrom).`,
+    );
+  } else if (input.convictionCount > 0) {
+    bullets.push(
+      `${input.convictionCount} altcoinov prešlo filtrom 3/3 — exponenciálna distribúcia podľa fundamentu^2.5.`,
+    );
+  }
+
+  return bullets;
 }
 
 function formatUsdShort(value: number): string {
@@ -206,7 +160,25 @@ export function computePortfolioBucketing(input: {
   tokenPlans: MasterTokenPlan[];
 }): PortfolioBucketingResult {
   const { deployedCapital, tokenPlans } = input;
-  const buckets = buildBuckets(deployedCapital, tokenPlans);
+
+  const rawCore = sumCategory(tokenPlans, "core");
+  const rawSat = sumCategory(tokenPlans, "satellite");
+  const rawYield = sumCategory(tokenPlans, "yield");
+
+  const yieldAltcoins = buildYieldFilterAllocations(rawYield);
+
+  const spillover = applyYieldSpillover({
+    coreUsd: rawCore,
+    satelliteUsd: rawSat,
+    yieldUsd: rawYield,
+    convictionCount: yieldAltcoins.conviction.length,
+  });
+
+  const buckets = buildBuckets(deployedCapital, {
+    core: spillover.coreUsd,
+    satellite: spillover.satelliteUsd,
+    yield: spillover.yieldUsd,
+  });
 
   const coreBucket = buckets.find((b) => b.category === "core")!;
   const satBucket = buckets.find((b) => b.category === "satellite")!;
@@ -243,8 +215,6 @@ export function computePortfolioBucketing(input: {
     },
   ];
 
-  const yieldAltcoins = buildYieldAllocations(yieldBucket.amountUsd);
-
   const badgeSubtitle = `Core ${Math.round(coreBucket.percent)}% • Sat ${Math.round(satBucket.percent)}% • Yield ${Math.round(yieldBucket.percent)}%`;
 
   return {
@@ -256,11 +226,16 @@ export function computePortfolioBucketing(input: {
     yieldAltcoins,
     yieldBucketAmount: yieldBucket.amountUsd,
     yieldAltcoinCount: YIELD_ALTCOIN_UNIVERSE.length,
-    narrativeBullets: buildNarrative(
-      buckets,
-      coreBucket.percent,
-      satBucket.percent,
-      yieldBucket.percent,
-    ),
+    spilloverActive: spillover.spilloverActive,
+    spilloverAmount: spillover.spilloverAmount,
+    narrativeBullets: buildNarrative({
+      corePercent: coreBucket.percent,
+      satPercent: satBucket.percent,
+      yieldPercent: yieldBucket.percent,
+      yieldAmount: spillover.yieldUsd > 0 ? spillover.yieldUsd : rawYield,
+      convictionCount: yieldAltcoins.conviction.length,
+      spilloverActive: spillover.spilloverActive,
+      spilloverAmount: spillover.spilloverAmount,
+    }),
   };
 }
