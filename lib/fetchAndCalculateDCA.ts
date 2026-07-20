@@ -233,6 +233,8 @@ export async function fetchAndCalculateDCA(input: {
     factors: ultimate.factors,
     baseAllocationPercent: ultimate.baseAllocationDisplay,
     allocationPercent: ultimate.allocationDisplay,
+    dynamicAnchor: ultimate.dynamicAnchor,
+    dynamicSlope: ultimate.dynamicSlope,
     confidence: ultimate.confidence,
     confidenceMultiplier: ultimate.confidenceMultiplier,
     regimeKey:

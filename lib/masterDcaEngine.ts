@@ -5,6 +5,10 @@ import type {
   TokenMarketSnapshot,
 } from "@/lib/dcaMarketData";
 import { resolveActiveDcaTokens } from "@/lib/dcaMarketData";
+import {
+  computeDynamicAnchor,
+  computeDynamicSlope,
+} from "@/lib/dcaScoringEngine";
 
 export type ConfidenceLevel = "high" | "medium" | "low";
 export type MoneyMode = "CAPITULATION" | "ACCUMULATION" | "NEUTRAL" | "EUPHORIA";
@@ -65,6 +69,8 @@ export interface MasterDcaResult {
   factors: FactorScore[];
   baseAllocationPercent: number;
   allocationPercent: number;
+  dynamicAnchor: number;
+  dynamicSlope: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   capitalPipeline: CapitalPipeline;
@@ -239,11 +245,14 @@ function resolveConfidence(snapshot: DcaMarketSnapshot): ConfidenceLevel {
 
 function computeBaseAllocation(
   score: number,
+  distWmaPct: number,
+  atr14Pct: number,
   fearGreed: number,
   brakeActive: boolean,
-): number {
-  let base = 82 - score * 0.62;
-  base = clamp(base, 22, 80);
+): { base: number; dynamicAnchor: number; dynamicSlope: number } {
+  const dynamicAnchor = computeDynamicAnchor(distWmaPct);
+  const dynamicSlope = computeDynamicSlope(atr14Pct);
+  let base = clamp(dynamicAnchor - score * dynamicSlope, 22, 80);
 
   if (fearGreed <= 25 && score < 15) {
     base = 80;
@@ -255,7 +264,11 @@ function computeBaseAllocation(
     base *= 0.5;
   }
 
-  return Math.round(base * 10) / 10;
+  return {
+    base: Math.round(base * 10) / 10,
+    dynamicAnchor,
+    dynamicSlope,
+  };
 }
 
 function matrixSplit(fearGreed: number): { market: number; limit: number } {
@@ -483,11 +496,14 @@ export function computeMasterDcaEngine(input: {
   const confidence = resolveConfidence(snapshot);
   const confidenceMultiplier = CONFIDENCE_MULTIPLIERS[confidence];
 
-  const baseAllocationPercent = computeBaseAllocation(
-    confluenceScore,
-    fearGreed.value,
-    brakeActive,
-  );
+  const { base: baseAllocationPercent, dynamicAnchor, dynamicSlope } =
+    computeBaseAllocation(
+      confluenceScore,
+      distance200w,
+      marketData.btc.atr14d,
+      fearGreed.value,
+      brakeActive,
+    );
   const allocationPercent =
     Math.round(baseAllocationPercent * confidenceMultiplier * 10) / 10;
 
@@ -591,6 +607,8 @@ export function computeMasterDcaEngine(input: {
     factors,
     baseAllocationPercent,
     allocationPercent,
+    dynamicAnchor,
+    dynamicSlope,
     confidence,
     confidenceMultiplier,
     capitalPipeline: {

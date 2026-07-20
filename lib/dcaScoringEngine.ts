@@ -138,8 +138,65 @@ export function computeFinalScoreRaw(factors: RawFactorScores): number {
   );
 }
 
-export function computeBaseAllocation(finalScoreRaw: number): number {
-  return clamp(82 - finalScoreRaw * 0.62, 22, 80);
+/** Dynamic anchor bounds: deep below 200WMA → 95, extreme above → 65 */
+const ANCHOR_WMA_DIST_LOW = -30;
+const ANCHOR_WMA_DIST_HIGH = 100;
+const ANCHOR_MAX = 95;
+const ANCHOR_MIN = 65;
+
+/** Dynamic slope bounds: low ATR → 0.40, high ATR → 0.85 */
+const SLOPE_ATR_LOW = 0.5;
+const SLOPE_ATR_HIGH = 10;
+const SLOPE_MIN = 0.4;
+const SLOPE_MAX = 0.85;
+
+const ALLOCATION_CLAMP_MIN = 22;
+const ALLOCATION_CLAMP_MAX = 80;
+
+export interface DynamicAllocationParams {
+  dynamicAnchor: number;
+  dynamicSlope: number;
+}
+
+/** Strop alokácie odvodený od odchýlky ceny od 200WMA */
+export function computeDynamicAnchor(distWmaPct: number): number {
+  return clamp(
+    lerpScore(distWmaPct, ANCHOR_WMA_DIST_LOW, ANCHOR_WMA_DIST_HIGH, ANCHOR_MAX, ANCHOR_MIN),
+    ANCHOR_MIN,
+    ANCHOR_MAX,
+  );
+}
+
+/** Sila brzdenia odvodená od 14D ATR (volatilita) */
+export function computeDynamicSlope(atr14Pct: number): number {
+  return clamp(
+    lerpScore(atr14Pct, SLOPE_ATR_LOW, SLOPE_ATR_HIGH, SLOPE_MIN, SLOPE_MAX),
+    SLOPE_MIN,
+    SLOPE_MAX,
+  );
+}
+
+export function resolveDynamicAllocationParams(
+  technicals: MarketTechnicals,
+): DynamicAllocationParams {
+  return {
+    dynamicAnchor: computeDynamicAnchor(technicals.distWmaPct),
+    dynamicSlope: computeDynamicSlope(technicals.atr14Pct),
+  };
+}
+
+export function computeBaseAllocation(
+  finalScoreRaw: number,
+  technicals: MarketTechnicals,
+): DynamicAllocationParams & { baseAllocationRaw: number } {
+  const { dynamicAnchor, dynamicSlope } =
+    resolveDynamicAllocationParams(technicals);
+  const baseAllocationRaw = clamp(
+    dynamicAnchor - finalScoreRaw * dynamicSlope,
+    ALLOCATION_CLAMP_MIN,
+    ALLOCATION_CLAMP_MAX,
+  );
+  return { baseAllocationRaw, dynamicAnchor, dynamicSlope };
 }
 
 export function applyConfidenceMultiplier(

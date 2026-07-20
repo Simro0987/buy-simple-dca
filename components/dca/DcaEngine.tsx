@@ -119,6 +119,8 @@ export function DcaEngine({
             confluenceScore={displayResult.confluenceScore}
             baseAllocationPercent={displayResult.baseAllocationPercent}
             allocationPercent={displayResult.allocationPercent}
+            dynamicAnchor={displayResult.dynamicAnchor}
+            dynamicSlope={displayResult.dynamicSlope}
             confidence={displayResult.confidence}
             confidenceMultiplier={displayResult.confidenceMultiplier}
             investmentAmount={displayResult.capitalPipeline.dDeployedCapital}
@@ -132,9 +134,10 @@ export function DcaEngine({
             regimeLabel={displayResult.regimeLabel}
             baseAllocationPercent={displayResult.baseAllocationPercent}
             allocationPercent={displayResult.allocationPercent}
+            dynamicAnchor={displayResult.dynamicAnchor}
+            dynamicSlope={displayResult.dynamicSlope}
             confidence={displayResult.confidence}
             confidenceMultiplier={displayResult.confidenceMultiplier}
-            fearGreedValue={displayResult.fearGreedValue}
           />
 
           <ExecutionEngineCards plans={executionPlans} loading={loading} />

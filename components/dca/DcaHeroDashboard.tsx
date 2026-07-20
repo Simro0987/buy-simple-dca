@@ -13,6 +13,8 @@ interface DcaHeroDashboardProps {
   confluenceScore: number;
   baseAllocationPercent: number;
   allocationPercent: number;
+  dynamicAnchor: number;
+  dynamicSlope: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   investmentAmount: number;
@@ -44,6 +46,8 @@ export function DcaHeroDashboard({
   confluenceScore,
   baseAllocationPercent,
   allocationPercent,
+  dynamicAnchor,
+  dynamicSlope,
   confidence,
   confidenceMultiplier,
   investmentAmount,
@@ -118,7 +122,8 @@ export function DcaHeroDashboard({
               {animatedAllocation.toFixed(1)}%
             </p>
             <p className="mt-2 text-[11px] text-zinc-500">
-              base {baseAllocationPercent}% × {confidenceMultiplier.toFixed(2)}
+              anchor {dynamicAnchor.toFixed(2)} − score×{dynamicSlope.toFixed(2)} • ×{" "}
+              {confidenceMultiplier.toFixed(2)}
             </p>
             <p className="mt-4 text-xl font-bold text-emerald-400">
               {formatUsd(animatedInvestment)}

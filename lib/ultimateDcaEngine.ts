@@ -143,6 +143,8 @@ export interface UltimateDcaOutput {
   baseAllocationDisplay: number;
   allocationRaw: number;
   allocationDisplay: number;
+  dynamicAnchor: number;
+  dynamicSlope: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   deployedCapital: number;
@@ -168,7 +170,8 @@ export function computeUltimateDca(input: {
   const finalScoreRaw = computeFinalScoreRaw(factorValues);
   const confidenceMultiplier = CONFIDENCE_MULTIPLIERS[meta.confidence];
 
-  const baseAllocationRaw = computeBaseAllocation(finalScoreRaw);
+  const baseResult = computeBaseAllocation(finalScoreRaw, indicators);
+  const { baseAllocationRaw, dynamicAnchor, dynamicSlope } = baseResult;
   const allocationRaw = applyConfidenceMultiplier(
     baseAllocationRaw,
     confidenceMultiplier,
@@ -231,6 +234,8 @@ export function computeUltimateDca(input: {
     baseAllocationDisplay: Math.round(baseAllocationRaw * 10) / 10,
     allocationRaw,
     allocationDisplay: Math.round(allocationRaw * 10) / 10,
+    dynamicAnchor,
+    dynamicSlope,
     confidence: meta.confidence,
     confidenceMultiplier,
     deployedCapital,

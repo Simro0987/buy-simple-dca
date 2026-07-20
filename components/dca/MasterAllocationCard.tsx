@@ -22,9 +22,10 @@ interface MasterAllocationCardProps {
   regimeLabel: string;
   baseAllocationPercent: number;
   allocationPercent: number;
+  dynamicAnchor: number;
+  dynamicSlope: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
-  fearGreedValue: number;
 }
 
 const FACTOR_ICONS: Record<string, LucideIcon> = {
@@ -87,9 +88,10 @@ export function MasterAllocationCard({
   regimeLabel,
   baseAllocationPercent,
   allocationPercent,
+  dynamicAnchor,
+  dynamicSlope,
   confidence,
   confidenceMultiplier,
-  fearGreedValue,
 }: MasterAllocationCardProps) {
   const animatedReserve = useCountUp(cashReserve, 700);
   const animatedCapital = useCountUp(weeklyCapital, 700);
@@ -141,10 +143,11 @@ export function MasterAllocationCard({
           confluenceScore={confluenceScore}
           baseAllocationPercent={baseAllocationPercent}
           allocationPercent={allocationPercent}
+          dynamicAnchor={dynamicAnchor}
+          dynamicSlope={dynamicSlope}
           confidence={confidence}
           confidenceMultiplier={confidenceMultiplier}
           factors={factors}
-          fearGreedValue={fearGreedValue}
         />
       </div>
     </motion.section>

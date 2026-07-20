@@ -11,10 +11,11 @@ interface DcaAllocationAccordionProps {
   confluenceScore: number;
   baseAllocationPercent: number;
   allocationPercent: number;
+  dynamicAnchor: number;
+  dynamicSlope: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   factors: FactorScore[];
-  fearGreedValue: number;
 }
 
 export function DcaAllocationAccordion({
@@ -22,10 +23,11 @@ export function DcaAllocationAccordion({
   confluenceScore,
   baseAllocationPercent,
   allocationPercent,
+  dynamicAnchor,
+  dynamicSlope,
   confidence,
   confidenceMultiplier,
   factors,
-  fearGreedValue,
 }: DcaAllocationAccordionProps) {
   const [open, setOpen] = useState(false);
 
@@ -34,10 +36,11 @@ export function DcaAllocationAccordion({
     confluenceScore,
     baseAllocationPercent,
     allocationPercent,
+    dynamicAnchor,
+    dynamicSlope,
     confidence,
     confidenceMultiplier,
     factors,
-    fearGreedValue,
   });
 
   return (
