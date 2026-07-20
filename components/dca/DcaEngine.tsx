@@ -5,6 +5,7 @@ import { RefreshCw, ShoppingCart } from "lucide-react";
 import { useEffect, useMemo } from "react";
 import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
+import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { PortfolioBucketingCard } from "@/components/dca/PortfolioBucketingCard";
 import { usePortfolioBucketing } from "@/hooks/usePortfolioBucketing";
@@ -141,6 +142,17 @@ export function DcaEngine({
             investmentAmount={displayResult.capitalPipeline.dDeployedCapital}
           />
 
+          <MarketRegimeFactorPills
+            snapshot={snapshot}
+            loading={engineLoading}
+          />
+
+          <PortfolioBucketingCard
+            bucketing={bucketing}
+            loading={bucketingMetricsLoading}
+            metricsError={bucketingMetricsError}
+          />
+
           <MasterAllocationCard
             factors={displayResult.factors}
             confluenceScore={displayResult.confluenceScore}
@@ -153,12 +165,6 @@ export function DcaEngine({
             dynamicSlope={displayResult.dynamicSlope}
             confidence={displayResult.confidence}
             confidenceMultiplier={displayResult.confidenceMultiplier}
-          />
-
-          <PortfolioBucketingCard
-            bucketing={bucketing}
-            loading={bucketingMetricsLoading}
-            metricsError={bucketingMetricsError}
           />
 
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
