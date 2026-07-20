@@ -1,4 +1,4 @@
-import type { DcaMarketSnapshot } from "@/lib/dcaMarketData";
+import type { LiveMarketRegimeRawData } from "@/lib/fetchMarketRegimeFactors";
 import { clamp, lerpScore } from "@/lib/dcaTechnicalIndicators";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -15,6 +15,7 @@ export interface MarketRegimeFactor {
   displayValue: string;
   colorScore: number;
   icon: LucideIcon;
+  source: string;
 }
 
 export interface MarketRegimeFactorData {
@@ -22,14 +23,8 @@ export interface MarketRegimeFactorData {
   wma200: number;
   distWmaPct: number;
   factors: MarketRegimeFactor[];
-}
-
-function scoreCbbc(mayer: number): number {
-  if (mayer < 0.9) return 88;
-  if (mayer < 1.1) return 74;
-  if (mayer < 1.5) return 55;
-  if (mayer < 2.4) return 35;
-  return 15;
+  degraded: boolean;
+  fetchedAt: string;
 }
 
 function formatCompactUsd(value: number): string {
@@ -45,29 +40,19 @@ function formatCompactUsd(value: number): string {
   return `$${Math.round(value)}`;
 }
 
-function estimateLiquidityUsd(snapshot: DcaMarketSnapshot): number {
-  const btcCap = snapshot.tokens.BTC?.marketCap ?? 0;
-  if (btcCap > 0) {
-    return btcCap * 0.0035;
-  }
-
-  const price = snapshot.marketData.btc.price;
-  return price > 0 ? price * 21_000 : 0;
-}
-
 export function buildMarketRegimeFactors(
-  snapshot: DcaMarketSnapshot,
+  raw: LiveMarketRegimeRawData,
 ): MarketRegimeFactorData {
-  const btc = snapshot.marketData.btc;
-  const { mayerMultiple } = btc;
-  const price = snapshot.tokens.BTC?.price ?? btc.price;
-  const wma200 = btc.ma200w;
-  const distWmaPct =
-    wma200 > 0 ? ((price - wma200) / wma200) * 100 : 0;
-  const fearGreed = snapshot.fearGreed.value;
-  const cbbcScore = scoreCbbc(mayerMultiple);
-  const liquidityUsd = estimateLiquidityUsd(snapshot);
-  const volatilityPct = btc.atr14d;
+  const {
+    btcPrice,
+    wma200,
+    distWmaPct,
+    fearGreed,
+    cbbcScore,
+    liquidityUsd,
+    atr14Pct,
+    sources,
+  } = raw;
 
   const wmaColorScore = Math.round(
     lerpScore(distWmaPct, -30, 30, 12, 88),
@@ -78,13 +63,15 @@ export function buildMarketRegimeFactors(
     clamp(72 - Math.log10(Math.max(liquidityUsd, 1_000_000)) * 8, 20, 75),
   );
   const volatilityColorScore = Math.round(
-    lerpScore(volatilityPct, 0.5, 8, 25, 85),
+    lerpScore(atr14Pct, 0.5, 8, 25, 85),
   );
 
   return {
-    btcPrice: price,
+    btcPrice,
     wma200,
-    distWmaPct: Math.round(distWmaPct * 100) / 100,
+    distWmaPct,
+    degraded: raw.degraded,
+    fetchedAt: raw.fetchedAt,
     factors: [
       {
         id: "wma200",
@@ -92,6 +79,7 @@ export function buildMarketRegimeFactors(
         displayValue: `${distWmaPct >= 0 ? "+" : ""}${distWmaPct.toFixed(2)}%`,
         colorScore: wmaColorScore,
         icon: TrendingUp,
+        source: sources.wma200,
       },
       {
         id: "fear-greed",
@@ -99,6 +87,7 @@ export function buildMarketRegimeFactors(
         displayValue: String(Math.round(fearGreed)),
         colorScore: fgColorScore,
         icon: Gauge,
+        source: sources.fearGreed,
       },
       {
         id: "cbbc",
@@ -106,6 +95,7 @@ export function buildMarketRegimeFactors(
         displayValue: String(cbbcScore),
         colorScore: cbbcColorScore,
         icon: Shield,
+        source: sources.cbbc,
       },
       {
         id: "liquidity",
@@ -113,13 +103,15 @@ export function buildMarketRegimeFactors(
         displayValue: formatCompactUsd(liquidityUsd),
         colorScore: liquidityColorScore,
         icon: Droplets,
+        source: sources.liquidity,
       },
       {
         id: "volatility",
         label: "Volatilita",
-        displayValue: `${volatilityPct.toFixed(1)}%`,
+        displayValue: `${atr14Pct.toFixed(1)}%`,
         colorScore: volatilityColorScore,
         icon: Activity,
+        source: sources.volatility,
       },
     ],
   };

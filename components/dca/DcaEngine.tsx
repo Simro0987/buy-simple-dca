@@ -142,10 +142,7 @@ export function DcaEngine({
             investmentAmount={displayResult.capitalPipeline.dDeployedCapital}
           />
 
-          <MarketRegimeFactorPills
-            snapshot={snapshot}
-            loading={engineLoading}
-          />
+          <MarketRegimeFactorPills />
 
           <PortfolioBucketingCard
             bucketing={bucketing}
