@@ -1,15 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { RefreshCw, ShoppingCart } from "lucide-react";
-import { useEffect, useMemo } from "react";
-import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
+import {
+  DcaMarketRegimeCard,
+  DcaMoneyModeBar,
+} from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { PortfolioBucketingCard } from "@/components/dca/PortfolioBucketingCard";
-import { usePortfolioBucketing } from "@/hooks/usePortfolioBucketing";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
+import { usePortfolioBucketing } from "@/hooks/usePortfolioBucketing";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import { useDcaLiveEngine } from "@/hooks/useDcaLiveEngine";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -17,6 +18,8 @@ import { toExecutionPlans } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
+import { RefreshCw, ShoppingCart } from "lucide-react";
+import { useEffect, useMemo } from "react";
 
 interface DcaEngineProps {
   portfolioSymbols?: string[];
@@ -92,6 +95,21 @@ export function DcaEngine({
     void refreshLive();
   };
 
+  const heroProps = displayResult
+    ? {
+        regimeLabel: displayResult.regimeLabel,
+        regimeDescription: displayResult.regimeDescription,
+        moneyMode: displayResult.regimeLabel,
+        confluenceScore: displayResult.confluenceScore,
+        allocationPercent: displayResult.allocationPercent,
+        dynamicAnchor: displayResult.dynamicAnchor,
+        dynamicSlope: displayResult.dynamicSlope,
+        confidence: displayResult.confidence,
+        confidenceMultiplier: displayResult.confidenceMultiplier,
+        investmentAmount: displayResult.capitalPipeline.dDeployedCapital,
+      }
+    : null;
+
   return (
     <div className="space-y-5">
       <motion.div
@@ -121,33 +139,40 @@ export function DcaEngine({
         </button>
       </motion.div>
 
-      <WeeklyInvestmentCard
-        value={weeklyAmount}
-        onChange={setWeeklyBudget}
-      />
-
-      {displayResult && (
+      {displayResult && heroProps && (
         <>
-          <DcaHeroDashboard
-            regimeLabel={displayResult.regimeLabel}
-            regimeDescription={displayResult.regimeDescription}
-            moneyMode={displayResult.regimeLabel}
-            confluenceScore={displayResult.confluenceScore}
-            baseAllocationPercent={displayResult.baseAllocationPercent}
-            allocationPercent={displayResult.allocationPercent}
-            dynamicAnchor={displayResult.dynamicAnchor}
-            dynamicSlope={displayResult.dynamicSlope}
-            confidence={displayResult.confidence}
-            confidenceMultiplier={displayResult.confidenceMultiplier}
-            investmentAmount={displayResult.capitalPipeline.dDeployedCapital}
+          {/* 1. Money Mode header */}
+          <DcaMoneyModeBar
+            moneyMode={heroProps.moneyMode}
+            confluenceScore={heroProps.confluenceScore}
           />
 
+          {/* 2. Five market regime input factors */}
           <MarketRegimeFactorPills />
 
+          {/* 3. Market regime + Final Score (derived from factors) */}
+          <DcaMarketRegimeCard
+            regimeLabel={heroProps.regimeLabel}
+            regimeDescription={heroProps.regimeDescription}
+            confluenceScore={heroProps.confluenceScore}
+            allocationPercent={heroProps.allocationPercent}
+            dynamicAnchor={heroProps.dynamicAnchor}
+            dynamicSlope={heroProps.dynamicSlope}
+            confidence={heroProps.confidence}
+            confidenceMultiplier={heroProps.confidenceMultiplier}
+            investmentAmount={heroProps.investmentAmount}
+          />
+
+          {/* 4. Portfolio bucketing: Core / Sat / Yield + yield filter */}
           <PortfolioBucketingCard
             bucketing={bucketing}
             loading={bucketingMetricsLoading}
             metricsError={bucketingMetricsError}
+          />
+
+          <WeeklyInvestmentCard
+            value={weeklyAmount}
+            onChange={setWeeklyBudget}
           />
 
           <MasterAllocationCard
