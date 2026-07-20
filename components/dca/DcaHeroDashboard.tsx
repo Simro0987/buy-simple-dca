@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Shield, Zap } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
+import { getScoreColor } from "@/lib/dcaScoreColors";
 import { formatUsd } from "@/lib/data";
 
 interface DcaHeroDashboardProps {
@@ -20,23 +21,10 @@ interface DcaHeroDashboardProps {
   investmentAmount: number;
 }
 
-const CONFIDENCE_STYLES: Record<
-  ConfidenceLevel,
-  { label: string; className: string }
-> = {
-  high: {
-    label: "High",
-    className:
-      "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
-  },
-  medium: {
-    label: "Medium",
-    className: "border-amber-400/30 bg-amber-400/10 text-amber-300",
-  },
-  low: {
-    label: "Low",
-    className: "border-rose-400/30 bg-rose-500/15 text-rose-300",
-  },
+const CONFIDENCE_LABELS: Record<ConfidenceLevel, string> = {
+  high: "High",
+  medium: "Medium",
+  low: "Low",
 };
 
 export function DcaHeroDashboard({
@@ -52,7 +40,7 @@ export function DcaHeroDashboard({
   confidenceMultiplier,
   investmentAmount,
 }: DcaHeroDashboardProps) {
-  const conf = CONFIDENCE_STYLES[confidence];
+  const scoreColor = getScoreColor(confluenceScore);
   const animatedScore = useCountUp(confluenceScore, 700);
   const animatedAllocation = useCountUp(allocationPercent, 700);
   const animatedInvestment = useCountUp(investmentAmount, 700);
@@ -64,12 +52,18 @@ export function DcaHeroDashboard({
       transition={{ duration: 0.4, ease: "easeOut" }}
       className="space-y-3"
     >
-      <div className="flex items-center justify-between gap-3 rounded-full border border-emerald-400/35 bg-[#0a0a0c] px-4 py-2.5">
-        <span className="inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider text-emerald-400">
-          <Zap className="h-3.5 w-3.5 fill-emerald-400" />
+      <div
+        className={`flex items-center justify-between gap-3 rounded-full border bg-[#0a0a0c] px-4 py-2.5 transition-colors duration-700 ease-out ${scoreColor.badgeBorder} ${scoreColor.badgeBg}`}
+      >
+        <span
+          className={`inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-colors duration-700 ease-out ${scoreColor.badgeText}`}
+        >
+          <Zap className={`h-3.5 w-3.5 transition-colors duration-700 ease-out ${scoreColor.fill}`} />
           Money Mode: {moneyMode}
         </span>
-        <span className="text-[11px] font-medium text-zinc-500">
+        <span
+          className={`text-[11px] font-medium transition-colors duration-700 ease-out ${scoreColor.badgeText} opacity-80`}
+        >
           Score {confluenceScore}/100
         </span>
       </div>
@@ -85,10 +79,11 @@ export function DcaHeroDashboard({
             </p>
           </div>
           <span
-            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${conf.className}`}
+            className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors duration-700 ease-out ${scoreColor.badgeBorder} ${scoreColor.badgeBg} ${scoreColor.badgeText}`}
           >
             <Shield className="h-3 w-3" />
-            Confidence {conf.label} • ×{confidenceMultiplier.toFixed(2)}
+            Confidence {CONFIDENCE_LABELS[confidence]} • ×
+            {confidenceMultiplier.toFixed(2)}
           </span>
         </div>
 
@@ -98,17 +93,19 @@ export function DcaHeroDashboard({
               Final Score
             </p>
             <p className="mt-2 flex items-baseline gap-1">
-              <span className="text-5xl font-black tabular-nums leading-none text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.35)] transition-all duration-700 ease-out">
+              <span
+                className={`text-5xl font-black tabular-nums leading-none transition-colors duration-700 ease-out ${scoreColor.text}`}
+              >
                 {animatedScore.toFixed(1)}
               </span>
               <span className="text-lg font-medium text-zinc-600">/100</span>
             </p>
             <p className="mt-2 text-[10px] font-medium text-zinc-600">
-              0 = lacný • 100 = drahý
+              0 = lacný • 100 = drahý • {scoreColor.label}
             </p>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-zinc-800/90">
               <div
-                className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 ease-out"
+                className={`h-full rounded-full transition-all duration-700 ease-out ${scoreColor.bg}`}
                 style={{ width: `${confluenceScore}%` }}
               />
             </div>
@@ -122,10 +119,12 @@ export function DcaHeroDashboard({
               {animatedAllocation.toFixed(1)}%
             </p>
             <p className="mt-2 text-[11px] text-zinc-500">
-              anchor {dynamicAnchor.toFixed(2)} − score×{dynamicSlope.toFixed(2)} • ×{" "}
-              {confidenceMultiplier.toFixed(2)}
+              anchor {dynamicAnchor.toFixed(2)} − score×{dynamicSlope.toFixed(2)}{" "}
+              • × {confidenceMultiplier.toFixed(2)}
             </p>
-            <p className="mt-4 text-xl font-bold text-emerald-400">
+            <p
+              className={`mt-4 text-xl font-bold transition-colors duration-700 ease-out ${scoreColor.text}`}
+            >
               {formatUsd(animatedInvestment)}
             </p>
           </div>

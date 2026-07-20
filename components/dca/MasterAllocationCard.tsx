@@ -12,6 +12,7 @@ import {
 import { DcaAllocationAccordion } from "@/components/dca/DcaAllocationAccordion";
 import { useCountUp } from "@/hooks/useCountUp";
 import { formatUsd } from "@/lib/data";
+import { getScoreColor } from "@/lib/dcaScoreColors";
 import type { ConfidenceLevel, FactorScore } from "@/lib/masterDcaEngine";
 
 interface MasterAllocationCardProps {
@@ -46,17 +47,22 @@ function FactorPill({
   const Icon = FACTOR_ICONS[factor.id] ?? Gauge;
   const weightPct = Math.round(factor.weight * 100);
   const animatedScore = useCountUp(factor.score, 700);
+  const factorColor = getScoreColor(factor.score);
 
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, delay: 0.12 + index * 0.04 }}
-      className="flex min-w-[108px] shrink-0 flex-col rounded-2xl border border-emerald-400/20 bg-[#0a0a0c] px-3 py-3"
+      className={`flex min-w-[108px] shrink-0 flex-col rounded-2xl border bg-[#0a0a0c] px-3 py-3 transition-colors duration-700 ease-out ${factorColor.badgeBorder}`}
     >
       <div className="flex items-center justify-between gap-2">
-        <Icon className="h-3.5 w-3.5 text-emerald-400/70" />
-        <span className="text-sm font-bold tabular-nums text-emerald-400 transition-all duration-700 ease-out">
+        <Icon
+          className={`h-3.5 w-3.5 transition-colors duration-700 ease-out ${factorColor.icon}`}
+        />
+        <span
+          className={`text-sm font-bold tabular-nums transition-colors duration-700 ease-out ${factorColor.text}`}
+        >
           {Math.round(animatedScore)}
         </span>
       </div>
@@ -72,7 +78,7 @@ function FactorPill({
 
       <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
         <div
-          className="h-full rounded-full bg-emerald-400 transition-all duration-700 ease-out"
+          className={`h-full rounded-full transition-all duration-700 ease-out ${factorColor.bg}`}
           style={{ width: `${factor.score}%` }}
         />
       </div>
