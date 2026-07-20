@@ -2,17 +2,14 @@
 
 import { motion } from "framer-motion";
 import { RefreshCw, ShoppingCart } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { DcaHeroDashboard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
+import { useDcaLiveEngine } from "@/hooks/useDcaLiveEngine";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
-import {
-  fetchAndCalculateDCA,
-  type DcaLiveCalculation,
-} from "@/lib/fetchAndCalculateDCA";
 import { toExecutionPlans } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
@@ -36,61 +33,25 @@ export function DcaEngine({
   const setDcaResult = useAppStore((state) => state.setDcaResult);
   const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
 
-  const { result: tokenResult, snapshot, loading: engineLoading, refresh } = useDcaEngine({
+  const { snapshot, loading: engineLoading, refresh: refreshTokens } =
+    useDcaEngine({
+      portfolioSymbols,
+      dcaTransactions,
+    });
+
+  const {
+    result: liveResult,
+    loading: liveLoading,
+    refresh: refreshLive,
+  } = useDcaLiveEngine({
+    weeklyBudget: weeklyAmount,
     portfolioSymbols,
     dcaTransactions,
+    tokenSnapshot: snapshot?.tokens,
   });
 
-  const [liveCalc, setLiveCalc] = useState<DcaLiveCalculation | null>(null);
-  const [liveLoading, setLiveLoading] = useState(true);
-
-  const loadLiveDca = useCallback(async () => {
-    setLiveLoading(true);
-    try {
-      const calc = await fetchAndCalculateDCA({
-        weeklyBudget: weeklyAmount,
-        portfolioSymbols,
-        dcaTransactions,
-        tokenSnapshot: snapshot?.tokens,
-      });
-      setLiveCalc(calc);
-    } catch {
-      if (tokenResult) {
-        setLiveCalc({
-          ...tokenResult,
-          degraded: false,
-          valueScore: 0,
-          trendScore: 0,
-          momentumScore: 0,
-          riskScore: 0,
-          sentimentScore: 0,
-        });
-      }
-    } finally {
-      setLiveLoading(false);
-    }
-  }, [weeklyAmount, portfolioSymbols, dcaTransactions, snapshot?.tokens, tokenResult]);
-
-  useEffect(() => {
-    void loadLiveDca();
-    const interval = setInterval(() => {
-      void loadLiveDca();
-    }, 5 * 60_000);
-    return () => clearInterval(interval);
-  }, [loadLiveDca]);
-
-  const displayResult = useMemo(() => {
-    if (!liveCalc && !tokenResult) return null;
-    if (!liveCalc) return tokenResult;
-    if (!tokenResult) return liveCalc;
-
-    return {
-      ...liveCalc,
-      tokenPlans: tokenResult.tokenPlans,
-      advisor: tokenResult.advisor,
-      marketLimitSplit: liveCalc.marketLimitSplit,
-    };
-  }, [liveCalc, tokenResult]);
+  const loading = externalLoading || engineLoading || liveLoading;
+  const displayResult = liveResult;
 
   useEffect(() => {
     if (displayResult) {
@@ -98,8 +59,6 @@ export function DcaEngine({
       setExecutionPlans(toExecutionPlans(displayResult));
     }
   }, [displayResult, setDcaResult, setExecutionPlans]);
-
-  const loading = externalLoading || engineLoading || liveLoading;
 
   const executionPlans = useMemo(
     () => (displayResult ? toExecutionPlans(displayResult) : []),
@@ -113,8 +72,8 @@ export function DcaEngine({
   };
 
   const handleRefresh = () => {
-    void refresh();
-    void loadLiveDca();
+    void refreshTokens();
+    void refreshLive();
   };
 
   return (
@@ -130,7 +89,7 @@ export function DcaEngine({
             DCA & Dynamic Execution
           </p>
           <h2 className="text-xl font-bold text-white">
-            DCA Execution Engine
+            Master Dynamic Allocation
           </h2>
         </div>
         <button

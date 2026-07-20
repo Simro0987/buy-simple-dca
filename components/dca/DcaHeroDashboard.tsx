@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { Shield, Zap } from "lucide-react";
+import { useCountUp } from "@/hooks/useCountUp";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
 import { formatUsd } from "@/lib/data";
 
@@ -48,6 +49,9 @@ export function DcaHeroDashboard({
   investmentAmount,
 }: DcaHeroDashboardProps) {
   const conf = CONFIDENCE_STYLES[confidence];
+  const animatedScore = useCountUp(confluenceScore, 700);
+  const animatedAllocation = useCountUp(allocationPercent, 700);
+  const animatedInvestment = useCountUp(investmentAmount, 700);
 
   return (
     <motion.div
@@ -91,7 +95,7 @@ export function DcaHeroDashboard({
             </p>
             <p className="mt-2 flex items-baseline gap-1">
               <span className="text-5xl font-black leading-none text-emerald-400 drop-shadow-[0_0_20px_rgba(52,211,153,0.35)]">
-                {confluenceScore}
+                {Math.round(animatedScore)}
               </span>
               <span className="text-lg font-medium text-zinc-600">/100</span>
             </p>
@@ -99,11 +103,9 @@ export function DcaHeroDashboard({
               0 = lacný • 100 = drahý
             </p>
             <div className="mt-3 h-3 overflow-hidden rounded-full bg-zinc-800/90">
-              <motion.div
-                initial={{ width: 0 }}
-                animate={{ width: `${confluenceScore}%` }}
-                transition={{ duration: 0.8, ease: "easeOut" }}
-                className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400"
+              <div
+                className="h-full rounded-full bg-gradient-to-r from-emerald-600 to-emerald-400 transition-all duration-700 ease-out"
+                style={{ width: `${confluenceScore}%` }}
               />
             </div>
           </div>
@@ -113,13 +115,13 @@ export function DcaHeroDashboard({
               Alokácia
             </p>
             <p className="mt-2 text-5xl font-black leading-none text-white">
-              {allocationPercent}%
+              {animatedAllocation.toFixed(1)}%
             </p>
             <p className="mt-2 text-[11px] text-zinc-500">
               base {baseAllocationPercent}% × {confidenceMultiplier.toFixed(2)}
             </p>
             <p className="mt-4 text-xl font-bold text-emerald-400">
-              {formatUsd(investmentAmount)}
+              {formatUsd(animatedInvestment)}
             </p>
           </div>
         </div>

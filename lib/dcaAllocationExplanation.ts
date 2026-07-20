@@ -53,5 +53,5 @@ export function buildAllocationExplanation(input: {
   return `Režim ${regimeLabel} • skóre ${confluenceScore}/100.
 Vyhladená alokácia podľa vzorca 82 – skóre×0.62 • z ${baseAllocationPercent} % na ${allocationPercent} %${divergentNote}.
 
-Vzorec: Allocation % = 82 - (Score x 0.62), clamp [22 %, 80 %]. Override: Panic + score < 15 → 85 %; Eufória + score > 90 → 20 %. Confidence multiplier: High ×1.00 • Medium ×0.93 • Low ×0.85. Aktuálne: ${CONFIDENCE_LABELS[confidence]} ×${confidenceMultiplier.toFixed(2)}.${overrideBlock}`;
+Vzorec: Allocation % = 82 - (Score × 0.62), clamp [22 %, 80 %]. Makro režimy: CAPITULATION (Low ×0.85) • EUPHORIA (Medium ×0.93) • ostatné (High ×1.00). Aktuálne: ${CONFIDENCE_LABELS[confidence]} ×${confidenceMultiplier.toFixed(2)}.${overrideBlock}`;
 }

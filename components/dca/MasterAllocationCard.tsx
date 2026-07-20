@@ -53,11 +53,9 @@ export function MasterAllocationCard({
       transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
       className="rounded-2xl border border-white/5 bg-[#0d0d0f] p-5"
     >
-      <div className="mb-3">
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-          5 Faktorov • Váhy podľa režimu
-        </p>
-      </div>
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+        5 Faktorov
+      </p>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
         {factors.map((factor, index) => {
@@ -89,11 +87,9 @@ export function MasterAllocationCard({
               </div>
 
               <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
-                <motion.div
-                  initial={{ width: 0 }}
-                  animate={{ width: `${factor.score}%` }}
-                  transition={{ duration: 0.6, delay: 0.2 + index * 0.05 }}
-                  className="h-full rounded-full bg-emerald-400"
+                <div
+                  className="h-full rounded-full bg-emerald-400 transition-all duration-700 ease-out"
+                  style={{ width: `${factor.score}%` }}
                 />
               </div>
             </motion.div>
@@ -102,8 +98,9 @@ export function MasterAllocationCard({
       </div>
 
       <p className="mt-3 text-[10px] leading-relaxed text-zinc-600">
-        Váhy sa menia dynamicky podľa zisteného režimu (BULL / BEAR / SIDEWAYS /
-        PANIC / EUFÓRIA).
+        Váhy: Value 30% • Trend 20% • Sentiment 20% • Momentum 15% • Risk 15%.
+        Režim sa určuje z makro-metrik s 3% hysteréziou (CAPITULATION / BEAR /
+        SIDEWAYS / BULL / EUPHORIA).
       </p>
 
       <div className="mt-5 flex gap-4">

@@ -5,10 +5,11 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const { prices, fearGreed } = await fetchLiveDcaInputs();
+    const { dailyBars, weeklyCloses, fearGreed } = await fetchLiveDcaInputs();
     return NextResponse.json({
       success: true,
-      prices,
+      dailyBars,
+      weeklyCloses,
       fearGreed,
     });
   } catch (error) {
