@@ -1,13 +1,14 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Download, Settings, Upload, X } from "lucide-react";
+import { Download, RotateCcw, Settings, Upload, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import {
   downloadPortfolioBackup,
   readBackupFile,
 } from "@/lib/portfolioBackup";
 import type { PortfolioData } from "@/lib/portfolioStorage";
+import { TradingModeToggle } from "@/components/TradingModeToggle";
 import { interactiveButton } from "@/lib/motion";
 
 interface SettingsModalProps {
@@ -15,6 +16,7 @@ interface SettingsModalProps {
   portfolioData: PortfolioData;
   onClose: () => void;
   onImport: (data: PortfolioData) => void;
+  onResetAllData?: () => void;
 }
 
 export function SettingsModal({
@@ -22,16 +24,19 @@ export function SettingsModal({
   portfolioData,
   onClose,
   onImport,
+  onResetAllData,
 }: SettingsModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [status, setStatus] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
 
   useEffect(() => {
     if (!open) {
       setStatus(null);
+      setConfirmReset(false);
       return;
     }
 
@@ -91,6 +96,27 @@ export function SettingsModal({
             : "Import zlyhal. Skontroluj formát súboru.",
       });
     }
+  };
+
+  const handleReset = () => {
+    if (!onResetAllData) return;
+
+    if (!confirmReset) {
+      setConfirmReset(true);
+      setStatus({
+        type: "error",
+        message:
+          "Klikni znova na Reset All Data pre potvrdenie. Vymažú sa všetky transakcie a zostatky.",
+      });
+      return;
+    }
+
+    onResetAllData();
+    setConfirmReset(false);
+    setStatus({
+      type: "success",
+      message: "Portfólio bolo resetované. Všetky zostatky sú na 0.",
+    });
   };
 
   return (
@@ -154,6 +180,10 @@ export function SettingsModal({
                 alebo PC bez straty dát.
               </p>
 
+              <div className="mb-6">
+                <TradingModeToggle />
+              </div>
+
               <div className="space-y-3">
                 <motion.button
                   type="button"
@@ -182,6 +212,24 @@ export function SettingsModal({
                   className="hidden"
                   onChange={handleFileChange}
                 />
+
+                {onResetAllData && (
+                  <motion.button
+                    type="button"
+                    onClick={handleReset}
+                    {...interactiveButton}
+                    className={`flex w-full items-center justify-center gap-2 rounded-2xl border px-4 py-3.5 text-sm font-semibold transition-colors ${
+                      confirmReset
+                        ? "border-rose-400/50 bg-rose-500/20 text-rose-300"
+                        : "border-rose-400/20 bg-rose-500/10 text-rose-400 hover:bg-rose-500/15"
+                    }`}
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    {confirmReset
+                      ? "Potvrdiť Reset All Data"
+                      : "Reset All Data"}
+                  </motion.button>
+                )}
               </div>
 
               {status && (
