@@ -14,27 +14,29 @@ export function formatCopyAmount2(value: number): string {
 }
 
 /**
- * Limit purchase price — comma separator, trailing zeros trimmed.
- * - BTC-scale (≥1000): up to 2 decimals, omit fraction if zero (e.g. 1827,5 not 1827,0000)
- * - Altcoins (<1000): 2–4 decimals, only non-zero digits kept (e.g. 0,0845)
+ * Rounds to 4 decimal places and ensures the 4th digit is 1–9 (never 0).
+ * Uses +0.0001 tick bump when the rounded value would end in 0.
+ */
+export function normalizeLimitPrice(value: number): number {
+  if (value <= 0) return 0;
+
+  let ticks = Math.round(value * 10000);
+  if (ticks <= 0) return 0.0001;
+
+  if (ticks % 10 === 0) {
+    ticks += 1;
+  }
+
+  return ticks / 10000;
+}
+
+/**
+ * Limit purchase price — exactly 4 decimal places, comma separator,
+ * 4th decimal digit always 1–9.
  */
 export function formatCopyLimitPrice4(value: number): string {
-  const v = Math.max(0, value);
-  if (v === 0) return "0";
+  if (value <= 0) return "0,0000";
 
-  const maxDecimals = v >= 1000 ? 2 : 4;
-  const minDecimals = v >= 1000 ? 0 : 2;
-
-  const [intPart, rawFrac = ""] = v.toFixed(maxDecimals).split(".");
-  let fracPart = rawFrac.replace(/0+$/, "");
-
-  if (fracPart.length < minDecimals) {
-    fracPart = fracPart.padEnd(minDecimals, "0");
-  }
-
-  if (fracPart.length === 0) {
-    return intPart;
-  }
-
-  return `${intPart},${fracPart}`;
+  const normalized = normalizeLimitPrice(value);
+  return formatDecimal(normalized, 4);
 }

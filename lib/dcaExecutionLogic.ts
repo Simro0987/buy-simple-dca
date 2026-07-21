@@ -1,4 +1,5 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
+import { normalizeLimitPrice } from "@/lib/executionFormatting";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 
@@ -56,10 +57,6 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
 function formatPrice(price: number): string {
   if (price >= 1000) {
     return `$${price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
@@ -76,7 +73,7 @@ export function computeBaseMarketPct(finalScore: number): number {
 
 function limitFromAtr(spot: number, atrPct: number, multiplier: number): number {
   if (spot <= 0) return 0;
-  return round2(spot * (1 - (multiplier * atrPct) / 100));
+  return normalizeLimitPrice(spot * (1 - (multiplier * atrPct) / 100));
 }
 
 function pullbackPct(spot: number, limitPrice: number): number {
@@ -133,10 +130,11 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   }
 
   const pullbackPrice = spot > 0 ? spot * (1 - CORE_PULLBACK_PCT / 100) : 0;
-  const limitPrice =
+  const rawLimit =
     ema50 > 0 && ema50 < spot
-      ? round2(Math.max(ema50, pullbackPrice))
-      : round2(pullbackPrice);
+      ? Math.max(ema50, pullbackPrice)
+      : pullbackPrice;
+  const limitPrice = normalizeLimitPrice(rawLimit);
 
   const limitPullbackPct = pullbackPct(spot, limitPrice);
   const emaPosition = aboveEma50 ? "nad" : "pod";
