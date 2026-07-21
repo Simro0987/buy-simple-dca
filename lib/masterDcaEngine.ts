@@ -651,5 +651,10 @@ export function toExecutionPlans(result: MasterDcaResult) {
     hasLiveData: plan.hasLiveData,
     marketStatusFallback: plan.marketStatusFallback,
     confidence: result.confidence,
+    entrySignal: "",
+    splitExplanation: "",
+    minOrderRuleActive: plan.yieldMergeActive,
+    safetyBrakeActive: plan.brakeActive,
+    limitPullbackPct: 0,
   }));
 }

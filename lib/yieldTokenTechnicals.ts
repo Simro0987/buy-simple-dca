@@ -1,6 +1,7 @@
 import { DCA_YIELD_TOKENS } from "@/lib/dcaMarketData";
 import {
   clamp,
+  computeAtr14Pct,
   computeRsi14,
   computeSma,
   lerpScore,
@@ -77,6 +78,7 @@ export function buildYieldMetricsFromBars(
   const rsi = Math.round(computeRsi14(closes) * 10) / 10;
   const priceVsSma14Pct =
     Math.round(((price / sma14 - 1) * 100) * 10) / 10;
+  const atr14Pct = Math.round(computeAtr14Pct(bars) * 10) / 10;
   const fundamentalScore = computeFundamentalScore(
     bars,
     rsi,
@@ -92,6 +94,7 @@ export function buildYieldMetricsFromBars(
     sma14: Math.round(sma14 * 100) / 100,
     priceVsSma14Pct,
     fundamentalScore,
+    atr14Pct,
     live: true,
     fetchedAt: new Date().toISOString(),
   };

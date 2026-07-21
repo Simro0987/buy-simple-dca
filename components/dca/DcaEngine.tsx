@@ -78,13 +78,15 @@ export function DcaEngine({
         ? buildFinalExecutionOrders({
             bucketing,
             deployedCapital: displayResult.capitalPipeline.dDeployedCapital,
+            finalScore: displayResult.confluenceScore,
             fearGreedValue: displayResult.fearGreedValue,
             brakeActive: displayResult.brakeActive,
             confidence: displayResult.confidence,
             tokenPlans: displayResult.tokenPlans,
+            marketData: snapshot?.marketData ?? null,
           })
         : [],
-    [displayResult, bucketing],
+    [displayResult, bucketing, snapshot?.marketData],
   );
 
   useEffect(() => {

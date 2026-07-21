@@ -24,6 +24,7 @@ export interface YieldTokenMetrics {
   sma14: number;
   priceVsSma14Pct: number;
   fundamentalScore: number;
+  atr14Pct?: number;
   live?: boolean;
   fetchedAt?: string;
 }

@@ -1,21 +1,18 @@
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { ALL_DCA_TOKENS } from "@/lib/dcaMarketData";
+import {
+  buildExecutionTokenInput,
+  resolveCategoryExecutionSplit,
+  toExecutionMarketContext,
+  type ExecutionMarketContext,
+} from "@/lib/dcaExecutionLogic";
 import type { PortfolioBucketingResult } from "@/lib/dcaPortfolioBucketing";
 import type { ConfidenceLevel, MasterTokenPlan } from "@/lib/masterDcaEngine";
 import type { AssetCategory } from "@/lib/portfolioStorage";
-
-const YIELD_RSI_MERGE_THRESHOLD = 38;
+import type { MarketDataServicePayload } from "@/lib/dcaMarketData";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
-}
-
-function matrixSplit(fearGreed: number): { market: number; limit: number } {
-  if (fearGreed <= 30) return { market: 70, limit: 30 };
-  if (fearGreed >= 75) return { market: 20, limit: 80 };
-  const t = (fearGreed - 30) / 45;
-  const market = Math.round(70 - t * 50);
-  return { market, limit: 100 - market };
 }
 
 interface AmountRow {
@@ -23,7 +20,11 @@ interface AmountRow {
   name: string;
   category: AssetCategory;
   amountUsd: number;
+  spotPrice: number;
   rsi14: number | null;
+  atr14dPct: number | null;
+  filtersPassedCount?: number;
+  fundamentalScore?: number;
 }
 
 function collectAmountRows(bucketing: PortfolioBucketingResult): AmountRow[] {
@@ -33,14 +34,18 @@ function collectAmountRows(bucketing: PortfolioBucketingResult): AmountRow[] {
       name: bucketing.coreToken.name,
       category: "core",
       amountUsd: bucketing.coreToken.amountUsd,
+      spotPrice: 0,
       rsi14: null,
+      atr14dPct: null,
     },
     ...bucketing.satelliteTokens.map((sat) => ({
       symbol: sat.symbol,
       name: sat.name,
       category: "satellite" as const,
       amountUsd: sat.amountUsd,
+      spotPrice: 0,
       rsi14: null,
+      atr14dPct: null,
     })),
   ];
 
@@ -51,7 +56,11 @@ function collectAmountRows(bucketing: PortfolioBucketingResult): AmountRow[] {
       name: conviction.name,
       category: "yield",
       amountUsd: conviction.amountUsd,
+      spotPrice: conviction.price,
       rsi14: conviction.rsi,
+      atr14dPct: conviction.atr14Pct ?? null,
+      filtersPassedCount: conviction.filtersPassedCount,
+      fundamentalScore: conviction.fundamentalScore,
     });
   }
 
@@ -78,53 +87,32 @@ function reconcileToTarget(rows: AmountRow[], targetTotal: number): AmountRow[] 
   return adjusted;
 }
 
-function resolveMarketLimitShares(input: {
-  category: AssetCategory;
-  rsi14: number | null;
-  brakeActive: boolean;
-  fearGreedValue: number;
-  existingPlan?: MasterTokenPlan;
-}): { marketShare: number; limitShare: number; yieldMergeActive: boolean } {
-  if (input.existingPlan) {
-    return {
-      marketShare: input.existingPlan.marketShare,
-      limitShare: input.existingPlan.limitShare,
-      yieldMergeActive: input.existingPlan.yieldMergeActive,
-    };
-  }
+function splitUsdAmounts(
+  totalUsd: number,
+  marketShare: number,
+  limitShare: number,
+): { marketUsd: number; limitUsd: number } {
+  if (totalUsd <= 0) return { marketUsd: 0, limitUsd: 0 };
 
-  const base = matrixSplit(input.fearGreedValue);
-  let marketShare = base.market;
-  let limitShare = base.limit;
-
-  const yieldMerge =
-    input.category === "yield" &&
-    input.rsi14 != null &&
-    input.rsi14 < YIELD_RSI_MERGE_THRESHOLD;
-
-  if (yieldMerge) {
-    marketShare = 100;
-    limitShare = 0;
-  } else if (input.brakeActive) {
-    marketShare = Math.round(marketShare * 0.5);
-    limitShare = 100 - marketShare;
-  }
-
-  return { marketShare, limitShare, yieldMergeActive: yieldMerge };
+  const marketUsd = roundUsd(totalUsd * (marketShare / 100));
+  const limitUsd = roundUsd(totalUsd - marketUsd);
+  return { marketUsd, limitUsd };
 }
 
 export interface BuildFinalExecutionOrdersInput {
   bucketing: PortfolioBucketingResult;
   deployedCapital: number;
+  finalScore: number;
   fearGreedValue: number;
   brakeActive: boolean;
   confidence: ConfidenceLevel;
   tokenPlans: MasterTokenPlan[];
+  marketData?: MarketDataServicePayload | null;
 }
 
 /**
  * Derived execution payload: CORE (BTC) + SATELLITES (ETH, SOL) + YIELD conviction only.
- * Excluded yield tokens never appear. Spillover-inflated core/sat amounts are respected.
+ * Category-specific logic trees drive MKT/LMT split, limit targets, and entry signals.
  */
 export function buildFinalExecutionOrders(
   input: BuildFinalExecutionOrdersInput,
@@ -134,6 +122,8 @@ export function buildFinalExecutionOrders(
 
   const planBySymbol = new Map(input.tokenPlans.map((plan) => [plan.symbol, plan]));
   const defBySymbol = new Map(ALL_DCA_TOKENS.map((token) => [token.symbol, token]));
+  const marketContext: ExecutionMarketContext | null =
+    toExecutionMarketContext(input.marketData ?? null);
 
   const reconciled = reconcileToTarget(
     collectAmountRows(bucketing),
@@ -146,26 +136,37 @@ export function buildFinalExecutionOrders(
       const existing = planBySymbol.get(row.symbol);
       const def = defBySymbol.get(row.symbol);
       const category = row.category;
-      const rsi14 = row.rsi14 ?? existing?.rsi14 ?? null;
+      const spotPrice =
+        existing?.spotPrice ||
+        row.spotPrice ||
+        (row.symbol === "BTC" ? marketContext?.btc.price ?? 0 : 0);
 
-      const { marketShare, limitShare, yieldMergeActive } =
-        resolveMarketLimitShares({
-          category,
-          rsi14,
-          brakeActive: input.brakeActive,
-          fearGreedValue: input.fearGreedValue,
-          existingPlan: existing,
-        });
+      const tokenInput = buildExecutionTokenInput({
+        symbol: row.symbol,
+        category,
+        finalScore: input.finalScore,
+        fearGreedValue: input.fearGreedValue,
+        brakeActive: input.brakeActive,
+        spotPrice,
+        rsi14: row.rsi14 ?? existing?.rsi14 ?? null,
+        atr14dPct: row.atr14dPct ?? existing?.atr14d ?? null,
+        marketContext,
+        filtersPassedCount: row.filtersPassedCount,
+        fundamentalScore: row.fundamentalScore,
+      });
 
+      const split = resolveCategoryExecutionSplit(tokenInput);
       const totalUsd = row.amountUsd;
-      const marketUsd = roundUsd(totalUsd * (marketShare / 100));
-      const limitUsd = roundUsd(totalUsd - marketUsd);
+      const { marketUsd, limitUsd } = splitUsdAmounts(
+        totalUsd,
+        split.marketShare,
+        split.limitShare,
+      );
+
       const weightPercent =
         deployedCapital > 0
           ? Math.round((totalUsd / deployedCapital) * 1000) / 10
           : 0;
-
-      const spotPrice = existing?.spotPrice ?? 0;
 
       return {
         symbol: row.symbol,
@@ -176,17 +177,23 @@ export function buildFinalExecutionOrders(
         totalUsd,
         marketUsd,
         limitUsd,
-        marketShare,
-        limitShare,
-        limitPrice: existing?.limitPrice ?? 0,
-        whyLimit: existing?.whyLimit ?? "",
-        spotPrice,
+        marketShare: split.marketShare,
+        limitShare: split.limitShare,
+        limitPrice: split.limitPrice,
+        whyLimit: split.whyLimit,
+        spotPrice: spotPrice || existing?.spotPrice || 0,
         change24h: existing?.change24h ?? 0,
-        yieldMergeActive,
-        brakeActive: input.brakeActive,
-        hasLiveData: existing?.hasLiveData ?? false,
-        marketStatusFallback: existing?.marketStatusFallback ?? spotPrice <= 0,
+        yieldMergeActive: split.yieldMergeActive,
+        brakeActive: split.safetyBrakeActive || input.brakeActive,
+        hasLiveData: existing?.hasLiveData ?? spotPrice > 0,
+        marketStatusFallback:
+          existing?.marketStatusFallback ?? (existing?.spotPrice ?? spotPrice) <= 0,
         confidence: input.confidence,
+        entrySignal: split.entrySignal,
+        splitExplanation: split.splitExplanation,
+        minOrderRuleActive: split.minOrderRuleActive,
+        safetyBrakeActive: split.safetyBrakeActive,
+        limitPullbackPct: split.limitPullbackPct,
       };
     });
 }

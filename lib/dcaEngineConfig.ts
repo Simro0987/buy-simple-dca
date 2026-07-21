@@ -25,6 +25,11 @@ export interface TokenExecutionPlan {
   hasLiveData: boolean;
   marketStatusFallback: boolean;
   confidence: ConfidenceLevel;
+  entrySignal: string;
+  splitExplanation: string;
+  minOrderRuleActive: boolean;
+  safetyBrakeActive: boolean;
+  limitPullbackPct: number;
 }
 
 export interface RegimeFactorDisplay {

@@ -193,6 +193,30 @@ function ExecutionOrderCard({
         </div>
       </div>
 
+      {plan.entrySignal && (
+        <p className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[10px] font-medium leading-relaxed text-emerald-400 transition-all duration-300 ease-in-out">
+          {plan.entrySignal}
+        </p>
+      )}
+
+      {plan.minOrderRuleActive && plan.splitExplanation && (
+        <p className="mb-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-300 transition-all duration-300 ease-in-out">
+          {plan.splitExplanation}
+        </p>
+      )}
+
+      {!plan.minOrderRuleActive && plan.splitExplanation && (
+        <p className="mb-3 text-[10px] font-medium leading-relaxed text-zinc-500 transition-all duration-300 ease-in-out">
+          {plan.splitExplanation}
+        </p>
+      )}
+
+      {plan.safetyBrakeActive && (
+        <p className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[10px] text-amber-400/90 transition-all duration-300 ease-in-out">
+          Safety Brake: BTC vysoko nad 200D SMA — posilnený Limit podiel
+        </p>
+      )}
+
       <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-zinc-800/80">
         <motion.div
           layout
