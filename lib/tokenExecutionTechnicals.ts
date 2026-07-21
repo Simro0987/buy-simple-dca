@@ -1,5 +1,9 @@
 import { ALL_DCA_TOKENS } from "@/lib/dcaMarketData";
-import { fetchBinanceKlines, type OhlcBar } from "@/lib/market-data/fetchKlines";
+import {
+  BINANCE_KLINE_LIMIT,
+  fetchBinanceKlines,
+  type OhlcBar,
+} from "@/lib/market-data/fetchKlines";
 import {
   computeAtr14Pct,
   computeEma,
@@ -103,18 +107,19 @@ export function buildTokenExecutionTechnicalsFromBars(
   symbol: string,
   bars: OhlcBar[],
 ): TokenExecutionTechnicals | null {
-  if (bars.length < 30) return null;
+  if (bars.length < 16) return null;
 
-  const closes = bars.map((bar) => bar.close);
+  const recentBars = bars.slice(-BINANCE_KLINE_LIMIT);
+  const closes = recentBars.map((bar) => bar.close);
   const price = closes[closes.length - 1];
   if (price <= 0) return null;
 
   const rsi14 = round1(computeRsi14(closes));
-  const atr14dPct = round1(computeAtr14Pct(bars));
+  const atr14dPct = round1(computeAtr14Pct(recentBars));
   const ema50 = round2(computeEma(closes, 50));
   const sma14 = round2(computeSma(closes, 14));
   const sma200 = round2(computeSma(closes, 200));
-  const supports = pickSupportsFromBars(price, bars, ema50, sma14, sma200);
+  const supports = pickSupportsFromBars(price, recentBars, ema50, sma14, sma200);
 
   return {
     symbol,
@@ -168,12 +173,16 @@ export async function fetchTokenExecutionTechnicals(
 
   try {
     if (token.binanceSymbol) {
-      const bars = await fetchBinanceKlines(token.binanceSymbol, "1d", 120);
+      const bars = await fetchBinanceKlines(
+        token.binanceSymbol,
+        "1d",
+        BINANCE_KLINE_LIMIT,
+      );
       const technicals = buildTokenExecutionTechnicalsFromBars(symbol, bars);
       if (technicals) return technicals;
     }
 
-    const cgBars = await fetchCoinGeckoDailyBars(token.coingeckoId, 120);
+    const cgBars = await fetchCoinGeckoDailyBars(token.coingeckoId, BINANCE_KLINE_LIMIT);
     return buildTokenExecutionTechnicalsFromBars(symbol, cgBars);
   } catch {
     return null;

@@ -11,10 +11,12 @@ type RawKline = [number, string, string, string, string, string, ...unknown[]];
 
 const BINANCE_KLINES_BASE = "https://data-api.binance.vision/api/v3/klines";
 
+export const BINANCE_KLINE_LIMIT = 30;
+
 export async function fetchBinanceKlines(
   symbol: string,
   interval = "1d",
-  limit = 120,
+  limit = BINANCE_KLINE_LIMIT,
 ): Promise<OhlcBar[]> {
   const url = `${BINANCE_KLINES_BASE}?symbol=${symbol}&interval=${interval}&limit=${limit}`;
   const res = await fetch(url, { cache: "no-store" });

@@ -2,7 +2,10 @@ import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 import type { SupportResistanceLevels } from "@/lib/supportResistanceLevels";
 import { formatSupportResistanceSummary } from "@/lib/supportResistanceLevels";
-import { LIMIT_VALIDITY_INSTRUCTION } from "@/lib/limitDepthEngine";
+import {
+  LIMIT_VALIDITY_INSTRUCTION,
+  SEVEN_DAY_CALIBRATION_NARRATIVE,
+} from "@/lib/limitDepthEngine";
 import { formatDecimal, formatSignedPct } from "@/lib/numberFormat";
 
 export interface LimitReasoningInput {
@@ -149,7 +152,7 @@ export function buildDynamicLimitReasoning(input: LimitReasoningInput): string {
     ? formatSupportResistanceSummary(input.supportResistance)
     : null;
 
-  const parts = [base];
+  const parts = [SEVEN_DAY_CALIBRATION_NARRATIVE, base];
   if (srSummary && srSummary !== "S/R úrovne sa načítavajú…") {
     parts.push(`S/R: ${srSummary}.`);
   }

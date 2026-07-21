@@ -392,7 +392,6 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
 }
 
 function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
-  const spot = input.spotPrice;
   const rsi = input.rsi14;
   const atrPct = input.atr14dPct;
   const filtersPassed = input.filtersPassedCount ?? 0;
