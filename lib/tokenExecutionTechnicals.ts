@@ -14,6 +14,7 @@ import {
 } from "@/lib/dcaTechnicalIndicators";
 import { detectMacroTrend, type MacroTrend } from "@/lib/macroTrend";
 import { detectShortTermTrend, type ShortTermTrend } from "@/lib/shortTermTrend";
+import { computePanicWickStats } from "@/lib/panicWickAnalysis";
 
 export interface TokenExecutionTechnicals {
   symbol: string;
@@ -28,6 +29,8 @@ export interface TokenExecutionTechnicals {
   sma200: number;
   macroTrend: MacroTrend | null;
   shortTermTrend: ShortTermTrend | null;
+  averagePanicWickPct: number | null;
+  redDayWickCount: number;
   support1: number | null;
   support2: number | null;
   support1Source: string;
@@ -133,6 +136,7 @@ export function buildTokenExecutionTechnicalsFromBars(
   const sma200 = round2(computeSma(closes, 200));
   const macroTrend = detectMacroTrend(price, sma200);
   const shortTermTrend = detectShortTermTrend(price, ema21, atr14dPct);
+  const panicWick = computePanicWickStats(recentBars);
   const supports = pickSupportsFromBars(price, recentBars, ema50, sma14, sma200);
 
   return {
@@ -148,6 +152,8 @@ export function buildTokenExecutionTechnicalsFromBars(
     sma200,
     macroTrend,
     shortTermTrend,
+    averagePanicWickPct: panicWick.averagePanicWickPct,
+    redDayWickCount: panicWick.redDayCount,
     support1: supports.support1 ? round2(supports.support1) : null,
     support2: supports.support2 ? round2(supports.support2) : null,
     support1Source: supports.support1Source,

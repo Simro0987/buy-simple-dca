@@ -1,11 +1,11 @@
+import { formatRsi } from "@/lib/numberFormat";
+
 /** RSI ≥ this value → limit stays at S1 (no S2 blend). */
 export const RSI_S1_HOLD_LEVEL = 50;
 
 /** RSI blend corridor: from 50 down toward 15 maps 0 → 100 % toward S2. */
 export const RSI_BLEND_START = RSI_S1_HOLD_LEVEL;
 export const RSI_BLEND_END = 15;
-
-import { formatRsi } from "@/lib/numberFormat";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));

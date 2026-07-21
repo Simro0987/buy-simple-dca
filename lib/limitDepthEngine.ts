@@ -16,6 +16,10 @@ import {
   type ShortTermTrend,
 } from "@/lib/shortTermTrend";
 import {
+  buildPanicWickNarrative,
+  resolvePanicWickLimit,
+} from "@/lib/panicWickAnalysis";
+import {
   computeSupportResistance,
   SNAP_ABOVE_SUPPORT_PCT,
   type SupportResistanceLevels,
@@ -153,6 +157,8 @@ export function computeAutonomousLimit(input: {
   distSma200Pct?: number | null;
   macroTrend?: MacroTrend | null;
   shortTermTrend?: ShortTermTrend | null;
+  averagePanicWickPct?: number | null;
+  redDayWickCount?: number;
 }): AutonomousLimitResult | null {
   void input.symbol;
   void input.category;
@@ -194,21 +200,50 @@ export function computeAutonomousLimit(input: {
     return null;
   }
 
-  const { limitPrice, blendFactor, atrGuardrailApplied } = resolution;
+  const { limitPrice: interpolatedPrice, blendFactor, atrGuardrailApplied: interpGuardrail } =
+    resolution;
   const badge = resolveFluidLimitBadge(blendFactor, input.rsi14);
+
+  let limitPrice = interpolatedPrice;
+  let atrGuardrailApplied = interpGuardrail;
+  let panicWickNarrative: string | null = null;
+
+  if (
+    badge.mode === "deep_wick" &&
+    input.averagePanicWickPct != null &&
+    input.averagePanicWickPct > 0
+  ) {
+    const panic = resolvePanicWickLimit({
+      spotPrice: input.spotPrice,
+      averagePanicWickPct: input.averagePanicWickPct,
+      atr14dPct: input.atr14dPct,
+    });
+    limitPrice = panic.limitPrice;
+    atrGuardrailApplied = panic.atrGuardrailApplied;
+    panicWickNarrative = buildPanicWickNarrative({
+      averagePanicWickPct: input.averagePanicWickPct,
+      redDayCount: input.redDayWickCount ?? 0,
+      atrGuardrailApplied: panic.atrGuardrailApplied,
+    });
+  }
+
   const limitPullbackPct =
     input.spotPrice > 0
       ? round1(((input.spotPrice - limitPrice) / input.spotPrice) * 100)
       : 0;
 
-  const narrative = buildRsiInterpolationNarrative({
-    rsi14: input.rsi14,
-    blendFactor,
-    atrGuardrailApplied,
-    limitPrice,
-  });
+  const narrative = panicWickNarrative
+    ? panicWickNarrative
+    : buildRsiInterpolationNarrative({
+        rsi14: input.rsi14,
+        blendFactor,
+        atrGuardrailApplied,
+        limitPrice,
+      });
 
-  const snapNote = atrGuardrailApplied
+  const snapNote = panicWickNarrative
+    ? panicWickNarrative
+    : atrGuardrailApplied
     ? `Limit korigovaný 7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14) — interpolácia S1→S2 presiahla 7-dňový dosah.`
     : input.shortTermTrend === "sideways"
       ? "Týždenný SIDEWAYS trend — limit defenzívne na S1, bez lovu hlbokých knotov."

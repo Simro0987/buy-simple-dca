@@ -95,6 +95,8 @@ export interface ExecutionTokenInput {
   macroTrend?: MacroTrend | null;
   shortTermTrend?: ShortTermTrend | null;
   ema21?: number | null;
+  averagePanicWickPct?: number | null;
+  redDayWickCount?: number;
   support1?: number | null;
   support2?: number | null;
   support1Source?: string;
@@ -246,6 +248,8 @@ function resolveAutonomousLimitFields(
     distSma200Pct: input.distSma200Pct,
     macroTrend: input.macroTrend,
     shortTermTrend: input.shortTermTrend,
+    averagePanicWickPct: input.averagePanicWickPct,
+    redDayWickCount: input.redDayWickCount,
   });
 
   if (!autonomous) return null;
@@ -791,6 +795,8 @@ export function buildExecutionTokenInput(input: {
     sma200: number;
     macroTrend?: MacroTrend | null;
     shortTermTrend?: ShortTermTrend | null;
+    averagePanicWickPct?: number | null;
+    redDayWickCount?: number;
     support1: number | null;
     support2: number | null;
     support1Source: string;
@@ -836,6 +842,8 @@ export function buildExecutionTokenInput(input: {
       distSma200Pct: ctx.btc.distSma200Pct,
       macroTrend: tech?.macroTrend ?? null,
       shortTermTrend: tech?.shortTermTrend ?? null,
+      averagePanicWickPct: tech?.averagePanicWickPct ?? null,
+      redDayWickCount: tech?.redDayWickCount ?? 0,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
@@ -855,6 +863,8 @@ export function buildExecutionTokenInput(input: {
       sma200: tech?.sma200,
       macroTrend: tech?.macroTrend ?? null,
       shortTermTrend: tech?.shortTermTrend ?? null,
+      averagePanicWickPct: tech?.averagePanicWickPct ?? null,
+      redDayWickCount: tech?.redDayWickCount ?? 0,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
@@ -875,6 +885,8 @@ export function buildExecutionTokenInput(input: {
       sma200: tech?.sma200,
       macroTrend: tech?.macroTrend ?? null,
       shortTermTrend: tech?.shortTermTrend ?? null,
+      averagePanicWickPct: tech?.averagePanicWickPct ?? null,
+      redDayWickCount: tech?.redDayWickCount ?? 0,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
@@ -894,6 +906,8 @@ export function buildExecutionTokenInput(input: {
     sma200: tech?.sma200,
     macroTrend: tech?.macroTrend ?? null,
     shortTermTrend: tech?.shortTermTrend ?? null,
+    averagePanicWickPct: tech?.averagePanicWickPct ?? null,
+    redDayWickCount: tech?.redDayWickCount ?? 0,
     support1: tech?.support1,
     support2: tech?.support2,
     support1Source: tech?.support1Source,
