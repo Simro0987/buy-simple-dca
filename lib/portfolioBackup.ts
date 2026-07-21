@@ -1,13 +1,16 @@
-import type { PortfolioData } from "@/lib/portfolioStorage";
+import {
+  normalizePortfolioData,
+  type PortfolioData,
+} from "@/lib/portfolioStorage";
 
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 export const BACKUP_FILENAME = "portfolio-backup.json";
 
 export interface PortfolioBackup {
   version: number;
   exportedAt: string;
   app: string;
-  holdings: PortfolioData["holdings"];
+  assets: PortfolioData["assets"];
   transactions: PortfolioData["transactions"];
 }
 
@@ -16,7 +19,7 @@ export function createPortfolioBackup(data: PortfolioData): PortfolioBackup {
     version: BACKUP_VERSION,
     exportedAt: new Date().toISOString(),
     app: "Edge Trading",
-    holdings: { ...data.holdings },
+    assets: [...data.assets],
     transactions: [...data.transactions],
   };
 }
@@ -34,21 +37,7 @@ export function downloadPortfolioBackup(data: PortfolioData): void {
   URL.revokeObjectURL(url);
 }
 
-function isValidHoldings(value: unknown): value is PortfolioData["holdings"] {
-  if (!value || typeof value !== "object") return false;
-
-  const record = value as Record<string, unknown>;
-  const symbols = ["BTC", "ETH", "SOL"] as const;
-
-  return symbols.every((symbol) => {
-    const amount = record[symbol];
-    return typeof amount === "number" && Number.isFinite(amount) && amount >= 0;
-  });
-}
-
-function isValidTransactions(
-  value: unknown,
-): value is PortfolioData["transactions"] {
+function isValidTransactions(value: unknown): boolean {
   if (!Array.isArray(value)) return true;
   return value.every((item) => {
     if (!item || typeof item !== "object") return false;
@@ -56,10 +45,7 @@ function isValidTransactions(
     return (
       typeof tx.id === "string" &&
       typeof tx.date === "string" &&
-      (tx.symbol === "BTC" || tx.symbol === "ETH" || tx.symbol === "SOL") &&
-      typeof tx.amount === "number" &&
-      typeof tx.priceUsd === "number" &&
-      typeof tx.spentUsd === "number"
+      typeof tx.amount === "number"
     );
   });
 }
@@ -67,23 +53,25 @@ function isValidTransactions(
 export function parsePortfolioBackup(raw: string): PortfolioData {
   const parsed = JSON.parse(raw) as Partial<PortfolioBackup> & {
     holdings?: unknown;
+    assets?: unknown;
     transactions?: unknown;
+    version?: number;
   };
 
-  if (parsed.holdings && isValidHoldings(parsed.holdings)) {
+  if (parsed.version === 3 && Array.isArray(parsed.assets)) {
+    if (!isValidTransactions(parsed.transactions)) {
+      throw new Error("Neplatné transakcie v zálohe.");
+    }
+
     return {
-      holdings: parsed.holdings,
-      transactions: isValidTransactions(parsed.transactions)
-        ? (parsed.transactions ?? [])
-        : [],
+      version: 3,
+      assets: parsed.assets as PortfolioData["assets"],
+      transactions: (parsed.transactions ?? []) as PortfolioData["transactions"],
     };
   }
 
-  if (isValidHoldings(parsed)) {
-    return {
-      holdings: parsed,
-      transactions: [],
-    };
+  if (parsed.holdings) {
+    return normalizePortfolioData(parsed);
   }
 
   throw new Error("Neplatný formát zálohy. Očakávaný súbor portfolio-backup.json.");
