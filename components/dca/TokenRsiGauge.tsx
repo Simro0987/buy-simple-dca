@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { formatDecimal } from "@/lib/numberFormat";
+import { formatDecimal, formatRsi } from "@/lib/numberFormat";
 import { describeRsiZone } from "@/lib/rsiInterpolation";
 
 interface TokenRsiGaugeProps {
@@ -44,7 +44,7 @@ export function TokenRsiGauge({
           RSI Teplomer
         </p>
         <p className="text-[10px] font-semibold tabular-nums text-zinc-300">
-          <span className="text-white">{formatDecimal(clamped, 1)}</span>
+          <span className="text-white">{formatRsi(clamped)}</span>
           <span className="mx-1 text-zinc-600">·</span>
           <span className="text-zinc-400">{zone}</span>
         </p>
@@ -67,8 +67,8 @@ export function TokenRsiGauge({
           animate={{ left: `${positionPct}%` }}
           transition={{ type: "spring", stiffness: 120, damping: 18 }}
           style={{ marginLeft: "-7px" }}
-          title={`RSI ${formatDecimal(clamped, 1)}`}
-          aria-label={`RSI ${formatDecimal(clamped, 1)}`}
+          title={`RSI ${formatRsi(clamped)}`}
+          aria-label={`RSI ${formatRsi(clamped)}`}
         />
       </div>
 

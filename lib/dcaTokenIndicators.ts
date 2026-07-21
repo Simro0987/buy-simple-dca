@@ -6,6 +6,7 @@ import {
   formatDecimal,
   formatMultiplier,
   formatPct,
+  formatRsi,
   formatSignedPct,
 } from "@/lib/numberFormat";
 
@@ -95,7 +96,7 @@ export function buildTokenIndicatorSnapshot(input: {
     if (rsi != null) {
       chips.push({
         label: "RSI",
-        value: rsi.toFixed(0),
+        value: formatRsi(rsi),
         tone: rsiTone(rsi),
       });
     }
@@ -155,7 +156,7 @@ export function buildTokenIndicatorSnapshot(input: {
       if (rsi != null) {
         chips.push({
           label: "RSI",
-          value: rsi.toFixed(0),
+          value: formatRsi(rsi),
           tone: rsiTone(rsi),
         });
       }
@@ -228,7 +229,7 @@ export function buildTokenIndicatorSnapshot(input: {
     if (rsi != null) {
       chips.push({
         label: "RSI",
-        value: rsi.toFixed(0),
+        value: formatRsi(rsi),
         tone: rsiTone(rsi),
       });
     }

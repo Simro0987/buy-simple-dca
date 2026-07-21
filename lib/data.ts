@@ -35,6 +35,7 @@ export {
   formatDecimal,
   formatNumber4,
   formatPct,
+  formatRsi,
   formatSignedPct,
   formatUnitPrice,
   formatUsd,

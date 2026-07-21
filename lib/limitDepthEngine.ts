@@ -1,10 +1,11 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import { normalizeLimitPrice } from "@/lib/executionFormatting";
-import { formatDecimal } from "@/lib/numberFormat";
+import { formatDecimal, formatRsi } from "@/lib/numberFormat";
 import {
   buildRsiInterpolationNarrative,
   computeRsiS2BlendFactor,
   resolveFluidLimitBadge,
+  RSI_S1_HOLD_LEVEL,
 } from "@/lib/rsiInterpolation";
 import {
   applyBearMarketBlendFactor,
@@ -91,11 +92,14 @@ function resolveInterpolatedLimit(input: {
 
   const rsiBlend = computeRsiS2BlendFactor(rsi14);
   const macroAdjusted = applyBearMarketBlendFactor(rsiBlend, macroTrend ?? null);
-  const blendFactor = applyShortTermTrendBlendFactor(
+  let blendFactor = applyShortTermTrendBlendFactor(
     macroAdjusted,
     shortTermTrend ?? null,
     rsi14,
   );
+  if (rsi14 >= RSI_S1_HOLD_LEVEL) {
+    blendFactor = 0;
+  }
   const effectiveS2 = s2Limit > 0 && s2Limit < s1Limit ? s2Limit : s1Limit;
   const interpolated = normalizeLimitPrice(
     s1Limit + blendFactor * (effectiveS2 - s1Limit),
@@ -191,7 +195,7 @@ export function computeAutonomousLimit(input: {
   }
 
   const { limitPrice, blendFactor, atrGuardrailApplied } = resolution;
-  const badge = resolveFluidLimitBadge(blendFactor);
+  const badge = resolveFluidLimitBadge(blendFactor, input.rsi14);
   const limitPullbackPct =
     input.spotPrice > 0
       ? round1(((input.spotPrice - limitPrice) / input.spotPrice) * 100)
@@ -216,7 +220,7 @@ export function computeAutonomousLimit(input: {
             ? `Defenzívny Bear režim — limit posunutý smerom k S2 (${Math.round(blendFactor * 100)} % blend, minimum 50 %).`
             : blendFactor > 0
               ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
-              : `Limit prichytený na S1 — RSI ${input.rsi14.toFixed(1)} drží neutrálny rozsah.`;
+              : `Limit prichytený na S1 — RSI ${formatRsi(input.rsi14)} drží neutrálny rozsah.`;
 
   return {
     limitPrice,

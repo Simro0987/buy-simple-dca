@@ -1,9 +1,11 @@
 /** RSI ≥ this value → limit stays at S1 (no S2 blend). */
 export const RSI_S1_HOLD_LEVEL = 50;
 
-/** RSI blend corridor: from 45 down toward 15 maps 0 → 100 % toward S2. */
-export const RSI_BLEND_START = 45;
+/** RSI blend corridor: from 50 down toward 15 maps 0 → 100 % toward S2. */
+export const RSI_BLEND_START = RSI_S1_HOLD_LEVEL;
 export const RSI_BLEND_END = 15;
+
+import { formatRsi } from "@/lib/numberFormat";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
@@ -29,10 +31,17 @@ export function describeRsiZone(rsi: number): string {
   return "Extrémne prepredané";
 }
 
-export function resolveFluidLimitBadge(blendFactor: number): {
+export function resolveFluidLimitBadge(
+  blendFactor: number,
+  rsi14?: number | null,
+): {
   mode: "standard" | "deep_wick";
   badge: string;
 } {
+  if (rsi14 != null && rsi14 >= RSI_S1_HOLD_LEVEL) {
+    return { mode: "standard", badge: "ŠTANDARD (S1)" };
+  }
+
   if (blendFactor >= 0.65) {
     return { mode: "deep_wick", badge: "DEEP WICK (LOV KNOTOV)" };
   }
@@ -53,11 +62,11 @@ export function buildRsiInterpolationNarrative(input: {
   const zone = describeRsiZone(input.rsi14);
 
   let text =
-    `RSI indikátor aktuálne ukazuje hodnotu ${input.rsi14.toFixed(1)} (${zone}). `;
+    `RSI indikátor aktuálne ukazuje hodnotu ${formatRsi(input.rsi14)} (${zone}). `;
 
   if (input.blendFactor <= 0) {
     text +=
-      "Limitná cena prichytená na Support S1 — RSI drží neutrálny až obnovujúci rozsah (≥45).";
+      "Limitná cena prichytená na Support S1 — RSI drží neutrálny až obnovujúci rozsah (≥50).";
   } else {
     text += `Limitná cena bola dynamicky stiahnutá o ${blendPct} % vzdialenosti medzi S1 a S2`;
     text += input.atrGuardrailApplied

@@ -51,6 +51,11 @@ export function formatSignedPct(value: number, fractionDigits = 1): string {
   return `${sign}${formatDecimal(value, fractionDigits)}%`;
 }
 
+/** RSI display — always 1 decimal with comma (e.g. 60,8). */
+export function formatRsi(value: number): string {
+  return formatDecimal(value, 1);
+}
+
 /** Multiplier display (e.g. 1,45×). */
 export function formatMultiplier(value: number, fractionDigits = 2): string {
   return `${formatDecimal(value, fractionDigits)}×`;

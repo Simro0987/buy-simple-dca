@@ -17,7 +17,7 @@ import {
   filterExecutionOrders,
   type DcaTokenFilter,
 } from "@/components/dca/DcaTokenFilterBar";
-import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
+import { formatDecimal, formatPct, formatRsi, formatSignedPct } from "@/lib/numberFormat";
 import { GTT_TOOLTIP, LIMIT_VALIDITY_DAYS } from "@/lib/limitDepthEngine";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { MACRO_TREND_BADGES } from "@/lib/macroTrend";
@@ -328,7 +328,7 @@ function ExecutionOrderCard({
 
   const yieldHeader =
     plan.category === "yield" && plan.convictionScore != null
-      ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14?.toFixed(0) ?? "—"} • MA ${plan.priceVsSma14Pct != null ? formatSignedPct(plan.priceVsSma14Pct, 0) : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
+      ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14 != null ? formatRsi(plan.rsi14) : "—"} • MA ${plan.priceVsSma14Pct != null ? formatSignedPct(plan.priceVsSma14Pct, 0) : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
       : null;
 
   const yieldAllocationLabel =
@@ -583,7 +583,7 @@ function ExecutionOrderCard({
               className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
                 plan.limitDepthMode === "deep_wick"
                   ? "border-orange-500/35 bg-orange-500/15 text-orange-300"
-                  : plan.rsiS2BlendPct != null && plan.rsiS2BlendPct > 0
+                  : plan.rsi14 != null && plan.rsi14 < 50 && plan.rsiS2BlendPct != null && plan.rsiS2BlendPct > 0
                     ? "border-cyan-500/30 bg-cyan-500/12 text-cyan-300"
                     : "border-emerald-500/30 bg-emerald-500/12 text-emerald-300"
               }`}
