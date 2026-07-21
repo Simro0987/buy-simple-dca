@@ -4,7 +4,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
 import { useMemo } from "react";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
+import { CopyValueButton } from "@/components/ui/CopyValueButton";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
+import {
+  formatCopyAmount2,
+  formatCopyLimitPrice4,
+} from "@/lib/executionFormatting";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
@@ -30,8 +35,14 @@ interface ExecutionEngineCardsProps {
   tradingMode: TradingMode;
   yieldConvictionCount?: number;
   yieldUniverseCount?: number;
+  executionAllowed?: boolean;
   onDeployAll: () => Promise<void>;
-  onDeployLeg?: (symbol: string, leg: OrderLeg) => Promise<void>;
+  onDeployLeg?: (
+    symbol: string,
+    leg: OrderLeg,
+    plan: TokenExecutionPlan,
+  ) => Promise<void>;
+  onCancelLimit?: (symbol: string) => void;
 }
 
 const listItemMotion = {
@@ -60,11 +71,13 @@ function DeployLegButton({
   leg,
   amountUsd,
   state,
+  disabled,
   onDeploy,
 }: {
   leg: OrderLeg;
   amountUsd: number;
   state: DeployState;
+  disabled?: boolean;
   onDeploy: () => void;
 }) {
   const isMarket = leg === "market";
@@ -77,36 +90,74 @@ function DeployLegButton({
   const loadingClass =
     "animate-pulse border-zinc-500/30 bg-zinc-700/40 text-zinc-300 cursor-wait";
 
-  const successClass = isMarket
-    ? "border-zinc-600/40 bg-zinc-800/60 text-zinc-500 cursor-not-allowed"
-    : "border-orange-500/25 bg-orange-500/10 text-orange-300/80 cursor-default";
+  const activatedClass = isMarket
+    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300 cursor-default"
+    : "border-orange-500/25 bg-orange-500/10 text-orange-300/90 cursor-default";
 
   const className = `${buttonTransition} w-full rounded-xl border px-3 py-2.5 text-[11px] font-bold uppercase tracking-wide ${
     state === "loading"
       ? loadingClass
-      : state === "success"
-        ? successClass
-        : idleClass
+      : state === "market_activated" || state === "limit_watching"
+        ? activatedClass
+        : state === "success"
+          ? activatedClass
+          : idleClass
   }`;
 
   const text =
     state === "loading"
       ? "Odosielam..."
-      : state === "success"
-        ? isMarket
-          ? "✓ Vykonané (Filled)"
-          : "⏳ Čaká na burze (Open)"
-        : `Aktivovať ${label} · ${formatUsd(amountUsd)}`;
+      : state === "market_activated"
+        ? "Market je aktivovaný"
+        : state === "limit_watching"
+          ? "Limit je aktivovaný – sleduje cenu"
+          : state === "success"
+            ? isMarket
+              ? "Market je aktivovaný"
+              : "Limit je aktivovaný – sleduje cenu"
+            : `Aktivovať ${label}`;
+
+  const isDisabled =
+    disabled ||
+    state === "loading" ||
+    state === "market_activated" ||
+    state === "limit_watching" ||
+    state === "success" ||
+    amountUsd <= 0;
 
   return (
     <button
       type="button"
       className={className}
-      disabled={state !== "idle" || amountUsd <= 0}
+      disabled={isDisabled}
       onClick={onDeploy}
     >
       {text}
     </button>
+  );
+}
+
+function CopyableAmountRow({
+  label,
+  value,
+  formatted,
+}: {
+  label: string;
+  value: number;
+  formatted: string;
+}) {
+  if (value <= 0) return null;
+
+  return (
+    <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-black/20 px-2 py-1.5">
+      <div>
+        <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
+          {label}
+        </p>
+        <p className="text-sm font-bold tabular-nums text-white">{formatted}</p>
+      </div>
+      <CopyValueButton value={formatted} label="Kopírovať sumu" />
+    </div>
   );
 }
 
@@ -173,13 +224,17 @@ function RegimeStatusBadge({
 function ExecutionOrderCard({
   plan,
   loading,
+  executionAllowed,
   getLegState,
   onDeployLeg,
+  onCancelLimit,
 }: {
   plan: TokenExecutionPlan;
   loading: boolean;
+  executionAllowed: boolean;
   getLegState: (symbol: string, leg: OrderLeg) => DeployState;
   onDeployLeg: (symbol: string, leg: OrderLeg) => void;
+  onCancelLimit: (symbol: string) => void;
 }) {
   const catStyles = getCategoryStyles(plan.category);
   const unitPrice = plan.spotPrice;
@@ -390,12 +445,18 @@ function ExecutionOrderCard({
           <p className="mt-1 text-base font-bold text-white">
             <OrderAmountDisplay value={plan.marketUsd} />
           </p>
+          <CopyableAmountRow
+            label="Suma za nákup (Market)"
+            value={plan.marketUsd}
+            formatted={formatCopyAmount2(plan.marketUsd)}
+          />
           {plan.marketUsd > 0 && (
             <div className="mt-2.5">
               <DeployLegButton
                 leg="market"
                 amountUsd={plan.marketUsd}
                 state={marketState}
+                disabled={!executionAllowed}
                 onDeploy={() => onDeployLeg(plan.symbol, "market")}
               />
             </div>
@@ -414,19 +475,50 @@ function ExecutionOrderCard({
           <p className="mt-1 text-base font-bold text-white">
             <OrderAmountDisplay value={plan.limitUsd} />
           </p>
+          <CopyableAmountRow
+            label="Suma za nákup (Limit)"
+            value={plan.limitUsd}
+            formatted={formatCopyAmount2(plan.limitUsd)}
+          />
           {plan.limitPrice > 0 && (
-            <p className="mt-0.5 text-[10px] text-orange-400/70 transition-all duration-500 ease-in-out">
-              @ {formatUnitPrice(plan.limitPrice)}
-            </p>
+            <>
+              <p className="mt-0.5 text-[10px] text-orange-400/70 transition-all duration-500 ease-in-out">
+                @ {formatUnitPrice(plan.limitPrice)}
+              </p>
+              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-orange-500/10 bg-black/20 px-2 py-1.5">
+                <div>
+                  <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
+                    Limitná cena nákupu
+                  </p>
+                  <p className="text-sm font-bold tabular-nums text-orange-300">
+                    {formatCopyLimitPrice4(plan.limitPrice)}
+                  </p>
+                </div>
+                <CopyValueButton
+                  value={formatCopyLimitPrice4(plan.limitPrice)}
+                  label="Kopírovať cenu"
+                />
+              </div>
+            </>
           )}
           {plan.limitUsd > 0 && (
-            <div className="mt-2.5">
+            <div className="mt-2.5 space-y-2">
               <DeployLegButton
                 leg="limit"
                 amountUsd={plan.limitUsd}
                 state={limitState}
+                disabled={!executionAllowed}
                 onDeploy={() => onDeployLeg(plan.symbol, "limit")}
               />
+              {limitState === "limit_watching" && (
+                <button
+                  type="button"
+                  onClick={() => onCancelLimit(plan.symbol)}
+                  className={`${buttonTransition} w-full rounded-xl border border-rose-500/25 bg-rose-500/10 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-rose-300 hover:bg-rose-500/15`}
+                >
+                  Zrušiť limit
+                </button>
+              )}
             </div>
           )}
         </div>
@@ -462,14 +554,17 @@ export function ExecutionEngineCards({
   tradingMode,
   yieldConvictionCount = 0,
   yieldUniverseCount = 0,
+  executionAllowed = true,
   onDeployAll,
   onDeployLeg,
+  onCancelLimit,
 }: ExecutionEngineCardsProps) {
   const ordersTotal = sumExecutionOrders(finalExecutionOrders);
-  const { masterState, deployError, getLegState, deployLeg, deployAll } =
+  const { masterState, deployError, getLegState, deployLeg, deployAll, cancelLimit } =
     useExecutionDeployState(finalExecutionOrders, {
       onDeployAll,
       onDeployLeg,
+      onCancelLimit,
     });
 
   const yieldCountLabel = useMemo(() => {
@@ -536,6 +631,7 @@ export function ExecutionEngineCards({
         disabled={
           masterState !== "idle" ||
           loading ||
+          !executionAllowed ||
           finalExecutionOrders.length === 0 ||
           ordersTotal <= 0
         }
@@ -552,8 +648,10 @@ export function ExecutionEngineCards({
               key={plan.symbol}
               plan={plan}
               loading={loading}
+              executionAllowed={executionAllowed}
               getLegState={getLegState}
               onDeployLeg={(symbol, leg) => void deployLeg(symbol, leg)}
+              onCancelLimit={(symbol) => cancelLimit(symbol)}
             />
           ))}
         </AnimatePresence>

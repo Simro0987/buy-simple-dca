@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 
 export type OrderLeg = "market" | "limit";
-export type DeployState = "idle" | "loading" | "success";
+
+export type DeployState =
+  | "idle"
+  | "loading"
+  | "market_activated"
+  | "limit_watching"
+  | "success";
 
 export function orderDeployKey(symbol: string, leg: OrderLeg): string {
   return `${symbol}:${leg}`;
@@ -27,16 +33,33 @@ function collectEligibleKeys(orders: TokenExecutionPlan[]): string[] {
   return keys;
 }
 
-function allKeysSuccessful(
+function isTerminalState(state: DeployState): boolean {
+  return (
+    state === "success" ||
+    state === "market_activated" ||
+    state === "limit_watching"
+  );
+}
+
+function allKeysComplete(
   keys: string[],
   states: Record<string, DeployState>,
 ): boolean {
-  return keys.length > 0 && keys.every((key) => states[key] === "success");
+  return keys.length > 0 && keys.every((key) => isTerminalState(states[key] ?? "idle"));
+}
+
+function legSuccessState(leg: OrderLeg): DeployState {
+  return leg === "market" ? "market_activated" : "limit_watching";
 }
 
 interface UseExecutionDeployStateOptions {
   onDeployAll?: () => Promise<void>;
-  onDeployLeg?: (symbol: string, leg: OrderLeg) => Promise<void>;
+  onDeployLeg?: (
+    symbol: string,
+    leg: OrderLeg,
+    plan: TokenExecutionPlan,
+  ) => Promise<void>;
+  onCancelLimit?: (symbol: string) => void;
 }
 
 export function useExecutionDeployState(
@@ -71,6 +94,11 @@ export function useExecutionDeployState(
 
   const eligibleKeys = useMemo(() => collectEligibleKeys(orders), [orders]);
 
+  const planBySymbol = useMemo(
+    () => new Map(orders.map((order) => [order.symbol, order])),
+    [orders],
+  );
+
   const getLegState = useCallback(
     (symbol: string, leg: OrderLeg): DeployState =>
       legStates[orderDeployKey(symbol, leg)] ?? "idle",
@@ -79,7 +107,7 @@ export function useExecutionDeployState(
 
   const syncMasterState = useCallback(
     (nextLegStates: Record<string, DeployState>) => {
-      if (allKeysSuccessful(eligibleKeys, nextLegStates)) {
+      if (allKeysComplete(eligibleKeys, nextLegStates)) {
         setMasterState("success");
       }
     },
@@ -92,7 +120,10 @@ export function useExecutionDeployState(
       if (!eligibleKeys.includes(key)) return;
 
       const current = legStatesRef.current[key] ?? "idle";
-      if (current === "loading" || current === "success") return;
+      if (current === "loading" || isTerminalState(current)) return;
+
+      const plan = planBySymbol.get(symbol);
+      if (!plan) return;
 
       const runId = deployRunRef.current;
       setDeployError(null);
@@ -100,14 +131,15 @@ export function useExecutionDeployState(
 
       try {
         if (options?.onDeployLeg) {
-          await options.onDeployLeg(symbol, leg);
+          await options.onDeployLeg(symbol, leg, plan);
         } else {
           await delay(750 + Math.random() * 350);
         }
         if (runId !== deployRunRef.current) return;
 
+        const nextState = legSuccessState(leg);
         setLegStates((prev) => {
-          const next = { ...prev, [key]: "success" as const };
+          const next = { ...prev, [key]: nextState };
           syncMasterState(next);
           return next;
         });
@@ -119,14 +151,27 @@ export function useExecutionDeployState(
         );
       }
     },
-    [eligibleKeys, options, syncMasterState],
+    [eligibleKeys, options, planBySymbol, syncMasterState],
+  );
+
+  const cancelLimit = useCallback(
+    (symbol: string) => {
+      const key = orderDeployKey(symbol, "limit");
+      setLegStates((prev) => {
+        if ((prev[key] ?? "idle") !== "limit_watching") return prev;
+        const next = { ...prev, [key]: "idle" as const };
+        return next;
+      });
+      options?.onCancelLimit?.(symbol);
+    },
+    [options],
   );
 
   const deployAll = useCallback(async () => {
     if (masterState === "loading" || masterState === "success") return;
 
     const pendingKeys = eligibleKeys.filter(
-      (key) => (legStatesRef.current[key] ?? "idle") !== "success",
+      (key) => !isTerminalState(legStatesRef.current[key] ?? "idle"),
     );
     if (pendingKeys.length === 0) {
       setMasterState("success");
@@ -153,7 +198,11 @@ export function useExecutionDeployState(
         await delay(420);
         if (runId !== deployRunRef.current) return;
         const key = pendingKeys[index];
-        setLegStates((prev) => ({ ...prev, [key]: "success" }));
+        const leg: OrderLeg = key.endsWith(":limit") ? "limit" : "market";
+        setLegStates((prev) => ({
+          ...prev,
+          [key]: legSuccessState(leg),
+        }));
       }
 
       await delay(280);
@@ -175,6 +224,7 @@ export function useExecutionDeployState(
     getLegState,
     deployLeg,
     deployAll,
+    cancelLimit,
     eligibleKeyCount: eligibleKeys.length,
   };
 }

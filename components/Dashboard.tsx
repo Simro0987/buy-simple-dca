@@ -55,6 +55,7 @@ export function Dashboard() {
     recordTransaction,
     importPortfolio,
     recordDcaPurchase,
+    recordDcaLegPurchase,
     resetAllData,
     portfolioData,
   } = usePortfolio();
@@ -69,6 +70,29 @@ export function Dashboard() {
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
   const showSwap = activeTab === "swap";
+
+  const handleRecordMarketLeg = useCallback(
+    (plan: TokenExecutionPlan) => {
+      const recorded = recordDcaLegPurchase(plan, "market");
+      if (recorded) {
+        const amount =
+          plan.spotPrice > 0 ? plan.marketUsd / plan.spotPrice : 0;
+        setToastMessage(
+          `Market nákup ${plan.symbol}: ${formatMarketLegToast(plan.marketUsd, amount)}`,
+        );
+      } else {
+        setToastMessage(
+          `Market ${plan.symbol} — token musí byť v portfóliu s platnou cenou`,
+        );
+      }
+      return recorded;
+    },
+    [recordDcaLegPurchase],
+  );
+
+  function formatMarketLegToast(spentUsd: number, amount: number): string {
+    return `$${spentUsd.toFixed(2)} • ${amount.toFixed(6)} ks`;
+  }
 
   const handleRecordPurchase = useCallback(
     (plans: TokenExecutionPlan[]) => {
@@ -205,6 +229,7 @@ export function Dashboard() {
                 dcaTransactions={transactions}
                 loading={loading}
                 onRecordPurchase={handleRecordPurchase}
+                onRecordMarketLeg={handleRecordMarketLeg}
               />
             </motion.div>
           )}

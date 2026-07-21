@@ -9,9 +9,11 @@ import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPill
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { PortfolioBucketingCard } from "@/components/dca/PortfolioBucketingCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
+import { SmartMondayTimingBanner } from "@/components/dca/SmartMondayTimingBanner";
 import { TradingModeToggle } from "@/components/TradingModeToggle";
 import { usePortfolioBucketing } from "@/hooks/usePortfolioBucketing";
 import type { OrderLeg } from "@/hooks/useExecutionDeployState";
+import { useSmartMondayTiming } from "@/hooks/useSmartMondayTiming";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import { useDcaLiveEngine } from "@/hooks/useDcaLiveEngine";
 import { buildExchangeExecuteOrders } from "@/lib/exchange/buildExecutePayload";
@@ -24,6 +26,10 @@ import {
   createSimulatedTradeRound,
   createTradeRound,
 } from "@/lib/tradeHistory";
+import {
+  cancelOpenLimitOrder,
+  registerOpenLimitOrder,
+} from "@/lib/openLimitOrders";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
 import { RefreshCw, ShoppingCart } from "lucide-react";
@@ -34,6 +40,7 @@ interface DcaEngineProps {
   dcaTransactions?: Transaction[];
   loading?: boolean;
   onRecordPurchase: (plans: TokenExecutionPlan[]) => boolean;
+  onRecordMarketLeg?: (plan: TokenExecutionPlan) => boolean;
 }
 
 export function DcaEngine({
@@ -41,12 +48,15 @@ export function DcaEngine({
   dcaTransactions = [],
   loading: externalLoading = false,
   onRecordPurchase,
+  onRecordMarketLeg,
 }: DcaEngineProps) {
   const weeklyAmount = useAppStore((state) => state.dcaPlan.weeklyBudget);
   const setWeeklyBudget = useAppStore((state) => state.setWeeklyBudget);
   const setDcaResult = useAppStore((state) => state.setDcaResult);
   const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
   const tradingMode = useAppStore((state) => state.tradingMode);
+  const { timing, loading: timingLoading, executionAllowed } =
+    useSmartMondayTiming();
 
   const { snapshot, loading: engineLoading, refresh: refreshTokens } =
     useDcaEngine({
@@ -157,29 +167,41 @@ export function DcaEngine({
   }, [displayResult, finalExecutionOrders, totalDeployed, tradingMode]);
 
   const handleDeployLeg = useCallback(
-    async (symbol: string, leg: OrderLeg) => {
-      if (tradingMode === "simulation") return;
+    async (symbol: string, leg: OrderLeg, plan: TokenExecutionPlan) => {
+      if (tradingMode === "live") {
+        const orders = buildExchangeExecuteOrders([plan]).filter(
+          (order) => order.leg === leg,
+        );
+        if (orders.length === 0) return;
 
-      const plan = finalExecutionOrders.find((item) => item.symbol === symbol);
-      if (!plan) throw new Error(`Token ${symbol} not found`);
+        const response = await fetch("/api/exchange/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orders }),
+        });
+        const json = (await response.json()) as ExchangeExecuteResponse;
+        if (!json.success) {
+          throw new Error(json.error ?? "Order execution failed");
+        }
+      }
 
-      const orders = buildExchangeExecuteOrders([plan]).filter(
-        (order) => order.leg === leg,
-      );
-      if (orders.length === 0) return;
-
-      const response = await fetch("/api/exchange/execute", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ orders }),
-      });
-      const json = (await response.json()) as ExchangeExecuteResponse;
-      if (!json.success) {
-        throw new Error(json.error ?? "Order execution failed");
+      if (leg === "market") {
+        onRecordMarketLeg?.(plan);
+      } else {
+        registerOpenLimitOrder({
+          symbol: plan.symbol,
+          limitPrice: plan.limitPrice,
+          limitUsd: plan.limitUsd,
+          createdAt: new Date().toISOString(),
+        });
       }
     },
-    [finalExecutionOrders, tradingMode],
+    [onRecordMarketLeg, tradingMode],
   );
+
+  const handleCancelLimit = useCallback((symbol: string) => {
+    cancelOpenLimitOrder(symbol);
+  }, []);
 
   const handleRecordPurchase = () => {
     onRecordPurchase(finalExecutionOrders);
@@ -305,15 +327,18 @@ export function DcaEngine({
           />
 
           {/* G — Execution engine */}
+          <SmartMondayTimingBanner timing={timing} loading={timingLoading} />
           <ExecutionEngineCards
             finalExecutionOrders={finalExecutionOrders}
             deployedCapital={totalDeployed}
             loading={loading}
             tradingMode={tradingMode}
+            executionAllowed={executionAllowed}
             yieldConvictionCount={bucketing?.yieldAltcoins.conviction.length ?? 0}
             yieldUniverseCount={bucketing?.yieldAltcoinCount ?? 0}
             onDeployAll={handleDeployAll}
             onDeployLeg={handleDeployLeg}
+            onCancelLimit={handleCancelLimit}
           />
         </>
       )}

@@ -367,6 +367,43 @@ export function usePortfolio() {
     [getAssetPrice, persistPortfolio, portfolio],
   );
 
+  const recordDcaLegPurchase = useCallback(
+    (plan: TokenExecutionPlan, leg: "market" | "limit") => {
+      const spentUsd = leg === "market" ? plan.marketUsd : plan.limitUsd;
+      if (spentUsd <= 0) return false;
+
+      const asset = portfolio.assets.find((item) => item.symbol === plan.symbol);
+      const unitPrice =
+        leg === "limit" && plan.limitPrice > 0
+          ? plan.limitPrice
+          : plan.spotPrice > 0
+            ? plan.spotPrice
+            : getAssetPrice(asset ?? ({} as TrackedAsset));
+
+      if (!asset || unitPrice <= 0) return false;
+
+      const amount = spentUsd / unitPrice;
+      const transaction: Transaction = {
+        id: createTransactionId(),
+        date: new Date().toISOString(),
+        assetId: asset.id,
+        symbol: asset.symbol,
+        amount,
+        priceUsd: unitPrice,
+        spentUsd,
+        type: "DCA",
+      };
+
+      persistPortfolio({
+        ...portfolio,
+        transactions: [transaction, ...portfolio.transactions],
+      });
+
+      return true;
+    },
+    [getAssetPrice, persistPortfolio, portfolio],
+  );
+
   const resetAllData = useCallback(() => {
     persistPortfolio(resetPortfolioData(portfolio));
   }, [persistPortfolio, portfolio]);
@@ -399,6 +436,7 @@ export function usePortfolio() {
     updateHoldings,
     importPortfolio,
     recordDcaPurchase,
+    recordDcaLegPurchase,
     resetAllData,
     portfolioData: portfolio,
   };
