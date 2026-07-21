@@ -2,16 +2,39 @@
 
 import { motion } from "framer-motion";
 import {
-  PolarAngleAxis,
-  PolarGrid,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-} from "recharts";
-import { confluenceMetrics } from "@/lib/confluenceData";
-import { interactiveCard, listContainerVariants, listItemVariants } from "@/lib/motion";
+  ConfluenceOctagonPanel,
+  TokenOctagonChips,
+} from "@/components/dca/ConfluenceOctagonPanel";
+import { useConfluenceOctagon } from "@/hooks/useConfluenceOctagon";
+import { interactiveCard } from "@/lib/motion";
+import type { TrackedAsset } from "@/lib/portfolioStorage";
 
-export function ConfluenceRadar() {
+interface ConfluenceRadarProps {
+  fearGreed?: number;
+  portfolioSymbols?: string[];
+  trackedAssets?: TrackedAsset[];
+}
+
+export function ConfluenceRadar({
+  fearGreed = 50,
+  portfolioSymbols,
+  trackedAssets,
+}: ConfluenceRadarProps) {
+  const {
+    tokens,
+    selectedToken,
+    setSelectedToken,
+    activeSnapshot,
+    scoresBySymbol,
+    loading,
+    tokenSwitchLoading,
+    error,
+    usingPortfolioTokens,
+  } = useConfluenceOctagon(fearGreed, portfolioSymbols, trackedAssets);
+
+  const metrics = activeSnapshot?.metrics ?? [];
+  const accumulationScore = activeSnapshot?.accumulationScore ?? 0;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -25,14 +48,17 @@ export function ConfluenceRadar() {
       <div className="pointer-events-none absolute -right-10 top-0 h-32 w-32 rounded-full bg-emerald-500/5 blur-3xl" />
 
       <div className="relative">
-        <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-600">
               Confluence Octagon
             </p>
             <h2 className="mt-1 text-base font-bold text-white">
-              Makro akumulácia
+              Makro akumulácia · {selectedToken}
             </h2>
+            <p className="mt-1 text-[10px] text-zinc-500">
+              {usingPortfolioTokens ? "Tokeny z Portfólia" : "Predvolený kôš"}
+            </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5">
             <span className="relative flex h-2 w-2">
@@ -40,65 +66,31 @@ export function ConfluenceRadar() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-              Live
+              {loading ? "Sync" : activeSnapshot?.live ? "Live" : "Cache"}
             </span>
           </span>
         </div>
 
-        <div className="h-72 w-full">
-          <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="72%" data={confluenceMetrics}>
-              <PolarGrid
-                stroke="#27272a"
-                radialLines={false}
-              />
-              <PolarAngleAxis
-                dataKey="subject"
-                tick={{
-                  fill: "#71717a",
-                  fontSize: 10,
-                  fontWeight: 500,
-                }}
-              />
-              <Radar
-                name="Confluence"
-                dataKey="value"
-                stroke="#34d399"
-                strokeWidth={2.5}
-                fill="#34d399"
-                fillOpacity={0.2}
-                dot={{
-                  r: 3,
-                  fill: "#34d399",
-                  stroke: "#050505",
-                  strokeWidth: 1.5,
-                }}
-              />
-            </RadarChart>
-          </ResponsiveContainer>
+        <div className="mb-4">
+          <TokenOctagonChips
+            tokens={tokens}
+            selectedToken={selectedToken}
+            onSelect={setSelectedToken}
+            scores={scoresBySymbol}
+            accent="emerald"
+          />
         </div>
 
-        <motion.div
-          variants={listContainerVariants}
-          initial="hidden"
-          animate="show"
-          className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"
-        >
-          {confluenceMetrics.map((metric) => (
-            <motion.div
-              key={metric.subject}
-              variants={listItemVariants}
-              className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2"
-            >
-              <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-                {metric.shortLabel}
-              </p>
-              <p className="mt-0.5 text-sm font-bold text-emerald-400">
-                {metric.value}
-              </p>
-            </motion.div>
-          ))}
-        </motion.div>
+        {error ? (
+          <p className="mb-3 text-[10px] text-amber-400">{error}</p>
+        ) : null}
+
+        <ConfluenceOctagonPanel
+          selectedToken={selectedToken}
+          metrics={metrics}
+          accumulationScore={accumulationScore}
+          loading={tokenSwitchLoading}
+        />
       </div>
     </motion.section>
   );
