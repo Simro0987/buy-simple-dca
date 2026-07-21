@@ -9,11 +9,11 @@ export const dcaEngineData = {
     investmentAmount: 284.46,
   },
   factors: [
-    { name: "Value", score: 88, status: "Strong Buy" },
-    { name: "Trend", score: 22, status: "Bearish" },
-    { name: "Sentiment", score: 18, status: "Extreme Fear" },
-    { name: "Momentum", score: 34, status: "Weak" },
-    { name: "Risk", score: 71, status: "Favorable" },
+    { id: "value", name: "Value", score: 88, status: "Strong Buy", weight: 0.3 },
+    { id: "trend", name: "Trend", score: 22, status: "Bearish", weight: 0.18 },
+    { id: "sentiment", name: "Sentiment", score: 18, status: "Extreme Fear", weight: 0.22 },
+    { id: "momentum", name: "Momentum", score: 34, status: "Weak", weight: 0.15 },
+    { id: "risk", name: "Risk", score: 71, status: "Favorable", weight: 0.15 },
   ],
   tokenAllocations: [
     {

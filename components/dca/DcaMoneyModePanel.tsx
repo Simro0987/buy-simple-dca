@@ -48,7 +48,7 @@ export function DcaMoneyModePanel({
           allocationPercent={marketRegime.allocationPercent}
           investmentAmount={marketRegime.investmentAmount}
         />
-        <FactorPills factors={factors} />
+        <FactorPills factors={factors} confluenceScore={score} />
         <TokenAllocationList
           tokens={tokenAllocations}
           prices={prices}
