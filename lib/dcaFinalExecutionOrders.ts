@@ -173,6 +173,7 @@ export function buildFinalExecutionOrders(
         filtersPassedCount: row.filtersPassedCount,
         fundamentalScore: row.fundamentalScore,
         filterConditions: row.filterConditions,
+        priceVsSma14Pct: row.priceVsSma14Pct,
       });
 
       const split = resolveCategoryExecutionSplit(tokenInput);

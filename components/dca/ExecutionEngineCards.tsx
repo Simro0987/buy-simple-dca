@@ -10,6 +10,7 @@ import {
   formatCopyAmount2,
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
+import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
@@ -486,7 +487,12 @@ function ExecutionOrderCard({
           />
           {plan.limitPrice > 0 && (
             <div className="mt-1.5">
-              <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold tabular-nums text-orange-300 transition-all duration-500 ease-in-out">
+                  {formatBelowSpotLabel(plan.limitPullbackPct)}
+                </span>
+              </div>
+              <p className="mt-1 text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
                 Limitná cena nákupu
               </p>
               <div className="mt-0.5 flex items-center gap-1">
@@ -535,7 +541,7 @@ function ExecutionOrderCard({
             className="mt-3 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
           >
             <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
-              Prečo limit?
+              Prečo tento limit?
             </p>
             <p className="mt-1 text-xs leading-relaxed text-zinc-400 transition-all duration-500 ease-in-out">
               {plan.whyLimit}

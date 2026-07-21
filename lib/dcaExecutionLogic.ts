@@ -1,5 +1,9 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import { normalizeLimitPrice } from "@/lib/executionFormatting";
+import {
+  buildDynamicLimitReasoning,
+  computeBelowSpotPercent,
+} from "@/lib/limitPriceReasoning";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 
@@ -34,6 +38,7 @@ export interface ExecutionTokenInput {
   filtersPassedCount?: number;
   fundamentalScore?: number;
   filterConditions?: YieldFilterCondition[];
+  priceVsSma14Pct?: number | null;
 }
 
 export interface ExecutionSplitResult {
@@ -57,14 +62,6 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function formatPrice(price: number): string {
-  if (price >= 1000) {
-    return `$${price.toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
-  }
-  if (price >= 1) return `$${price.toFixed(2)}`;
-  return `$${price.toFixed(4)}`;
-}
-
 /** Final Score 0 → 40 % MKT, 100 → 90 % MKT (continuous). */
 export function computeBaseMarketPct(finalScore: number): number {
   const clamped = clamp(finalScore, 0, 100);
@@ -74,11 +71,6 @@ export function computeBaseMarketPct(finalScore: number): number {
 function limitFromAtr(spot: number, atrPct: number, multiplier: number): number {
   if (spot <= 0) return 0;
   return normalizeLimitPrice(spot * (1 - (multiplier * atrPct) / 100));
-}
-
-function pullbackPct(spot: number, limitPrice: number): number {
-  if (spot <= 0 || limitPrice <= 0) return 0;
-  return round1(((spot - limitPrice) / spot) * 100);
 }
 
 function buildYieldEntrySignal(input: {
@@ -108,11 +100,33 @@ function rsiLabel(rsi: number): string {
   return "RSI Neutral";
 }
 
+function buildWhyLimit(
+  input: ExecutionTokenInput,
+  limitPrice: number,
+  options?: { atrMultiplier?: number; safetyBrakeActive?: boolean },
+): string {
+  return buildDynamicLimitReasoning({
+    symbol: input.symbol,
+    category: input.category,
+    spotPrice: input.spotPrice,
+    limitPrice,
+    rsi14: input.rsi14,
+    atr14dPct: input.atr14dPct,
+    ema50: input.ema50,
+    distSma200Pct: input.distSma200Pct,
+    priceVsSma14Pct: input.priceVsSma14Pct,
+    fundamentalScore: input.fundamentalScore,
+    filtersPassedCount: input.filtersPassedCount,
+    fearGreedValue: input.fearGreedValue,
+    safetyBrakeActive: options?.safetyBrakeActive ?? input.brakeActive,
+    atrMultiplier: options?.atrMultiplier,
+  });
+}
+
 function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   const spot = input.spotPrice;
   const ema50 = input.ema50 ?? 0;
   const distSma200 = input.distSma200Pct ?? 0;
-  const aboveEma50 = ema50 > 0 && spot > ema50;
   const safetyBrakeActive =
     input.brakeActive || distSma200 >= SAFETY_BRAKE_SMA200_THRESHOLD_PCT;
 
@@ -136,13 +150,8 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       : pullbackPrice;
   const limitPrice = normalizeLimitPrice(rawLimit);
 
-  const limitPullbackPct = pullbackPct(spot, limitPrice);
-  const emaPosition = aboveEma50 ? "nad" : "pod";
-
-  const whyLimit =
-    spot > 0
-      ? `BTC je ${emaPosition} 50D EMA. Cielime na ${limitPullbackPct.toFixed(1)} % pullback na ${formatPrice(limitPrice)}, aby nám akumulácia neušla.`
-      : "Čakáme na live cenu pre výpočet limitného cieľa.";
+  const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
+  const whyLimit = buildWhyLimit(input, limitPrice, { safetyBrakeActive });
 
   const fgPart =
     input.fearGreedValue <= 30
@@ -207,12 +216,8 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
   }
 
   const limitPrice = limitFromAtr(spot, atrPct, 1.5);
-  const limitPullbackPct = pullbackPct(spot, limitPrice);
-
-  const whyLimit =
-    spot > 0
-      ? `Cielime na ${limitPullbackPct.toFixed(1)} % pullback na ${formatPrice(limitPrice)} podľa 1.5× ATR (${atrPct.toFixed(1)} %).`
-      : "Čakáme na live cenu pre výpočet limitného cieľa.";
+  const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
+  const whyLimit = buildWhyLimit(input, limitPrice, { atrMultiplier: 1.5 });
 
   const entrySignal = `ENTRY SIGNAL: ${rsiLabel(rsi)} (${rsi.toFixed(0)}) • Momentum ${rsi < 50 ? "OK" : "Watch"} • ATR ${atrPct.toFixed(1)} %`;
 
@@ -286,12 +291,8 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   );
   const limitShare = round1(100 - marketShare);
   const limitPrice = limitFromAtr(spot, atrPct, 2.0);
-  const limitPullbackPct = pullbackPct(spot, limitPrice);
-
-  const whyLimit =
-    spot > 0
-      ? `Yield altcoin — cielime na ${limitPullbackPct.toFixed(1)} % pullback na ${formatPrice(limitPrice)} (Spot − 2.0× ATR ${atrPct.toFixed(1)} %) pre chytenie likvidačných knôtov.`
-      : "Čakáme na live cenu pre výpočet limitného cieľa.";
+  const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
+  const whyLimit = buildWhyLimit(input, limitPrice, { atrMultiplier: 2.0 });
 
   const entrySignal = buildYieldEntrySignal({
     rsi,
@@ -345,6 +346,7 @@ export function buildExecutionTokenInput(input: {
   filtersPassedCount?: number;
   fundamentalScore?: number;
   filterConditions?: YieldFilterCondition[];
+  priceVsSma14Pct?: number | null;
 }): ExecutionTokenInput {
   const ctx = input.marketContext;
 
