@@ -10,6 +10,7 @@ import {
   formatCopyAmount2,
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
+import { DcaCollapsibleDetails } from "@/components/dca/DcaCollapsibleDetails";
 import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { getCategoryStyles } from "@/lib/assetStyles";
@@ -248,6 +249,20 @@ function ExecutionOrderCard({
         }`
       : null;
 
+  const whyLimitTitle =
+    plan.category === "yield"
+      ? "Prečo Yield?"
+      : plan.category === "satellite"
+        ? "Prečo Limit?"
+        : "Prečo tento limit?";
+
+  const hasAnalyticalDetails = Boolean(
+    plan.entrySignal ||
+      plan.splitExplanation ||
+      (plan.supportSnapApplied && plan.supportSnapNote) ||
+      (plan.limitShare > 0 && plan.whyLimit),
+  );
+
   return (
     <motion.article
       layout
@@ -360,58 +375,6 @@ function ExecutionOrderCard({
         </div>
       )}
 
-      <AnimatePresence mode="wait">
-        {plan.entrySignal && (
-          <motion.p
-            key={plan.entrySignal}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.45, ease: "easeInOut" }}
-            className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[10px] font-medium leading-relaxed text-emerald-400"
-          >
-            {plan.entrySignal}
-          </motion.p>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence mode="wait">
-        {(plan.minOrderRuleActive || plan.minOrderMergeActive) && plan.splitExplanation ? (
-          <motion.div
-            key={`min-${plan.splitExplanation}-${plan.routerReasoning ?? ""}`}
-            initial={{ opacity: 0, y: 6, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -6, scale: 0.98 }}
-            transition={{ duration: 0.5, ease: "easeInOut" }}
-            className="mb-3 space-y-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2"
-          >
-            <p className="text-[10px] font-bold leading-relaxed text-blue-300">
-              {plan.splitExplanation}
-            </p>
-            {plan.routerReasoning ? (
-              <p className="text-[10px] font-medium leading-relaxed text-blue-200/90">
-                {plan.routerReasoning}
-              </p>
-            ) : null}
-          </motion.div>
-        ) : (
-          plan.splitExplanation && (
-            <motion.p
-              key={`split-${plan.splitExplanation}`}
-              initial={{ opacity: 0, y: 4 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -4 }}
-              transition={{ duration: 0.45, ease: "easeInOut" }}
-              className={`mb-3 text-[10px] font-medium leading-relaxed ${smoothColorClass} ${
-                plan.safetyBrakeActive ? "text-amber-400/90" : "text-zinc-500"
-              }`}
-            >
-              {plan.splitExplanation}
-            </motion.p>
-          )
-        )}
-      </AnimatePresence>
-
       <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-zinc-800/80">
         <motion.div
           layout
@@ -444,6 +407,18 @@ function ExecutionOrderCard({
           <p className="mt-1 text-base font-bold text-white">
             <OrderAmountDisplay value={plan.marketUsd} copyable />
           </p>
+          {unitPrice > 0 && (
+            <p className="mt-1.5 text-[10px] text-zinc-500">
+              Aktuálna cena:{" "}
+              <span className="font-bold tabular-nums text-emerald-300">
+                {loading ? (
+                  <PriceSkeleton className="inline-block h-3 w-20 align-middle" />
+                ) : (
+                  formatDecimal(unitPrice, 4)
+                )}
+              </span>
+            </p>
+          )}
           {plan.marketUsd > 0 && (
             <div className="mt-2.5">
               <DeployLegButton
@@ -526,81 +501,104 @@ function ExecutionOrderCard({
         </div>
       </div>
 
-      <AnimatePresence mode="wait">
-        {plan.supportSnapApplied && plan.supportSnapNote && (
-          <motion.div
-            key={`snap-${plan.symbol}-${plan.supportSnapNote}`}
-            initial={{ opacity: 0, y: 4 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -4 }}
-            transition={{ duration: 0.45, ease: "easeInOut" }}
-            className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5"
-          >
-            <p className="text-[9px] font-bold uppercase tracking-wider text-amber-300">
-              Smart Snap · S1 zóna
-            </p>
-            <p className="mt-1 text-[11px] leading-relaxed text-amber-100/90">
-              {plan.supportSnapNote}
-            </p>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {hasAnalyticalDetails && (
+        <DcaCollapsibleDetails className="mt-3">
+          {plan.entrySignal && (
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-emerald-400/80">
+                Entry Signal
+              </p>
+              <p className="mt-1 text-[10px] font-medium leading-relaxed text-emerald-400">
+                {plan.entrySignal}
+              </p>
+            </div>
+          )}
 
-      <AnimatePresence mode="wait">
-        {plan.limitShare > 0 && plan.whyLimit && (
-          <motion.div
-            key={`${plan.symbol}-${plan.whyLimit}`}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.5, ease: "easeInOut" }}
-            className="mt-3 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
-          >
-            <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
-              {plan.category === "yield"
-                ? "Prečo Yield?"
-                : plan.category === "satellite"
-                  ? "Prečo Limit?"
-                  : "Prečo tento limit?"}
-            </p>
-            <p className="mt-1 text-xs leading-relaxed text-zinc-400 transition-all duration-500 ease-in-out">
-              {plan.whyLimit}
-            </p>
-            {plan.supportResistance &&
-              (plan.supportResistance.support1 != null ||
-                plan.supportResistance.resistance1 != null) && (
-                <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
-                  {plan.supportResistance.support1 != null && (
-                    <>
-                      Support S1 ({plan.supportResistance.supportSource}):{" "}
-                      <span className="font-semibold tabular-nums text-emerald-300/90">
-                        {formatDecimal(plan.supportResistance.support1, 4)}
-                      </span>
-                      {plan.supportResistance.distToSupportPct != null
-                        ? ` · ${formatSignedPct(plan.supportResistance.distToSupportPct, 1)} od spotu`
-                        : null}
-                    </>
-                  )}
-                  {plan.supportResistance.support1 != null &&
-                  plan.supportResistance.resistance1 != null
-                    ? " · "
-                    : null}
-                  {plan.supportResistance.resistance1 != null && (
-                    <>
-                      Rezistencia R1 ({plan.supportResistance.resistanceSource}):{" "}
-                      <span className="font-semibold tabular-nums text-rose-300/90">
-                        {formatDecimal(plan.supportResistance.resistance1, 4)}
-                      </span>
-                      {plan.supportResistance.distToResistancePct != null
-                        ? ` · ${formatSignedPct(plan.supportResistance.distToResistancePct, 1)} od spotu`
-                        : null}
-                    </>
-                  )}
+          {plan.splitExplanation &&
+            (plan.minOrderRuleActive || plan.minOrderMergeActive ? (
+              <div className="space-y-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-blue-300/90">
+                  Rozpad splitu
                 </p>
-              )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+                <p className="text-[10px] font-bold leading-relaxed text-blue-300">
+                  {plan.splitExplanation}
+                </p>
+                {plan.routerReasoning ? (
+                  <p className="text-[10px] font-medium leading-relaxed text-blue-200/90">
+                    {plan.routerReasoning}
+                  </p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2">
+                <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                  Rozpad splitu
+                </p>
+                <p
+                  className={`mt-1 text-[10px] font-medium leading-relaxed ${smoothColorClass} ${
+                    plan.safetyBrakeActive ? "text-amber-400/90" : "text-zinc-500"
+                  }`}
+                >
+                  {plan.splitExplanation}
+                </p>
+              </div>
+            ))}
+
+          {plan.supportSnapApplied && plan.supportSnapNote && (
+            <div className="rounded-xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-amber-300">
+                Smart Snap · S1 zóna
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-amber-100/90">
+                {plan.supportSnapNote}
+              </p>
+            </div>
+          )}
+
+          {plan.limitShare > 0 && plan.whyLimit && (
+            <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+              <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+                {whyLimitTitle}
+              </p>
+              <p className="mt-1 text-xs leading-relaxed text-zinc-400">
+                {plan.whyLimit}
+              </p>
+              {plan.supportResistance &&
+                (plan.supportResistance.support1 != null ||
+                  plan.supportResistance.resistance1 != null) && (
+                  <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+                    {plan.supportResistance.support1 != null && (
+                      <>
+                        Support S1 ({plan.supportResistance.supportSource}):{" "}
+                        <span className="font-semibold tabular-nums text-emerald-300/90">
+                          {formatDecimal(plan.supportResistance.support1, 4)}
+                        </span>
+                        {plan.supportResistance.distToSupportPct != null
+                          ? ` · ${formatSignedPct(plan.supportResistance.distToSupportPct, 1)} od spotu`
+                          : null}
+                      </>
+                    )}
+                    {plan.supportResistance.support1 != null &&
+                    plan.supportResistance.resistance1 != null
+                      ? " · "
+                      : null}
+                    {plan.supportResistance.resistance1 != null && (
+                      <>
+                        Rezistencia R1 ({plan.supportResistance.resistanceSource}):{" "}
+                        <span className="font-semibold tabular-nums text-rose-300/90">
+                          {formatDecimal(plan.supportResistance.resistance1, 4)}
+                        </span>
+                        {plan.supportResistance.distToResistancePct != null
+                          ? ` · ${formatSignedPct(plan.supportResistance.distToResistancePct, 1)} od spotu`
+                          : null}
+                      </>
+                    )}
+                  </p>
+                )}
+            </div>
+          )}
+        </DcaCollapsibleDetails>
+      )}
     </motion.article>
   );
 }
