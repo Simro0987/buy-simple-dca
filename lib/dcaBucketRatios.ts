@@ -1,6 +1,8 @@
 import { clamp, lerpScore } from "@/lib/dcaTechnicalIndicators";
 import type { MacroRegime } from "@/lib/ultimateDcaEngine";
 
+export const BEAR_MIN_CORE_PERCENT = 50;
+
 export interface BucketRatioSet {
   core: number;
   satellite: number;
@@ -37,6 +39,35 @@ function normalizeRatios(ratios: BucketRatioSet): BucketRatioSet {
 }
 
 /**
+ * BEAR accumulation bias: Core (BTC) never falls below 50%.
+ * Deficit is taken proportionally from Satellites and Yield.
+ */
+export function enforceBearCoreFloor(
+  regime: MacroRegime,
+  ratios: BucketRatioSet,
+): BucketRatioSet {
+  if (regime !== "BEAR" || ratios.core >= BEAR_MIN_CORE_PERCENT) {
+    return ratios;
+  }
+
+  const deficit = BEAR_MIN_CORE_PERCENT - ratios.core;
+  const nonCoreTotal = ratios.satellite + ratios.yield;
+
+  if (nonCoreTotal <= 0) {
+    return { core: BEAR_MIN_CORE_PERCENT, satellite: 0, yield: 0 };
+  }
+
+  const satelliteShare = ratios.satellite / nonCoreTotal;
+  const yieldShare = ratios.yield / nonCoreTotal;
+
+  return normalizeRatios({
+    core: BEAR_MIN_CORE_PERCENT,
+    satellite: Math.max(0, ratios.satellite - deficit * satelliteShare),
+    yield: Math.max(0, ratios.yield - deficit * yieldShare),
+  });
+}
+
+/**
  * Dynamic Core / Satellites / Yield split from macro regime + final score.
  * Low score (cheap market) shifts weight toward Core; high score toward Yield/Sat.
  */
@@ -51,11 +82,14 @@ export function computeDynamicBucketRatios(
   const satAdj = lerpScore(score, 0, 100, -2, 4);
   const yieldAdj = lerpScore(score, 0, 100, -4, 5);
 
-  return normalizeRatios({
-    core: base.core + coreAdj,
-    satellite: base.satellite + satAdj,
-    yield: base.yield + yieldAdj,
-  });
+  return enforceBearCoreFloor(
+    regime,
+    normalizeRatios({
+      core: base.core + coreAdj,
+      satellite: base.satellite + satAdj,
+      yield: base.yield + yieldAdj,
+    }),
+  );
 }
 
 export function getBucketBadgeTitle(regime: MacroRegime): string {

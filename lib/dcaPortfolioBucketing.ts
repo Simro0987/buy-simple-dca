@@ -1,4 +1,5 @@
 import {
+  BEAR_MIN_CORE_PERCENT,
   computeDynamicBucketRatios,
   getBucketBadgeTitle,
 } from "@/lib/dcaBucketRatios";
@@ -80,6 +81,50 @@ function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
+function enforceBearCoreAmountFloor(
+  regime: MacroRegime,
+  deployedCapital: number,
+  amounts: { coreUsd: number; satelliteUsd: number; yieldUsd: number },
+): {
+  coreUsd: number;
+  satelliteUsd: number;
+  yieldUsd: number;
+  floorApplied: boolean;
+} {
+  if (regime !== "BEAR" || deployedCapital <= 0) {
+    return { ...amounts, floorApplied: false };
+  }
+
+  const minCoreUsd = roundUsd((deployedCapital * BEAR_MIN_CORE_PERCENT) / 100);
+  if (amounts.coreUsd >= minCoreUsd) {
+    return { ...amounts, floorApplied: false };
+  }
+
+  const deficit = roundUsd(minCoreUsd - amounts.coreUsd);
+  const nonCoreTotal = amounts.satelliteUsd + amounts.yieldUsd;
+
+  if (nonCoreTotal <= 0) {
+    return {
+      coreUsd: minCoreUsd,
+      satelliteUsd: 0,
+      yieldUsd: 0,
+      floorApplied: true,
+    };
+  }
+
+  const satelliteShare = amounts.satelliteUsd / nonCoreTotal;
+  const yieldShare = amounts.yieldUsd / nonCoreTotal;
+
+  return {
+    coreUsd: minCoreUsd,
+    satelliteUsd: roundUsd(
+      Math.max(0, amounts.satelliteUsd - deficit * satelliteShare),
+    ),
+    yieldUsd: roundUsd(Math.max(0, amounts.yieldUsd - deficit * yieldShare)),
+    floorApplied: true,
+  };
+}
+
 function pctOf(part: number, total: number): number {
   if (total <= 0) return 0;
   return Math.round((part / total) * 1000) / 10;
@@ -150,6 +195,7 @@ function buildNarrative(input: {
   spilloverActive: boolean;
   spilloverAmount: number;
   liveDataReady: boolean;
+  bearCoreFloorApplied?: boolean;
 }): string[] {
   const bullets = [
     `Alokácia BTC ${input.corePercent}% — režim ${input.regimeLabel}, Final Score ${Math.round(input.finalScore)}.`,
@@ -157,6 +203,12 @@ function buildNarrative(input: {
     "Quality Bias: ETH CBBC > SOL → ETH váha z tokenPlans v satellite buckete.",
     `Yield kôš ${input.yieldPercent}% — live filter 3/3, váha skóre^2.5 (${formatUsdShort(input.yieldAmount)}).`,
   ];
+
+  if (input.bearCoreFloorApplied) {
+    bullets.push(
+      `BEAR guardrail: Core (BTC) uzamknutý na minimálne ${BEAR_MIN_CORE_PERCENT}% — deficit pomerne znížený zo Satellites a Yield.`,
+    );
+  }
 
   if (input.liveDataReady) {
     bullets.push(
@@ -205,19 +257,51 @@ export function computePortfolioBucketing(input: {
   const rawSat = roundUsd((deployedCapital * bucketRatios.satellite) / 100);
   const rawYield = roundUsd((deployedCapital * bucketRatios.yield) / 100);
 
-  const yieldAltcoins = buildYieldFilterAllocations(rawYield, yieldMetrics);
+  const yieldAltcoinsPreFloor = buildYieldFilterAllocations(
+    rawYield,
+    yieldMetrics,
+  );
 
   const spillover = applyYieldSpillover({
     coreUsd: rawCore,
     satelliteUsd: rawSat,
     yieldUsd: rawYield,
-    convictionCount: yieldAltcoins.conviction.length,
+    convictionCount: yieldAltcoinsPreFloor.conviction.length,
   });
 
+  const flooredAmounts = enforceBearCoreAmountFloor(regime, deployedCapital, {
+    coreUsd: spillover.coreUsd,
+    satelliteUsd: spillover.satelliteUsd,
+    yieldUsd: spillover.yieldUsd,
+  });
+
+  const yieldBudgetScale =
+    spillover.yieldUsd > 0
+      ? flooredAmounts.yieldUsd / spillover.yieldUsd
+      : 1;
+
+  const yieldAltcoins =
+    yieldBudgetScale < 1
+      ? {
+          conviction: yieldAltcoinsPreFloor.conviction.map((row) => ({
+            ...row,
+            amountUsd: roundUsd(row.amountUsd * yieldBudgetScale),
+            shareOfYieldPercent:
+              flooredAmounts.yieldUsd > 0
+                ? pctOf(
+                    roundUsd(row.amountUsd * yieldBudgetScale),
+                    flooredAmounts.yieldUsd,
+                  )
+                : 0,
+          })),
+          excluded: yieldAltcoinsPreFloor.excluded,
+        }
+      : yieldAltcoinsPreFloor;
+
   const buckets = buildBuckets(deployedCapital, {
-    core: spillover.coreUsd,
-    satellite: spillover.satelliteUsd,
-    yield: spillover.yieldUsd,
+    core: flooredAmounts.coreUsd,
+    satellite: flooredAmounts.satelliteUsd,
+    yield: flooredAmounts.yieldUsd,
   });
 
   const coreBucket = buckets.find((b) => b.category === "core")!;
@@ -277,11 +361,12 @@ export function computePortfolioBucketing(input: {
       corePercent: coreBucket.percent,
       satPercent: satBucket.percent,
       yieldPercent: yieldBucket.percent,
-      yieldAmount: spillover.yieldUsd > 0 ? spillover.yieldUsd : rawYield,
+      yieldAmount: flooredAmounts.yieldUsd > 0 ? flooredAmounts.yieldUsd : rawYield,
       convictionCount: yieldAltcoins.conviction.length,
       spilloverActive: spillover.spilloverActive,
       spilloverAmount: spillover.spilloverAmount,
       liveDataReady,
+      bearCoreFloorApplied: flooredAmounts.floorApplied,
     }),
   };
 }
