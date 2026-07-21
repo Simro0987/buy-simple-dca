@@ -75,3 +75,26 @@ export function computeAtr14Pct(bars: OhlcBar[]): number {
     ? trs.reduce((sum, v) => sum + v, 0) / trs.length
     : 2;
 }
+
+/** Latest daily true range as % of prior close — for Black Swan ATR spike detection. */
+export function computeDailyAtrPct(bars: OhlcBar[]): number {
+  if (bars.length < 2) return 0;
+  const last = bars[bars.length - 1];
+  const prev = bars[bars.length - 2];
+  if (prev.close <= 0) return 0;
+  const tr = Math.max(
+    last.high - last.low,
+    Math.abs(last.high - prev.close),
+    Math.abs(last.low - prev.close),
+  );
+  return (tr / prev.close) * 100;
+}
+
+/** Approximate 24h change from the last two daily closes. */
+export function computeChange24hPct(bars: OhlcBar[]): number {
+  if (bars.length < 2) return 0;
+  const prev = bars[bars.length - 2].close;
+  const last = bars[bars.length - 1].close;
+  if (prev <= 0) return 0;
+  return ((last - prev) / prev) * 100;
+}

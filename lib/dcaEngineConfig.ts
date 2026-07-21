@@ -9,6 +9,7 @@ import type {
 } from "@/lib/dcaTokenIndicators";
 import type { MacroTrend } from "@/lib/macroTrend";
 import type { ShortTermTrend } from "@/lib/shortTermTrend";
+import type { NoTradeZone } from "@/lib/noTradeZones";
 
 export const DEFAULT_WEEKLY_INVESTMENT = 431;
 
@@ -75,6 +76,9 @@ export interface TokenExecutionPlan {
   limitUsdBase: number | null;
   positionSizeMultiplier: number;
   positionSizeBoostPct: number;
+  noTradeActive: boolean;
+  noTradeZone: NoTradeZone | null;
+  noTradeBadge: string | null;
 }
 
 export interface RegimeFactorDisplay {

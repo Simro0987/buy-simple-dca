@@ -22,6 +22,7 @@ import { GTT_TOOLTIP, LIMIT_VALIDITY_DAYS } from "@/lib/limitDepthEngine";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { MACRO_TREND_BADGES } from "@/lib/macroTrend";
 import { SHORT_TERM_TREND_BADGES } from "@/lib/shortTermTrend";
+import { NO_TRADE_BADGE_STYLES } from "@/lib/noTradeZones";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
@@ -152,10 +153,18 @@ function DeployLegButton({
 function OrderAmountDisplay({
   value,
   copyable = false,
+  blocked = false,
 }: {
   value: number;
   copyable?: boolean;
+  blocked?: boolean;
 }) {
+  if (blocked) {
+    return (
+      <span className="inline-flex items-center gap-1 tabular-nums text-zinc-500">—</span>
+    );
+  }
+
   const animated = useCountUp(value, 1000);
   const formatted = formatCopyAmount2(animated);
 
@@ -273,6 +282,27 @@ function WeeklyTrendBadge({
   );
 }
 
+function NoTradeBadge({
+  noTradeZone,
+  badge,
+}: {
+  noTradeZone: TokenExecutionPlan["noTradeZone"];
+  badge: string;
+}) {
+  if (!noTradeZone) return null;
+
+  const style = NO_TRADE_BADGE_STYLES[noTradeZone];
+
+  return (
+    <motion.span
+      layout
+      className={`rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide transition-all duration-500 ease-in-out ${style.className}`}
+    >
+      {badge}
+    </motion.span>
+  );
+}
+
 function ExecutionOrderCard({
   plan,
   loading,
@@ -294,6 +324,7 @@ function ExecutionOrderCard({
   const unitPrice = plan.spotPrice;
   const marketState = getLegState(plan.symbol, "market");
   const limitState = getLegState(plan.symbol, "limit");
+  const isNoTrade = plan.noTradeActive;
 
   const yieldHeader =
     plan.category === "yield" && plan.convictionScore != null
@@ -317,7 +348,8 @@ function ExecutionOrderCard({
         : "Prečo tento limit?";
 
   const hasAnalyticalDetails = Boolean(
-    plan.entrySignal ||
+    plan.noTradeActive ||
+      plan.entrySignal ||
       plan.splitExplanation ||
       (plan.supportSnapApplied && plan.supportSnapNote) ||
       (plan.limitShare > 0 && plan.whyLimit),
@@ -378,6 +410,12 @@ function ExecutionOrderCard({
               />
               <MacroTrendBadge macroTrend={plan.macroTrend} />
               <WeeklyTrendBadge shortTermTrend={plan.shortTermTrend} />
+              {plan.noTradeActive && plan.noTradeBadge && plan.noTradeZone && (
+                <NoTradeBadge
+                  noTradeZone={plan.noTradeZone}
+                  badge={plan.noTradeBadge}
+                />
+              )}
               {(plan.minOrderMergeActive || plan.yieldMergeActive) && (
                 <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-300 transition-all duration-500 ease-in-out">
                   {plan.minOrderMergeActive ? "Merged" : "Min Order"}
@@ -503,15 +541,43 @@ function ExecutionOrderCard({
           )}
         </div>
 
-        <div className="rounded-2xl border border-orange-500/15 bg-orange-500/5 p-3">
+        <div
+          className={`rounded-2xl border p-3 transition-all duration-500 ease-in-out ${
+            isNoTrade
+              ? "border-rose-500/25 bg-rose-950/25 opacity-70"
+              : "border-orange-500/15 bg-orange-500/5"
+          }`}
+        >
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
+            <span
+              className={`text-[10px] font-bold uppercase tracking-wider ${
+                isNoTrade ? "text-rose-400/80" : "text-orange-400"
+              }`}
+            >
               LMT
             </span>
             <span className="text-[10px] font-medium tabular-nums text-zinc-500">
-              <ShareDisplay value={plan.limitShare} />
+              {isNoTrade ? "—" : <ShareDisplay value={plan.limitShare} />}
             </span>
           </div>
+          {isNoTrade ? (
+            <div className="mt-2 space-y-2">
+              {plan.noTradeBadge && plan.noTradeZone && (
+                <NoTradeBadge
+                  noTradeZone={plan.noTradeZone}
+                  badge={plan.noTradeBadge}
+                />
+              )}
+              <p className="text-lg font-bold tabular-nums text-zinc-500">—</p>
+              <p className="text-[10px] font-medium leading-relaxed text-rose-200/90">
+                {plan.whyLimit}
+              </p>
+              <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-600">
+                Ochranný režim — limitný príkaz deaktivovaný
+              </p>
+            </div>
+          ) : (
+            <>
           {plan.limitDepthBadge && plan.limitUsd > 0 && (
             <span
               className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
@@ -526,7 +592,11 @@ function ExecutionOrderCard({
             </span>
           )}
           <p className="mt-1 text-base font-bold text-white">
-            <OrderAmountDisplay value={plan.limitUsd} copyable />
+            <OrderAmountDisplay
+              value={plan.limitUsd}
+              copyable
+              blocked={isNoTrade}
+            />
           </p>
           {plan.limitUsd > 0 && (
             <div className="mt-1.5">
@@ -564,6 +634,7 @@ function ExecutionOrderCard({
                   compact
                   value={formatCopyLimitPrice4(plan.limitPrice)}
                   label="Kopírovať limitnú cenu"
+                  disabled={isNoTrade}
                 />
               </div>
               <p
@@ -580,7 +651,7 @@ function ExecutionOrderCard({
                 leg="limit"
                 amountUsd={plan.limitUsd}
                 state={limitState}
-                disabled={!executionAllowed}
+                disabled={!executionAllowed || isNoTrade}
                 onDeploy={() => onDeployLeg(plan.symbol, "limit")}
               />
               {limitState === "limit_watching" && (
@@ -593,6 +664,8 @@ function ExecutionOrderCard({
                 </button>
               )}
             </div>
+          )}
+            </>
           )}
         </div>
       </div>
@@ -651,16 +724,31 @@ function ExecutionOrderCard({
             </div>
           )}
 
-          {plan.limitShare > 0 && plan.whyLimit && (
-            <div className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
-              <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+          {(plan.noTradeActive || (plan.limitShare > 0 && plan.whyLimit)) && plan.whyLimit && (
+            <div
+              className={`rounded-xl border px-3 py-2.5 ${
+                plan.noTradeActive
+                  ? "border-rose-500/25 bg-rose-950/30"
+                  : "border-white/5 bg-white/[0.02]"
+              }`}
+            >
+              <p
+                className={`text-[9px] font-bold uppercase tracking-wider ${
+                  plan.noTradeActive ? "text-rose-400/90" : "text-zinc-500"
+                }`}
+              >
                 {whyLimitTitle}
               </p>
               <div className="mt-1 max-h-32 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
-                <p className="text-xs leading-relaxed text-zinc-400">
+                <p
+                  className={`text-xs leading-relaxed ${
+                    plan.noTradeActive ? "text-rose-100/90" : "text-zinc-400"
+                  }`}
+                >
                   {plan.whyLimit}
                 </p>
                 {plan.supportResistance &&
+                  !plan.noTradeActive &&
                   (plan.supportResistance.support1 != null ||
                     plan.supportResistance.resistance1 != null) && (
                     <p className="text-[10px] leading-relaxed text-zinc-500">

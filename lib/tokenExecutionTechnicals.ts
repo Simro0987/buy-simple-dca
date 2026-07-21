@@ -6,6 +6,8 @@ import {
 } from "@/lib/market-data/fetchKlines";
 import {
   computeAtr14Pct,
+  computeChange24hPct,
+  computeDailyAtrPct,
   computeEma,
   computeRsi14,
   computeSma,
@@ -18,6 +20,8 @@ export interface TokenExecutionTechnicals {
   price: number;
   rsi14: number;
   atr14dPct: number;
+  dailyAtrPct: number;
+  change24hPct: number;
   ema21: number;
   ema50: number;
   sma14: number;
@@ -121,6 +125,8 @@ export function buildTokenExecutionTechnicalsFromBars(
 
   const rsi14 = round1(computeRsi14(closes));
   const atr14dPct = round1(computeAtr14Pct(recentBars));
+  const dailyAtrPct = round1(computeDailyAtrPct(recentBars));
+  const change24hPct = round1(computeChange24hPct(recentBars));
   const ema21 = round2(computeEma(closes, 21));
   const ema50 = round2(computeEma(closes, 50));
   const sma14 = round2(computeSma(closes, 14));
@@ -134,6 +140,8 @@ export function buildTokenExecutionTechnicalsFromBars(
     price,
     rsi14,
     atr14dPct,
+    dailyAtrPct,
+    change24hPct,
     ema21,
     ema50,
     sma14,

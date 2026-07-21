@@ -22,6 +22,7 @@ import {
   applyPositionSizeToLimitUsd,
   buildPositionSizingNarrative,
 } from "@/lib/positionSizing";
+import { evaluateNoTradeZone } from "@/lib/noTradeZones";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
@@ -303,9 +304,45 @@ export function buildFinalExecutionOrders(
       const positionNarrative = buildPositionSizingNarrative(
         positionSizing.boostPct,
       );
-      const whyLimit = positionNarrative
+      let whyLimit = positionNarrative
         ? `${split.whyLimit} ${positionNarrative}`
         : split.whyLimit;
+
+      const tech = input.tokenTechnicals?.[row.symbol];
+      const change24h =
+        existing?.change24h != null && existing.change24h !== 0
+          ? existing.change24h
+          : (tech?.change24hPct ?? 0);
+      const noTrade = evaluateNoTradeZone({
+        rsi14: tokenInput.rsi14,
+        change24h,
+        dailyAtrPct: tech?.dailyAtrPct ?? null,
+        atr14dPct: tokenInput.atr14dPct,
+      });
+
+      let limitPrice = split.limitPrice;
+      let limitPullbackPct = split.limitPullbackPct;
+      let limitDepthMode = split.limitDepthMode;
+      let limitDepthBadge = split.limitDepthBadge;
+      let limitDepthNarrative = split.limitDepthNarrative;
+      let rsiS2BlendPct = split.rsiS2BlendPct;
+      let limitUsdBase = baseLimitUsd > 0 ? baseLimitUsd : null;
+      let positionSizeMultiplier = positionSizing.multiplier;
+      let positionSizeBoostPct = positionSizing.boostPct;
+
+      if (noTrade) {
+        limitUsd = 0;
+        limitPrice = 0;
+        limitPullbackPct = 0;
+        whyLimit = noTrade.narrative;
+        limitDepthMode = null;
+        limitDepthBadge = null;
+        limitDepthNarrative = null;
+        rsiS2BlendPct = null;
+        limitUsdBase = null;
+        positionSizeMultiplier = 1;
+        positionSizeBoostPct = 0;
+      }
 
       const adjustedTotalUsd = roundUsd(marketUsd + limitUsd);
 
@@ -325,10 +362,10 @@ export function buildFinalExecutionOrders(
         limitUsd,
         marketShare,
         limitShare,
-        limitPrice: split.limitPrice,
+        limitPrice,
         whyLimit,
         spotPrice: spotPrice || existing?.spotPrice || 0,
-        change24h: existing?.change24h ?? 0,
+        change24h,
         yieldMergeActive,
         minOrderMergeActive,
         mergedExecutionRoute,
@@ -343,7 +380,7 @@ export function buildFinalExecutionOrders(
         splitExplanation,
         minOrderRuleActive,
         safetyBrakeActive: split.safetyBrakeActive,
-        limitPullbackPct: split.limitPullbackPct,
+        limitPullbackPct,
         indicatorChips: indicatorSnapshot.chips,
         regimeStatusLabel: indicatorSnapshot.regimeStatusLabel,
         regimeStatusTone: indicatorSnapshot.regimeStatusTone,
@@ -368,14 +405,17 @@ export function buildFinalExecutionOrders(
         supportResistance: split.supportResistance,
         supportSnapApplied: split.supportSnapApplied,
         supportSnapNote: split.supportSnapNote,
-        limitDepthMode: split.limitDepthMode,
-        limitDepthBadge: split.limitDepthBadge,
-        limitDepthNarrative: split.limitDepthNarrative,
+        limitDepthMode,
+        limitDepthBadge,
+        limitDepthNarrative,
         limitValidityDays: split.limitValidityDays,
-        rsiS2BlendPct: split.rsiS2BlendPct,
-        limitUsdBase: baseLimitUsd > 0 ? baseLimitUsd : null,
-        positionSizeMultiplier: positionSizing.multiplier,
-        positionSizeBoostPct: positionSizing.boostPct,
+        rsiS2BlendPct,
+        limitUsdBase,
+        positionSizeMultiplier,
+        positionSizeBoostPct,
+        noTradeActive: noTrade != null,
+        noTradeZone: noTrade?.zone ?? null,
+        noTradeBadge: noTrade?.badge ?? null,
       };
     });
 }
