@@ -1,6 +1,7 @@
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { ALL_DCA_TOKENS } from "@/lib/dcaMarketData";
 import {
+  applyMinOrderAmountMerge,
   buildExecutionTokenInput,
   resolveCategoryExecutionSplit,
   toExecutionMarketContext,
@@ -196,11 +197,50 @@ export function buildFinalExecutionOrders(
         safetyBrakeActive: split.safetyBrakeActive,
       });
       const totalUsd = row.amountUsd;
-      const { marketUsd, limitUsd } = splitUsdAmounts(
+      const ema50Dev = ema50DeviationPct(spotPrice, ema50);
+      let { marketUsd, limitUsd } = splitUsdAmounts(
         totalUsd,
         split.marketShare,
         split.limitShare,
       );
+      let marketShare = split.marketShare;
+      let limitShare = split.limitShare;
+      let splitExplanation = split.splitExplanation;
+      let minOrderRuleActive = split.minOrderRuleActive;
+      let yieldMergeActive = split.yieldMergeActive;
+      let minOrderMergeActive = false;
+      let mergedExecutionRoute: "market" | "limit" | null = null;
+      let mergedTotalUsd = 0;
+
+      const minOrderMerge = applyMinOrderAmountMerge({
+        symbol: row.symbol,
+        marketUsd,
+        limitUsd,
+        marketShare,
+        limitShare,
+        router: {
+          rsi14: tokenInput.rsi14,
+          atr14dPct: tokenInput.atr14dPct,
+          finalScore: input.finalScore,
+          convictionScore: row.convictionScore ?? null,
+          priceVsSma14Pct: row.priceVsSma14Pct ?? null,
+          ema50DeviationPct: ema50Dev,
+          fundamentalScore: row.fundamentalScore ?? null,
+        },
+      });
+
+      if (minOrderMerge.minOrderMergeActive) {
+        marketUsd = minOrderMerge.marketUsd;
+        limitUsd = minOrderMerge.limitUsd;
+        marketShare = minOrderMerge.marketShare;
+        limitShare = minOrderMerge.limitShare;
+        splitExplanation = minOrderMerge.splitExplanation ?? splitExplanation;
+        minOrderRuleActive = true;
+        yieldMergeActive = true;
+        minOrderMergeActive = true;
+        mergedExecutionRoute = minOrderMerge.mergedExecutionRoute;
+        mergedTotalUsd = minOrderMerge.mergedTotalUsd;
+      }
 
       const weightPercent =
         deployedCapital > 0
@@ -222,15 +262,18 @@ export function buildFinalExecutionOrders(
         whyLimit: split.whyLimit,
         spotPrice: spotPrice || existing?.spotPrice || 0,
         change24h: existing?.change24h ?? 0,
-        yieldMergeActive: split.yieldMergeActive,
+        yieldMergeActive,
+        minOrderMergeActive,
+        mergedExecutionRoute,
+        mergedTotalUsd,
         brakeActive: split.safetyBrakeActive || input.brakeActive,
         hasLiveData: existing?.hasLiveData ?? spotPrice > 0,
         marketStatusFallback:
           existing?.marketStatusFallback ?? (existing?.spotPrice ?? spotPrice) <= 0,
         confidence: input.confidence,
         entrySignal: split.entrySignal,
-        splitExplanation: split.splitExplanation,
-        minOrderRuleActive: split.minOrderRuleActive,
+        splitExplanation,
+        minOrderRuleActive,
         safetyBrakeActive: split.safetyBrakeActive,
         limitPullbackPct: split.limitPullbackPct,
         indicatorChips: indicatorSnapshot.chips,

@@ -1,5 +1,8 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
-import { normalizeLimitPrice } from "@/lib/executionFormatting";
+import {
+  formatCopyAmount2,
+  normalizeLimitPrice,
+} from "@/lib/executionFormatting";
 import {
   buildDynamicLimitReasoning,
   computeBelowSpotPercent,
@@ -8,8 +11,33 @@ import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
+export const MIN_ORDER_USD_THRESHOLD = 10;
+export const MIN_ORDER_MERGE_SYMBOLS = new Set(["HYPE", "JUP", "SOL"]);
 export const CORE_PULLBACK_PCT = 2.5;
 export const SAFETY_BRAKE_SMA200_THRESHOLD_PCT = 15;
+
+export type MergedExecutionRoute = "market" | "limit";
+
+export interface SmartRouterInput {
+  rsi14: number | null;
+  atr14dPct: number | null;
+  finalScore: number;
+  convictionScore?: number | null;
+  priceVsSma14Pct?: number | null;
+  ema50DeviationPct?: number | null;
+  fundamentalScore?: number | null;
+}
+
+export interface MinOrderMergeResult {
+  marketUsd: number;
+  limitUsd: number;
+  marketShare: number;
+  limitShare: number;
+  minOrderMergeActive: boolean;
+  mergedExecutionRoute: MergedExecutionRoute | null;
+  mergedTotalUsd: number;
+  splitExplanation: string | null;
+}
 
 export interface ExecutionMarketContext {
   btc: {
@@ -315,6 +343,144 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive: false,
+  };
+}
+
+function roundUsd(value: number): number {
+  return Math.round(value * 100) / 100;
+}
+
+function buildMinOrderMergeExplanation(
+  route: MergedExecutionRoute,
+  mergedTotalUsd: number,
+): string {
+  const routeLabel = route === "market" ? "Market" : "Limit";
+  return `MERGED: MIN ORDER RULE (<${MIN_ORDER_USD_THRESHOLD} USD limit) • Zlúčené do ${routeLabel} (Spolu: ${formatCopyAmount2(mergedTotalUsd)} USD)`;
+}
+
+/**
+ * Smart execution router — evaluates RSI, volatility, score, and MA distance
+ * to route a merged order to Market (buy now) or Limit (wait for pullback).
+ */
+export function evaluateSmartExecutionRoute(
+  input: SmartRouterInput,
+): MergedExecutionRoute {
+  let marketScore = 0;
+  let limitScore = 0;
+
+  const rsi = input.rsi14;
+  if (rsi != null) {
+    if (rsi < 38) marketScore += 3;
+    else if (rsi < 45) marketScore += 1;
+    else if (rsi > 65) limitScore += 2;
+    else if (rsi > 55) limitScore += 1;
+  }
+
+  const atr = input.atr14dPct;
+  if (atr != null) {
+    if (atr >= 6) limitScore += 2;
+    else if (atr >= 4) limitScore += 1;
+    else marketScore += 1;
+  }
+
+  const score = input.convictionScore ?? input.finalScore;
+  if (score >= 70) marketScore += 2;
+  else if (score >= 55) marketScore += 1;
+  else if (score < 40) limitScore += 1;
+
+  const sma14 = input.priceVsSma14Pct;
+  if (sma14 != null) {
+    if (sma14 <= -3) marketScore += 2;
+    else if (sma14 < 0) marketScore += 1;
+    else if (sma14 >= 5) limitScore += 2;
+    else if (sma14 > 0) limitScore += 1;
+  }
+
+  const ema50 = input.ema50DeviationPct;
+  if (ema50 != null) {
+    if (ema50 <= -5) marketScore += 1;
+    else if (ema50 >= 8) limitScore += 1;
+  }
+
+  const fundamental = input.fundamentalScore;
+  if (fundamental != null) {
+    if (fundamental >= 70) marketScore += 1;
+    else if (fundamental < 45) limitScore += 1;
+  }
+
+  return marketScore >= limitScore ? "market" : "limit";
+}
+
+/**
+ * Merges sub-minimum Limit legs (< $10) with Market for HYPE, JUP, and SOL.
+ * After merge: total < $10 → Market; total ≥ $10 → smart router picks route.
+ */
+export function applyMinOrderAmountMerge(input: {
+  symbol: string;
+  marketUsd: number;
+  limitUsd: number;
+  marketShare: number;
+  limitShare: number;
+  router: SmartRouterInput;
+}): MinOrderMergeResult {
+  const passthrough = {
+    marketUsd: input.marketUsd,
+    limitUsd: input.limitUsd,
+    marketShare: input.marketShare,
+    limitShare: input.limitShare,
+    minOrderMergeActive: false,
+    mergedExecutionRoute: null as MergedExecutionRoute | null,
+    mergedTotalUsd: 0,
+    splitExplanation: null as string | null,
+  };
+
+  if (!MIN_ORDER_MERGE_SYMBOLS.has(input.symbol)) {
+    return passthrough;
+  }
+
+  if (input.limitUsd <= 0 || input.limitUsd >= MIN_ORDER_USD_THRESHOLD) {
+    return passthrough;
+  }
+
+  const mergedTotalUsd = roundUsd(input.marketUsd + input.limitUsd);
+
+  if (mergedTotalUsd < MIN_ORDER_USD_THRESHOLD) {
+    return {
+      marketUsd: mergedTotalUsd,
+      limitUsd: 0,
+      marketShare: 100,
+      limitShare: 0,
+      minOrderMergeActive: true,
+      mergedExecutionRoute: "market",
+      mergedTotalUsd,
+      splitExplanation: buildMinOrderMergeExplanation("market", mergedTotalUsd),
+    };
+  }
+
+  const route = evaluateSmartExecutionRoute(input.router);
+
+  if (route === "market") {
+    return {
+      marketUsd: mergedTotalUsd,
+      limitUsd: 0,
+      marketShare: 100,
+      limitShare: 0,
+      minOrderMergeActive: true,
+      mergedExecutionRoute: "market",
+      mergedTotalUsd,
+      splitExplanation: buildMinOrderMergeExplanation("market", mergedTotalUsd),
+    };
+  }
+
+  return {
+    marketUsd: 0,
+    limitUsd: mergedTotalUsd,
+    marketShare: 0,
+    limitShare: 100,
+    minOrderMergeActive: true,
+    mergedExecutionRoute: "limit",
+    mergedTotalUsd,
+    splitExplanation: buildMinOrderMergeExplanation("limit", mergedTotalUsd),
   };
 }
 

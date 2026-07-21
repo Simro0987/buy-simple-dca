@@ -26,6 +26,9 @@ export interface TokenExecutionPlan {
   spotPrice: number;
   change24h: number;
   yieldMergeActive: boolean;
+  minOrderMergeActive: boolean;
+  mergedExecutionRoute: "market" | "limit" | null;
+  mergedTotalUsd: number;
   brakeActive: boolean;
   hasLiveData: boolean;
   marketStatusFallback: boolean;

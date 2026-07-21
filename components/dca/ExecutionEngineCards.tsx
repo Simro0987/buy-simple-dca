@@ -312,9 +312,9 @@ function ExecutionOrderCard({
                 label={plan.regimeStatusLabel}
                 tone={plan.regimeStatusTone}
               />
-              {plan.yieldMergeActive && (
+              {(plan.minOrderMergeActive || plan.yieldMergeActive) && (
                 <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-300 transition-all duration-500 ease-in-out">
-                  Min Order
+                  {plan.minOrderMergeActive ? "Merged" : "Min Order"}
                 </span>
               )}
             </div>
@@ -389,7 +389,7 @@ function ExecutionOrderCard({
       </AnimatePresence>
 
       <AnimatePresence mode="wait">
-        {plan.minOrderRuleActive && plan.splitExplanation ? (
+        {(plan.minOrderRuleActive || plan.minOrderMergeActive) && plan.splitExplanation ? (
           <motion.p
             key={`min-${plan.splitExplanation}`}
             initial={{ opacity: 0, y: 6, scale: 0.98 }}
