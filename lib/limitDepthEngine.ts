@@ -11,6 +11,10 @@ import {
   type MacroTrend,
 } from "@/lib/macroTrend";
 import {
+  applyShortTermTrendBlendFactor,
+  type ShortTermTrend,
+} from "@/lib/shortTermTrend";
+import {
   computeSupportResistance,
   SNAP_ABOVE_SUPPORT_PCT,
   type SupportResistanceLevels,
@@ -74,8 +78,9 @@ function resolveInterpolatedLimit(input: {
   support1: number | null;
   support2: number | null;
   macroTrend?: MacroTrend | null;
+  shortTermTrend?: ShortTermTrend | null;
 }): LimitResolution | null {
-  const { spotPrice, rsi14, atr14dPct, macroTrend } = input;
+  const { spotPrice, rsi14, atr14dPct, macroTrend, shortTermTrend } = input;
   const s1Limit = supportSnapPrice(input.support1);
   const s2Raw = input.support2 ?? input.support1;
   const s2Limit = supportSnapPrice(s2Raw);
@@ -85,7 +90,12 @@ function resolveInterpolatedLimit(input: {
   }
 
   const rsiBlend = computeRsiS2BlendFactor(rsi14);
-  const blendFactor = applyBearMarketBlendFactor(rsiBlend, macroTrend ?? null);
+  const macroAdjusted = applyBearMarketBlendFactor(rsiBlend, macroTrend ?? null);
+  const blendFactor = applyShortTermTrendBlendFactor(
+    macroAdjusted,
+    shortTermTrend ?? null,
+    rsi14,
+  );
   const effectiveS2 = s2Limit > 0 && s2Limit < s1Limit ? s2Limit : s1Limit;
   const interpolated = normalizeLimitPrice(
     s1Limit + blendFactor * (effectiveS2 - s1Limit),
@@ -138,6 +148,7 @@ export function computeAutonomousLimit(input: {
   priceVsSma14Pct?: number | null;
   distSma200Pct?: number | null;
   macroTrend?: MacroTrend | null;
+  shortTermTrend?: ShortTermTrend | null;
 }): AutonomousLimitResult | null {
   void input.symbol;
   void input.category;
@@ -172,6 +183,7 @@ export function computeAutonomousLimit(input: {
     support1: supportResistance.support1,
     support2: supportResistance.support2,
     macroTrend: input.macroTrend,
+    shortTermTrend: input.shortTermTrend,
   });
 
   if (!resolution) {
@@ -194,11 +206,17 @@ export function computeAutonomousLimit(input: {
 
   const snapNote = atrGuardrailApplied
     ? `Limit korigovaný 7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14) — interpolácia S1→S2 presiahla 7-dňový dosah.`
-    : input.macroTrend === "bear"
-      ? `Defenzívny Bear režim — limit posunutý smerom k S2 (${Math.round(blendFactor * 100)} % blend, minimum 50 %).`
-      : blendFactor > 0
-        ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
-        : `Limit prichytený na S1 — RSI ${input.rsi14.toFixed(1)} drží neutrálny rozsah.`;
+    : input.shortTermTrend === "sideways"
+      ? "Týždenný SIDEWAYS trend — limit defenzívne na S1, bez lovu hlbokých knotov."
+      : input.shortTermTrend === "bear"
+        ? `Krátkodobý Bear — priorita Deep Wick / S2 (${Math.round(blendFactor * 100)} % blend).`
+        : input.shortTermTrend === "bull"
+          ? `Krátkodobý Bull — limit tesne pod spotom (${Math.round(blendFactor * 100)} % blend k S2).`
+          : input.macroTrend === "bear"
+            ? `Defenzívny Bear režim — limit posunutý smerom k S2 (${Math.round(blendFactor * 100)} % blend, minimum 50 %).`
+            : blendFactor > 0
+              ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
+              : `Limit prichytený na S1 — RSI ${input.rsi14.toFixed(1)} drží neutrálny rozsah.`;
 
   return {
     limitPrice,

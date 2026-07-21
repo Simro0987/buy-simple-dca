@@ -353,6 +353,8 @@ export function buildFinalExecutionOrders(
         distSma200Pct,
         sma200: tokenInput.sma200 ?? null,
         macroTrend: tokenInput.macroTrend ?? null,
+        shortTermTrend: tokenInput.shortTermTrend ?? null,
+        ema21: tokenInput.ema21 ?? null,
         ema50DeviationPct: ema50DeviationPct(spotPrice, ema50),
         fundamentalScore: row.fundamentalScore ?? null,
         filtersPassedCount: row.filtersPassedCount ?? null,

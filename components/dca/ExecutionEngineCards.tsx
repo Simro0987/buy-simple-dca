@@ -21,6 +21,7 @@ import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
 import { GTT_TOOLTIP, LIMIT_VALIDITY_DAYS } from "@/lib/limitDepthEngine";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { MACRO_TREND_BADGES } from "@/lib/macroTrend";
+import { SHORT_TERM_TREND_BADGES } from "@/lib/shortTermTrend";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
@@ -246,6 +247,32 @@ function MacroTrendBadge({
   );
 }
 
+function WeeklyTrendBadge({
+  shortTermTrend,
+}: {
+  shortTermTrend: TokenExecutionPlan["shortTermTrend"];
+}) {
+  if (!shortTermTrend) return null;
+
+  const badge = SHORT_TERM_TREND_BADGES[shortTermTrend];
+  const toneClasses =
+    badge.tone === "bull"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300"
+      : badge.tone === "bear"
+        ? "border-rose-500/25 bg-rose-500/10 text-rose-300"
+        : "border-amber-500/25 bg-amber-500/10 text-amber-200";
+
+  return (
+    <motion.span
+      layout
+      className={`rounded-full border px-2 py-0.5 text-[8px] font-semibold tracking-wide transition-all duration-500 ease-in-out ${toneClasses}`}
+      title="Týždenný trend (EMA 21 ± 0.5×ATR)"
+    >
+      {badge.label}
+    </motion.span>
+  );
+}
+
 function ExecutionOrderCard({
   plan,
   loading,
@@ -350,6 +377,7 @@ function ExecutionOrderCard({
                 tone={plan.regimeStatusTone}
               />
               <MacroTrendBadge macroTrend={plan.macroTrend} />
+              <WeeklyTrendBadge shortTermTrend={plan.shortTermTrend} />
               {(plan.minOrderMergeActive || plan.yieldMergeActive) && (
                 <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-300 transition-all duration-500 ease-in-out">
                   {plan.minOrderMergeActive ? "Merged" : "Min Order"}

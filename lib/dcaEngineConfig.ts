@@ -8,6 +8,7 @@ import type {
   TokenIndicatorChip,
 } from "@/lib/dcaTokenIndicators";
 import type { MacroTrend } from "@/lib/macroTrend";
+import type { ShortTermTrend } from "@/lib/shortTermTrend";
 
 export const DEFAULT_WEEKLY_INVESTMENT = 431;
 
@@ -51,6 +52,8 @@ export interface TokenExecutionPlan {
   distSma200Pct: number | null;
   sma200: number | null;
   macroTrend: MacroTrend | null;
+  shortTermTrend: ShortTermTrend | null;
+  ema21: number | null;
   ema50DeviationPct: number | null;
   fundamentalScore: number | null;
   filtersPassedCount: number | null;

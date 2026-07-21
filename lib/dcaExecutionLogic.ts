@@ -21,7 +21,12 @@ import {
   LIMIT_VALIDITY_DAYS,
   type LimitDepthMode,
 } from "@/lib/limitDepthEngine";
-import { detectMacroTrend, buildMacroTrendNarrative, type MacroTrend } from "@/lib/macroTrend";
+import { detectMacroTrend, type MacroTrend } from "@/lib/macroTrend";
+import {
+  buildCombinedTrendNarrative,
+  detectShortTermTrend,
+  type ShortTermTrend,
+} from "@/lib/shortTermTrend";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const MIN_ORDER_USD_THRESHOLD = 10;
@@ -88,6 +93,8 @@ export interface ExecutionTokenInput {
   sma200?: number | null;
   distSma200Pct?: number | null;
   macroTrend?: MacroTrend | null;
+  shortTermTrend?: ShortTermTrend | null;
+  ema21?: number | null;
   support1?: number | null;
   support2?: number | null;
   support1Source?: string;
@@ -207,7 +214,10 @@ function buildWhyLimit(
     supportResistance: options?.supportResistance ?? null,
     supportSnapNote: options?.supportSnapNote ?? null,
     limitDepthNarrative: options?.limitDepthNarrative ?? null,
-    macroTrendNarrative: buildMacroTrendNarrative(input.macroTrend ?? null),
+    macroTrendNarrative: buildCombinedTrendNarrative(
+      input.macroTrend ?? null,
+      input.shortTermTrend ?? null,
+    ),
   });
 }
 
@@ -235,6 +245,7 @@ function resolveAutonomousLimitFields(
     priceVsSma14Pct: input.priceVsSma14Pct,
     distSma200Pct: input.distSma200Pct,
     macroTrend: input.macroTrend,
+    shortTermTrend: input.shortTermTrend,
   });
 
   if (!autonomous) return null;
@@ -774,10 +785,12 @@ export function buildExecutionTokenInput(input: {
   tokenTechnicals?: {
     rsi14: number;
     atr14dPct: number;
+    ema21: number;
     ema50: number;
     sma14: number;
     sma200: number;
     macroTrend?: MacroTrend | null;
+    shortTermTrend?: ShortTermTrend | null;
     support1: number | null;
     support2: number | null;
     support1Source: string;
@@ -787,12 +800,21 @@ export function buildExecutionTokenInput(input: {
 }): ExecutionTokenInput {
   const ctx = input.marketContext;
 
-  const enrich = (partial: ExecutionTokenInput): ExecutionTokenInput => ({
-    ...partial,
-    macroTrend:
-      partial.macroTrend ??
-      detectMacroTrend(partial.spotPrice, partial.sma200),
-  });
+  const enrich = (partial: ExecutionTokenInput): ExecutionTokenInput => {
+    const atr14dPct = partial.atr14dPct ?? null;
+    const ema21 = partial.ema21 ?? null;
+    return {
+      ...partial,
+      macroTrend:
+        partial.macroTrend ??
+        detectMacroTrend(partial.spotPrice, partial.sma200),
+      shortTermTrend:
+        partial.shortTermTrend ??
+        (ema21 != null && atr14dPct != null
+          ? detectShortTermTrend(partial.spotPrice, ema21, atr14dPct)
+          : null),
+    };
+  };
 
   if (input.category === "core" && ctx) {
     const tech = input.tokenTechnicals;
@@ -807,11 +829,13 @@ export function buildExecutionTokenInput(input: {
       brakeActive: input.brakeActive,
       rsi14: tech?.rsi14 ?? ctx.btc.rsi14 ?? input.rsi14,
       atr14dPct: tech?.atr14dPct ?? ctx.btc.atr14dPct ?? input.atr14dPct,
+      ema21: tech?.ema21,
       ema50: tech?.ema50 ?? ctx.btc.ema50,
       sma14: tech?.sma14,
       sma200,
       distSma200Pct: ctx.btc.distSma200Pct,
       macroTrend: tech?.macroTrend ?? null,
+      shortTermTrend: tech?.shortTermTrend ?? null,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
@@ -825,10 +849,12 @@ export function buildExecutionTokenInput(input: {
       ...input,
       rsi14: tech?.rsi14 ?? ctx.eth.rsi14 ?? input.rsi14,
       atr14dPct: tech?.atr14dPct ?? ctx.eth.atr14dPct ?? input.atr14dPct,
+      ema21: tech?.ema21,
       ema50: tech?.ema50,
       sma14: tech?.sma14,
       sma200: tech?.sma200,
       macroTrend: tech?.macroTrend ?? null,
+      shortTermTrend: tech?.shortTermTrend ?? null,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
@@ -843,10 +869,12 @@ export function buildExecutionTokenInput(input: {
       ...input,
       rsi14: tech?.rsi14 ?? ctx.sol.rsi14 ?? input.rsi14,
       atr14dPct: tech?.atr14dPct ?? ctx.sol.atr14dPct ?? input.atr14dPct,
+      ema21: tech?.ema21,
       ema50: tech?.ema50,
       sma14: tech?.sma14,
       sma200: tech?.sma200,
       macroTrend: tech?.macroTrend ?? null,
+      shortTermTrend: tech?.shortTermTrend ?? null,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
@@ -860,10 +888,12 @@ export function buildExecutionTokenInput(input: {
     ...input,
     rsi14: tech?.rsi14 ?? input.rsi14,
     atr14dPct: tech?.atr14dPct ?? input.atr14dPct,
+    ema21: tech?.ema21,
     ema50: tech?.ema50,
     sma14: tech?.sma14,
     sma200: tech?.sma200,
     macroTrend: tech?.macroTrend ?? null,
+    shortTermTrend: tech?.shortTermTrend ?? null,
     support1: tech?.support1,
     support2: tech?.support2,
     support1Source: tech?.support1Source,

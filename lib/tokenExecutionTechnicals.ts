@@ -11,16 +11,19 @@ import {
   computeSma,
 } from "@/lib/dcaTechnicalIndicators";
 import { detectMacroTrend, type MacroTrend } from "@/lib/macroTrend";
+import { detectShortTermTrend, type ShortTermTrend } from "@/lib/shortTermTrend";
 
 export interface TokenExecutionTechnicals {
   symbol: string;
   price: number;
   rsi14: number;
   atr14dPct: number;
+  ema21: number;
   ema50: number;
   sma14: number;
   sma200: number;
   macroTrend: MacroTrend | null;
+  shortTermTrend: ShortTermTrend | null;
   support1: number | null;
   support2: number | null;
   support1Source: string;
@@ -118,10 +121,12 @@ export function buildTokenExecutionTechnicalsFromBars(
 
   const rsi14 = round1(computeRsi14(closes));
   const atr14dPct = round1(computeAtr14Pct(recentBars));
+  const ema21 = round2(computeEma(closes, 21));
   const ema50 = round2(computeEma(closes, 50));
   const sma14 = round2(computeSma(closes, 14));
   const sma200 = round2(computeSma(closes, 200));
   const macroTrend = detectMacroTrend(price, sma200);
+  const shortTermTrend = detectShortTermTrend(price, ema21, atr14dPct);
   const supports = pickSupportsFromBars(price, recentBars, ema50, sma14, sma200);
 
   return {
@@ -129,10 +134,12 @@ export function buildTokenExecutionTechnicalsFromBars(
     price,
     rsi14,
     atr14dPct,
+    ema21,
     ema50,
     sma14,
     sma200,
     macroTrend,
+    shortTermTrend,
     support1: supports.support1 ? round2(supports.support1) : null,
     support2: supports.support2 ? round2(supports.support2) : null,
     support1Source: supports.support1Source,
