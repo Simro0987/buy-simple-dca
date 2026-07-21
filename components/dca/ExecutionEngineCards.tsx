@@ -11,6 +11,7 @@ import {
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
 import { DcaCollapsibleDetails } from "@/components/dca/DcaCollapsibleDetails";
+import { TokenRsiGauge } from "@/components/dca/TokenRsiGauge";
 import {
   DcaTokenFilterBar,
   filterExecutionOrders,
@@ -384,6 +385,14 @@ function ExecutionOrderCard({
         </div>
       )}
 
+      <div className="mb-3">
+        <TokenRsiGauge
+          rsi={plan.rsi14}
+          symbol={plan.symbol}
+          loading={loading}
+        />
+      </div>
+
       <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-zinc-800/80">
         <motion.div
           layout
@@ -455,7 +464,9 @@ function ExecutionOrderCard({
               className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
                 plan.limitDepthMode === "deep_wick"
                   ? "border-orange-500/35 bg-orange-500/15 text-orange-300"
-                  : "border-emerald-500/30 bg-emerald-500/12 text-emerald-300"
+                  : plan.rsiS2BlendPct != null && plan.rsiS2BlendPct > 0
+                    ? "border-cyan-500/30 bg-cyan-500/12 text-cyan-300"
+                    : "border-emerald-500/30 bg-emerald-500/12 text-emerald-300"
               }`}
             >
               {plan.limitDepthBadge}

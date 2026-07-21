@@ -343,6 +343,7 @@ export function buildFinalExecutionOrders(
         limitDepthBadge: split.limitDepthBadge,
         limitDepthNarrative: split.limitDepthNarrative,
         limitValidityDays: split.limitValidityDays,
+        rsiS2BlendPct: split.rsiS2BlendPct,
       };
     });
 }

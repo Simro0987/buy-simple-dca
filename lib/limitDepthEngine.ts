@@ -2,6 +2,11 @@ import type { AssetCategory } from "@/lib/portfolioStorage";
 import { normalizeLimitPrice } from "@/lib/executionFormatting";
 import { formatDecimal } from "@/lib/numberFormat";
 import {
+  buildRsiInterpolationNarrative,
+  computeRsiS2BlendFactor,
+  resolveFluidLimitBadge,
+} from "@/lib/rsiInterpolation";
+import {
   computeSupportResistance,
   SNAP_ABOVE_SUPPORT_PCT,
   type SupportResistanceLevels,
@@ -9,7 +14,7 @@ import {
 
 export const LIMIT_VALIDITY_DAYS = 7;
 
-/** 7-day feasibility guardrail — used ONLY in Deep Wick when S2 is too deep. */
+/** 7-day feasibility guardrail — limit never deeper than spot − 1.5×ATR14. */
 export const DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER = 1.5;
 
 export const SEVEN_DAY_CALIBRATION_NARRATIVE =
@@ -30,23 +35,8 @@ export const LIMIT_DEPTH_BADGES: Record<LimitDepthMode, string> = {
   deep_wick: "DEEP WICK (LOV KNOTOV)",
 };
 
-const DEEP_WICK_FG_THRESHOLD = 20;
-const DEEP_WICK_RSI_THRESHOLD = 30;
-
 function round1(value: number): number {
   return Math.round(value * 10) / 10;
-}
-
-export function resolveLimitDepthMode(input: {
-  fearGreedValue: number;
-  rsi14: number | null;
-  atr14dPct: number | null;
-}): LimitDepthMode {
-  if (input.fearGreedValue < DEEP_WICK_FG_THRESHOLD) return "deep_wick";
-  if (input.rsi14 != null && input.rsi14 < DEEP_WICK_RSI_THRESHOLD) {
-    return "deep_wick";
-  }
-  return "standard";
 }
 
 function supportSnapPrice(support: number | null | undefined): number {
@@ -54,11 +44,7 @@ function supportSnapPrice(support: number | null | undefined): number {
   return normalizeLimitPrice(support * (1 + SNAP_ABOVE_SUPPORT_PCT / 100));
 }
 
-/** 7-day ATR guardrail floor — only for Deep Wick when S2 is unrealistically deep. */
-function atrGuardrailFloor(
-  spotPrice: number,
-  atr14dPct: number,
-): number {
+function atrGuardrailFloor(spotPrice: number, atr14dPct: number): number {
   if (spotPrice <= 0 || atr14dPct <= 0) return 0;
   return normalizeLimitPrice(
     spotPrice *
@@ -66,141 +52,55 @@ function atrGuardrailFloor(
   );
 }
 
-function supportDepthPct(spotPrice: number, supportPrice: number): number {
-  if (spotPrice <= 0 || supportPrice <= 0) return 0;
-  return ((spotPrice - supportPrice) / spotPrice) * 100;
-}
-
 interface LimitResolution {
   limitPrice: number;
-  structuralSupportUsed: boolean;
+  blendFactor: number;
   atrGuardrailApplied: boolean;
-  supportSource: string;
-  supportLevel: number | null;
+  interpolatedFromS1: number;
+  interpolatedFromS2: number;
 }
 
 /**
- * Standard: snap directly to structural S1 — no ATR subtraction.
- * Deep Wick: snap to S2; if S2 is deeper than 1.5×ATR14, raise to ATR guardrail.
+ * Fluid limit: lerp between S1 and S2 by RSI blend factor, then clamp to ATR guardrail.
  */
-function resolveStructuralLimit(input: {
+function resolveInterpolatedLimit(input: {
   spotPrice: number;
-  mode: LimitDepthMode;
+  rsi14: number;
   atr14dPct: number;
   support1: number | null;
   support2: number | null;
-  support1Source: string;
-  support2Source: string;
-}): LimitResolution {
-  const { spotPrice, mode, atr14dPct } = input;
+}): LimitResolution | null {
+  const { spotPrice, rsi14, atr14dPct } = input;
+  const s1Limit = supportSnapPrice(input.support1);
+  const s2Raw = input.support2 ?? input.support1;
+  const s2Limit = supportSnapPrice(s2Raw);
 
-  if (mode === "standard") {
-    const s1 = input.support1;
-    const s1Limit = supportSnapPrice(s1);
-
-    if (s1Limit > 0 && s1Limit < spotPrice * 0.999) {
-      return {
-        limitPrice: s1Limit,
-        structuralSupportUsed: true,
-        atrGuardrailApplied: false,
-        supportSource: input.support1Source,
-        supportLevel: s1,
-      };
-    }
-
-    return {
-      limitPrice: 0,
-      structuralSupportUsed: false,
-      atrGuardrailApplied: false,
-      supportSource: input.support1Source,
-      supportLevel: s1,
-    };
+  if (s1Limit <= 0 || s1Limit >= spotPrice) {
+    return null;
   }
 
-  const s2 = input.support2 ?? input.support1;
-  const s2Source =
-    input.support2 != null ? input.support2Source : input.support1Source;
-  const s2Limit = supportSnapPrice(s2);
+  const blendFactor = computeRsiS2BlendFactor(rsi14);
+  const effectiveS2 = s2Limit > 0 && s2Limit < s1Limit ? s2Limit : s1Limit;
+  const interpolated = normalizeLimitPrice(
+    s1Limit + blendFactor * (effectiveS2 - s1Limit),
+  );
+
   const guardrail = atrGuardrailFloor(spotPrice, atr14dPct);
-  const maxDepthPct = DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER * atr14dPct;
+  const atrGuardrailApplied =
+    guardrail > 0 && interpolated < guardrail && blendFactor > 0;
 
-  if (s2Limit > 0 && s2 != null) {
-    const s2DepthPct = supportDepthPct(spotPrice, s2);
-
-    if (s2DepthPct <= maxDepthPct) {
-      return {
-        limitPrice: s2Limit,
-        structuralSupportUsed: true,
-        atrGuardrailApplied: false,
-        supportSource: s2Source,
-        supportLevel: s2,
-      };
-    }
-
-    if (guardrail > 0) {
-      return {
-        limitPrice: guardrail,
-        structuralSupportUsed: true,
-        atrGuardrailApplied: true,
-        supportSource: s2Source,
-        supportLevel: s2,
-      };
-    }
-  }
-
-  if (guardrail > 0) {
-    return {
-      limitPrice: guardrail,
-      structuralSupportUsed: false,
-      atrGuardrailApplied: true,
-      supportSource: "ATR mantinel",
-      supportLevel: null,
-    };
-  }
+  const limitPrice =
+    atrGuardrailApplied && guardrail > 0
+      ? guardrail
+      : interpolated;
 
   return {
-    limitPrice: 0,
-    structuralSupportUsed: false,
-    atrGuardrailApplied: false,
-    supportSource: s2Source,
-    supportLevel: s2,
+    limitPrice,
+    blendFactor,
+    atrGuardrailApplied,
+    interpolatedFromS1: s1Limit,
+    interpolatedFromS2: effectiveS2,
   };
-}
-
-function buildDepthNarrative(input: {
-  mode: LimitDepthMode;
-  resolution: LimitResolution;
-  fearGreedValue: number;
-  rsi14: number;
-  atr14dPct: number;
-  limitPrice: number;
-}): string {
-  const { resolution, mode } = input;
-  const supportLabel =
-    resolution.supportLevel != null
-      ? `${resolution.supportSource} ${formatDecimal(resolution.supportLevel, 4)}`
-      : resolution.supportSource;
-
-  let logicText: string;
-
-  if (mode === "standard") {
-    logicText = resolution.structuralSupportUsed
-      ? `Cena prichytená na štrukturálny Support S1 (${supportLabel}).`
-      : "Čakáme na identifikáciu štrukturálneho Supportu S1 z klines.";
-  } else if (resolution.atrGuardrailApplied) {
-    logicText =
-      `Cena cieli na hlboký Support S2 (${supportLabel}), avšak bola korigovaná ` +
-      `7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14 = ` +
-      `−${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER * input.atr14dPct, 2)} %) ` +
-      "pre zachovanie reálnej šance na vyplnenie príkazu.";
-  } else {
-    logicText = `Cena prichytená na hlboký štrukturálny Support S2 (${supportLabel}).`;
-  }
-
-  return (
-    `${logicText} F&G ${Math.round(input.fearGreedValue)} · RSI ${input.rsi14.toFixed(0)} · ` +
-    `ATR14 ${formatDecimal(input.atr14dPct, 1)} % · Cieľ ${formatDecimal(input.limitPrice, 4)}.`
-  );
 }
 
 export interface AutonomousLimitResult {
@@ -209,6 +109,7 @@ export interface AutonomousLimitResult {
   limitDepthMode: LimitDepthMode;
   limitDepthBadge: string;
   limitDepthNarrative: string;
+  rsiS2BlendPct: number;
   supportResistance: SupportResistanceLevels;
   supportSnapApplied: boolean;
   supportSnapNote: string | null;
@@ -233,6 +134,7 @@ export function computeAutonomousLimit(input: {
 }): AutonomousLimitResult | null {
   void input.symbol;
   void input.category;
+  void input.fearGreedValue;
 
   if (
     input.spotPrice <= 0 ||
@@ -241,12 +143,6 @@ export function computeAutonomousLimit(input: {
   ) {
     return null;
   }
-
-  const mode = resolveLimitDepthMode({
-    fearGreedValue: input.fearGreedValue,
-    rsi14: input.rsi14,
-    atr14dPct: input.atr14dPct,
-  });
 
   const supportResistance = computeSupportResistance({
     spotPrice: input.spotPrice,
@@ -262,48 +158,59 @@ export function computeAutonomousLimit(input: {
     support2Source: input.support2Source,
   });
 
-  const resolution = resolveStructuralLimit({
+  const resolution = resolveInterpolatedLimit({
     spotPrice: input.spotPrice,
-    mode,
+    rsi14: input.rsi14,
     atr14dPct: input.atr14dPct,
     support1: supportResistance.support1,
     support2: supportResistance.support2,
-    support1Source: supportResistance.supportSource,
-    support2Source: supportResistance.support2Source,
   });
 
-  if (resolution.limitPrice <= 0) {
+  if (!resolution) {
     return null;
   }
 
-  const limitPrice = resolution.limitPrice;
+  const { limitPrice, blendFactor, atrGuardrailApplied } = resolution;
+  const badge = resolveFluidLimitBadge(blendFactor);
   const limitPullbackPct =
     input.spotPrice > 0
       ? round1(((input.spotPrice - limitPrice) / input.spotPrice) * 100)
       : 0;
 
-  const snapNote = resolution.atrGuardrailApplied
-    ? `Limit korigovaný 7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14) — S2 príliš hlboký pre 7-dňové okno.`
-    : resolution.structuralSupportUsed
-      ? `Limit prichytený na ${resolution.supportSource} zóne (${formatDecimal(resolution.supportLevel ?? 0, 4)}).`
-      : null;
+  const narrative = buildRsiInterpolationNarrative({
+    rsi14: input.rsi14,
+    blendFactor,
+    atrGuardrailApplied,
+    limitPrice,
+  });
+
+  const snapNote = atrGuardrailApplied
+    ? `Limit korigovaný 7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14) — interpolácia S1→S2 presiahla 7-dňový dosah.`
+    : blendFactor > 0
+      ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
+      : `Limit prichytený na S1 — RSI ${input.rsi14.toFixed(1)} drží neutrálny rozsah.`;
 
   return {
     limitPrice,
     limitPullbackPct,
-    limitDepthMode: mode,
-    limitDepthBadge: LIMIT_DEPTH_BADGES[mode],
-    limitDepthNarrative: buildDepthNarrative({
-      mode,
-      resolution,
-      fearGreedValue: input.fearGreedValue,
-      rsi14: input.rsi14,
-      atr14dPct: input.atr14dPct,
-      limitPrice,
-    }),
+    limitDepthMode: badge.mode,
+    limitDepthBadge: badge.badge,
+    limitDepthNarrative: `${narrative} Cieľ ${formatDecimal(limitPrice, 4)}.`,
+    rsiS2BlendPct: Math.round(blendFactor * 100),
     supportResistance,
-    supportSnapApplied:
-      resolution.structuralSupportUsed || resolution.atrGuardrailApplied,
+    supportSnapApplied: true,
     supportSnapNote: snapNote,
   };
+}
+
+/** @deprecated Use fluid RSI interpolation — kept for type compatibility. */
+export function resolveLimitDepthMode(input: {
+  fearGreedValue: number;
+  rsi14: number | null;
+  atr14dPct: number | null;
+}): LimitDepthMode {
+  void input.fearGreedValue;
+  void input.atr14dPct;
+  if (input.rsi14 == null) return "standard";
+  return computeRsiS2BlendFactor(input.rsi14) >= 0.65 ? "deep_wick" : "standard";
 }

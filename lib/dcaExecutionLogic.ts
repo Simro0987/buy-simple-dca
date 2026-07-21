@@ -117,6 +117,7 @@ export interface ExecutionSplitResult {
   limitDepthBadge: string | null;
   limitDepthNarrative: string | null;
   limitValidityDays: number;
+  rsiS2BlendPct: number | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -259,6 +260,7 @@ function emptyLimitFields(): Pick<
   | "limitDepthBadge"
   | "limitDepthNarrative"
   | "limitValidityDays"
+  | "rsiS2BlendPct"
 > {
   return {
     limitPrice: 0,
@@ -271,6 +273,7 @@ function emptyLimitFields(): Pick<
     limitDepthBadge: null,
     limitDepthNarrative: null,
     limitValidityDays: LIMIT_VALIDITY_DAYS,
+    rsiS2BlendPct: null,
   };
 }
 
@@ -331,6 +334,7 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     limitDepthBadge: limitFields.limitDepthBadge,
     limitDepthNarrative: limitFields.limitDepthNarrative,
     limitValidityDays: limitFields.limitValidityDays,
+    rsiS2BlendPct: limitFields.rsiS2BlendPct,
   };
 }
 
@@ -368,7 +372,7 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
 
   const entrySignal = `ENTRY SIGNAL: Satellite staking • ATR ${atrPct.toFixed(1)} % • ${limitFields.limitDepthBadge ?? "autonómny limit"} • RSI ${rsi.toFixed(0)}`;
 
-  const splitExplanation = `SPLIT: Satellites ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT — autonómny ${limitFields.limitDepthMode === "deep_wick" ? "Deep Wick" : "Standard"} limit`;
+  const splitExplanation = `SPLIT: Satellites ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT — plynulá RSI interpolácia S1→S2 (${limitFields.rsiS2BlendPct ?? 0} % smerom k S2)`;
 
   return {
     marketShare: round1(marketShare),
@@ -388,6 +392,7 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     limitDepthBadge: limitFields.limitDepthBadge,
     limitDepthNarrative: limitFields.limitDepthNarrative,
     limitValidityDays: limitFields.limitValidityDays,
+    rsiS2BlendPct: limitFields.rsiS2BlendPct,
   };
 }
 
@@ -441,6 +446,7 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       limitDepthBadge: null,
       limitDepthNarrative: null,
       limitValidityDays: LIMIT_VALIDITY_DAYS,
+      rsiS2BlendPct: null,
     };
   }
 
@@ -461,7 +467,7 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     minOrderRule: false,
   });
 
-  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — autonómny ${limitFields.limitDepthMode === "deep_wick" ? "Deep Wick" : "Standard"} limit`;
+  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — plynulá RSI interpolácia S1→S2 (${limitFields.rsiS2BlendPct ?? 0} % smerom k S2)`;
 
   return {
     marketShare,
@@ -481,6 +487,7 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     limitDepthBadge: limitFields.limitDepthBadge,
     limitDepthNarrative: limitFields.limitDepthNarrative,
     limitValidityDays: limitFields.limitValidityDays,
+    rsiS2BlendPct: limitFields.rsiS2BlendPct,
   };
 }
 

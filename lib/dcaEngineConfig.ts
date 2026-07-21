@@ -65,6 +65,7 @@ export interface TokenExecutionPlan {
   limitDepthBadge: string | null;
   limitDepthNarrative: string | null;
   limitValidityDays: number;
+  rsiS2BlendPct: number | null;
 }
 
 export interface RegimeFactorDisplay {
