@@ -2,7 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import Image from "next/image";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { CopyValueButton } from "@/components/ui/CopyValueButton";
 import { formatUsd, formatUnitPrice } from "@/lib/data";
@@ -11,6 +11,11 @@ import {
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
 import { DcaCollapsibleDetails } from "@/components/dca/DcaCollapsibleDetails";
+import {
+  DcaTokenFilterBar,
+  filterExecutionOrders,
+  type DcaTokenFilter,
+} from "@/components/dca/DcaTokenFilterBar";
 import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { getCategoryStyles } from "@/lib/assetStyles";
@@ -222,6 +227,7 @@ function ExecutionOrderCard({
   getLegState,
   onDeployLeg,
   onCancelLimit,
+  cardRef,
 }: {
   plan: TokenExecutionPlan;
   loading: boolean;
@@ -229,6 +235,7 @@ function ExecutionOrderCard({
   getLegState: (symbol: string, leg: OrderLeg) => DeployState;
   onDeployLeg: (symbol: string, leg: OrderLeg) => void;
   onCancelLimit: (symbol: string) => void;
+  cardRef?: (node: HTMLElement | null) => void;
 }) {
   const catStyles = getCategoryStyles(plan.category);
   const unitPrice = plan.spotPrice;
@@ -265,6 +272,7 @@ function ExecutionOrderCard({
 
   return (
     <motion.article
+      ref={cardRef}
       layout
       {...listItemMotion}
       {...interactiveCard}
@@ -560,13 +568,14 @@ function ExecutionOrderCard({
               <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
                 {whyLimitTitle}
               </p>
-              <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-                {plan.whyLimit}
-              </p>
-              {plan.supportResistance &&
-                (plan.supportResistance.support1 != null ||
-                  plan.supportResistance.resistance1 != null) && (
-                  <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+              <div className="mt-1 max-h-32 space-y-2 overflow-y-auto pr-1 [scrollbar-width:thin]">
+                <p className="text-xs leading-relaxed text-zinc-400">
+                  {plan.whyLimit}
+                </p>
+                {plan.supportResistance &&
+                  (plan.supportResistance.support1 != null ||
+                    plan.supportResistance.resistance1 != null) && (
+                    <p className="text-[10px] leading-relaxed text-zinc-500">
                     {plan.supportResistance.support1 != null && (
                       <>
                         Support S1 ({plan.supportResistance.supportSource}):{" "}
@@ -595,6 +604,7 @@ function ExecutionOrderCard({
                     )}
                   </p>
                 )}
+              </div>
             </div>
           )}
         </DcaCollapsibleDetails>
@@ -615,13 +625,37 @@ export function ExecutionEngineCards({
   onDeployLeg,
   onCancelLimit,
 }: ExecutionEngineCardsProps) {
+  const [activeFilter, setActiveFilter] = useState<DcaTokenFilter>("all");
+  const cardRefs = useRef<Record<string, HTMLElement | null>>({});
+
   const ordersTotal = sumExecutionOrders(finalExecutionOrders);
+  const filteredOrders = useMemo(
+    () => filterExecutionOrders(finalExecutionOrders, activeFilter),
+    [finalExecutionOrders, activeFilter],
+  );
+  const isFiltered = activeFilter !== "all";
+
   const { masterState, deployError, getLegState, deployLeg, deployAll, cancelLimit } =
     useExecutionDeployState(finalExecutionOrders, {
       onDeployAll,
       onDeployLeg,
       onCancelLimit,
     });
+
+  useEffect(() => {
+    if (typeof activeFilter !== "object") return;
+    const exists = finalExecutionOrders.some(
+      (order) => order.symbol === activeFilter.symbol,
+    );
+    if (!exists) {
+      setActiveFilter("all");
+      return;
+    }
+    cardRefs.current[activeFilter.symbol]?.scrollIntoView({
+      behavior: "smooth",
+      block: "nearest",
+    });
+  }, [activeFilter, finalExecutionOrders]);
 
   const yieldCountLabel = useMemo(() => {
     if (yieldUniverseCount > 0) {
@@ -662,7 +696,10 @@ export function ExecutionEngineCards({
           Dynamic Split · MKT / LMT
         </h3>
         <p className="mt-1 text-[10px] text-zinc-500">
-          {finalExecutionOrders.length} tokenov • {yieldCountLabel} •{" "}
+          {isFiltered
+            ? `${filteredOrders.length} / ${finalExecutionOrders.length}`
+            : finalExecutionOrders.length}{" "}
+          tokenov • {yieldCountLabel} •{" "}
           {tradingMode === "live" ? "Live Trading" : "Simulácia"} • celkom{" "}
           <span className="font-semibold text-emerald-400">
             {formatUsd(ordersTotal)}
@@ -675,6 +712,12 @@ export function ExecutionEngineCards({
           )}
         </p>
       </div>
+
+      <DcaTokenFilterBar
+        orders={finalExecutionOrders}
+        activeFilter={activeFilter}
+        onFilterChange={setActiveFilter}
+      />
 
       {deployError && (
         <p className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-400/90 transition-all duration-500 ease-in-out">
@@ -699,7 +742,7 @@ export function ExecutionEngineCards({
 
       <motion.div layout className="space-y-3">
         <AnimatePresence mode="popLayout" initial={false}>
-          {finalExecutionOrders.map((plan) => (
+          {filteredOrders.map((plan) => (
             <ExecutionOrderCard
               key={plan.symbol}
               plan={plan}
@@ -708,9 +751,17 @@ export function ExecutionEngineCards({
               getLegState={getLegState}
               onDeployLeg={(symbol, leg) => void deployLeg(symbol, leg)}
               onCancelLimit={(symbol) => cancelLimit(symbol)}
+              cardRef={(node) => {
+                cardRefs.current[plan.symbol] = node;
+              }}
             />
           ))}
         </AnimatePresence>
+        {isFiltered && filteredOrders.length === 0 && (
+          <p className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-[11px] text-zinc-500">
+            Žiadny token nezodpovedá zvolenému filtru.
+          </p>
+        )}
       </motion.div>
     </motion.section>
   );

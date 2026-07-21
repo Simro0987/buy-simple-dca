@@ -46,7 +46,9 @@ export function DcaCollapsibleDetails({
             transition={{ duration: 0.25, ease: "easeOut" }}
             className="overflow-hidden"
           >
-            <div className="mt-2 space-y-3">{children}</div>
+            <div className="mt-2 max-h-32 space-y-3 overflow-y-auto pr-1 [scrollbar-width:thin]">
+              {children}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
