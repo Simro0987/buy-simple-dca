@@ -10,6 +10,7 @@ import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
 import type { TradingMode } from "@/lib/exchange/types";
 import { sumExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
+import { YIELD_FILTER_THRESHOLDS } from "@/lib/dcaYieldFilter";
 import {
   useExecutionDeployState,
   type DeployState,
@@ -190,6 +191,15 @@ function ExecutionOrderCard({
       ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14?.toFixed(0) ?? "—"} • MA ${plan.priceVsSma14Pct != null ? `${plan.priceVsSma14Pct >= 0 ? "+" : ""}${plan.priceVsSma14Pct.toFixed(0)}%` : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
       : null;
 
+  const yieldAllocationLabel =
+    plan.category === "yield" && plan.shareOfYieldPercent != null
+      ? `${plan.shareOfYieldPercent.toFixed(1)}% Yield kôša • ${formatUsd(plan.totalUsd)}${
+          plan.yieldWeight != null
+            ? ` • váha S^${YIELD_FILTER_THRESHOLDS.weightExponent} = ${Math.round(plan.yieldWeight).toLocaleString("en-US")}`
+            : ""
+        }`
+      : null;
+
   return (
     <motion.article
       layout
@@ -249,8 +259,13 @@ function ExecutionOrderCard({
               )}
             </div>
             <p className="text-xs text-zinc-500">{plan.name}</p>
+            {yieldAllocationLabel ? (
+              <p className="mt-1 text-[10px] font-semibold tabular-nums text-teal-300/90 transition-all duration-500 ease-in-out">
+                {yieldAllocationLabel}
+              </p>
+            ) : null}
             {yieldHeader ? (
-              <p className="mt-0.5 text-[10px] font-medium text-teal-400/90 transition-all duration-500 ease-in-out">
+              <p className="mt-0.5 text-[10px] font-medium text-teal-400/80 transition-all duration-500 ease-in-out">
                 {yieldHeader}
               </p>
             ) : (

@@ -9,6 +9,7 @@ import {
   applyYieldSpillover,
   buildYieldFilterAllocations,
   YIELD_ALTCOIN_UNIVERSE,
+  YIELD_FILTER_THRESHOLDS,
   type YieldAllocationRow,
   type YieldFilterEvaluation,
   type YieldTokenMetrics,
@@ -201,7 +202,7 @@ function buildNarrative(input: {
     `Alokácia BTC ${input.corePercent}% — režim ${input.regimeLabel}, Final Score ${Math.round(input.finalScore)}.`,
     `Dynamický split ${Math.round(input.corePercent)}/${Math.round(input.satPercent)}/${Math.round(input.yieldPercent)} (Core/Sat/Yield) z live režimu a skóre.`,
     "Quality Bias: ETH CBBC > SOL → ETH váha z tokenPlans v satellite buckete.",
-    `Yield kôš ${input.yieldPercent}% — live filter 3/3, váha skóre^2.5 (${formatUsdShort(input.yieldAmount)}).`,
+    `Yield kôš ${input.yieldPercent}% — live filter 3/3, váha skóre^${YIELD_FILTER_THRESHOLDS.weightExponent} (${formatUsdShort(input.yieldAmount)}).`,
   ];
 
   if (input.bearCoreFloorApplied) {
@@ -222,7 +223,7 @@ function buildNarrative(input: {
     );
   } else if (input.convictionCount > 0) {
     bullets.push(
-      `${input.convictionCount} altcoinov prešlo live filtrom 3/3 — exponenciálna distribúcia podľa fundamentu^2.5.`,
+      `${input.convictionCount} altcoinov prešlo live filtrom 3/3 — vážená distribúcia podľa conviction skóre^${YIELD_FILTER_THRESHOLDS.weightExponent}.`,
     );
   }
 

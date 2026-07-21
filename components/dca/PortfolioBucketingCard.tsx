@@ -16,6 +16,7 @@ import type {
   YieldAltcoinRow,
   YieldExcludedRow,
 } from "@/lib/dcaPortfolioBucketing";
+import { YIELD_FILTER_THRESHOLDS } from "@/lib/dcaYieldFilter";
 
 interface PortfolioBucketingCardProps {
   bucketing: PortfolioBucketingResult | null;
@@ -169,8 +170,13 @@ function YieldAltcoinRowItem({
         {isConviction && convictionRow ? (
           <>
             <p className={`mt-0.5 text-[10px] text-teal-400/80 ${smoothColorClass}`}>
-              Filter 3/3 • skóre {convictionRow.convictionScore} • váha{" "}
-              {convictionRow.convictionScore}^2.5
+              Filter 3/3 • S {convictionRow.convictionScore} • váha S^
+              {YIELD_FILTER_THRESHOLDS.weightExponent} ={" "}
+              {Math.round(convictionRow.weight).toLocaleString("en-US")}
+            </p>
+            <p className="text-[10px] font-semibold tabular-nums text-teal-300/90">
+              {convictionRow.shareOfYieldPercent.toFixed(1)}% Yield kôša •{" "}
+              {formatUsd(convictionRow.amountUsd)}
             </p>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-800">
               <motion.div

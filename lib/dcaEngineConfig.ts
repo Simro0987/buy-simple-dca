@@ -49,6 +49,8 @@ export interface TokenExecutionPlan {
   convictionScore: number | null;
   tag: string | null;
   priceVsSma14Pct: number | null;
+  shareOfYieldPercent: number | null;
+  yieldWeight: number | null;
 }
 
 export interface RegimeFactorDisplay {

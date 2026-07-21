@@ -31,6 +31,8 @@ interface AmountRow {
   convictionScore?: number;
   tag?: string;
   priceVsSma14Pct?: number;
+  shareOfYieldPercent?: number;
+  yieldWeight?: number;
 }
 
 function ema50DeviationPct(spot: number, ema50: number | null | undefined): number | null {
@@ -76,6 +78,8 @@ function collectAmountRows(bucketing: PortfolioBucketingResult): AmountRow[] {
       convictionScore: conviction.convictionScore,
       tag: conviction.tag,
       priceVsSma14Pct: conviction.priceVsSma14Pct,
+      shareOfYieldPercent: conviction.shareOfYieldPercent,
+      yieldWeight: conviction.weight,
     });
   }
 
@@ -242,6 +246,8 @@ export function buildFinalExecutionOrders(
         convictionScore: row.convictionScore ?? null,
         tag: row.tag ?? null,
         priceVsSma14Pct: row.priceVsSma14Pct ?? null,
+        shareOfYieldPercent: row.shareOfYieldPercent ?? null,
+        yieldWeight: row.yieldWeight ?? null,
       };
     });
 }

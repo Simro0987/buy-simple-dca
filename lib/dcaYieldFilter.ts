@@ -1,10 +1,11 @@
 import { DCA_YIELD_TOKENS } from "@/lib/dcaMarketData";
+import { clamp, lerpScore } from "@/lib/dcaTechnicalIndicators";
 
 export const YIELD_FILTER_THRESHOLDS = {
   rsiMax: 50,
   sma14FloorPct: -10,
   fundamentalMin: 50,
-  weightExponent: 2.5,
+  weightExponent: 2,
 } as const;
 
 export type YieldFilterId = "rsi" | "sma14" | "fundamental";
@@ -107,6 +108,16 @@ function buildUnavailableEvaluation(
   };
 }
 
+export function computeConvictionScore(metrics: YieldTokenMetrics): number {
+  const rsiScore = lerpScore(metrics.rsi, 15, 50, 95, 50);
+  const smaScore = lerpScore(metrics.priceVsSma14Pct, -12, 8, 90, 45);
+  const fundScore = metrics.fundamentalScore;
+
+  return Math.round(
+    clamp(rsiScore * 0.35 + smaScore * 0.25 + fundScore * 0.4, 1, 100),
+  );
+}
+
 export function evaluateYieldToken(
   coin: (typeof YIELD_ALTCOIN_UNIVERSE)[number],
   metrics: YieldTokenMetrics | null | undefined,
@@ -128,13 +139,17 @@ export function evaluateYieldToken(
     filtersPassedCount,
     passed,
     failureReasons,
-    convictionScore: metrics.fundamentalScore,
+    convictionScore: computeConvictionScore(metrics),
   };
 }
 
 export function convictionWeight(score: number): number {
   const clamped = Math.max(0, Math.min(100, score));
   return Math.pow(clamped, YIELD_FILTER_THRESHOLDS.weightExponent);
+}
+
+function roundUsd(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
 export function distributeYieldExponential(
@@ -156,9 +171,9 @@ export function distributeYieldExponential(
   }));
   const totalWeight = weighted.reduce((sum, item) => sum + item.weight, 0);
 
-  return weighted.map(({ token, weight }) => {
+  const rows = weighted.map(({ token, weight }) => {
     const share = totalWeight > 0 ? weight / totalWeight : 0;
-    const amountUsd = Math.round(yieldBudgetUsd * share * 100) / 100;
+    const amountUsd = roundUsd(yieldBudgetUsd * share);
 
     return {
       ...token,
@@ -166,10 +181,33 @@ export function distributeYieldExponential(
       amountUsd,
       shareOfYieldPercent:
         yieldBudgetUsd > 0
-          ? Math.round((amountUsd / yieldBudgetUsd) * 1000) / 10
+          ? Math.round(share * 1000) / 10
           : 0,
     };
   });
+
+  const allocated = roundUsd(rows.reduce((sum, row) => sum + row.amountUsd, 0));
+  const remainder = roundUsd(yieldBudgetUsd - allocated);
+
+  if (Math.abs(remainder) >= 0.01 && rows.length > 0) {
+    const topIndex = rows.reduce(
+      (bestIndex, row, index, allRows) =>
+        row.weight > allRows[bestIndex].weight ? index : bestIndex,
+      0,
+    );
+    rows[topIndex] = {
+      ...rows[topIndex],
+      amountUsd: roundUsd(rows[topIndex].amountUsd + remainder),
+    };
+  }
+
+  return rows.map((row) => ({
+    ...row,
+    shareOfYieldPercent:
+      yieldBudgetUsd > 0
+        ? Math.round((row.amountUsd / yieldBudgetUsd) * 1000) / 10
+        : 0,
+  }));
 }
 
 export function buildYieldFilterAllocations(
