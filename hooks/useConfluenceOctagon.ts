@@ -8,6 +8,7 @@ import {
 } from "@/lib/resolveOctagonTokens";
 import { fetchOctagonSnapshotsForTokens } from "@/lib/tokenOctagonData";
 import type { TrackedAsset } from "@/lib/portfolioStorage";
+import { useAppStore } from "@/src/store/useAppStore";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
@@ -31,25 +32,42 @@ export function useConfluenceOctagon(
   );
   const tokensKey = octagonTokensKey(tokens);
 
-  const [selectedToken, setSelectedToken] = useState(tokens[0]?.symbol ?? "BTC");
-  const [snapshots, setSnapshots] = useState<Record<string, TokenOctagonSnapshot | null>>(
-    memoryCache?.tokensKey === tokensKey ? (memoryCache.snapshots ?? {}) : {},
+  const storedToken = useAppStore((state) => state.octagonSelectedToken);
+  const setStoredToken = useAppStore((state) => state.setOctagonSelectedToken);
+
+  const selectedToken = useMemo(() => {
+    if (storedToken && tokens.some((token) => token.symbol === storedToken)) {
+      return storedToken;
+    }
+    return tokens[0]?.symbol ?? "BTC";
+  }, [storedToken, tokens]);
+
+  const setSelectedToken = useCallback(
+    (symbol: string) => {
+      setStoredToken(symbol);
+    },
+    [setStoredToken],
   );
-  const [loading, setLoading] = useState(
+
+  const [snapshots, setSnapshots] = useState<Record<string, TokenOctagonSnapshot | null>>(
+    () =>
+      memoryCache?.tokensKey === tokensKey ? (memoryCache.snapshots ?? {}) : {},
+  );
+  const [isFetching, setIsFetching] = useState(
     !memoryCache || memoryCache.tokensKey !== tokensKey,
   );
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!tokens.some((token) => token.symbol === selectedToken)) {
-      setSelectedToken(tokens[0]?.symbol ?? "BTC");
+    if (!storedToken || !tokens.some((token) => token.symbol === storedToken)) {
+      setStoredToken(tokens[0]?.symbol ?? "BTC");
     }
-  }, [selectedToken, tokens, tokensKey]);
+  }, [setStoredToken, storedToken, tokens, tokensKey]);
 
   const refresh = useCallback(async () => {
     if (tokens.length === 0) return;
 
-    setLoading(true);
+    setIsFetching(true);
     setError(null);
     try {
       const next = await fetchOctagonSnapshotsForTokens(tokens, fearGreed);
@@ -65,7 +83,7 @@ export function useConfluenceOctagon(
         err instanceof Error ? err.message : "Nepodarilo sa načítať oktágon",
       );
     } finally {
-      setLoading(false);
+      setIsFetching(false);
     }
   }, [fearGreed, tokens, tokensKey]);
 
@@ -78,11 +96,29 @@ export function useConfluenceOctagon(
 
     if (stale) {
       void refresh();
+      return;
+    }
+
+    if (memoryCache?.tokensKey === tokensKey) {
+      setSnapshots(memoryCache.snapshots);
+      setIsFetching(false);
     }
   }, [fearGreed, refresh, tokensKey]);
 
   const activeSnapshot = snapshots[selectedToken] ?? null;
   const usingPortfolioTokens = (portfolioSymbols?.length ?? 0) > 0;
+  const tokenSwitchLoading = isFetching && !activeSnapshot;
+
+  const scoresBySymbol = useMemo(
+    () =>
+      Object.fromEntries(
+        Object.entries(snapshots).map(([symbol, snapshot]) => [
+          symbol,
+          snapshot?.accumulationScore,
+        ]),
+      ),
+    [snapshots],
+  );
 
   return {
     tokens,
@@ -90,7 +126,9 @@ export function useConfluenceOctagon(
     setSelectedToken,
     activeSnapshot,
     snapshots,
-    loading,
+    scoresBySymbol,
+    loading: isFetching,
+    tokenSwitchLoading,
     error,
     refresh,
     usingPortfolioTokens,

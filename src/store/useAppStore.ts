@@ -47,6 +47,7 @@ interface AppStore {
   newsFeed: NewsFeedState;
   apiStatus: ApiStatusState;
   tradingMode: TradingMode;
+  octagonSelectedToken: string | null;
 
   hydratePortfolio: () => void;
   setPortfolioData: (
@@ -73,6 +74,7 @@ interface AppStore {
   setApiStatus: (key: keyof ApiStatusState, status: ApiSourceHealth) => void;
   setTradingMode: (mode: TradingMode) => void;
   hydrateTradingMode: () => void;
+  setOctagonSelectedToken: (symbol: string | null) => void;
 }
 
 const defaultNewsFeed: NewsFeedState = {
@@ -101,6 +103,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   newsFeed: defaultNewsFeed,
   apiStatus: DEFAULT_API_STATUS,
   tradingMode: "simulation",
+  octagonSelectedToken: null,
 
   hydratePortfolio: () => {
     if (get().isPortfolioHydrated) return;
@@ -223,6 +226,10 @@ export const useAppStore = create<AppStore>((set, get) => ({
 
   hydrateTradingMode: () => {
     set({ tradingMode: readTradingMode() });
+  },
+
+  setOctagonSelectedToken: (symbol) => {
+    set({ octagonSelectedToken: symbol });
   },
 }));
 

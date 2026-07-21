@@ -1,6 +1,10 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  ConfluenceOctagonPanel,
+  TokenOctagonChips,
+} from "@/components/dca/ConfluenceOctagonPanel";
 import { useConfluenceOctagon } from "@/hooks/useConfluenceOctagon";
 import { useTokenExecutionAdvisor } from "@/hooks/useTokenExecutionAdvisor";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -13,6 +17,11 @@ const GRADE_COLORS: Record<string, string> = {
   D: "text-orange-300",
   E: "text-rose-300",
   F: "text-rose-400",
+};
+
+const tokenSwitchTransition = {
+  duration: 0.45,
+  ease: [0.4, 0, 0.2, 1] as const,
 };
 
 interface ExecutionPerformanceSectionProps {
@@ -37,8 +46,8 @@ export function ExecutionPerformanceSection({
     selectedToken,
     setSelectedToken,
     activeSnapshot,
-    snapshots,
-    loading,
+    scoresBySymbol,
+    tokenSwitchLoading,
     usingPortfolioTokens,
   } = useConfluenceOctagon(fearGreed, portfolioSymbols, trackedAssets);
 
@@ -52,6 +61,7 @@ export function ExecutionPerformanceSection({
 
   const gradeClass =
     GRADE_COLORS[advisor.efficiencyGrade] ?? "text-zinc-300";
+  const metrics = activeSnapshot?.metrics ?? [];
 
   return (
     <motion.section
@@ -63,110 +73,162 @@ export function ExecutionPerformanceSection({
       <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-            Execution Performance
+            Confluence Octagon & Active Advisor
           </p>
-          <h3 className="mt-1 text-base font-bold text-white">
-            Active Advisor · {selectedToken}
-          </h3>
+          <AnimatePresence mode="wait">
+            <motion.h3
+              key={`title-${selectedToken}`}
+              initial={{ opacity: 0, x: -8 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 8 }}
+              transition={tokenSwitchTransition}
+              className="mt-1 text-base font-bold text-white"
+            >
+              {selectedToken} · {advisor.name}
+            </motion.h3>
+          </AnimatePresence>
           <p className="mt-1 text-[10px] text-zinc-500">
-            Prepojené s Confluence Octagon a históriou exekúcií
+            Prepojené s portfóliom a históriou exekúcií
             {usingPortfolioTokens ? " · tokeny z Portfólia" : " · predvolený kôš"}
           </p>
         </div>
-        <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
-            Oktágon
-          </p>
-          <p className="text-lg font-bold tabular-nums text-emerald-300">
-            {advisor.accumulationScore}/100
-          </p>
-        </div>
-      </div>
-
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {tokens.map((token) => {
-          const active = token.symbol === selectedToken;
-          const score = snapshots[token.symbol]?.accumulationScore;
-          return (
-            <button
-              key={token.symbol}
-              type="button"
-              onClick={() => setSelectedToken(token.symbol)}
-              className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${
-                active
-                  ? "bg-blue-400/15 text-blue-300 ring-1 ring-blue-400/30"
-                  : "bg-white/5 text-zinc-500 hover:text-zinc-300"
-              }`}
-            >
-              {token.symbol}
-              {score != null ? (
-                <span className="ml-1 tabular-nums text-[9px] opacity-80">
-                  {score}
-                </span>
-              ) : null}
-            </button>
-          );
-        })}
-      </div>
-
-      <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4">
-        <MetricTile
-          label="Alpha vs Market"
-          value={`${advisor.alphaVsMarketPct >= 0 ? "+" : ""}${advisor.alphaVsMarketPct.toFixed(1)} %`}
-          tone={advisor.alphaVsMarketPct >= 0 ? "positive" : "negative"}
-        />
-        <MetricTile
-          label="7D Market DCA"
-          value={`${advisor.marketDcaBaselinePct >= 0 ? "+" : ""}${advisor.marketDcaBaselinePct.toFixed(1)} %`}
-          tone="neutral"
-        />
-        <MetricTile
-          label="Ø Reward"
-          value={`${advisor.rewardScore >= 0 ? "+" : ""}${advisor.rewardScore.toFixed(1)}`}
-          tone={advisor.rewardScore >= 0 ? "positive" : "negative"}
-        />
-        <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
-          <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
-            Efficiency Grade
-          </p>
-          <p className={`mt-1 text-xl font-black ${gradeClass}`}>
-            {advisor.efficiencyGrade}
-          </p>
-          <p className="text-[9px] text-zinc-600">
-            z {advisor.previousGrade} · n={advisor.weeklyCount} týž.
-          </p>
-        </div>
-      </div>
-
-      <motion.div
-        key={advisor.activeAdvice}
-        initial={{ opacity: 0, y: 6 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="mb-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3"
-      >
-        <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-          Active Advisor
-        </p>
-        <p className="mt-1 text-[11px] font-medium leading-relaxed text-emerald-100/90">
-          {loading ? "Načítavam token-špecifický oktágon…" : advisor.activeAdvice}
-        </p>
-      </motion.div>
-
-      {advisor.learnedPatterns.length > 0 && (
-        <div className="space-y-2">
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            Naučené vzory · {advisor.preferredRoute === "market" ? "Market bias" : "Limit bias"}
-          </p>
-          {advisor.learnedPatterns.map((pattern) => (
-            <p
-              key={pattern}
-              className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-[10px] leading-relaxed text-zinc-400"
-            >
-              {pattern}
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={`score-badge-${selectedToken}-${advisor.accumulationScore}`}
+            initial={{ opacity: 0, scale: 0.95 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            transition={tokenSwitchTransition}
+            className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right"
+          >
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
+              Oktágon
             </p>
-          ))}
-        </div>
-      )}
+            <p className="text-lg font-bold tabular-nums text-emerald-300">
+              {tokenSwitchLoading ? "—" : `${advisor.accumulationScore}/100`}
+            </p>
+          </motion.div>
+        </AnimatePresence>
+      </div>
+
+      <div className="mb-4">
+        <TokenOctagonChips
+          tokens={tokens}
+          selectedToken={selectedToken}
+          onSelect={setSelectedToken}
+          scores={scoresBySymbol}
+          accent="blue"
+        />
+      </div>
+
+      <ConfluenceOctagonPanel
+        selectedToken={selectedToken}
+        metrics={metrics}
+        accumulationScore={advisor.accumulationScore}
+        loading={tokenSwitchLoading}
+        compact
+      />
+
+      <div className="my-5 h-px bg-white/5" />
+
+      <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+        Execution Performance
+      </p>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`advisor-metrics-${selectedToken}`}
+          initial={{ opacity: 0, y: 8 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -8 }}
+          transition={tokenSwitchTransition}
+          className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4"
+        >
+          <MetricTile
+            label="Alpha vs Market"
+            value={`${advisor.alphaVsMarketPct >= 0 ? "+" : ""}${advisor.alphaVsMarketPct.toFixed(1)} %`}
+            tone={advisor.alphaVsMarketPct >= 0 ? "positive" : "negative"}
+          />
+          <MetricTile
+            label="7D Market DCA"
+            value={`${advisor.marketDcaBaselinePct >= 0 ? "+" : ""}${advisor.marketDcaBaselinePct.toFixed(1)} %`}
+            tone="neutral"
+          />
+          <MetricTile
+            label="Ø Reward"
+            value={`${advisor.rewardScore >= 0 ? "+" : ""}${advisor.rewardScore.toFixed(1)}`}
+            tone={advisor.rewardScore >= 0 ? "positive" : "negative"}
+          />
+          <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+            <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
+              Efficiency Grade
+            </p>
+            <p className={`mt-1 text-xl font-black ${gradeClass}`}>
+              {advisor.efficiencyGrade}
+            </p>
+            <p className="text-[9px] text-zinc-600">
+              z {advisor.previousGrade} · n={advisor.weeklyCount} týž.
+            </p>
+          </div>
+        </motion.div>
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`advice-${selectedToken}-${advisor.activeAdvice}`}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -6 }}
+          transition={tokenSwitchTransition}
+          className="mb-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/8 px-4 py-3"
+        >
+          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+            Active Advisor
+          </p>
+          <p className="mt-1 text-[11px] font-medium leading-relaxed text-emerald-100/90">
+            {tokenSwitchLoading
+              ? "Načítavam token-špecifický oktágon…"
+              : advisor.activeAdvice}
+          </p>
+        </motion.div>
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
+        {advisor.learnedPatterns.length > 0 ? (
+          <motion.div
+            key={`patterns-${selectedToken}`}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={tokenSwitchTransition}
+            className="space-y-2"
+          >
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
+              Naučené vzory ·{" "}
+              {advisor.preferredRoute === "market" ? "Market bias" : "Limit bias"}
+            </p>
+            {advisor.learnedPatterns.map((pattern) => (
+              <p
+                key={`${selectedToken}-${pattern}`}
+                className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2 text-[10px] leading-relaxed text-zinc-400"
+              >
+                {pattern}
+              </p>
+            ))}
+          </motion.div>
+        ) : (
+          <motion.p
+            key={`patterns-empty-${selectedToken}`}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="rounded-xl border border-dashed border-white/10 bg-white/[0.02] px-3 py-2 text-[10px] leading-relaxed text-zinc-500"
+          >
+            {selectedToken}: žiadne naučené vzory — spustite prvú exekúciu pre
+            self-learning loop.
+          </motion.p>
+        )}
+      </AnimatePresence>
     </motion.section>
   );
 }
@@ -188,7 +250,7 @@ function MetricTile({
         : "text-white";
 
   return (
-    <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
+    <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5 transition-colors duration-300">
       <p className="text-[9px] font-semibold uppercase tracking-wider text-zinc-500">
         {label}
       </p>
