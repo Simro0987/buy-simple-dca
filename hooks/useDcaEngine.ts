@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { DcaMarketSnapshot } from "@/lib/dcaMarketData";
 import {
   computeMasterDcaEngine,
-  toExecutionPlans,
   type MasterDcaResult,
 } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
@@ -29,7 +28,6 @@ export function useDcaEngine({
 }: UseDcaEngineOptions = {}) {
   const weeklyBudget = useAppStore((state) => state.dcaPlan.weeklyBudget);
   const portfolioAssets = useAppStore((state) => state.portfolioAssets);
-  const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
   const setDcaResult = useAppStore((state) => state.setDcaResult);
   const setApiStatus = useAppStore((state) => state.setApiStatus);
 
@@ -114,9 +112,8 @@ export function useDcaEngine({
   useEffect(() => {
     if (result) {
       setDcaResult(result);
-      setExecutionPlans(toExecutionPlans(result));
     }
-  }, [result, setDcaResult, setExecutionPlans]);
+  }, [result, setDcaResult]);
 
   return {
     result,

@@ -10,8 +10,8 @@ import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { usePortfolioBucketing } from "@/hooks/usePortfolioBucketing";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import { useDcaLiveEngine } from "@/hooks/useDcaLiveEngine";
+import { buildFinalExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
-import { toExecutionPlans } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
@@ -59,18 +59,6 @@ export function DcaEngine({
     engineLoading ||
     (liveLoading && !displayResult);
 
-  useEffect(() => {
-    if (displayResult) {
-      setDcaResult(displayResult);
-      setExecutionPlans(toExecutionPlans(displayResult));
-    }
-  }, [displayResult, setDcaResult, setExecutionPlans]);
-
-  const executionPlans = useMemo(
-    () => (displayResult ? toExecutionPlans(displayResult) : []),
-    [displayResult],
-  );
-
   const {
     bucketing,
     metricsLoading: bucketingMetricsLoading,
@@ -84,10 +72,32 @@ export function DcaEngine({
     enabled: Boolean(displayResult),
   });
 
+  const finalExecutionOrders = useMemo(
+    () =>
+      displayResult && bucketing
+        ? buildFinalExecutionOrders({
+            bucketing,
+            deployedCapital: displayResult.capitalPipeline.dDeployedCapital,
+            fearGreedValue: displayResult.fearGreedValue,
+            brakeActive: displayResult.brakeActive,
+            confidence: displayResult.confidence,
+            tokenPlans: displayResult.tokenPlans,
+          })
+        : [],
+    [displayResult, bucketing],
+  );
+
+  useEffect(() => {
+    if (displayResult) {
+      setDcaResult(displayResult);
+      setExecutionPlans(finalExecutionOrders);
+    }
+  }, [displayResult, finalExecutionOrders, setDcaResult, setExecutionPlans]);
+
   const totalDeployed = displayResult?.capitalPipeline.dDeployedCapital ?? 0;
 
   const handleRecordPurchase = () => {
-    onRecordPurchase(executionPlans);
+    onRecordPurchase(finalExecutionOrders);
   };
 
   const handleRefresh = () => {
@@ -187,7 +197,11 @@ export function DcaEngine({
           />
 
           {/* G — Execution engine */}
-          <ExecutionEngineCards plans={executionPlans} loading={loading} />
+          <ExecutionEngineCards
+            finalExecutionOrders={finalExecutionOrders}
+            deployedCapital={totalDeployed}
+            loading={loading}
+          />
         </>
       )}
 
@@ -213,7 +227,7 @@ export function DcaEngine({
       <motion.button
         type="button"
         onClick={handleRecordPurchase}
-        disabled={loading || totalDeployed <= 0 || executionPlans.length === 0}
+        disabled={loading || totalDeployed <= 0 || finalExecutionOrders.length === 0}
         {...interactiveButton}
         className="flex w-full items-center justify-center gap-2 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4 text-base font-bold text-emerald-400 shadow-[0_0_32px_rgba(52,211,153,0.18)] transition-colors hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
       >
