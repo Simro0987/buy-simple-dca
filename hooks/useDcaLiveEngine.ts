@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   fetchAndCalculateDCA,
   type DcaLiveCalculation,
@@ -16,13 +16,14 @@ export function useDcaLiveEngine(input: {
 }) {
   const [result, setResult] = useState<DcaLiveCalculation | null>(null);
   const [loading, setLoading] = useState(true);
+  const hasResultRef = useRef(false);
 
   const tokenSnapshotKey = input.tokenSnapshot
     ? Object.keys(input.tokenSnapshot).sort().join(",")
     : "";
 
   const refresh = useCallback(async () => {
-    setLoading(true);
+    if (!hasResultRef.current) setLoading(true);
     try {
       const calc = await fetchAndCalculateDCA({
         weeklyBudget: input.weeklyBudget,
@@ -31,8 +32,9 @@ export function useDcaLiveEngine(input: {
         tokenSnapshot: input.tokenSnapshot,
       });
       setResult(calc);
+      hasResultRef.current = true;
     } catch {
-      setResult(null);
+      if (!hasResultRef.current) setResult(null);
     } finally {
       setLoading(false);
     }

@@ -5,6 +5,11 @@ import { Check, Loader2, Shield, X } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
+import {
+  smoothColorClass,
+  smoothWidthClass,
+  smoothWidthTransition,
+} from "@/lib/motion";
 import type {
   PortfolioBucketingResult,
   TokenAllocationRow,
@@ -20,7 +25,7 @@ interface PortfolioBucketingCardProps {
 }
 
 const listTransition = {
-  layout: { duration: 0.7, ease: [0.4, 0, 0.2, 1] as const },
+  layout: smoothWidthTransition,
   opacity: { duration: 0.5 },
 };
 
@@ -37,7 +42,7 @@ function BucketAmountLabel({
 
   return (
     <p
-      className={`text-center text-[11px] font-semibold tabular-nums transition-all duration-700 ease-out ${textClass}`}
+      className={`text-center text-[11px] font-semibold tabular-nums ${smoothWidthClass} ${textClass}`}
     >
       {Math.round(percent)}% • {formatUsd(animatedAmount)}
     </p>
@@ -52,7 +57,7 @@ function TokenRow({ row }: { row: TokenAllocationRow }) {
     <motion.div
       layout
       transition={listTransition.layout}
-      className="rounded-2xl border border-white/5 bg-[#0a0a0c] px-3.5 py-3 transition-all duration-700 ease-out"
+      className={`rounded-2xl border border-white/5 bg-[#0a0a0c] px-3.5 py-3 ${smoothWidthClass}`}
     >
       <div className="mb-2.5 flex items-center justify-between gap-3">
         <div className="flex items-center gap-2.5">
@@ -68,7 +73,7 @@ function TokenRow({ row }: { row: TokenAllocationRow }) {
         </div>
         <div className="text-right">
           <p
-            className={`text-sm font-bold tabular-nums transition-colors duration-700 ${row.textClass}`}
+            className={`text-sm font-bold tabular-nums ${smoothColorClass} ${row.textClass}`}
           >
             {formatUsd(animatedAmount)}
           </p>
@@ -79,10 +84,10 @@ function TokenRow({ row }: { row: TokenAllocationRow }) {
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-zinc-800">
         <motion.div
-          layout
-          className={`h-full rounded-full transition-all duration-700 ease-out ${row.barClass}`}
-          style={{ width: `${barWidth}%` }}
-          transition={listTransition.layout}
+          initial={false}
+          animate={{ width: `${barWidth}%` }}
+          transition={smoothWidthTransition}
+          className={`h-full rounded-full ${smoothColorClass} ${row.barClass}`}
         />
       </div>
     </motion.div>
@@ -96,7 +101,7 @@ function FilterDots({ conditions }: { conditions: YieldExcludedRow["conditions"]
         <span
           key={condition.id}
           title={condition.detail}
-          className={`h-1.5 w-1.5 rounded-full transition-colors duration-700 ${
+          className={`h-1.5 w-1.5 rounded-full ${smoothColorClass} ${
             condition.passed
               ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.5)]"
               : "bg-rose-500 shadow-[0_0_6px_rgba(244,63,94,0.5)]"
@@ -128,14 +133,14 @@ function YieldAltcoinRowItem({
       animate={{ opacity: 1, y: 0 }}
       exit={{ opacity: 0, y: -6 }}
       transition={listTransition.layout}
-      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 transition-all duration-700 ease-out ${
+      className={`flex items-center gap-3 rounded-xl border px-3 py-2.5 ${smoothWidthClass} ${
         isConviction
           ? "border-teal-500/20 bg-teal-500/5"
           : "border-white/5 bg-zinc-900/40 opacity-60"
       }`}
     >
       <div
-        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold transition-colors duration-700 ${
+        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-[9px] font-bold ${smoothColorClass} ${
           isConviction
             ? "bg-teal-500/20 text-teal-400"
             : "bg-zinc-800 text-zinc-500"
@@ -147,7 +152,7 @@ function YieldAltcoinRowItem({
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <span
-            className={`text-xs font-bold transition-colors duration-700 ${
+            className={`text-xs font-bold ${smoothColorClass} ${
               isConviction ? "text-white" : "text-zinc-500"
             }`}
           >
@@ -163,16 +168,16 @@ function YieldAltcoinRowItem({
 
         {isConviction && convictionRow ? (
           <>
-            <p className="mt-0.5 text-[10px] text-teal-400/80 transition-colors duration-700">
+            <p className={`mt-0.5 text-[10px] text-teal-400/80 ${smoothColorClass}`}>
               Filter 3/3 • skóre {convictionRow.convictionScore} • váha{" "}
               {convictionRow.convictionScore}^2.5
             </p>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-800">
               <motion.div
-                layout
-                className="h-full rounded-full bg-teal-400 transition-all duration-700 ease-out"
-                style={{ width: `${barWidth}%` }}
-                transition={listTransition.layout}
+                initial={false}
+                animate={{ width: `${barWidth}%` }}
+                transition={smoothWidthTransition}
+                className={`h-full rounded-full bg-teal-400 ${smoothColorClass}`}
               />
             </div>
           </>
@@ -181,7 +186,7 @@ function YieldAltcoinRowItem({
             {(row as YieldExcludedRow).failureReasons.map((reason) => (
               <p
                 key={reason}
-                className="text-[10px] text-rose-400/80 transition-colors duration-700"
+                className="text-[10px] text-rose-400/80"
               >
                 {reason}
               </p>
@@ -197,7 +202,7 @@ function YieldAltcoinRowItem({
 
       <div className="shrink-0 text-right">
         {isConviction && convictionRow ? (
-          <p className="text-xs font-bold tabular-nums text-teal-400 transition-all duration-700">
+          <p className={`text-xs font-bold tabular-nums text-teal-400 ${smoothWidthClass}`}>
             {formatUsd(animatedAmount)}
           </p>
         ) : (
@@ -221,8 +226,8 @@ function MultiColorSplitBar({
           layout
           initial={false}
           animate={{ width: `${Math.max(0, bucket.percent)}%` }}
-          transition={listTransition.layout}
-          className={`h-full ${bucket.barClass} transition-colors duration-700 first:rounded-l-full last:rounded-r-full`}
+          transition={smoothWidthTransition}
+          className={`h-full ${bucket.barClass} ${smoothColorClass} first:rounded-l-full last:rounded-r-full`}
           title={`${bucket.label} ${bucket.percent}%`}
         />
       ))}
@@ -264,11 +269,11 @@ export function PortfolioBucketingCard({
       {showMacro && (
         <>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-blue-400 transition-all duration-700">
+            <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-blue-400">
               <Shield className="h-3.5 w-3.5" />
               {bucketing.badgeTitle}
             </span>
-            <span className="text-[11px] font-medium text-zinc-500 transition-all duration-700">
+            <span className="text-[11px] font-medium text-zinc-500">
               {bucketing.badgeSubtitle}
             </span>
           </div>
@@ -276,7 +281,7 @@ export function PortfolioBucketingCard({
           {bucketing.spilloverActive && (
             <motion.p
               layout
-              className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] text-amber-400/90 transition-all duration-700"
+              className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] text-amber-400/90"
             >
               Spillover aktívny — {formatUsd(bucketing.spilloverAmount)} z Yield
               presunuté do CORE/SATELLITES (žiadny token neprešiel filtrom 3/3).
@@ -287,7 +292,7 @@ export function PortfolioBucketingCard({
             {bucketing.buckets.map((bucket) => (
               <span
                 key={bucket.category}
-                className={`transition-colors duration-700 ${bucket.textClass}`}
+                className={`${smoothColorClass} ${bucket.textClass}`}
               >
                 {bucket.label} • {bucket.subtitle}
               </span>
@@ -334,7 +339,7 @@ export function PortfolioBucketingCard({
             Yield • High-Conviction
           </p>
           {loading && (
-            <span className="inline-flex items-center gap-1.5 text-[10px] text-zinc-500 transition-all duration-700">
+            <span className={`inline-flex items-center gap-1.5 text-[10px] text-zinc-500 ${smoothWidthClass}`}>
               <Loader2 className="h-3 w-3 animate-spin" />
               Načítavam live metriky…
             </span>
@@ -342,7 +347,7 @@ export function PortfolioBucketingCard({
         </div>
 
         {metricsError && !loading && (
-          <p className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[10px] text-rose-400/90 transition-all duration-700">
+          <p className="mb-3 rounded-lg border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[10px] text-rose-400/90">
             {metricsError} — filter používa posledné dostupné dáta.
           </p>
         )}
@@ -376,7 +381,7 @@ export function PortfolioBucketingCard({
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-[11px] text-zinc-600 transition-all duration-700"
+                    className="rounded-xl border border-dashed border-white/10 px-3 py-4 text-center text-[11px] text-zinc-600"
                   >
                     Žiadny altcoin neprešiel filtrom 3/3 — kapitál presunutý do
                     CORE/SATELLITES.
@@ -420,7 +425,7 @@ export function PortfolioBucketingCard({
             <motion.li
               key={bullet}
               layout
-              className="flex gap-2 text-[11px] leading-relaxed text-zinc-500 transition-all duration-700"
+              className={`flex gap-2 text-[11px] leading-relaxed text-zinc-500 ${smoothWidthClass}`}
             >
               <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-zinc-600" />
               {bullet}

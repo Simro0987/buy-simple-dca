@@ -1,6 +1,6 @@
 "use client";
 
-import { motion } from "framer-motion";
+import { LayoutGroup, motion } from "framer-motion";
 import { DcaMarketRegimeCard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
@@ -53,8 +53,11 @@ export function DcaEngine({
     tokenSnapshot: snapshot?.tokens,
   });
 
-  const loading = externalLoading || engineLoading || liveLoading;
   const displayResult = liveResult;
+  const loading =
+    externalLoading ||
+    engineLoading ||
+    (liveLoading && !displayResult);
 
   useEffect(() => {
     if (displayResult) {
@@ -109,7 +112,8 @@ export function DcaEngine({
     : null;
 
   return (
-    <div className="space-y-5">
+    <LayoutGroup>
+    <div className="space-y-6">
       <motion.div
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
@@ -137,14 +141,16 @@ export function DcaEngine({
         </button>
       </motion.div>
 
-      {/* A — Weekly investment budget (user starts here) */}
-      <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyBudget} />
+      {/* A — Weekly investment + capital pipeline */}
+      <motion.div layout className="space-y-6">
+        <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyBudget} />
+        {displayResult && allocationProps && (
+          <MasterAllocationCard {...allocationProps} section="capital" />
+        )}
+      </motion.div>
 
       {displayResult && allocationProps && (
         <>
-          {/* A — Hotovosť rezerva + Týždenný kapitál */}
-          <MasterAllocationCard {...allocationProps} section="capital" />
-
           {/* B — 5 scoring factors (VALUE, TREND, SENTIMENT…) */}
           <MasterAllocationCard {...allocationProps} section="factors" />
 
@@ -179,8 +185,6 @@ export function DcaEngine({
             metricsError={bucketingMetricsError}
             section="tokens"
           />
-
-          <MasterAllocationCard {...allocationProps} section="accordion" />
 
           {/* G — Execution engine */}
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
@@ -217,5 +221,6 @@ export function DcaEngine({
         Zaznamenať nákup
       </motion.button>
     </div>
+    </LayoutGroup>
   );
 }

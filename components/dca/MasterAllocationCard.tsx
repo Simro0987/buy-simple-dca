@@ -13,6 +13,7 @@ import { DcaAllocationAccordion } from "@/components/dca/DcaAllocationAccordion"
 import { useCountUp } from "@/hooks/useCountUp";
 import { formatUsd } from "@/lib/data";
 import { getScoreColor } from "@/lib/dcaScoreColors";
+import { smoothColorClass, smoothWidthTransition } from "@/lib/motion";
 import type { ConfidenceLevel, FactorScore } from "@/lib/masterDcaEngine";
 
 interface MasterAllocationCardProps {
@@ -55,14 +56,14 @@ function FactorPill({
       initial={{ opacity: 0, scale: 0.94 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3, delay: 0.12 + index * 0.04 }}
-      className={`flex min-w-[108px] shrink-0 flex-col rounded-2xl border bg-[#0a0a0c] px-3 py-3 transition-colors duration-700 ease-out ${factorColor.badgeBorder}`}
+      className={`flex min-w-[108px] shrink-0 flex-col rounded-2xl border bg-[#0a0a0c] px-3 py-3 ${smoothColorClass} ${factorColor.badgeBorder}`}
     >
       <div className="flex items-center justify-between gap-2">
         <Icon
-          className={`h-3.5 w-3.5 transition-colors duration-700 ease-out ${factorColor.icon}`}
+          className={`h-3.5 w-3.5 ${smoothColorClass} ${factorColor.icon}`}
         />
         <span
-          className={`text-sm font-bold tabular-nums transition-colors duration-700 ease-out ${factorColor.text}`}
+          className={`text-sm font-bold tabular-nums ${smoothColorClass} ${factorColor.text}`}
         >
           {Math.round(animatedScore)}
         </span>
@@ -78,9 +79,11 @@ function FactorPill({
       </div>
 
       <div className="mt-3 h-1 overflow-hidden rounded-full bg-zinc-800">
-        <div
-          className={`h-full rounded-full transition-all duration-700 ease-out ${factorColor.bg}`}
-          style={{ width: `${factor.score}%` }}
+        <motion.div
+          initial={false}
+          animate={{ width: `${factor.score}%` }}
+          transition={smoothWidthTransition}
+          className={`h-full rounded-full ${smoothColorClass} ${factorColor.bg}`}
         />
       </div>
     </motion.div>

@@ -6,6 +6,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
 import { getScoreColor } from "@/lib/dcaScoreColors";
 import { formatUsd } from "@/lib/data";
+import { smoothColorClass, smoothWidthTransition } from "@/lib/motion";
 
 interface DcaHeroSharedProps {
   regimeLabel: string;
@@ -38,7 +39,7 @@ export function DcaMoneyModeBar({
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, ease: "easeOut" }}
-      className={`flex items-center justify-between gap-3 rounded-full border bg-[#0a0a0c] px-4 py-2.5 transition-colors duration-700 ease-out ${scoreColor.badgeBorder} ${scoreColor.badgeBg}`}
+      className={`flex items-center justify-between gap-3 rounded-full border bg-[#0a0a0c] px-4 py-2.5 ${smoothColorClass} ${scoreColor.badgeBorder} ${scoreColor.badgeBg}`}
     >
       <span
         className={`inline-flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider transition-colors duration-700 ease-out ${scoreColor.badgeText}`}
@@ -90,7 +91,7 @@ export function DcaMarketRegimeCard({
           </p>
         </div>
         <span
-          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide transition-colors duration-700 ease-out ${scoreColor.badgeBorder} ${scoreColor.badgeBg} ${scoreColor.badgeText}`}
+          className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide ${smoothColorClass} ${scoreColor.badgeBorder} ${scoreColor.badgeBg} ${scoreColor.badgeText}`}
         >
           <Shield className="h-3 w-3" />
           Confidence {CONFIDENCE_LABELS[confidence]} • ×
@@ -105,7 +106,7 @@ export function DcaMarketRegimeCard({
           </p>
           <p className="mt-2 flex items-baseline gap-1">
             <span
-              className={`text-5xl font-black tabular-nums leading-none transition-colors duration-700 ease-out ${scoreColor.text}`}
+              className={`text-5xl font-black tabular-nums leading-none ${smoothColorClass} ${scoreColor.text}`}
             >
               {animatedScore.toFixed(1)}
             </span>
@@ -115,9 +116,11 @@ export function DcaMarketRegimeCard({
             0 = lacný • 100 = drahý • {scoreColor.label}
           </p>
           <div className="mt-3 h-3 overflow-hidden rounded-full bg-zinc-800/90">
-            <div
-              className={`h-full rounded-full transition-all duration-700 ease-out ${scoreColor.bg}`}
-              style={{ width: `${confluenceScore}%` }}
+            <motion.div
+              initial={false}
+              animate={{ width: `${confluenceScore}%` }}
+              transition={smoothWidthTransition}
+              className={`h-full rounded-full ${smoothColorClass} ${scoreColor.bg}`}
             />
           </div>
         </div>
@@ -134,7 +137,7 @@ export function DcaMarketRegimeCard({
             • × {confidenceMultiplier.toFixed(2)}
           </p>
           <p
-            className={`mt-4 text-xl font-bold transition-colors duration-700 ease-out ${scoreColor.text}`}
+            className={`mt-4 text-xl font-bold ${smoothColorClass} ${scoreColor.text}`}
           >
             {formatUsd(animatedInvestment)}
           </p>

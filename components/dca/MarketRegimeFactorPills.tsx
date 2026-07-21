@@ -9,6 +9,7 @@ import { useMarketRegimeFactors } from "@/hooks/useMarketRegimeFactors";
 import { buildMarketRegimeFactors } from "@/lib/dcaMarketRegimeFactors";
 import { formatUnitPrice } from "@/lib/data";
 import { getScoreColor } from "@/lib/dcaScoreColors";
+import { smoothColorClass } from "@/lib/motion";
 
 function CircularFactorPill({
   label,
@@ -42,24 +43,24 @@ function CircularFactorPill({
       initial={{ opacity: 0, scale: 0.9 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.35, delay: 0.08 + index * 0.05 }}
-      className="flex min-w-[84px] shrink-0 flex-col items-center gap-2 transition-all duration-700 ease-out"
+      className={`flex min-w-[84px] shrink-0 flex-col items-center gap-2 ${smoothColorClass}`}
     >
       <div
-        className={`relative flex h-[84px] w-[84px] flex-col items-center justify-center rounded-full border-2 bg-[#0a0a0c] shadow-[0_0_24px_rgba(0,0,0,0.35)] transition-all duration-700 ease-out ${colors.badgeBorder}`}
+        className={`relative flex h-[84px] w-[84px] flex-col items-center justify-center rounded-full border-2 bg-[#0a0a0c] shadow-[0_0_24px_rgba(0,0,0,0.35)] ${smoothColorClass} ${colors.badgeBorder}`}
       >
         <div
-          className={`absolute inset-1 rounded-full opacity-30 transition-colors duration-700 ${colors.badgeBg}`}
+          className={`absolute inset-1 rounded-full opacity-30 ${smoothColorClass} ${colors.badgeBg}`}
         />
         <Icon
-          className={`relative z-10 h-4 w-4 transition-colors duration-700 ${colors.icon}`}
+          className={`relative z-10 h-4 w-4 ${smoothColorClass} ${colors.icon}`}
         />
         <span
-          className={`relative z-10 mt-1 text-[11px] font-bold tabular-nums leading-none transition-colors duration-700 ${colors.text}`}
+          className={`relative z-10 mt-1 text-[11px] font-bold tabular-nums leading-none ${smoothColorClass} ${colors.text}`}
         >
           {displayValue}
         </span>
       </div>
-      <p className="max-w-[84px] text-center text-[9px] font-bold uppercase tracking-wide text-zinc-400 transition-colors duration-700">
+      <p className={`max-w-[84px] text-center text-[9px] font-bold uppercase tracking-wide text-zinc-400 ${smoothColorClass}`}>
         {label}
       </p>
     </motion.div>
@@ -113,23 +114,23 @@ export function MarketRegimeFactorPills() {
           </div>
         ) : data ? (
           <>
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-zinc-400 transition-all duration-700">
+            <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-medium text-zinc-400 ${smoothColorClass}`}>
               <span className="text-zinc-300">
                 BTC Live:{" "}
-                <span className="font-bold text-white transition-all duration-700">
+                <span className={`font-bold text-white ${smoothColorClass}`}>
                   {formatUnitPrice(data.btcPrice)}
                 </span>
               </span>
               <span className="text-zinc-600">•</span>
               <span>
                 200WMA:{" "}
-                <span className="font-semibold text-zinc-200 transition-all duration-700">
+                <span className={`font-semibold text-zinc-200 ${smoothColorClass}`}>
                   {formatUnitPrice(data.wma200)}
                 </span>
               </span>
               <span className="text-zinc-600">•</span>
               <span
-                className={`transition-colors duration-700 ${
+                className={`${smoothColorClass} ${
                   data.distWmaPct >= 0 ? "text-amber-400" : "text-emerald-400"
                 }`}
               >
