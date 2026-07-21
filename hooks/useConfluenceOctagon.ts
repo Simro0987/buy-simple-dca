@@ -1,11 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useDcaPortfolioTokens } from "@/hooks/useDcaPortfolioTokens";
 import type { TokenOctagonSnapshot } from "@/lib/confluenceOctagon";
-import {
-  octagonTokensKey,
-  resolveOctagonTokensFromPortfolio,
-} from "@/lib/resolveOctagonTokens";
 import { fetchOctagonSnapshotsForTokens } from "@/lib/tokenOctagonData";
 import type { TrackedAsset } from "@/lib/portfolioStorage";
 import { useAppStore } from "@/src/store/useAppStore";
@@ -26,11 +23,10 @@ export function useConfluenceOctagon(
   portfolioSymbols?: string[],
   trackedAssets?: TrackedAsset[],
 ) {
-  const tokens = useMemo(
-    () => resolveOctagonTokensFromPortfolio(portfolioSymbols, trackedAssets),
-    [portfolioSymbols, trackedAssets],
+  const { tokens, tokensKey, usingPortfolioTokens } = useDcaPortfolioTokens(
+    portfolioSymbols,
+    trackedAssets,
   );
-  const tokensKey = octagonTokensKey(tokens);
 
   const storedToken = useAppStore((state) => state.octagonSelectedToken);
   const setStoredToken = useAppStore((state) => state.setOctagonSelectedToken);
@@ -57,6 +53,13 @@ export function useConfluenceOctagon(
     !memoryCache || memoryCache.tokensKey !== tokensKey,
   );
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (memoryCache?.tokensKey !== tokensKey) {
+      setSnapshots({});
+      setIsFetching(true);
+    }
+  }, [tokensKey]);
 
   useEffect(() => {
     if (!storedToken || !tokens.some((token) => token.symbol === storedToken)) {
@@ -106,7 +109,6 @@ export function useConfluenceOctagon(
   }, [fearGreed, refresh, tokensKey]);
 
   const activeSnapshot = snapshots[selectedToken] ?? null;
-  const usingPortfolioTokens = (portfolioSymbols?.length ?? 0) > 0;
   const tokenSwitchLoading = isFetching && !activeSnapshot;
 
   const scoresBySymbol = useMemo(
