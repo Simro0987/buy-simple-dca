@@ -239,6 +239,7 @@ export function DcaEngine({
         </div>
       </motion.div>
 
+      {/* Extreme market alert — first content block below header, above Weekly Investment (A) */}
       {displayResult && (
         <ExtremeMarketAlertBanner
           finalScore={displayResult.confluenceScore}
@@ -295,6 +296,14 @@ export function DcaEngine({
             section="tokens"
           />
 
+          {/* Backtest — 12M strategy comparison (tesne pred exekúciou) */}
+          <DcaBacktestModule
+            finalScore={displayResult.confluenceScore}
+            fearGreed={displayResult.fearGreedValue}
+            regimeLabel={displayResult.regimeLabel}
+            allocationPercent={displayResult.allocationPercent}
+          />
+
           {/* G — Execution engine */}
           <ExecutionEngineCards
             finalExecutionOrders={finalExecutionOrders}
@@ -305,15 +314,6 @@ export function DcaEngine({
             onDeployLeg={handleDeployLeg}
           />
         </>
-      )}
-
-      {displayResult && (
-        <DcaBacktestModule
-          finalScore={displayResult.confluenceScore}
-          fearGreed={displayResult.fearGreedValue}
-          regimeLabel={displayResult.regimeLabel}
-          allocationPercent={displayResult.allocationPercent}
-        />
       )}
 
       <motion.div
