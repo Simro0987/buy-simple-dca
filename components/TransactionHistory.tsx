@@ -8,20 +8,11 @@ import {
   listItemVariants,
 } from "@/lib/motion";
 
-const accentStyles = {
-  BTC: {
-    ring: "ring-orange-500/30",
-    bg: "bg-orange-500",
-  },
-  ETH: {
-    ring: "ring-purple-400/30",
-    bg: "bg-purple-500",
-  },
-  SOL: {
-    ring: "ring-cyan-400/30",
-    bg: "bg-gradient-to-br from-cyan-400 to-blue-500",
-  },
-} as const;
+const TYPE_LABELS: Record<Transaction["type"], string> = {
+  DCA: "DCA",
+  ADD: "Pridať",
+  REMOVE: "Odstrániť",
+};
 
 function formatTransactionDate(date: string) {
   return new Intl.DateTimeFormat("sk-SK", {
@@ -33,9 +24,11 @@ function formatTransactionDate(date: string) {
   }).format(new Date(date));
 }
 
-function formatAmount(amount: number, symbol: string) {
-  const decimals = symbol === "BTC" ? 6 : symbol === "ETH" ? 5 : 4;
-  return `+${amount.toFixed(decimals)} ${symbol}`;
+function formatAmount(transaction: Transaction) {
+  const decimals =
+    transaction.symbol === "BTC" ? 6 : transaction.symbol === "ETH" ? 5 : 4;
+  const prefix = transaction.type === "REMOVE" ? "-" : "+";
+  return `${prefix}${transaction.amount.toFixed(decimals)} ${transaction.symbol}`;
 }
 
 interface TransactionHistoryProps {
@@ -59,9 +52,9 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
 
       {transactions.length === 0 ? (
         <div className="rounded-3xl border border-white/5 bg-[#111113] px-4 py-8 text-center">
-          <p className="text-sm font-medium text-zinc-400">Zatiaľ žiadne nákupy</p>
+          <p className="text-sm font-medium text-zinc-400">Zatiaľ žiadne transakcie</p>
           <p className="mt-1 text-xs text-zinc-600">
-            Zaznamenaj prvý DCA nákup v záložke DCA Engine.
+            Pridaj token alebo zaznamenaj DCA nákup.
           </p>
         </div>
       ) : (
@@ -71,50 +64,45 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
           animate="show"
           className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]"
         >
-          {transactions.map((transaction, index) => {
-            const styles = accentStyles[transaction.symbol];
-
-            return (
-              <motion.div
-                key={transaction.id}
-                variants={listItemVariants}
-                className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 ${
-                  index < transactions.length - 1
-                    ? "border-b border-zinc-800/50"
-                    : ""
-                }`}
-              >
-                <div className="flex min-w-0 items-center gap-3">
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full ring-2 ${styles.ring} ${styles.bg}`}
-                  >
-                    <span className="text-[10px] font-bold text-white">
-                      {transaction.symbol.slice(0, 1)}
-                    </span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold text-white">
-                      Nákup (DCA)
-                    </p>
-                    <p className="text-xs text-zinc-500">{transaction.symbol}</p>
-                  </div>
-                </div>
-
-                <p className="text-center text-[11px] leading-snug text-zinc-500">
-                  {formatTransactionDate(transaction.date)}
+          {transactions.map((transaction, index) => (
+            <motion.div
+              key={transaction.id}
+              variants={listItemVariants}
+              className={`grid grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] items-center gap-3 px-4 py-4 ${
+                index < transactions.length - 1
+                  ? "border-b border-zinc-800/50"
+                  : ""
+              }`}
+            >
+              <div className="min-w-0">
+                <p
+                  className={`truncate text-sm font-semibold ${
+                    transaction.type === "REMOVE"
+                      ? "text-rose-400"
+                      : "text-emerald-400"
+                  }`}
+                >
+                  {TYPE_LABELS[transaction.type]}
                 </p>
+                <p className="text-xs text-zinc-500">{transaction.symbol}</p>
+              </div>
 
-                <div className="text-right">
-                  <p className="text-sm font-bold text-emerald-400">
-                    {formatAmount(transaction.amount, transaction.symbol)}
-                  </p>
+              <p className="text-center text-[11px] leading-snug text-zinc-500">
+                {formatTransactionDate(transaction.date)}
+              </p>
+
+              <div className="text-right">
+                <p className="text-sm font-bold text-white">
+                  {formatAmount(transaction)}
+                </p>
+                {transaction.spentUsd > 0 && (
                   <p className="mt-0.5 text-xs text-zinc-500">
                     {formatUsd(transaction.spentUsd)}
                   </p>
-                </div>
-              </motion.div>
-            );
-          })}
+                )}
+              </div>
+            </motion.div>
+          ))}
         </motion.div>
       )}
     </motion.section>

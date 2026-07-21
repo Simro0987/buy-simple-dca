@@ -1,63 +1,148 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
+import { ApiStatusBanner } from "@/components/ApiStatusBanner";
+import { SwapPanel } from "@/components/SwapPanel";
+import { AddAssetModal } from "@/components/AddAssetModal";
 import { AssetList } from "@/components/AssetList";
 import { BottomNav, type Tab } from "@/components/BottomNav";
 import { ConfluenceRadar } from "@/components/ConfluenceRadar";
 import { DcaEngine } from "@/components/dca/DcaEngine";
-import { EditHoldingsModal } from "@/components/EditHoldingsModal";
 import { HeroSection } from "@/components/HeroSection";
 import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
+import { PortfolioBubbleAllocation } from "@/components/PortfolioBubbleAllocation";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
+import { TradeHistoryPanel } from "@/components/TradeHistoryPanel";
+import { TradingModeToggle } from "@/components/TradingModeToggle";
 import { TransactionHistory } from "@/components/TransactionHistory";
-import { YieldTokensList } from "@/components/YieldTokensList";
+import { TransactionModal } from "@/components/TransactionModal";
+import type { LiveAsset } from "@/hooks/usePortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
+import { useAppStore } from "@/src/store/useAppStore";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isAddAssetOpen, setIsAddAssetOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState<LiveAsset | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const hydrateTradingMode = useAppStore((state) => state.hydrateTradingMode);
+  const fearGreedValue = useAppStore(
+    (state) => state.dcaPlan.result?.fearGreedValue ?? 50,
+  );
+
+  useEffect(() => {
+    hydrateTradingMode();
+  }, [hydrateTradingMode]);
+
   const {
     assets,
-    holdings,
+    yieldAssets,
+    satelliteAssets,
+    allAssets,
     transactions,
+    trackedAssets,
     totalBalance,
     totalInvested,
     profitLoss,
     loading,
     isLive,
-    prices,
-    updateHoldings,
+    addAsset,
+    recordTransaction,
     importPortfolio,
     recordDcaPurchase,
+    recordDcaLegPurchase,
+    resetAllData,
     portfolioData,
   } = usePortfolio();
+
+  const portfolioSymbols = useMemo(
+    () => allAssets.map((asset) => asset.symbol),
+    [allAssets],
+  );
 
   const showHome = activeTab === "home";
   const showPortfolio = activeTab === "portfolio";
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
+  const showSwap = activeTab === "swap";
 
-  const handleRecordPurchase = useCallback(
-    (plans: TokenExecutionPlan[]) => {
-      if (!prices) return false;
-
-      const recorded = recordDcaPurchase(plans, prices);
+  const handleRecordMarketLeg = useCallback(
+    (plan: TokenExecutionPlan) => {
+      const recorded = recordDcaLegPurchase(plan, "market");
       if (recorded) {
-        setToastMessage("Záznam uložený");
+        const amount =
+          plan.spotPrice > 0 ? plan.marketUsd / plan.spotPrice : 0;
+        setToastMessage(
+          `Market nákup ${plan.symbol}: ${formatMarketLegToast(plan.marketUsd, amount)}`,
+        );
+      } else {
+        setToastMessage(
+          `Market ${plan.symbol} — token musí byť v portfóliu s platnou cenou`,
+        );
       }
       return recorded;
     },
-    [prices, recordDcaPurchase],
+    [recordDcaLegPurchase],
   );
+
+  function formatMarketLegToast(spentUsd: number, amount: number): string {
+    return `$${spentUsd.toFixed(2)} • ${amount.toFixed(6)} ks`;
+  }
+
+  const handleRecordPurchase = useCallback(
+    (plans: TokenExecutionPlan[]) => {
+      const recorded = recordDcaPurchase(plans);
+      if (recorded) {
+        setToastMessage("Záznam uložený");
+      } else {
+        setToastMessage(
+          "Žiadny záznam — token musí byť v portfóliu s platnou cenou",
+        );
+      }
+      return recorded;
+    },
+    [recordDcaPurchase],
+  );
+
+  const handleOpenTransactions = useCallback((asset: LiveAsset) => {
+    setSelectedAsset(asset);
+  }, []);
+
+  const handleAddAsset = useCallback(
+    (input: Parameters<typeof addAsset>[0]) => {
+      const asset = addAsset(input);
+      if (asset) {
+        setToastMessage(`${asset.symbol} pridané do portfólia`);
+      }
+    },
+    [addAsset],
+  );
+
+  const handleRecordTransaction = useCallback(
+    (input: Parameters<typeof recordTransaction>[0]) => {
+      const success = recordTransaction(input);
+      if (success) {
+        setToastMessage(
+          input.type === "ADD" ? "Transakcia pridaná" : "Transakcia odstránená",
+        );
+      }
+      return success;
+    },
+    [recordTransaction],
+  );
+
+  const handleResetAllData = useCallback(() => {
+    resetAllData();
+    setToastMessage("Všetky dáta boli vymazané");
+  }, [resetAllData]);
 
   return (
     <div className="relative min-h-dvh bg-[#050505]">
@@ -76,19 +161,22 @@ export function Dashboard() {
             <p className="text-sm font-medium text-zinc-400">Terminal v2.0</p>
           </div>
           <div className="flex items-center gap-2">
+            <TradingModeToggle compact />
             <SettingsButton onClick={() => setIsSettingsOpen(true)} />
             <LiveIndicator isLive={isLive} loading={loading} />
           </div>
         </header>
 
+        <ApiStatusBanner />
+
         <AnimatePresence mode="wait">
           {showHome && (
-            <motion.div
-              key="home"
-              {...pageTransition}
-              className="space-y-8"
-            >
-              <ConfluenceRadar />
+            <motion.div key="home" {...pageTransition} className="space-y-8">
+              <ConfluenceRadar
+                fearGreed={fearGreedValue}
+                portfolioSymbols={portfolioSymbols}
+                trackedAssets={trackedAssets}
+              />
             </motion.div>
           )}
 
@@ -105,20 +193,51 @@ export function Dashboard() {
                 loading={loading}
                 isLive={isLive}
               />
-              <PortfolioChart endValue={totalBalance} loading={loading} />
-              <AssetList assets={assets} loading={loading} />
-              <YieldTokensList />
-              <AddAssetButton onClick={() => setIsEditModalOpen(true)} />
+
+              <PortfolioChart
+                endValue={totalBalance}
+                transactions={transactions}
+                loading={loading}
+              />
+
+              <PortfolioBubbleAllocation
+                assets={allAssets}
+                loading={loading}
+              />
+
+              <AssetList
+                category="core"
+                assets={assets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AssetList
+                category="satellite"
+                assets={satelliteAssets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AssetList
+                category="yield"
+                assets={yieldAssets}
+                loading={loading}
+                onOpenTransactions={handleOpenTransactions}
+              />
+              <AddAssetButton onClick={() => setIsAddAssetOpen(true)} />
               <TransactionHistory transactions={transactions} />
+              <TradeHistoryPanel />
             </motion.div>
           )}
 
           {showDca && (
             <motion.div key="dca" {...pageTransition}>
               <DcaEngine
-                prices={prices}
+                portfolioSymbols={portfolioSymbols}
+                trackedAssets={trackedAssets}
+                dcaTransactions={transactions}
                 loading={loading}
                 onRecordPurchase={handleRecordPurchase}
+                onRecordMarketLeg={handleRecordMarketLeg}
               />
             </motion.div>
           )}
@@ -128,16 +247,28 @@ export function Dashboard() {
               <NewsFeed />
             </motion.div>
           )}
+          {showSwap && (
+            <motion.div key="swap" {...pageTransition}>
+              <SwapPanel />
+            </motion.div>
+          )}
         </AnimatePresence>
       </main>
 
       <BottomNav activeTab={activeTab} onTabChange={setActiveTab} />
 
-      <EditHoldingsModal
-        open={isEditModalOpen}
-        holdings={holdings}
-        onClose={() => setIsEditModalOpen(false)}
-        onSave={updateHoldings}
+      <AddAssetModal
+        open={isAddAssetOpen}
+        onClose={() => setIsAddAssetOpen(false)}
+        onAdd={handleAddAsset}
+        existingCoingeckoIds={trackedAssets.map((asset) => asset.coingeckoId)}
+      />
+
+      <TransactionModal
+        open={Boolean(selectedAsset)}
+        asset={selectedAsset}
+        onClose={() => setSelectedAsset(null)}
+        onSubmit={handleRecordTransaction}
       />
 
       <SettingsModal
@@ -145,6 +276,7 @@ export function Dashboard() {
         portfolioData={portfolioData}
         onClose={() => setIsSettingsOpen(false)}
         onImport={importPortfolio}
+        onResetAllData={handleResetAllData}
       />
 
       <Toast

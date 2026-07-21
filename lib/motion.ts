@@ -1,3 +1,20 @@
+/** Shared motion / transition tokens for jump-free DCA UI updates. */
+export const SMOOTH_WIDTH_MS = 700;
+export const SMOOTH_COLOR_MS = 500;
+
+export const smoothWidthClass = "transition-all duration-700 ease-in-out";
+export const smoothColorClass = "transition-colors duration-500 ease-in-out";
+
+export const smoothWidthTransition = {
+  duration: SMOOTH_WIDTH_MS / 1000,
+  ease: [0.4, 0, 0.2, 1] as const,
+};
+
+export const smoothColorTransition = {
+  duration: SMOOTH_COLOR_MS / 1000,
+  ease: "easeInOut" as const,
+};
+
 export const pageTransition = {
   initial: { opacity: 0, y: 10 },
   animate: { opacity: 1, y: 0 },

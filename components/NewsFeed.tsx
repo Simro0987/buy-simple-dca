@@ -1,102 +1,48 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { Zap } from "lucide-react";
-import { useMemo, useState } from "react";
-import {
-  flashCount,
-  newsArticles,
-  newsFilters,
-  type NewsArticle,
-  type NewsCategory,
-  type NewsTagVariant,
-} from "@/lib/newsData";
-import {
-  interactiveButton,
-  interactiveCard,
-  listContainerVariants,
-  listItemVariants,
-} from "@/lib/motion";
-
-const tagStyles: Record<
-  NewsTagVariant,
-  { className: string; showBolt?: boolean }
-> = {
-  macro: {
-    className: "bg-blue-500/10 text-blue-400 border-blue-500/20",
-  },
-  institutions: {
-    className: "bg-yellow-400/10 text-yellow-400 border-yellow-400/20",
-    showBolt: true,
-  },
-  btc: {
-    className: "bg-orange-500/10 text-orange-400 border-orange-500/20",
-  },
-  eth: {
-    className: "bg-purple-500/10 text-purple-400 border-purple-500/20",
-  },
-  sol: {
-    className: "bg-cyan-500/10 text-cyan-400 border-cyan-500/20",
-  },
-  defi: {
-    className: "bg-emerald-500/10 text-emerald-400 border-emerald-500/20",
-  },
-  regulation: {
-    className: "bg-red-500/10 text-red-400 border-red-500/20",
-  },
-};
-
-function NewsCard({ article }: { article: NewsArticle }) {
-  return (
-    <motion.article
-      variants={listItemVariants}
-      {...interactiveCard}
-      className="relative rounded-3xl border border-white/5 bg-[#111113] p-4"
-    >
-      <span className="absolute right-4 top-4 flex h-2.5 w-2.5">
-        <span
-          className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-75 ${article.pulseColor}`}
-        />
-        <span
-          className={`relative inline-flex h-2.5 w-2.5 rounded-full ${article.pulseColor}`}
-        />
-      </span>
-
-      <div className="flex flex-wrap gap-1.5 pr-6">
-        {article.tags.map((tag) => {
-          const style = tagStyles[tag.variant];
-          return (
-            <span
-              key={`${article.id}-${tag.label}`}
-              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide ${style.className}`}
-            >
-              {style.showBolt && <Zap className="h-2.5 w-2.5 fill-yellow-400" />}
-              {tag.label}
-            </span>
-          );
-        })}
-      </div>
-
-      <h3 className="mt-3 text-base font-bold leading-snug text-white">
-        {article.title}
-      </h3>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-500">
-        {article.summary}
-      </p>
-      <p className="mt-3 text-[11px] font-medium uppercase tracking-wider text-zinc-600">
-        {article.source}
-      </p>
-    </motion.article>
-  );
-}
+import { useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import { Loader2, RefreshCw, Wallet, Zap } from "lucide-react";
+import { FlashAlertModal } from "@/components/FlashAlertModal";
+import { NewsArticleRow } from "@/components/NewsArticleRow";
+import { NewsFeedSeparator } from "@/components/NewsFeedSeparator";
+import { NewsHeroCard } from "@/components/NewsHeroCard";
+import { NewsTokenChips } from "@/components/NewsTokenChips";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
+import { useNewsFeed } from "@/hooks/useNewsFeed";
+import { usePortfolioAssets } from "@/src/store/useAppStore";
+import type { SmartNewsArticle } from "@/lib/newsTokenFilter";
+import { listContainerVariants } from "@/lib/motion";
 
 export function NewsFeed() {
-  const [activeFilter, setActiveFilter] = useState<NewsCategory>("all");
+  const portfolioAssets = usePortfolioAssets();
+  const {
+    mode,
+    setMode,
+    selectedToken,
+    setSelectedToken,
+    heroArticle,
+    flashArticles,
+    regularArticles,
+    heroImageUrl,
+    flashArticleId,
+    loading,
+    error,
+    lastUpdated,
+    refresh,
+    matchedCount,
+    portfolioTokens,
+  } = useNewsFeed(portfolioAssets);
 
-  const filteredArticles = useMemo(() => {
-    if (activeFilter === "all") return newsArticles;
-    return newsArticles.filter((article) => article.category === activeFilter);
-  }, [activeFilter]);
+  const [flashModalArticle, setFlashModalArticle] =
+    useState<SmartNewsArticle | null>(null);
+
+  const visibleCount =
+    flashArticles.length + regularArticles.length + (heroArticle ? 1 : 0);
+
+  const handleFlashClick = (article: SmartNewsArticle) => {
+    setFlashModalArticle(article);
+  };
 
   return (
     <motion.div
@@ -108,50 +54,198 @@ export function NewsFeed() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-3xl font-bold tracking-tight text-white">
-            Noviny
+            Smart Feed
           </h2>
           <p className="mt-1 text-sm text-zinc-500">
-            Inštitucionálny radar · BTC, ETH, SOL
+            Správy podľa tvojich držaných tokenov · slovenčina
           </p>
+          {lastUpdated && !loading && (
+            <p className="mt-1 text-[10px] text-zinc-600">
+              Aktualizované{" "}
+              {lastUpdated.toLocaleTimeString("sk-SK", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+              {mode === "portfolio" && (
+                <>
+                  {" "}
+                  · {selectedToken ? visibleCount : matchedCount} relevantných
+                  správ
+                </>
+              )}
+            </p>
+          )}
         </div>
-        <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.15)]">
-          <Zap className="h-3 w-3 fill-yellow-400" />
-          {flashCount} flash
-        </span>
+        <div className="flex shrink-0 items-center gap-2">
+          {flashArticles.length > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-yellow-400/30 bg-yellow-400/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-yellow-400">
+              <Zap className="h-3 w-3 fill-yellow-400" />
+              {flashArticles.length} flash
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={() => void refresh()}
+            disabled={loading}
+            aria-label="Obnoviť správy"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-[#111113] text-zinc-400 transition hover:border-white/20 hover:text-white disabled:opacity-50"
+          >
+            {loading ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+          </button>
+        </div>
       </div>
 
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-        {newsFilters.map((filter) => {
-          const isActive = activeFilter === filter.id;
-          return (
-            <motion.button
-              key={filter.id}
-              type="button"
-              onClick={() => setActiveFilter(filter.id)}
-              {...interactiveButton}
-              className={`shrink-0 rounded-full px-4 py-2 text-xs font-semibold transition-colors ${
-                isActive
-                  ? "bg-emerald-900/60 text-emerald-400 shadow-[0_0_16px_rgba(6,78,59,0.4)]"
-                  : "border border-white/5 bg-white/[0.03] text-zinc-500 hover:text-zinc-300"
-              }`}
+      <div className="grid grid-cols-2 gap-2 rounded-2xl border border-white/5 bg-[#111113] p-1">
+        <button
+          type="button"
+          onClick={() => setMode("portfolio")}
+          className={`flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+            mode === "portfolio"
+              ? "bg-emerald-400/15 text-emerald-400"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          <Wallet className="h-3.5 w-3.5" />
+          Moje tokeny
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("all")}
+          className={`rounded-xl px-3 py-2.5 text-xs font-semibold transition ${
+            mode === "all"
+              ? "bg-white/10 text-white"
+              : "text-zinc-500 hover:text-zinc-300"
+          }`}
+        >
+          Všetky novinky
+        </button>
+      </div>
+
+      {portfolioTokens.length > 0 && (
+        <NewsTokenChips
+          tokens={portfolioTokens}
+          selectedToken={selectedToken}
+          onSelect={setSelectedToken}
+        />
+      )}
+
+      {error && (
+        <div className="rounded-2xl border border-rose-400/20 bg-rose-400/5 px-4 py-3 text-sm text-rose-300">
+          {error}
+        </div>
+      )}
+
+      {mode === "portfolio" && portfolioTokens.length === 0 && !loading && (
+        <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+          Pridaj tokeny do portfólia, aby Smart Feed vedel filtrovať relevantné
+          správy.
+        </div>
+      )}
+
+      {mode === "portfolio" &&
+        portfolioTokens.length > 0 &&
+        matchedCount === 0 &&
+        !loading &&
+        !selectedToken && (
+          <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+            Momentálne žiadne správy pre tvoje tokeny (
+            {portfolioTokens.map((t) => t.symbol).join(", ")}). Skús „Všetky
+            novinky“.
+          </div>
+        )}
+
+      {selectedToken && visibleCount === 0 && !loading && (
+        <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center text-sm text-zinc-500">
+          Žiadne správy pre {selectedToken}. Skús iný token alebo „Všetky“.
+        </div>
+      )}
+
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={`${mode}-${selectedToken ?? "all"}-hero`}
+          initial={{ opacity: 0, y: 14 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -10 }}
+          transition={{ duration: 0.3, ease: "easeOut" }}
+        >
+          <NewsHeroCard
+            article={heroArticle}
+            imageUrl={heroImageUrl ?? heroArticle?.imageUrl}
+            loading={loading}
+            showTokenBadges={mode === "portfolio"}
+          />
+        </motion.div>
+      </AnimatePresence>
+
+      <div className="space-y-2">
+        {flashArticles.length > 0 && (
+          <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-yellow-500/80">
+            Flash Alert
+          </p>
+        )}
+
+        {loading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <PriceSkeleton key={index} className="h-20 w-full rounded-2xl" />
+            ))}
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`${mode}-${selectedToken ?? "all"}-list`}
+              variants={listContainerVariants}
+              initial="hidden"
+              animate="show"
+              exit={{ opacity: 0, y: -8 }}
+              className="space-y-2"
             >
-              {filter.label}
-            </motion.button>
-          );
-        })}
+              {flashArticles.map((article) => (
+                <NewsArticleRow
+                  key={article.id}
+                  article={article}
+                  showTokenBadges={mode === "portfolio"}
+                  flashArticleId={flashArticleId}
+                  onFlashClick={handleFlashClick}
+                />
+              ))}
+
+              {flashArticles.length > 0 && regularArticles.length > 0 && (
+                <NewsFeedSeparator />
+              )}
+
+              {regularArticles.length > 0 && flashArticles.length === 0 && (
+                <p className="px-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
+                  {selectedToken
+                    ? `Správy · ${selectedToken}`
+                    : mode === "portfolio"
+                      ? "Relevantné správy"
+                      : "Najnovšie správy"}
+                </p>
+              )}
+
+              {regularArticles.map((article) => (
+                <NewsArticleRow
+                  key={article.id}
+                  article={article}
+                  showTokenBadges={mode === "portfolio"}
+                  flashArticleId={flashArticleId}
+                />
+              ))}
+            </motion.div>
+          </AnimatePresence>
+        )}
       </div>
 
-      <motion.div
-        key={activeFilter}
-        variants={listContainerVariants}
-        initial="hidden"
-        animate="show"
-        className="space-y-3"
-      >
-        {filteredArticles.map((article) => (
-          <NewsCard key={article.id} article={article} />
-        ))}
-      </motion.div>
+      <FlashAlertModal
+        article={flashModalArticle}
+        open={flashModalArticle !== null}
+        onClose={() => setFlashModalArticle(null)}
+      />
     </motion.div>
   );
 }
