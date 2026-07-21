@@ -21,7 +21,7 @@ import { buildExchangeExecuteOrders } from "@/lib/exchange/buildExecutePayload";
 import type { ExchangeExecuteResponse } from "@/lib/exchange/types";
 import { buildFinalExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
-import type { Transaction } from "@/lib/portfolioStorage";
+import type { Transaction, TrackedAsset } from "@/lib/portfolioStorage";
 import {
   appendTradeRound,
   createSimulatedTradeRound,
@@ -43,6 +43,7 @@ import { useCallback, useEffect, useMemo } from "react";
 
 interface DcaEngineProps {
   portfolioSymbols?: string[];
+  trackedAssets?: TrackedAsset[];
   dcaTransactions?: Transaction[];
   loading?: boolean;
   onRecordPurchase: (plans: TokenExecutionPlan[]) => boolean;
@@ -51,6 +52,7 @@ interface DcaEngineProps {
 
 export function DcaEngine({
   portfolioSymbols = [],
+  trackedAssets = [],
   dcaTransactions = [],
   loading: externalLoading = false,
   onRecordPurchase,
@@ -146,7 +148,11 @@ export function DcaEngine({
     async (plans: TokenExecutionPlan[]) => {
       if (plans.length === 0) return;
       const fearGreed = displayResult?.fearGreedValue ?? 50;
-      const octagonSnapshots = await fetchAllTokenOctagonSnapshots(fearGreed);
+      const octagonSnapshots = await fetchAllTokenOctagonSnapshots(
+        fearGreed,
+        portfolioSymbols,
+        trackedAssets,
+      );
       const octagonScores = Object.fromEntries(
         Object.entries(octagonSnapshots).map(([symbol, snap]) => [
           symbol,
@@ -165,13 +171,17 @@ export function DcaEngine({
         marketAvg7dBySymbol,
       );
     },
-    [displayResult?.fearGreedValue, tokenPrices],
+    [displayResult?.fearGreedValue, portfolioSymbols, tokenPrices, trackedAssets],
   );
 
   const logSingleLegPerformance = useCallback(
     async (plan: TokenExecutionPlan, leg: OrderLeg) => {
       const fearGreed = displayResult?.fearGreedValue ?? 50;
-      const octagonSnapshots = await fetchAllTokenOctagonSnapshots(fearGreed);
+      const octagonSnapshots = await fetchAllTokenOctagonSnapshots(
+        fearGreed,
+        portfolioSymbols,
+        trackedAssets,
+      );
       const snap = octagonSnapshots[plan.symbol as keyof typeof octagonSnapshots];
       appendSingleExecutionPerformanceEntry({
         plan,
@@ -180,7 +190,7 @@ export function DcaEngine({
         marketAvg7d: snap?.avgPrice7d ?? plan.spotPrice,
       });
     },
-    [displayResult?.fearGreedValue],
+    [displayResult?.fearGreedValue, portfolioSymbols, trackedAssets],
   );
 
   const handleDeployAll = useCallback(async () => {
@@ -399,6 +409,8 @@ export function DcaEngine({
 
           <ExecutionPerformanceSection
             fearGreed={displayResult.fearGreedValue}
+            portfolioSymbols={portfolioSymbols}
+            trackedAssets={trackedAssets}
             dcaTransactions={dcaTransactions}
             executionPlans={finalExecutionOrders}
             tokenPrices={tokenPrices}

@@ -3,9 +3,8 @@
 import { motion } from "framer-motion";
 import { useConfluenceOctagon } from "@/hooks/useConfluenceOctagon";
 import { useTokenExecutionAdvisor } from "@/hooks/useTokenExecutionAdvisor";
-import type { OctagonTokenSymbol } from "@/lib/confluenceOctagon";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
-import type { Transaction } from "@/lib/portfolioStorage";
+import type { Transaction, TrackedAsset } from "@/lib/portfolioStorage";
 
 const GRADE_COLORS: Record<string, string> = {
   A: "text-emerald-300",
@@ -18,6 +17,8 @@ const GRADE_COLORS: Record<string, string> = {
 
 interface ExecutionPerformanceSectionProps {
   fearGreed: number;
+  portfolioSymbols?: string[];
+  trackedAssets?: TrackedAsset[];
   dcaTransactions: Transaction[];
   executionPlans: TokenExecutionPlan[];
   tokenPrices: Record<string, number>;
@@ -25,6 +26,8 @@ interface ExecutionPerformanceSectionProps {
 
 export function ExecutionPerformanceSection({
   fearGreed,
+  portfolioSymbols,
+  trackedAssets,
   dcaTransactions,
   executionPlans,
   tokenPrices,
@@ -36,7 +39,8 @@ export function ExecutionPerformanceSection({
     activeSnapshot,
     snapshots,
     loading,
-  } = useConfluenceOctagon(fearGreed);
+    usingPortfolioTokens,
+  } = useConfluenceOctagon(fearGreed, portfolioSymbols, trackedAssets);
 
   const advisor = useTokenExecutionAdvisor({
     symbol: selectedToken,
@@ -66,6 +70,7 @@ export function ExecutionPerformanceSection({
           </h3>
           <p className="mt-1 text-[10px] text-zinc-500">
             Prepojené s Confluence Octagon a históriou exekúcií
+            {usingPortfolioTokens ? " · tokeny z Portfólia" : " · predvolený kôš"}
           </p>
         </div>
         <div className="rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-right">
@@ -86,7 +91,7 @@ export function ExecutionPerformanceSection({
             <button
               key={token.symbol}
               type="button"
-              onClick={() => setSelectedToken(token.symbol as OctagonTokenSymbol)}
+              onClick={() => setSelectedToken(token.symbol)}
               className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${
                 active
                   ? "bg-blue-400/15 text-blue-300 ring-1 ring-blue-400/30"

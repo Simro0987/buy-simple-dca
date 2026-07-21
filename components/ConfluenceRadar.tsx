@@ -9,14 +9,20 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useConfluenceOctagon } from "@/hooks/useConfluenceOctagon";
-import type { OctagonTokenSymbol } from "@/lib/confluenceOctagon";
 import { interactiveCard, listContainerVariants, listItemVariants } from "@/lib/motion";
+import type { TrackedAsset } from "@/lib/portfolioStorage";
 
 interface ConfluenceRadarProps {
   fearGreed?: number;
+  portfolioSymbols?: string[];
+  trackedAssets?: TrackedAsset[];
 }
 
-export function ConfluenceRadar({ fearGreed = 50 }: ConfluenceRadarProps) {
+export function ConfluenceRadar({
+  fearGreed = 50,
+  portfolioSymbols,
+  trackedAssets,
+}: ConfluenceRadarProps) {
   const {
     tokens,
     selectedToken,
@@ -24,7 +30,8 @@ export function ConfluenceRadar({ fearGreed = 50 }: ConfluenceRadarProps) {
     activeSnapshot,
     loading,
     error,
-  } = useConfluenceOctagon(fearGreed);
+    usingPortfolioTokens,
+  } = useConfluenceOctagon(fearGreed, portfolioSymbols, trackedAssets);
 
   const metrics = activeSnapshot?.metrics ?? [];
   const accumulationScore = activeSnapshot?.accumulationScore ?? 0;
@@ -52,6 +59,7 @@ export function ConfluenceRadar({ fearGreed = 50 }: ConfluenceRadarProps) {
             </h2>
             <p className="mt-1 text-[10px] font-semibold tabular-nums text-emerald-300">
               Skóre akumulácie {accumulationScore}/100
+              {usingPortfolioTokens ? " · z Portfólia" : " · predvolený kôš"}
             </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5">
@@ -72,7 +80,7 @@ export function ConfluenceRadar({ fearGreed = 50 }: ConfluenceRadarProps) {
               <button
                 key={token.symbol}
                 type="button"
-                onClick={() => setSelectedToken(token.symbol as OctagonTokenSymbol)}
+                onClick={() => setSelectedToken(token.symbol)}
                 className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${
                   active
                     ? "bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-400/30"

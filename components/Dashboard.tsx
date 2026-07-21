@@ -172,7 +172,11 @@ export function Dashboard() {
         <AnimatePresence mode="wait">
           {showHome && (
             <motion.div key="home" {...pageTransition} className="space-y-8">
-              <ConfluenceRadar fearGreed={fearGreedValue} />
+              <ConfluenceRadar
+                fearGreed={fearGreedValue}
+                portfolioSymbols={portfolioSymbols}
+                trackedAssets={trackedAssets}
+              />
             </motion.div>
           )}
 
@@ -229,6 +233,7 @@ export function Dashboard() {
             <motion.div key="dca" {...pageTransition}>
               <DcaEngine
                 portfolioSymbols={portfolioSymbols}
+                trackedAssets={trackedAssets}
                 dcaTransactions={transactions}
                 loading={loading}
                 onRecordPurchase={handleRecordPurchase}

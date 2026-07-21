@@ -1,10 +1,12 @@
 import {
   buildTokenOctagonSnapshot,
-  OCTAGON_TOKEN_DEFINITIONS,
-  type OctagonTokenSymbol,
+  DEFAULT_OCTAGON_BASKET,
+  type OctagonTokenDefinition,
   type OhlcVolumeBar,
   type TokenOctagonSnapshot,
 } from "@/lib/confluenceOctagon";
+import { resolveOctagonTokensFromPortfolio } from "@/lib/resolveOctagonTokens";
+import type { TrackedAsset } from "@/lib/portfolioStorage";
 
 type RawKline = [number, string, string, string, string, string, ...unknown[]];
 
@@ -29,13 +31,10 @@ async function fetchKlines(
   }));
 }
 
-export async function fetchTokenOctagonSnapshot(
-  symbol: OctagonTokenSymbol,
+export async function fetchTokenOctagonSnapshotForDef(
+  def: OctagonTokenDefinition,
   fearGreed: number,
 ): Promise<TokenOctagonSnapshot | null> {
-  const def = OCTAGON_TOKEN_DEFINITIONS.find((token) => token.symbol === symbol);
-  if (!def) return null;
-
   const [dailyBars, weeklyBars] = await Promise.all([
     fetchKlines(def.binanceSymbol, "1d", 250),
     fetchKlines(def.binanceSymbol, "1w", 210),
@@ -50,18 +49,42 @@ export async function fetchTokenOctagonSnapshot(
   });
 }
 
-export async function fetchAllTokenOctagonSnapshots(
+export async function fetchOctagonSnapshotsForTokens(
+  tokens: OctagonTokenDefinition[],
   fearGreed: number,
-): Promise<Record<OctagonTokenSymbol, TokenOctagonSnapshot | null>> {
+): Promise<Record<string, TokenOctagonSnapshot | null>> {
   const entries = await Promise.all(
-    OCTAGON_TOKEN_DEFINITIONS.map(async (token) => {
-      const snapshot = await fetchTokenOctagonSnapshot(token.symbol, fearGreed);
+    tokens.map(async (token) => {
+      const snapshot = await fetchTokenOctagonSnapshotForDef(token, fearGreed);
       return [token.symbol, snapshot] as const;
     }),
   );
 
-  return Object.fromEntries(entries) as Record<
-    OctagonTokenSymbol,
-    TokenOctagonSnapshot | null
-  >;
+  return Object.fromEntries(entries);
+}
+
+export async function fetchAllTokenOctagonSnapshots(
+  fearGreed: number,
+  portfolioSymbols?: string[],
+  trackedAssets?: TrackedAsset[],
+): Promise<Record<string, TokenOctagonSnapshot | null>> {
+  const tokens = resolveOctagonTokensFromPortfolio(
+    portfolioSymbols,
+    trackedAssets,
+  );
+  return fetchOctagonSnapshotsForTokens(tokens, fearGreed);
+}
+
+/** @deprecated Use fetchOctagonSnapshotsForTokens */
+export async function fetchTokenOctagonSnapshot(
+  symbol: string,
+  fearGreed: number,
+): Promise<TokenOctagonSnapshot | null> {
+  const def =
+    DEFAULT_OCTAGON_BASKET.find((token) => token.symbol === symbol) ??
+    DEFAULT_OCTAGON_BASKET[0];
+  return fetchTokenOctagonSnapshotForDef(
+    def.symbol === symbol ? def : { ...def, symbol },
+    fearGreed,
+  );
 }

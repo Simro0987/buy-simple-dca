@@ -32,16 +32,24 @@ export interface TokenOctagonSnapshot {
   live: boolean;
 }
 
-export const OCTAGON_TOKEN_DEFINITIONS = [
+export interface OctagonTokenDefinition {
+  symbol: string;
+  name: string;
+  binanceSymbol: string;
+}
+
+export const DEFAULT_OCTAGON_BASKET: OctagonTokenDefinition[] = [
   { symbol: "BTC", name: "Bitcoin", binanceSymbol: "BTCUSDT" },
   { symbol: "ETH", name: "Ethereum", binanceSymbol: "ETHUSDT" },
   { symbol: "SOL", name: "Solana", binanceSymbol: "SOLUSDT" },
   { symbol: "HYPE", name: "Hyperliquid", binanceSymbol: "HYPEUSDT" },
   { symbol: "JUP", name: "Jupiter", binanceSymbol: "JUPUSDT" },
-] as const;
+];
 
-export type OctagonTokenSymbol =
-  (typeof OCTAGON_TOKEN_DEFINITIONS)[number]["symbol"];
+/** @deprecated Use DEFAULT_OCTAGON_BASKET or resolveOctagonTokensFromPortfolio */
+export const OCTAGON_TOKEN_DEFINITIONS = DEFAULT_OCTAGON_BASKET;
+
+export type OctagonTokenSymbol = string;
 
 function round0(value: number): number {
   return Math.round(value);

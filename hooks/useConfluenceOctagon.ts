@@ -1,67 +1,91 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import type { TokenOctagonSnapshot } from "@/lib/confluenceOctagon";
 import {
-  OCTAGON_TOKEN_DEFINITIONS,
-  type OctagonTokenSymbol,
-  type TokenOctagonSnapshot,
-} from "@/lib/confluenceOctagon";
-import { fetchAllTokenOctagonSnapshots } from "@/lib/tokenOctagonData";
+  octagonTokensKey,
+  resolveOctagonTokensFromPortfolio,
+} from "@/lib/resolveOctagonTokens";
+import { fetchOctagonSnapshotsForTokens } from "@/lib/tokenOctagonData";
+import type { TrackedAsset } from "@/lib/portfolioStorage";
 
 const CACHE_TTL_MS = 5 * 60 * 1000;
 
 interface OctagonCache {
   fearGreed: number;
-  snapshots: Record<OctagonTokenSymbol, TokenOctagonSnapshot | null>;
+  tokensKey: string;
+  snapshots: Record<string, TokenOctagonSnapshot | null>;
   fetchedAt: number;
 }
 
 let memoryCache: OctagonCache | null = null;
 
-export function useConfluenceOctagon(fearGreed = 50) {
-  const [selectedToken, setSelectedToken] =
-    useState<OctagonTokenSymbol>("BTC");
-  const [snapshots, setSnapshots] = useState<
-    Record<OctagonTokenSymbol, TokenOctagonSnapshot | null>
-  >(
-    memoryCache?.snapshots ??
-      (Object.fromEntries(
-        OCTAGON_TOKEN_DEFINITIONS.map((token) => [token.symbol, null]),
-      ) as Record<OctagonTokenSymbol, TokenOctagonSnapshot | null>),
+export function useConfluenceOctagon(
+  fearGreed = 50,
+  portfolioSymbols?: string[],
+  trackedAssets?: TrackedAsset[],
+) {
+  const tokens = useMemo(
+    () => resolveOctagonTokensFromPortfolio(portfolioSymbols, trackedAssets),
+    [portfolioSymbols, trackedAssets],
   );
-  const [loading, setLoading] = useState(!memoryCache);
+  const tokensKey = octagonTokensKey(tokens);
+
+  const [selectedToken, setSelectedToken] = useState(tokens[0]?.symbol ?? "BTC");
+  const [snapshots, setSnapshots] = useState<Record<string, TokenOctagonSnapshot | null>>(
+    memoryCache?.tokensKey === tokensKey ? (memoryCache.snapshots ?? {}) : {},
+  );
+  const [loading, setLoading] = useState(
+    !memoryCache || memoryCache.tokensKey !== tokensKey,
+  );
   const [error, setError] = useState<string | null>(null);
 
+  useEffect(() => {
+    if (!tokens.some((token) => token.symbol === selectedToken)) {
+      setSelectedToken(tokens[0]?.symbol ?? "BTC");
+    }
+  }, [selectedToken, tokens, tokensKey]);
+
   const refresh = useCallback(async () => {
+    if (tokens.length === 0) return;
+
     setLoading(true);
     setError(null);
     try {
-      const next = await fetchAllTokenOctagonSnapshots(fearGreed);
+      const next = await fetchOctagonSnapshotsForTokens(tokens, fearGreed);
       memoryCache = {
         fearGreed,
+        tokensKey,
         snapshots: next,
         fetchedAt: Date.now(),
       };
       setSnapshots(next);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Nepodarilo sa načítať oktágon");
+      setError(
+        err instanceof Error ? err.message : "Nepodarilo sa načítať oktágon",
+      );
     } finally {
       setLoading(false);
     }
-  }, [fearGreed]);
+  }, [fearGreed, tokens, tokensKey]);
 
   useEffect(() => {
     const stale =
-      !memoryCache || Date.now() - memoryCache.fetchedAt > CACHE_TTL_MS;
-    if (stale || memoryCache?.fearGreed !== fearGreed) {
+      !memoryCache ||
+      Date.now() - memoryCache.fetchedAt > CACHE_TTL_MS ||
+      memoryCache.tokensKey !== tokensKey ||
+      memoryCache.fearGreed !== fearGreed;
+
+    if (stale) {
       void refresh();
     }
-  }, [fearGreed, refresh]);
+  }, [fearGreed, refresh, tokensKey]);
 
   const activeSnapshot = snapshots[selectedToken] ?? null;
+  const usingPortfolioTokens = (portfolioSymbols?.length ?? 0) > 0;
 
   return {
-    tokens: OCTAGON_TOKEN_DEFINITIONS,
+    tokens,
     selectedToken,
     setSelectedToken,
     activeSnapshot,
@@ -69,5 +93,6 @@ export function useConfluenceOctagon(fearGreed = 50) {
     loading,
     error,
     refresh,
+    usingPortfolioTokens,
   };
 }
