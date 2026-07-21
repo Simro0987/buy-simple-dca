@@ -8,10 +8,27 @@ import {
   RadarChart,
   ResponsiveContainer,
 } from "recharts";
-import { confluenceMetrics } from "@/lib/confluenceData";
+import { useConfluenceOctagon } from "@/hooks/useConfluenceOctagon";
+import type { OctagonTokenSymbol } from "@/lib/confluenceOctagon";
 import { interactiveCard, listContainerVariants, listItemVariants } from "@/lib/motion";
 
-export function ConfluenceRadar() {
+interface ConfluenceRadarProps {
+  fearGreed?: number;
+}
+
+export function ConfluenceRadar({ fearGreed = 50 }: ConfluenceRadarProps) {
+  const {
+    tokens,
+    selectedToken,
+    setSelectedToken,
+    activeSnapshot,
+    loading,
+    error,
+  } = useConfluenceOctagon(fearGreed);
+
+  const metrics = activeSnapshot?.metrics ?? [];
+  const accumulationScore = activeSnapshot?.accumulationScore ?? 0;
+
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -25,14 +42,17 @@ export function ConfluenceRadar() {
       <div className="pointer-events-none absolute -right-10 top-0 h-32 w-32 rounded-full bg-emerald-500/5 blur-3xl" />
 
       <div className="relative">
-        <div className="mb-5 flex items-start justify-between gap-3">
+        <div className="mb-4 flex items-start justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-600">
               Confluence Octagon
             </p>
             <h2 className="mt-1 text-base font-bold text-white">
-              Makro akumulácia
+              Makro akumulácia · {selectedToken}
             </h2>
+            <p className="mt-1 text-[10px] font-semibold tabular-nums text-emerald-300">
+              Skóre akumulácie {accumulationScore}/100
+            </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5">
             <span className="relative flex h-2 w-2">
@@ -40,18 +60,39 @@ export function ConfluenceRadar() {
               <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-400" />
             </span>
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
-              Live
+              {loading ? "Sync" : activeSnapshot?.live ? "Live" : "Cache"}
             </span>
           </span>
         </div>
 
+        <div className="mb-4 flex flex-wrap gap-1.5">
+          {tokens.map((token) => {
+            const active = token.symbol === selectedToken;
+            return (
+              <button
+                key={token.symbol}
+                type="button"
+                onClick={() => setSelectedToken(token.symbol as OctagonTokenSymbol)}
+                className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide transition-colors ${
+                  active
+                    ? "bg-emerald-400/15 text-emerald-300 ring-1 ring-emerald-400/30"
+                    : "bg-white/5 text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                {token.symbol}
+              </button>
+            );
+          })}
+        </div>
+
+        {error ? (
+          <p className="mb-3 text-[10px] text-amber-400">{error}</p>
+        ) : null}
+
         <div className="h-72 w-full">
           <ResponsiveContainer width="100%" height="100%">
-            <RadarChart cx="50%" cy="50%" outerRadius="72%" data={confluenceMetrics}>
-              <PolarGrid
-                stroke="#27272a"
-                radialLines={false}
-              />
+            <RadarChart cx="50%" cy="50%" outerRadius="72%" data={metrics}>
+              <PolarGrid stroke="#27272a" radialLines={false} />
               <PolarAngleAxis
                 dataKey="subject"
                 tick={{
@@ -84,9 +125,9 @@ export function ConfluenceRadar() {
           animate="show"
           className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"
         >
-          {confluenceMetrics.map((metric) => (
+          {metrics.map((metric) => (
             <motion.div
-              key={metric.subject}
+              key={`${selectedToken}-${metric.subject}`}
               variants={listItemVariants}
               className="rounded-xl border border-white/5 bg-white/[0.02] px-3 py-2"
             >

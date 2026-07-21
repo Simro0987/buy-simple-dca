@@ -34,6 +34,9 @@ export function Dashboard() {
   const [selectedAsset, setSelectedAsset] = useState<LiveAsset | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const hydrateTradingMode = useAppStore((state) => state.hydrateTradingMode);
+  const fearGreedValue = useAppStore(
+    (state) => state.dcaPlan.result?.fearGreedValue ?? 50,
+  );
 
   useEffect(() => {
     hydrateTradingMode();
@@ -169,7 +172,7 @@ export function Dashboard() {
         <AnimatePresence mode="wait">
           {showHome && (
             <motion.div key="home" {...pageTransition} className="space-y-8">
-              <ConfluenceRadar />
+              <ConfluenceRadar fearGreed={fearGreedValue} />
             </motion.div>
           )}
 

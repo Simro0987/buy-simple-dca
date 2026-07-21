@@ -4,6 +4,7 @@ import { LayoutGroup, motion } from "framer-motion";
 import { DcaMarketRegimeCard } from "@/components/dca/DcaHeroDashboard";
 import { DcaBacktestModule } from "@/components/dca/DcaBacktestModule";
 import { ExtremeMarketAlertBanner } from "@/components/dca/ExtremeMarketAlertBanner";
+import { ExecutionPerformanceSection } from "@/components/dca/ExecutionPerformanceSection";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
@@ -27,9 +28,14 @@ import {
   createTradeRound,
 } from "@/lib/tradeHistory";
 import {
+  appendExecutionPerformanceEntries,
+  appendSingleExecutionPerformanceEntry,
+} from "@/lib/executionPerformanceLog";
+import {
   cancelOpenLimitOrder,
   registerOpenLimitOrder,
 } from "@/lib/openLimitOrders";
+import { fetchAllTokenOctagonSnapshots } from "@/lib/tokenOctagonData";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
 import { RefreshCw, ShoppingCart } from "lucide-react";
@@ -120,6 +126,63 @@ export function DcaEngine({
 
   const totalDeployed = displayResult?.capitalPipeline.dDeployedCapital ?? 0;
 
+  const tokenPrices = useMemo(() => {
+    const prices: Record<string, number> = {};
+    for (const plan of displayResult?.tokenPlans ?? []) {
+      if (plan.spotPrice > 0) prices[plan.symbol] = plan.spotPrice;
+    }
+    for (const plan of finalExecutionOrders) {
+      if (plan.spotPrice > 0) prices[plan.symbol] = plan.spotPrice;
+    }
+    if (snapshot?.tokens) {
+      for (const [symbol, token] of Object.entries(snapshot.tokens)) {
+        if (token.price > 0) prices[symbol] = token.price;
+      }
+    }
+    return prices;
+  }, [displayResult?.tokenPlans, finalExecutionOrders, snapshot?.tokens]);
+
+  const logExecutionPerformance = useCallback(
+    async (plans: TokenExecutionPlan[]) => {
+      if (plans.length === 0) return;
+      const fearGreed = displayResult?.fearGreedValue ?? 50;
+      const octagonSnapshots = await fetchAllTokenOctagonSnapshots(fearGreed);
+      const octagonScores = Object.fromEntries(
+        Object.entries(octagonSnapshots).map(([symbol, snap]) => [
+          symbol,
+          snap?.accumulationScore ?? 0,
+        ]),
+      );
+      const marketAvg7dBySymbol = Object.fromEntries(
+        Object.entries(octagonSnapshots).map(([symbol, snap]) => [
+          symbol,
+          snap?.avgPrice7d ?? tokenPrices[symbol] ?? 0,
+        ]),
+      );
+      appendExecutionPerformanceEntries(
+        plans,
+        octagonScores,
+        marketAvg7dBySymbol,
+      );
+    },
+    [displayResult?.fearGreedValue, tokenPrices],
+  );
+
+  const logSingleLegPerformance = useCallback(
+    async (plan: TokenExecutionPlan, leg: OrderLeg) => {
+      const fearGreed = displayResult?.fearGreedValue ?? 50;
+      const octagonSnapshots = await fetchAllTokenOctagonSnapshots(fearGreed);
+      const snap = octagonSnapshots[plan.symbol as keyof typeof octagonSnapshots];
+      appendSingleExecutionPerformanceEntry({
+        plan,
+        leg,
+        octagonScore: snap?.accumulationScore ?? 0,
+        marketAvg7d: snap?.avgPrice7d ?? plan.spotPrice,
+      });
+    },
+    [displayResult?.fearGreedValue],
+  );
+
   const handleDeployAll = useCallback(async () => {
     if (!displayResult) {
       throw new Error("DCA výsledok nie je pripravený");
@@ -135,6 +198,7 @@ export function DcaEngine({
           plans: finalExecutionOrders,
         }),
       );
+      void logExecutionPerformance(finalExecutionOrders);
       return;
     }
 
@@ -164,7 +228,9 @@ export function DcaEngine({
     if (!json.success) {
       throw new Error(json.error ?? "Čiastočná exekúcia — skontroluj históriu");
     }
-  }, [displayResult, finalExecutionOrders, totalDeployed, tradingMode]);
+
+    void logExecutionPerformance(finalExecutionOrders);
+  }, [displayResult, finalExecutionOrders, logExecutionPerformance, totalDeployed, tradingMode]);
 
   const handleDeployLeg = useCallback(
     async (symbol: string, leg: OrderLeg, plan: TokenExecutionPlan) => {
@@ -195,8 +261,10 @@ export function DcaEngine({
           createdAt: new Date().toISOString(),
         });
       }
+
+      void logSingleLegPerformance(plan, leg);
     },
-    [onRecordMarketLeg, tradingMode],
+    [logSingleLegPerformance, onRecordMarketLeg, tradingMode],
   );
 
   const handleCancelLimit = useCallback((symbol: string) => {
@@ -204,7 +272,10 @@ export function DcaEngine({
   }, []);
 
   const handleRecordPurchase = () => {
-    onRecordPurchase(finalExecutionOrders);
+    const recorded = onRecordPurchase(finalExecutionOrders);
+    if (recorded) {
+      void logExecutionPerformance(finalExecutionOrders);
+    }
   };
 
   const handleRefresh = () => {
@@ -324,6 +395,13 @@ export function DcaEngine({
             fearGreed={displayResult.fearGreedValue}
             regimeLabel={displayResult.regimeLabel}
             allocationPercent={displayResult.allocationPercent}
+          />
+
+          <ExecutionPerformanceSection
+            fearGreed={displayResult.fearGreedValue}
+            dcaTransactions={dcaTransactions}
+            executionPlans={finalExecutionOrders}
+            tokenPrices={tokenPrices}
           />
 
           {/* G — Execution engine */}
