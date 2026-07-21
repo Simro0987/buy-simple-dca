@@ -63,9 +63,21 @@ export function Dashboard() {
     portfolioData,
   } = usePortfolio();
 
-  const portfolioSymbols = useMemo(
-    () => allAssets.map((asset) => asset.symbol),
+  const portfolioHoldings = useMemo(
+    () =>
+      allAssets.map((asset) => ({
+        symbol: asset.symbol,
+        category: asset.category,
+        usdValue: asset.usdValue,
+        roiPercent: asset.roiPercent,
+        hasPurchaseHistory: asset.hasPurchaseHistory,
+      })),
     [allAssets],
+  );
+
+  const portfolioSymbols = useMemo(
+    () => portfolioHoldings.map((asset) => asset.symbol),
+    [portfolioHoldings],
   );
 
   const showHome = activeTab === "home";
@@ -234,6 +246,7 @@ export function Dashboard() {
               <DcaEngine
                 portfolioSymbols={portfolioSymbols}
                 trackedAssets={trackedAssets}
+                portfolioHoldings={portfolioHoldings}
                 dcaTransactions={transactions}
                 loading={loading}
                 onRecordPurchase={handleRecordPurchase}

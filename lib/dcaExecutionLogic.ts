@@ -15,6 +15,7 @@ import {
 } from "@/lib/yieldSatelliteMetrics";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
+import type { PortfolioYieldContext, ResolvedYieldApy } from "@/lib/yieldDataSources";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const MIN_ORDER_USD_THRESHOLD = 10;
@@ -83,6 +84,8 @@ export interface ExecutionTokenInput {
   filterConditions?: YieldFilterCondition[];
   priceVsSma14Pct?: number | null;
   convictionScore?: number | null;
+  apyRecord?: ResolvedYieldApy | null;
+  portfolioYieldContext?: PortfolioYieldContext | null;
 }
 
 export interface ExecutionSplitResult {
@@ -159,6 +162,8 @@ function buildWhyLimit(
     fundamentalScore: input.fundamentalScore,
     convictionScore: input.convictionScore,
     limitPullbackPct: belowPct,
+    apyRecord: input.apyRecord,
+    portfolio: input.portfolioYieldContext,
   });
 
   return buildDynamicLimitReasoning({

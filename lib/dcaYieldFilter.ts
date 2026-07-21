@@ -16,6 +16,8 @@ export interface YieldFilterCondition {
   detail: string;
 }
 
+import type { YieldApySource } from "@/lib/yieldDataSources";
+
 export interface YieldTokenMetrics {
   symbol: string;
   name: string;
@@ -28,6 +30,13 @@ export interface YieldTokenMetrics {
   atr14Pct?: number;
   live?: boolean;
   fetchedAt?: string;
+  /** Resolved staking / yield APY (% p.a.) from portfolio → API → DeFiLlama → fallback. */
+  apyPct?: number;
+  /** Raw DeFiLlama pool APY before portfolio / technical adjustments. */
+  defillamaApyPct?: number;
+  apySource?: YieldApySource;
+  apyIsEstimated?: boolean;
+  apySourceLabel?: string;
 }
 
 export interface YieldFilterEvaluation extends YieldTokenMetrics {

@@ -187,6 +187,11 @@ export function ExecutionPerformanceSection({
               <MetricTile
                 label="APY výnos"
                 value={`${advisor.yieldSatelliteMetrics.apyPct.toFixed(1)} %`}
+                sublabel={
+                  advisor.yieldSatelliteMetrics.apyIsEstimated
+                    ? advisor.yieldSatelliteMetrics.apySourceLabel
+                    : `Live · ${advisor.yieldSatelliteMetrics.apySourceLabel}`
+                }
                 tone="positive"
               />
               <MetricTile
@@ -271,10 +276,12 @@ export function ExecutionPerformanceSection({
 function MetricTile({
   label,
   value,
+  sublabel,
   tone,
 }: {
   label: string;
   value: string;
+  sublabel?: string;
   tone: "positive" | "negative" | "neutral";
 }) {
   const toneClass =
@@ -290,6 +297,9 @@ function MetricTile({
         {label}
       </p>
       <p className={`mt-1 text-sm font-bold tabular-nums ${toneClass}`}>{value}</p>
+      {sublabel ? (
+        <p className="mt-0.5 text-[8px] font-medium text-zinc-500">{sublabel}</p>
+      ) : null}
     </div>
   );
 }

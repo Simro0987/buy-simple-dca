@@ -21,7 +21,8 @@ import { buildExchangeExecuteOrders } from "@/lib/exchange/buildExecutePayload";
 import type { ExchangeExecuteResponse } from "@/lib/exchange/types";
 import { buildFinalExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
-import type { Transaction, TrackedAsset } from "@/lib/portfolioStorage";
+import type { Transaction, TrackedAsset, AssetCategory } from "@/lib/portfolioStorage";
+import { buildPortfolioYieldContext } from "@/lib/yieldDataSources";
 import {
   appendTradeRound,
   createSimulatedTradeRound,
@@ -44,6 +45,13 @@ import { useCallback, useEffect, useMemo } from "react";
 interface DcaEngineProps {
   portfolioSymbols?: string[];
   trackedAssets?: TrackedAsset[];
+  portfolioHoldings?: Array<{
+    symbol: string;
+    category: AssetCategory;
+    usdValue: number;
+    roiPercent: number;
+    hasPurchaseHistory: boolean;
+  }>;
   dcaTransactions?: Transaction[];
   loading?: boolean;
   onRecordPurchase: (plans: TokenExecutionPlan[]) => boolean;
@@ -53,6 +61,7 @@ interface DcaEngineProps {
 export function DcaEngine({
   portfolioSymbols = [],
   trackedAssets = [],
+  portfolioHoldings = [],
   dcaTransactions = [],
   loading: externalLoading = false,
   onRecordPurchase,
@@ -93,6 +102,8 @@ export function DcaEngine({
     bucketing,
     metricsLoading: bucketingMetricsLoading,
     metricsError: bucketingMetricsError,
+    yieldMetrics,
+    stakingApy,
   } = usePortfolioBucketing({
     deployedCapital: displayResult?.capitalPipeline.dDeployedCapital ?? 0,
     tokenPlans: displayResult?.tokenPlans ?? [],
@@ -101,6 +112,11 @@ export function DcaEngine({
     finalScore: displayResult?.confluenceScore ?? 50,
     enabled: Boolean(displayResult),
   });
+
+  const portfolioYieldContext = useMemo(
+    () => buildPortfolioYieldContext({ holdings: portfolioHoldings }),
+    [portfolioHoldings],
+  );
 
   const finalExecutionOrders = useMemo(
     () =>
@@ -114,9 +130,19 @@ export function DcaEngine({
             confidence: displayResult.confidence,
             tokenPlans: displayResult.tokenPlans,
             marketData: snapshot?.marketData ?? null,
+            portfolioYieldContext,
+            yieldMetrics,
+            stakingApy,
           })
         : [],
-    [displayResult, bucketing, snapshot?.marketData],
+    [
+      displayResult,
+      bucketing,
+      snapshot?.marketData,
+      portfolioYieldContext,
+      yieldMetrics,
+      stakingApy,
+    ],
   );
 
   useEffect(() => {

@@ -7,6 +7,8 @@ import {
   lerpScore,
 } from "@/lib/dcaTechnicalIndicators";
 import type { YieldTokenMetrics } from "@/lib/dcaYieldFilter";
+import { resolveYieldApy } from "@/lib/yieldDataSources";
+import { fetchDefillamaApyMap } from "@/lib/yieldStakingFetch";
 
 export interface YieldBar {
   open: number;
@@ -151,17 +153,45 @@ export async function fetchYieldTokenMetrics(
 
 export type YieldMetricsMap = Record<string, YieldTokenMetrics>;
 
+function attachResolvedApy(
+  metrics: YieldTokenMetrics,
+  defillamaApy: number | undefined,
+): YieldTokenMetrics {
+  const resolved = resolveYieldApy({
+    symbol: metrics.symbol,
+    category: "yield",
+    defillamaApyPct: defillamaApy,
+    atr14dPct: metrics.atr14Pct,
+    fundamentalScore: metrics.fundamentalScore,
+  });
+
+  return {
+    ...metrics,
+    apyPct: resolved.apyPct,
+    defillamaApyPct: defillamaApy,
+    apySource: resolved.source,
+    apyIsEstimated: resolved.isEstimated,
+    apySourceLabel: resolved.sourceLabel,
+  };
+}
+
 export async function fetchAllYieldTokenMetrics(): Promise<YieldMetricsMap> {
-  const results = await Promise.all(
-    DCA_YIELD_TOKENS.map(async (coin) => {
-      const metrics = await fetchYieldTokenMetrics(coin);
-      return [coin.symbol, metrics] as const;
-    }),
-  );
+  const symbols = DCA_YIELD_TOKENS.map((coin) => coin.symbol);
+
+  const [results, defillamaApyMap] = await Promise.all([
+    Promise.all(
+      DCA_YIELD_TOKENS.map(async (coin) => {
+        const metrics = await fetchYieldTokenMetrics(coin);
+        return [coin.symbol, metrics] as const;
+      }),
+    ),
+    fetchDefillamaApyMap(symbols),
+  ]);
 
   const map: YieldMetricsMap = {};
   for (const [symbol, metrics] of results) {
-    if (metrics) map[symbol] = metrics;
+    if (!metrics) continue;
+    map[symbol] = attachResolvedApy(metrics, defillamaApyMap[symbol]);
   }
   return map;
 }

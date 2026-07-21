@@ -1,14 +1,20 @@
 import { NextResponse } from "next/server";
 import { fetchAllYieldTokenMetrics } from "@/lib/yieldTokenTechnicals";
+import { fetchDefillamaApyMap } from "@/lib/yieldStakingFetch";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const metrics = await fetchAllYieldTokenMetrics();
+    const [metrics, stakingApy] = await Promise.all([
+      fetchAllYieldTokenMetrics(),
+      fetchDefillamaApyMap(),
+    ]);
+
     return NextResponse.json({
       success: true,
       metrics,
+      stakingApy,
       fetchedAt: new Date().toISOString(),
     });
   } catch (error) {

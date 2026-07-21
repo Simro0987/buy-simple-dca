@@ -9,6 +9,9 @@ import {
 } from "@/lib/dcaExecutionLogic";
 import { buildTokenIndicatorSnapshot } from "@/lib/dcaTokenIndicators";
 import { computeYieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
+import type { PortfolioYieldContext } from "@/lib/yieldDataSources";
+import { resolveYieldApy } from "@/lib/yieldDataSources";
+import type { YieldTokenMetrics } from "@/lib/dcaYieldFilter";
 import type { PortfolioBucketingResult } from "@/lib/dcaPortfolioBucketing";
 import type { ConfidenceLevel, MasterTokenPlan } from "@/lib/masterDcaEngine";
 import type { AssetCategory } from "@/lib/portfolioStorage";
@@ -129,6 +132,9 @@ export interface BuildFinalExecutionOrdersInput {
   confidence: ConfidenceLevel;
   tokenPlans: MasterTokenPlan[];
   marketData?: MarketDataServicePayload | null;
+  portfolioYieldContext?: PortfolioYieldContext | null;
+  yieldMetrics?: Record<string, YieldTokenMetrics>;
+  stakingApy?: Record<string, number>;
 }
 
 /**
@@ -179,7 +185,25 @@ export function buildFinalExecutionOrders(
         convictionScore: row.convictionScore ?? null,
       });
 
-      const split = resolveCategoryExecutionSplit(tokenInput);
+      const yieldMetric = input.yieldMetrics?.[row.symbol];
+      const apyRecord = resolveYieldApy({
+        symbol: row.symbol,
+        category,
+        portfolio: input.portfolioYieldContext,
+        apiApyPct:
+          yieldMetric?.apySource === "api" ? yieldMetric.apyPct : undefined,
+        defillamaApyPct:
+          yieldMetric?.defillamaApyPct ?? input.stakingApy?.[row.symbol],
+        atr14dPct: tokenInput.atr14dPct,
+        fundamentalScore: row.fundamentalScore ?? null,
+        convictionScore: row.convictionScore ?? null,
+      });
+
+      const split = resolveCategoryExecutionSplit({
+        ...tokenInput,
+        apyRecord,
+        portfolioYieldContext: input.portfolioYieldContext,
+      });
       const yieldSatelliteMetrics = computeYieldSatelliteMetrics({
         symbol: row.symbol,
         category,
@@ -187,6 +211,7 @@ export function buildFinalExecutionOrders(
         fundamentalScore: row.fundamentalScore ?? null,
         convictionScore: row.convictionScore ?? null,
         limitPullbackPct: split.limitPullbackPct,
+        apyRecord,
       });
       const distSma200Pct =
         category === "core" ? (tokenInput.distSma200Pct ?? null) : null;

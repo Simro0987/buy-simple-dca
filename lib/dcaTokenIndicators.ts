@@ -94,9 +94,12 @@ export function buildTokenIndicatorSnapshot(input: {
     const chips: TokenIndicatorChip[] = [];
 
     if (metrics) {
+      const apyLabel = metrics.apyIsEstimated
+        ? `APY (${metrics.apySourceLabel ?? "Odhad"})`
+        : `APY · ${metrics.apySourceLabel ?? "Live"}`;
       chips.push(
         {
-          label: "APY",
+          label: apyLabel,
           value: `${metrics.apyPct.toFixed(1)}%`,
           tone: metrics.apyPct >= 6 ? "bullish" : "neutral",
         },
@@ -151,9 +154,12 @@ export function buildTokenIndicatorSnapshot(input: {
   const chips: TokenIndicatorChip[] = [];
 
   if (metrics) {
+    const apyLabel = metrics.apyIsEstimated
+      ? `APY (${metrics.apySourceLabel ?? "Odhad"})`
+      : `APY · ${metrics.apySourceLabel ?? "Live"}`;
     chips.push(
       {
-        label: "APY",
+        label: apyLabel,
         value: `${metrics.apyPct.toFixed(1)}%`,
         tone: metrics.apyPct >= 8 ? "bullish" : "neutral",
       },

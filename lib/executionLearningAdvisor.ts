@@ -111,7 +111,7 @@ function buildLearnedPatterns(input: {
 
   if (yieldSatelliteMetrics && (category === "yield" || category === "satellite")) {
     patterns.push(
-      `Yield metriky: APY ${yieldSatelliteMetrics.apyPct.toFixed(1)}%, IL R/R ${yieldSatelliteMetrics.ilRiskRewardRatio.toFixed(1)}×, compound ${yieldSatelliteMetrics.stakingYieldMultiplier.toFixed(2)}×.`,
+      `Yield metriky: APY ${yieldSatelliteMetrics.apyPct.toFixed(1)}% (${yieldSatelliteMetrics.apySourceLabel}), IL R/R ${yieldSatelliteMetrics.ilRiskRewardRatio.toFixed(1)}×, compound ${yieldSatelliteMetrics.stakingYieldMultiplier.toFixed(2)}×.`,
     );
     patterns.push(
       `Limitný pás ${yieldSatelliteMetrics.atrLimitMultiplier.toFixed(1)}×ATR — rebalans pri −${yieldSatelliteMetrics.rebalanceThresholdPct.toFixed(1)}%.`,

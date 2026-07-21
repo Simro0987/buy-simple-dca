@@ -22,6 +22,7 @@ export function usePortfolioBucketing(input: {
   const [yieldMetrics, setYieldMetrics] = useState<
     Record<string, YieldTokenMetrics>
   >({});
+  const [stakingApy, setStakingApy] = useState<Record<string, number>>({});
   const [metricsLoading, setMetricsLoading] = useState(true);
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
@@ -36,6 +37,7 @@ export function usePortfolioBucketing(input: {
       const json = (await res.json()) as {
         success: boolean;
         metrics?: Record<string, YieldTokenMetrics>;
+        stakingApy?: Record<string, number>;
         error?: string;
       };
 
@@ -44,6 +46,7 @@ export function usePortfolioBucketing(input: {
       }
 
       setYieldMetrics(json.metrics);
+      setStakingApy(json.stakingApy ?? {});
       setMetricsError(null);
     } catch (error) {
       setMetricsError(
@@ -89,5 +92,7 @@ export function usePortfolioBucketing(input: {
     metricsError,
     refreshMetrics,
     liveMetricsCount: Object.keys(yieldMetrics).length,
+    yieldMetrics,
+    stakingApy,
   };
 }
