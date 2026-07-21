@@ -2,10 +2,13 @@ import type { ConfluenceMetric, TokenOctagonSnapshot } from "@/lib/confluenceOct
 import type { ExecutionPerformanceEntry } from "@/lib/executionPerformanceLog";
 import type { EfficiencyGrade } from "@/lib/masterDcaEngine";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import type { AssetCategory } from "@/lib/portfolioStorage";
+import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 
 export interface TokenExecutionAdvisor {
   symbol: string;
   name: string;
+  category: AssetCategory;
   accumulationScore: number;
   alphaVsMarketPct: number;
   marketDcaBaselinePct: number;
@@ -18,6 +21,7 @@ export interface TokenExecutionAdvisor {
   octagonMetrics: ConfluenceMetric[];
   learnedPatterns: string[];
   executionCount: number;
+  yieldSatelliteMetrics: YieldSatelliteMetrics | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -98,9 +102,21 @@ function buildLearnedPatterns(input: {
   entries: ExecutionPerformanceEntry[];
   octagon: TokenOctagonSnapshot | null;
   preferredRoute: "market" | "limit";
+  yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
+  category?: AssetCategory;
 }): string[] {
   const patterns: string[] = [];
-  const { entries, octagon, preferredRoute } = input;
+  const { entries, octagon, preferredRoute, yieldSatelliteMetrics, category } =
+    input;
+
+  if (yieldSatelliteMetrics && (category === "yield" || category === "satellite")) {
+    patterns.push(
+      `Yield metriky: APY ${yieldSatelliteMetrics.apyPct.toFixed(1)}%, IL R/R ${yieldSatelliteMetrics.ilRiskRewardRatio.toFixed(1)}×, compound ${yieldSatelliteMetrics.stakingYieldMultiplier.toFixed(2)}×.`,
+    );
+    patterns.push(
+      `Limitný pás ${yieldSatelliteMetrics.atrLimitMultiplier.toFixed(1)}×ATR — rebalans pri −${yieldSatelliteMetrics.rebalanceThresholdPct.toFixed(1)}%.`,
+    );
+  }
 
   const mergeCount = entries.filter((entry) => entry.minOrderMergeActive).length;
   if (mergeCount > 0) {
@@ -139,6 +155,7 @@ function buildLearnedPatterns(input: {
 
 function buildActiveAdvice(input: {
   symbol: string;
+  category: AssetCategory;
   octagon: TokenOctagonSnapshot | null;
   alphaVsMarketPct: number;
   marketDcaBaselinePct: number;
@@ -147,9 +164,11 @@ function buildActiveAdvice(input: {
   preferredRoute: "market" | "limit";
   weeklyCount: number;
   rewardScore: number;
+  yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
 }): string {
   const {
     symbol,
+    category,
     octagon,
     alphaVsMarketPct,
     marketDcaBaselinePct,
@@ -158,6 +177,7 @@ function buildActiveAdvice(input: {
     preferredRoute,
     weeklyCount,
     rewardScore,
+    yieldSatelliteMetrics,
   } = input;
 
   const score = octagon?.accumulationScore ?? 0;
@@ -206,7 +226,12 @@ function buildActiveAdvice(input: {
         ? " Nízka volatilita — Market vstup bez čakania."
         : "";
 
-  return `${symbol}: Oktágon ${score}/100 — ${routeHint} ${alphaHint}, ${marketHint}, ${gradeHint}, ${rewardHint} (n=${weeklyCount} týž.).${volatilityHint}`;
+  const yieldHint =
+    yieldSatelliteMetrics && (category === "yield" || category === "satellite")
+      ? ` Yield APY ~${yieldSatelliteMetrics.apyPct.toFixed(1)}%, IL R/R ${yieldSatelliteMetrics.ilRiskRewardRatio.toFixed(1)}× — širší ${yieldSatelliteMetrics.atrLimitMultiplier.toFixed(1)}×ATR pás pred auto-kompaundáciou.`
+      : "";
+
+  return `${symbol}: Oktágon ${score}/100 — ${routeHint} ${alphaHint}, ${marketHint}, ${gradeHint}, ${rewardHint} (n=${weeklyCount} týž.).${volatilityHint}${yieldHint}`;
 }
 
 export function buildTokenExecutionAdvisor(input: {
@@ -280,10 +305,13 @@ export function buildTokenExecutionAdvisor(input: {
     entries: symbolEntries,
     octagon: input.octagon,
     preferredRoute,
+    yieldSatelliteMetrics: input.executionPlan?.yieldSatelliteMetrics ?? null,
+    category: input.executionPlan?.category ?? "core",
   });
 
   const activeAdvice = buildActiveAdvice({
     symbol: input.symbol,
+    category: input.executionPlan?.category ?? "core",
     octagon: input.octagon,
     alphaVsMarketPct,
     marketDcaBaselinePct,
@@ -292,11 +320,13 @@ export function buildTokenExecutionAdvisor(input: {
     preferredRoute,
     weeklyCount: effectiveWeeklyCount,
     rewardScore,
+    yieldSatelliteMetrics: input.executionPlan?.yieldSatelliteMetrics ?? null,
   });
 
   return {
     symbol: input.symbol,
     name: input.name,
+    category: input.executionPlan?.category ?? "core",
     accumulationScore: input.octagon?.accumulationScore ?? 0,
     alphaVsMarketPct,
     marketDcaBaselinePct,
@@ -309,5 +339,6 @@ export function buildTokenExecutionAdvisor(input: {
     octagonMetrics: input.octagon?.metrics ?? [],
     learnedPatterns,
     executionCount: symbolEntries.length,
+    yieldSatelliteMetrics: input.executionPlan?.yieldSatelliteMetrics ?? null,
   };
 }

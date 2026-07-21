@@ -7,6 +7,12 @@ import {
   buildDynamicLimitReasoning,
   computeBelowSpotPercent,
 } from "@/lib/limitPriceReasoning";
+import {
+  computeYieldSatelliteMetrics,
+  getAtrLimitMultiplier,
+  SATELLITE_ATR_LIMIT_MULTIPLIER,
+  YIELD_ATR_LIMIT_MULTIPLIER,
+} from "@/lib/yieldSatelliteMetrics";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 
@@ -76,6 +82,7 @@ export interface ExecutionTokenInput {
   fundamentalScore?: number;
   filterConditions?: YieldFilterCondition[];
   priceVsSma14Pct?: number | null;
+  convictionScore?: number | null;
 }
 
 export interface ExecutionSplitResult {
@@ -142,6 +149,18 @@ function buildWhyLimit(
   limitPrice: number,
   options?: { atrMultiplier?: number; safetyBrakeActive?: boolean },
 ): string {
+  const belowPct = computeBelowSpotPercent(input.spotPrice, limitPrice);
+  const atrMultiplier =
+    options?.atrMultiplier ?? getAtrLimitMultiplier(input.category);
+  const yieldSatelliteMetrics = computeYieldSatelliteMetrics({
+    symbol: input.symbol,
+    category: input.category,
+    atr14dPct: input.atr14dPct,
+    fundamentalScore: input.fundamentalScore,
+    convictionScore: input.convictionScore,
+    limitPullbackPct: belowPct,
+  });
+
   return buildDynamicLimitReasoning({
     symbol: input.symbol,
     category: input.category,
@@ -156,7 +175,8 @@ function buildWhyLimit(
     filtersPassedCount: input.filtersPassedCount,
     fearGreedValue: input.fearGreedValue,
     safetyBrakeActive: options?.safetyBrakeActive ?? input.brakeActive,
-    atrMultiplier: options?.atrMultiplier,
+    atrMultiplier,
+    yieldSatelliteMetrics,
   });
 }
 
@@ -252,13 +272,15 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     marketShare = clamp(marketShare - 10, 0, 100);
   }
 
-  const limitPrice = limitFromAtr(spot, atrPct, 1.5);
+  const limitPrice = limitFromAtr(spot, atrPct, SATELLITE_ATR_LIMIT_MULTIPLIER);
   const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
-  const whyLimit = buildWhyLimit(input, limitPrice, { atrMultiplier: 1.5 });
+  const whyLimit = buildWhyLimit(input, limitPrice, {
+    atrMultiplier: SATELLITE_ATR_LIMIT_MULTIPLIER,
+  });
 
-  const entrySignal = `ENTRY SIGNAL: ${rsiLabel(rsi)} (${rsi.toFixed(0)}) • Momentum ${rsi < 50 ? "OK" : "Watch"} • ATR ${atrPct.toFixed(1)} %`;
+  const entrySignal = `ENTRY SIGNAL: Satellite staking • ATR ${atrPct.toFixed(1)} % • širší pás ${SATELLITE_ATR_LIMIT_MULTIPLIER}×ATR • RSI ${rsi.toFixed(0)}`;
 
-  const splitExplanation = `SPLIT: Satellites ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT — Final Score ${round1(input.finalScore)} + RSI ${rsi.toFixed(0)}`;
+  const splitExplanation = `SPLIT: Satellites ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT — ${SATELLITE_ATR_LIMIT_MULTIPLIER}×ATR limitný pás (vyššia volatilita)`;
 
   return {
     marketShare: round1(marketShare),
@@ -327,9 +349,11 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     clamp(100 - computeBaseMarketPct(input.finalScore), 15, 70),
   );
   const limitShare = round1(100 - marketShare);
-  const limitPrice = limitFromAtr(spot, atrPct, 2.0);
+  const limitPrice = limitFromAtr(spot, atrPct, YIELD_ATR_LIMIT_MULTIPLIER);
   const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
-  const whyLimit = buildWhyLimit(input, limitPrice, { atrMultiplier: 2.0 });
+  const whyLimit = buildWhyLimit(input, limitPrice, {
+    atrMultiplier: YIELD_ATR_LIMIT_MULTIPLIER,
+  });
 
   const entrySignal = buildYieldEntrySignal({
     rsi,
@@ -339,7 +363,7 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     minOrderRule: false,
   });
 
-  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — Final Score ${round1(input.finalScore)} + hlboké limitné knôty (2.0× ATR)`;
+  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — ${YIELD_ATR_LIMIT_MULTIPLIER}×ATR pás pre maximalizáciu nákupu pred auto-kompaundáciou`;
 
   return {
     marketShare,
@@ -630,6 +654,7 @@ export function buildExecutionTokenInput(input: {
   fundamentalScore?: number;
   filterConditions?: YieldFilterCondition[];
   priceVsSma14Pct?: number | null;
+  convictionScore?: number | null;
 }): ExecutionTokenInput {
   const ctx = input.marketContext;
 

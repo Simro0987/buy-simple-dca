@@ -1,3 +1,4 @@
+import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
@@ -55,6 +56,7 @@ export interface TokenExecutionPlan {
   priceVsSma14Pct: number | null;
   shareOfYieldPercent: number | null;
   yieldWeight: number | null;
+  yieldSatelliteMetrics: YieldSatelliteMetrics | null;
 }
 
 export interface RegimeFactorDisplay {

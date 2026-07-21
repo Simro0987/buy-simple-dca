@@ -1,4 +1,5 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
+import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 
 export interface LimitReasoningInput {
   symbol: string;
@@ -15,6 +16,7 @@ export interface LimitReasoningInput {
   fearGreedValue?: number;
   safetyBrakeActive?: boolean;
   atrMultiplier?: number;
+  yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
 }
 
 export function computeBelowSpotPercent(
@@ -73,9 +75,14 @@ function buildSatelliteReasoning(
   input: LimitReasoningInput,
   belowPct: number,
 ): string {
+  const metrics = input.yieldSatelliteMetrics;
+  if (metrics) {
+    return metrics.whyExecutionText;
+  }
+
   const rsi = input.rsi14 ?? 50;
   const atr = input.atr14dPct ?? 0;
-  const mult = input.atrMultiplier ?? 1.5;
+  const mult = input.atrMultiplier ?? 1.8;
   const depth = (mult * atr).toFixed(1);
 
   return (
@@ -86,9 +93,14 @@ function buildSatelliteReasoning(
 }
 
 function buildYieldReasoning(input: LimitReasoningInput, belowPct: number): string {
+  const metrics = input.yieldSatelliteMetrics;
+  if (metrics) {
+    return metrics.whyExecutionText;
+  }
+
   const rsi = input.rsi14 ?? 50;
   const atr = input.atr14dPct ?? 0;
-  const mult = input.atrMultiplier ?? 2.0;
+  const mult = input.atrMultiplier ?? 2.5;
   const ma = input.priceVsSma14Pct;
   const fund = input.fundamentalScore ?? 0;
   const filters = input.filtersPassedCount ?? 0;

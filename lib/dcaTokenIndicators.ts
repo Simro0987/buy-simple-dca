@@ -1,5 +1,6 @@
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import type { AssetCategory } from "@/lib/portfolioStorage";
+import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 
 export type IndicatorTone = "neutral" | "bullish" | "bearish" | "warning";
 
@@ -43,6 +44,7 @@ export function buildTokenIndicatorSnapshot(input: {
   fundamentalScore?: number | null;
   convictionScore?: number | null;
   safetyBrakeActive: boolean;
+  yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
 }): TokenIndicatorSnapshot {
   const rsi = input.rsi14;
   const atr = input.atr14dPct;
@@ -88,7 +90,107 @@ export function buildTokenIndicatorSnapshot(input: {
   }
 
   if (input.category === "satellite") {
+    const metrics = input.yieldSatelliteMetrics;
     const chips: TokenIndicatorChip[] = [];
+
+    if (metrics) {
+      chips.push(
+        {
+          label: "APY",
+          value: `${metrics.apyPct.toFixed(1)}%`,
+          tone: metrics.apyPct >= 6 ? "bullish" : "neutral",
+        },
+        {
+          label: "IL R/R",
+          value: `${metrics.ilRiskRewardRatio.toFixed(1)}×`,
+          tone:
+            metrics.ilRiskRewardRatio >= 1.5
+              ? "bullish"
+              : metrics.ilRiskRewardRatio < 0.8
+                ? "warning"
+                : "neutral",
+        },
+        {
+          label: "Staking",
+          value: `${metrics.stakingYieldMultiplier.toFixed(2)}×`,
+          tone: "bullish",
+        },
+        {
+          label: "ATR pás",
+          value: `${metrics.atrLimitMultiplier.toFixed(1)}×`,
+          tone: "neutral",
+        },
+      );
+    } else {
+      if (rsi != null) {
+        chips.push({
+          label: "RSI",
+          value: rsi.toFixed(0),
+          tone: rsiTone(rsi),
+        });
+      }
+      if (atr != null) {
+        chips.push({
+          label: "ATR",
+          value: `${round1(atr)}%`,
+          tone: "neutral",
+        });
+      }
+    }
+
+    const watch = rsi != null && rsi > 65;
+
+    return {
+      chips,
+      regimeStatusLabel: watch ? "MOMENTUM WATCH" : "STAKING OK",
+      regimeStatusTone: watch ? "watch" : "ok",
+    };
+  }
+
+  const metrics = input.yieldSatelliteMetrics;
+  const chips: TokenIndicatorChip[] = [];
+
+  if (metrics) {
+    chips.push(
+      {
+        label: "APY",
+        value: `${metrics.apyPct.toFixed(1)}%`,
+        tone: metrics.apyPct >= 8 ? "bullish" : "neutral",
+      },
+      {
+        label: "IL R/R",
+        value: `${metrics.ilRiskRewardRatio.toFixed(1)}×`,
+        tone:
+          metrics.ilRiskRewardRatio >= 1.2
+            ? "bullish"
+            : metrics.ilRiskRewardRatio < 0.7
+              ? "warning"
+              : "neutral",
+      },
+      {
+        label: "Compound",
+        value: `${metrics.stakingYieldMultiplier.toFixed(2)}×`,
+        tone: "bullish",
+      },
+      {
+        label: "Limit pás",
+        value: `${metrics.atrLimitMultiplier.toFixed(1)}×ATR`,
+        tone: "neutral",
+      },
+    );
+  } else {
+    if (input.convictionScore != null) {
+      chips.push({
+        label: "S",
+        value: String(Math.round(input.convictionScore)),
+        tone:
+          input.convictionScore >= 70
+            ? "bullish"
+            : input.convictionScore >= 50
+              ? "neutral"
+              : "bearish",
+      });
+    }
 
     if (rsi != null) {
       chips.push({
@@ -98,84 +200,28 @@ export function buildTokenIndicatorSnapshot(input: {
       });
     }
 
-    if (atr != null) {
+    if (input.fundamentalScore != null) {
       chips.push({
-        label: "ATR",
-        value: `${round1(atr)}%`,
-        tone: "neutral",
-      });
-    }
-
-    if (input.ema50DeviationPct != null) {
-      chips.push({
-        label: "50D EMA",
-        value: formatSignedPct(input.ema50DeviationPct),
-        tone: input.ema50DeviationPct >= 0 ? "warning" : "bullish",
-      });
-    }
-
-    const watch = rsi != null && rsi > 65;
-
-    return {
-      chips,
-      regimeStatusLabel: watch ? "MOMENTUM WATCH" : "V NORME",
-      regimeStatusTone: watch ? "watch" : "ok",
-    };
-  }
-
-  const chips: TokenIndicatorChip[] = [];
-
-  if (input.convictionScore != null) {
-    chips.push({
-      label: "S",
-      value: String(Math.round(input.convictionScore)),
-      tone:
-        input.convictionScore >= 70
-          ? "bullish"
-          : input.convictionScore >= 50
-            ? "neutral"
-            : "bearish",
-    });
-  }
-
-  if (rsi != null) {
-    chips.push({
-      label: "RSI",
-      value: rsi.toFixed(0),
-      tone: rsiTone(rsi),
-    });
-  }
-
-  if (input.priceVsSma14Pct != null) {
-    chips.push({
-      label: "MA14",
-      value: formatSignedPct(input.priceVsSma14Pct),
-      tone:
-        input.priceVsSma14Pct >= 0
-          ? "neutral"
-          : input.priceVsSma14Pct >= -10
+        label: "Fund.",
+        value: String(Math.round(input.fundamentalScore)),
+        tone:
+          input.fundamentalScore >= 50
             ? "bullish"
-            : "bearish",
-    });
-  }
-
-  if (input.fundamentalScore != null) {
-    chips.push({
-      label: "Fund.",
-      value: String(Math.round(input.fundamentalScore)),
-      tone:
-        input.fundamentalScore >= 50
-          ? "bullish"
-          : input.fundamentalScore >= 35
-            ? "neutral"
-            : "bearish",
-    });
+            : input.fundamentalScore >= 35
+              ? "neutral"
+              : "bearish",
+      });
+    }
   }
 
   return {
     chips,
     regimeStatusLabel:
-      rsi != null && rsi < 38 ? "MIN ORDER ZONE" : "V NORME",
+      metrics && metrics.apyPct >= 10
+        ? "YIELD COMPOUND"
+        : rsi != null && rsi < 38
+          ? "MIN ORDER ZONE"
+          : "V NORME",
     regimeStatusTone: rsi != null && rsi < 38 ? "watch" : "ok",
   };
 }

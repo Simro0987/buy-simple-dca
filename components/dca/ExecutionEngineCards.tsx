@@ -540,7 +540,7 @@ function ExecutionOrderCard({
       <AnimatePresence mode="wait">
         {plan.limitShare > 0 && plan.whyLimit && (
           <motion.div
-            key={plan.whyLimit}
+            key={`${plan.symbol}-${plan.whyLimit}`}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
@@ -548,7 +548,11 @@ function ExecutionOrderCard({
             className="mt-3 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
           >
             <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
-              Prečo tento limit?
+              {plan.category === "yield"
+                ? "Prečo Yield?"
+                : plan.category === "satellite"
+                  ? "Prečo Limit?"
+                  : "Prečo tento limit?"}
             </p>
             <p className="mt-1 text-xs leading-relaxed text-zinc-400 transition-all duration-500 ease-in-out">
               {plan.whyLimit}

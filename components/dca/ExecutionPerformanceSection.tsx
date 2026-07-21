@@ -173,6 +173,41 @@ export function ExecutionPerformanceSection({
         </motion.div>
       </AnimatePresence>
 
+      {advisor.yieldSatelliteMetrics &&
+        (advisor.category === "yield" || advisor.category === "satellite") && (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={`yield-metrics-${selectedToken}`}
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -6 }}
+              transition={tokenSwitchTransition}
+              className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4"
+            >
+              <MetricTile
+                label="APY výnos"
+                value={`${advisor.yieldSatelliteMetrics.apyPct.toFixed(1)} %`}
+                tone="positive"
+              />
+              <MetricTile
+                label="IL Risk / Reward"
+                value={`${advisor.yieldSatelliteMetrics.ilRiskRewardRatio.toFixed(1)}×`}
+                tone="neutral"
+              />
+              <MetricTile
+                label="Staking Multiplier"
+                value={`${advisor.yieldSatelliteMetrics.stakingYieldMultiplier.toFixed(2)}×`}
+                tone="positive"
+              />
+              <MetricTile
+                label="Limitný pás"
+                value={`${advisor.yieldSatelliteMetrics.atrLimitMultiplier.toFixed(1)}×ATR`}
+                tone="neutral"
+              />
+            </motion.div>
+          </AnimatePresence>
+        )}
+
       <AnimatePresence mode="wait">
         <motion.div
           key={`advice-${selectedToken}-${advisor.activeAdvice}`}

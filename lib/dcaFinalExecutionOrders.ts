@@ -8,6 +8,7 @@ import {
   type ExecutionMarketContext,
 } from "@/lib/dcaExecutionLogic";
 import { buildTokenIndicatorSnapshot } from "@/lib/dcaTokenIndicators";
+import { computeYieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 import type { PortfolioBucketingResult } from "@/lib/dcaPortfolioBucketing";
 import type { ConfidenceLevel, MasterTokenPlan } from "@/lib/masterDcaEngine";
 import type { AssetCategory } from "@/lib/portfolioStorage";
@@ -175,9 +176,18 @@ export function buildFinalExecutionOrders(
         fundamentalScore: row.fundamentalScore,
         filterConditions: row.filterConditions,
         priceVsSma14Pct: row.priceVsSma14Pct,
+        convictionScore: row.convictionScore ?? null,
       });
 
       const split = resolveCategoryExecutionSplit(tokenInput);
+      const yieldSatelliteMetrics = computeYieldSatelliteMetrics({
+        symbol: row.symbol,
+        category,
+        atr14dPct: tokenInput.atr14dPct,
+        fundamentalScore: row.fundamentalScore ?? null,
+        convictionScore: row.convictionScore ?? null,
+        limitPullbackPct: split.limitPullbackPct,
+      });
       const distSma200Pct =
         category === "core" ? (tokenInput.distSma200Pct ?? null) : null;
       const ema50 =
@@ -195,6 +205,7 @@ export function buildFinalExecutionOrders(
         fundamentalScore: row.fundamentalScore ?? null,
         convictionScore: row.convictionScore ?? null,
         safetyBrakeActive: split.safetyBrakeActive,
+        yieldSatelliteMetrics,
       });
       const totalUsd = row.amountUsd;
       const ema50Dev = ema50DeviationPct(spotPrice, ema50);
@@ -295,6 +306,7 @@ export function buildFinalExecutionOrders(
         priceVsSma14Pct: row.priceVsSma14Pct ?? null,
         shareOfYieldPercent: row.shareOfYieldPercent ?? null,
         yieldWeight: row.yieldWeight ?? null,
+        yieldSatelliteMetrics,
       };
     });
 }
