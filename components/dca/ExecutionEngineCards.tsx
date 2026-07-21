@@ -149,14 +149,18 @@ function CopyableAmountRow({
   if (value <= 0) return null;
 
   return (
-    <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-white/5 bg-black/20 px-2 py-1.5">
-      <div>
-        <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
-          {label}
-        </p>
-        <p className="text-sm font-bold tabular-nums text-white">{formatted}</p>
+    <div className="mt-1.5">
+      <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
+        {label}
+      </p>
+      <div className="mt-0.5 flex items-center gap-1">
+        <p className="text-xs font-bold tabular-nums text-white">{formatted}</p>
+        <CopyValueButton
+          compact
+          value={formatted}
+          label="Kopírovať sumu"
+        />
       </div>
-      <CopyValueButton value={formatted} label="Kopírovať sumu" />
     </div>
   );
 }
@@ -481,25 +485,21 @@ function ExecutionOrderCard({
             formatted={formatCopyAmount2(plan.limitUsd)}
           />
           {plan.limitPrice > 0 && (
-            <>
-              <p className="mt-0.5 text-[10px] text-orange-400/70 transition-all duration-500 ease-in-out">
-                @ {formatUnitPrice(plan.limitPrice)}
+            <div className="mt-1.5">
+              <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
+                Limitná cena nákupu
               </p>
-              <div className="mt-2 flex items-center justify-between gap-2 rounded-lg border border-orange-500/10 bg-black/20 px-2 py-1.5">
-                <div>
-                  <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
-                    Limitná cena nákupu
-                  </p>
-                  <p className="text-sm font-bold tabular-nums text-orange-300">
-                    {formatCopyLimitPrice4(plan.limitPrice)}
-                  </p>
-                </div>
+              <div className="mt-0.5 flex items-center gap-1">
+                <p className="text-xs font-bold tabular-nums text-orange-300">
+                  {formatCopyLimitPrice4(plan.limitPrice)}
+                </p>
                 <CopyValueButton
+                  compact
                   value={formatCopyLimitPrice4(plan.limitPrice)}
                   label="Kopírovať cenu"
                 />
               </div>
-            </>
+            </div>
           )}
           {plan.limitUsd > 0 && (
             <div className="mt-2.5 space-y-2">
