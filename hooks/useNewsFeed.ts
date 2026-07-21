@@ -113,10 +113,6 @@ export function useNewsFeed(portfolioAssets: LiveAsset[] = []) {
 
   useEffect(() => {
     void loadNews();
-    const interval = setInterval(() => {
-      void loadNews();
-    }, 15 * 60 * 1000);
-    return () => clearInterval(interval);
   }, [loadNews]);
 
   const smartFeed = useMemo(

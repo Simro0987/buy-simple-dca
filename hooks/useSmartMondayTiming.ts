@@ -7,8 +7,7 @@ import {
   readMondayDeferUntil,
   type MondayTimingEvaluation,
 } from "@/lib/smartMondayTiming";
-
-const POLL_MS = 15 * 60_000;
+import { GLOBAL_REFRESH_EVENT } from "@/lib/globalRefresh";
 
 export function useSmartMondayTiming() {
   const [timing, setTiming] = useState<MondayTimingEvaluation | null>(null);
@@ -31,10 +30,14 @@ export function useSmartMondayTiming() {
 
   useEffect(() => {
     void refresh();
-    const interval = window.setInterval(() => {
+  }, [refresh]);
+
+  useEffect(() => {
+    const onGlobalRefresh = () => {
       void refresh();
-    }, POLL_MS);
-    return () => window.clearInterval(interval);
+    };
+    window.addEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+    return () => window.removeEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
   }, [refresh]);
 
   return {

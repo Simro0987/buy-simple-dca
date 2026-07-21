@@ -4,6 +4,8 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
 import { ApiStatusBanner } from "@/components/ApiStatusBanner";
+import { GlobalDataSync } from "@/components/GlobalDataSync";
+import { GlobalLastUpdated } from "@/components/GlobalLastUpdated";
 import { SwapPanel } from "@/components/SwapPanel";
 import { AddAssetModal } from "@/components/AddAssetModal";
 import { AssetList } from "@/components/AssetList";
@@ -23,6 +25,7 @@ import { TransactionHistory } from "@/components/TransactionHistory";
 import { TransactionModal } from "@/components/TransactionModal";
 import type { LiveAsset } from "@/hooks/usePortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import { useGlobalDataRefresh } from "@/hooks/useGlobalDataRefresh";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
@@ -79,6 +82,9 @@ export function Dashboard() {
     () => portfolioHoldings.map((asset) => asset.symbol),
     [portfolioHoldings],
   );
+
+  const { refresh: refreshGlobalData, isRefreshing, lastUpdated } =
+    useGlobalDataRefresh();
 
   const showHome = activeTab === "home";
   const showPortfolio = activeTab === "portfolio";
@@ -165,19 +171,34 @@ export function Dashboard() {
       </div>
 
       <main className="relative mx-auto max-w-lg px-4 pb-28 pt-8 sm:px-6 sm:pt-12">
-        <header className="mb-8 flex items-center justify-between">
-          <div>
+        <header className="mb-6 flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
             <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-zinc-600">
               Edge Trader
             </p>
             <p className="text-sm font-medium text-zinc-400">Terminal v2.0</p>
+            <div className="mt-1.5">
+              <GlobalLastUpdated
+                lastUpdated={lastUpdated}
+                isRefreshing={isRefreshing}
+                onRefresh={() => void refreshGlobalData()}
+              />
+            </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <TradingModeToggle compact />
             <SettingsButton onClick={() => setIsSettingsOpen(true)} />
-            <LiveIndicator isLive={isLive} loading={loading} />
+            <LiveIndicator
+              isLive={isLive}
+              loading={loading || isRefreshing}
+            />
           </div>
         </header>
+
+        <GlobalDataSync
+          portfolioSymbols={portfolioSymbols}
+          trackedAssets={trackedAssets}
+        />
 
         <ApiStatusBanner />
 

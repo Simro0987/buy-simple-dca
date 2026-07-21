@@ -6,10 +6,10 @@ import {
   type PortfolioBucketingResult,
 } from "@/lib/dcaPortfolioBucketing";
 import type { YieldTokenMetrics } from "@/lib/dcaYieldFilter";
+import { GLOBAL_REFRESH_EVENT } from "@/lib/globalRefresh";
 import type { MasterTokenPlan } from "@/lib/masterDcaEngine";
 import type { MacroRegime } from "@/lib/ultimateDcaEngine";
-
-const REFRESH_MS = 5 * 60_000;
+import { useAppStore } from "@/src/store/useAppStore";
 
 export function usePortfolioBucketing(input: {
   deployedCapital: number;
@@ -19,51 +19,47 @@ export function usePortfolioBucketing(input: {
   finalScore: number;
   enabled?: boolean;
 }) {
+  const globalYieldMetrics = useAppStore(
+    (state) => state.globalLiveData.yieldMetrics,
+  );
+  const globalStakingApy = useAppStore(
+    (state) => state.globalLiveData.stakingApy,
+  );
+  const isRefreshing = useAppStore((state) => state.globalRefresh.isRefreshing);
+
   const [yieldMetrics, setYieldMetrics] = useState<
     Record<string, YieldTokenMetrics>
-  >({});
-  const [stakingApy, setStakingApy] = useState<Record<string, number>>({});
-  const [metricsLoading, setMetricsLoading] = useState(true);
+  >(globalYieldMetrics);
+  const [stakingApy, setStakingApy] = useState<Record<string, number>>(
+    globalStakingApy,
+  );
   const [metricsError, setMetricsError] = useState<string | null>(null);
 
-  const refreshMetrics = useCallback(async () => {
-    if (input.enabled === false) return;
-
-    setMetricsLoading(true);
-    try {
-      const res = await fetch("/api/dca/yield-metrics", { cache: "no-store" });
-      if (!res.ok) throw new Error("Yield metrics unavailable");
-
-      const json = (await res.json()) as {
-        success: boolean;
-        metrics?: Record<string, YieldTokenMetrics>;
-        stakingApy?: Record<string, number>;
-        error?: string;
-      };
-
-      if (!json.success || !json.metrics) {
-        throw new Error(json.error ?? "Yield metrics unavailable");
-      }
-
-      setYieldMetrics(json.metrics);
-      setStakingApy(json.stakingApy ?? {});
+  const syncFromStore = useCallback(() => {
+    const live = useAppStore.getState().globalLiveData;
+    setYieldMetrics(live.yieldMetrics);
+    setStakingApy(live.stakingApy);
+    if (Object.keys(live.yieldMetrics).length > 0) {
       setMetricsError(null);
-    } catch (error) {
-      setMetricsError(
-        error instanceof Error ? error.message : "Yield metrics unavailable",
-      );
-    } finally {
-      setMetricsLoading(false);
     }
-  }, [input.enabled]);
+  }, []);
 
   useEffect(() => {
-    void refreshMetrics();
-    const interval = setInterval(() => {
-      void refreshMetrics();
-    }, REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [refreshMetrics]);
+    syncFromStore();
+  }, [globalYieldMetrics, globalStakingApy, syncFromStore]);
+
+  useEffect(() => {
+    const onGlobalRefresh = () => {
+      syncFromStore();
+    };
+    window.addEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+    return () => window.removeEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+  }, [syncFromStore]);
+
+  const metricsLoading =
+    input.enabled !== false &&
+    isRefreshing &&
+    Object.keys(yieldMetrics).length === 0;
 
   const bucketing = useMemo<PortfolioBucketingResult | null>(() => {
     if (input.enabled === false || input.deployedCapital <= 0) return null;
@@ -90,7 +86,7 @@ export function usePortfolioBucketing(input: {
     bucketing,
     metricsLoading,
     metricsError,
-    refreshMetrics,
+    refreshMetrics: syncFromStore,
     liveMetricsCount: Object.keys(yieldMetrics).length,
     yieldMetrics,
     stakingApy,

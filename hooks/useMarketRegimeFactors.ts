@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { LiveMarketRegimeRawData } from "@/lib/fetchMarketRegimeFactors";
+import { GLOBAL_REFRESH_EVENT } from "@/lib/globalRefresh";
+import { useAppStore } from "@/src/store/useAppStore";
 
-const REFRESH_MS = 5 * 60_000;
 const CACHE_KEY = "edge-trader-market-regime-factors";
 
 function readCache(): LiveMarketRegimeRawData | null {
@@ -26,55 +27,44 @@ function writeCache(data: LiveMarketRegimeRawData): void {
 }
 
 export function useMarketRegimeFactors() {
-  const [data, setData] = useState<LiveMarketRegimeRawData | null>(readCache);
-  const [loading, setLoading] = useState(!readCache());
+  const globalFactors = useAppStore(
+    (state) => state.globalLiveData.regimeFactors,
+  );
+  const isRefreshing = useAppStore((state) => state.globalRefresh.isRefreshing);
+
+  const [data, setData] = useState<LiveMarketRegimeRawData | null>(
+    globalFactors ?? readCache(),
+  );
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = useCallback(async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/dca/market-regime-factors", {
-        cache: "no-store",
-      });
-      const json = (await res.json()) as {
-        success: boolean;
-        data?: LiveMarketRegimeRawData;
-        error?: string;
-      };
+  const syncFromStore = useCallback(() => {
+    const live = useAppStore.getState().globalLiveData.regimeFactors;
+    if (live) {
+      setData(live);
+      writeCache(live);
+      setError(live.degraded ? "Čiastočné dáta — niektoré zdroje nedostupné" : null);
+      return;
+    }
 
-      if (!json.success || !json.data) {
-        throw new Error(json.error ?? "Market regime factors unavailable");
-      }
-
-      setData(json.data);
-      writeCache(json.data);
-      setError(json.data.degraded ? "Čiastočné dáta — niektoré zdroje nedostupné" : null);
-    } catch (err) {
-      const cached = readCache();
-      if (cached) {
-        setData(cached);
-        setError(
-          err instanceof Error
-            ? `${err.message} — zobrazené cache dáta`
-            : "Zobrazené cache dáta",
-        );
-      } else {
-        setError(
-          err instanceof Error ? err.message : "Market regime factors unavailable",
-        );
-      }
-    } finally {
-      setLoading(false);
+    const cached = readCache();
+    if (cached) {
+      setData(cached);
     }
   }, []);
 
   useEffect(() => {
-    void refresh();
-    const interval = setInterval(() => {
-      void refresh();
-    }, REFRESH_MS);
-    return () => clearInterval(interval);
-  }, [refresh]);
+    syncFromStore();
+  }, [globalFactors, syncFromStore]);
 
-  return { data, loading, error, refresh };
+  useEffect(() => {
+    const onGlobalRefresh = () => {
+      syncFromStore();
+    };
+    window.addEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+    return () => window.removeEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+  }, [syncFromStore]);
+
+  const loading = isRefreshing && !data;
+
+  return { data, loading, error, refresh: syncFromStore };
 }

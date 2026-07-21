@@ -8,6 +8,7 @@ import {
 } from "@/lib/masterDcaEngine";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { useAppStore } from "@/src/store/useAppStore";
+import { GLOBAL_REFRESH_EVENT } from "@/lib/globalRefresh";
 
 interface UseDcaEngineOptions {
   portfolioSymbols?: string[];
@@ -28,6 +29,7 @@ export function useDcaEngine({
 }: UseDcaEngineOptions = {}) {
   const weeklyBudget = useAppStore((state) => state.dcaPlan.weeklyBudget);
   const portfolioAssets = useAppStore((state) => state.portfolioAssets);
+  const globalSnapshot = useAppStore((state) => state.globalLiveData.dcaSnapshot);
   const setDcaResult = useAppStore((state) => state.setDcaResult);
   const setApiStatus = useAppStore((state) => state.setApiStatus);
 
@@ -36,7 +38,9 @@ export function useDcaEngine({
     return portfolioAssets.map((asset) => asset.symbol);
   }, [portfolioSymbolsProp, portfolioAssets]);
 
-  const [snapshot, setSnapshot] = useState<DcaMarketSnapshot | null>(null);
+  const [snapshot, setSnapshot] = useState<DcaMarketSnapshot | null>(
+    globalSnapshot,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -82,11 +86,26 @@ export function useDcaEngine({
   }, [portfolioSymbols, setApiStatus, symbolsKey]);
 
   useEffect(() => {
+    if (globalSnapshot) {
+      setSnapshot(globalSnapshot);
+    }
+  }, [globalSnapshot]);
+
+  useEffect(() => {
     void loadSnapshot();
-    const interval = setInterval(() => {
+  }, [loadSnapshot]);
+
+  useEffect(() => {
+    const onGlobalRefresh = () => {
+      const latest = useAppStore.getState().globalLiveData.dcaSnapshot;
+      if (latest) {
+        setSnapshot(latest);
+        return;
+      }
       void loadSnapshot();
-    }, 5 * 60_000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+    return () => window.removeEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
   }, [loadSnapshot]);
 
   const result: MasterDcaResult | null = useMemo(() => {

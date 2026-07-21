@@ -6,6 +6,7 @@ import {
   type DcaLiveCalculation,
 } from "@/lib/fetchAndCalculateDCA";
 import type { DcaMarketSnapshot } from "@/lib/dcaMarketData";
+import { GLOBAL_REFRESH_EVENT } from "@/lib/globalRefresh";
 import type { Transaction } from "@/lib/portfolioStorage";
 
 export function useDcaLiveEngine(input: {
@@ -48,10 +49,14 @@ export function useDcaLiveEngine(input: {
 
   useEffect(() => {
     void refresh();
-    const interval = setInterval(() => {
+  }, [refresh]);
+
+  useEffect(() => {
+    const onGlobalRefresh = () => {
       void refresh();
-    }, 5 * 60_000);
-    return () => clearInterval(interval);
+    };
+    window.addEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
+    return () => window.removeEventListener(GLOBAL_REFRESH_EVENT, onGlobalRefresh);
   }, [refresh]);
 
   return { result, loading, refresh };

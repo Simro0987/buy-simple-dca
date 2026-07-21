@@ -16,6 +16,9 @@ import {
   writePortfolioToStorage,
   type PortfolioData,
 } from "@/lib/portfolioStorage";
+import type { DcaMarketSnapshot } from "@/lib/dcaMarketData";
+import type { YieldTokenMetrics } from "@/lib/dcaYieldFilter";
+import type { LiveMarketRegimeRawData } from "@/lib/fetchMarketRegimeFactors";
 import { readTradingMode, writeTradingMode } from "@/lib/tradeHistory";
 
 export type NewsFeedMode = "portfolio" | "all";
@@ -38,6 +41,30 @@ export interface NewsFeedState {
   lastUpdated: string | null;
 }
 
+export interface GlobalLiveDataState {
+  dcaSnapshot: DcaMarketSnapshot | null;
+  yieldMetrics: Record<string, YieldTokenMetrics>;
+  stakingApy: Record<string, number>;
+  regimeFactors: LiveMarketRegimeRawData | null;
+}
+
+export interface GlobalRefreshState {
+  lastUpdated: string | null;
+  isRefreshing: boolean;
+}
+
+const defaultGlobalLiveData: GlobalLiveDataState = {
+  dcaSnapshot: null,
+  yieldMetrics: {},
+  stakingApy: {},
+  regimeFactors: null,
+};
+
+const defaultGlobalRefresh: GlobalRefreshState = {
+  lastUpdated: null,
+  isRefreshing: false,
+};
+
 interface AppStore {
   portfolioData: PortfolioData;
   portfolioAssets: LiveAsset[];
@@ -48,6 +75,8 @@ interface AppStore {
   apiStatus: ApiStatusState;
   tradingMode: TradingMode;
   octagonSelectedToken: string | null;
+  globalLiveData: GlobalLiveDataState;
+  globalRefresh: GlobalRefreshState;
 
   hydratePortfolio: () => void;
   setPortfolioData: (
@@ -75,6 +104,9 @@ interface AppStore {
   setTradingMode: (mode: TradingMode) => void;
   hydrateTradingMode: () => void;
   setOctagonSelectedToken: (symbol: string | null) => void;
+  setGlobalLiveData: (patch: Partial<GlobalLiveDataState>) => void;
+  setGlobalRefreshing: (isRefreshing: boolean) => void;
+  touchGlobalLastUpdated: () => void;
 }
 
 const defaultNewsFeed: NewsFeedState = {
@@ -104,6 +136,8 @@ export const useAppStore = create<AppStore>((set, get) => ({
   apiStatus: DEFAULT_API_STATUS,
   tradingMode: "simulation",
   octagonSelectedToken: null,
+  globalLiveData: defaultGlobalLiveData,
+  globalRefresh: defaultGlobalRefresh,
 
   hydratePortfolio: () => {
     if (get().isPortfolioHydrated) return;
@@ -231,6 +265,33 @@ export const useAppStore = create<AppStore>((set, get) => ({
   setOctagonSelectedToken: (symbol) => {
     set({ octagonSelectedToken: symbol });
   },
+
+  setGlobalLiveData: (patch) => {
+    set((state) => ({
+      globalLiveData: {
+        ...state.globalLiveData,
+        ...patch,
+      },
+    }));
+  },
+
+  setGlobalRefreshing: (isRefreshing) => {
+    set((state) => ({
+      globalRefresh: {
+        ...state.globalRefresh,
+        isRefreshing,
+      },
+    }));
+  },
+
+  touchGlobalLastUpdated: () => {
+    set((state) => ({
+      globalRefresh: {
+        ...state.globalRefresh,
+        lastUpdated: new Date().toISOString(),
+      },
+    }));
+  },
 }));
 
 export function usePortfolioAssets() {
@@ -251,4 +312,12 @@ export function useApiStatus() {
 
 export function useTradingMode() {
   return useAppStore((state) => state.tradingMode);
+}
+
+export function useGlobalRefreshState() {
+  return useAppStore((state) => state.globalRefresh);
+}
+
+export function useGlobalLiveData() {
+  return useAppStore((state) => state.globalLiveData);
 }

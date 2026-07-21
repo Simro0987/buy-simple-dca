@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import type { CryptoPrice, CryptoPricesMap, CryptoSymbol } from "@/lib/cryptoApi";
 import type { DynamicPricesMap } from "@/lib/cryptoApi";
 import type { MarketDataApiResponse } from "@/lib/cryptoApi";
+import { GLOBAL_REFRESH_MS } from "@/lib/globalRefresh";
 import { useAppStore } from "@/src/store/useAppStore";
 
 const EMPTY_CORE: CryptoPricesMap = {
@@ -49,7 +50,7 @@ export function useCryptoPrices() {
   const query = useQuery({
     queryKey: ["market-data", "core"],
     queryFn: () => fetchMarketData(),
-    refetchInterval: 60_000,
+    refetchInterval: GLOBAL_REFRESH_MS,
   });
 
   useEffect(() => {
@@ -97,7 +98,7 @@ export function usePortfolioPriceQuery(
     queryKey: ["market-data", "portfolio", key],
     queryFn: () => fetchMarketData(coingeckoIds, symbols),
     enabled: coingeckoIds.length > 0,
-    refetchInterval: 60_000,
+    refetchInterval: GLOBAL_REFRESH_MS,
   });
 
   useEffect(() => {
