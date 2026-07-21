@@ -14,6 +14,7 @@ import {
   type YieldFilterEvaluation,
   type YieldTokenMetrics,
 } from "@/lib/dcaYieldFilter";
+import { formatUsd } from "@/lib/numberFormat";
 import type { MacroRegime } from "@/lib/ultimateDcaEngine";
 
 export interface PortfolioBucket {
@@ -231,7 +232,7 @@ function buildNarrative(input: {
 }
 
 function formatUsdShort(value: number): string {
-  return `$${Math.round(value)}`;
+  return formatUsd(value);
 }
 
 export function computePortfolioBucketing(input: {

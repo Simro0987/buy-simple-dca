@@ -7,7 +7,7 @@ import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { CopyValueButton } from "@/components/ui/CopyValueButton";
 import { formatUsd, formatUnitPrice } from "@/lib/data";
 import {
-  formatCopyAmount4,
+  formatCopyAmount2,
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
 import { formatPct, formatSignedPct } from "@/lib/numberFormat";
@@ -147,7 +147,7 @@ function OrderAmountDisplay({
   copyable?: boolean;
 }) {
   const animated = useCountUp(value, 1000);
-  const formatted = formatCopyAmount4(animated);
+  const formatted = formatCopyAmount2(animated);
 
   return (
     <span className="inline-flex items-center gap-1 tabular-nums transition-all duration-1000 ease-in-out">

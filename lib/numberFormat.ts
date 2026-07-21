@@ -17,21 +17,27 @@ export function formatNumber4(value: number): string {
   return formatDecimal(value, 4);
 }
 
-/** USD amount with $ prefix and 4 decimal places (e.g. $65188,6462). */
+/**
+ * Money sums and capital allocations — exactly 2 decimals (e.g. $119,13).
+ * Use for Market/Limit amounts, weekly budget, deployed capital, etc.
+ */
 export function formatUsd(
   value: number,
   options?: { showSign?: boolean },
 ): string {
-  const formatted = `$${formatDecimal(Math.abs(value), 4)}`;
+  const formatted = `$${formatDecimal(Math.abs(value), 2)}`;
 
   if (options?.showSign && value > 0) return `+${formatted}`;
   if (options?.showSign && value < 0) return `-${formatted}`;
   return formatted;
 }
 
-/** Spot / limit unit price — 4 decimals, comma separator. */
+/**
+ * Spot / limit token unit price — exactly 4 decimals (e.g. $65188,6462).
+ */
 export function formatUnitPrice(value: number): string {
-  return formatUsd(value);
+  if (value <= 0) return "$0,0000";
+  return `$${formatDecimal(value, 4)}`;
 }
 
 /** Percentage with comma separator (default 1 decimal, e.g. -8,5%). */
@@ -50,10 +56,12 @@ export function formatMultiplier(value: number, fractionDigits = 2): string {
   return `${formatDecimal(value, fractionDigits)}×`;
 }
 
-/** Clipboard-friendly amount — 4 decimals, no currency symbol. */
+/** Clipboard-friendly purchase sum — 2 decimals, no currency symbol (e.g. 119,13). */
+export function formatCopyAmount2(value: number): string {
+  return formatDecimal(Math.max(0, value), 2);
+}
+
+/** Clipboard-friendly price — 4 decimals, no currency symbol (e.g. 65188,6462). */
 export function formatCopyAmount4(value: number): string {
   return formatDecimal(Math.max(0, value), 4);
 }
-
-/** @deprecated Use formatCopyAmount4 */
-export const formatCopyAmount2 = formatCopyAmount4;

@@ -30,6 +30,7 @@ export const portfolioData = {
 };
 
 export {
+  formatCopyAmount2,
   formatCopyAmount4,
   formatDecimal,
   formatNumber4,
