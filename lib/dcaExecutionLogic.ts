@@ -1,4 +1,6 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
+import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
+import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const CORE_PULLBACK_PCT = 2.5;
@@ -30,6 +32,7 @@ export interface ExecutionTokenInput {
   distSma200Pct?: number | null;
   filtersPassedCount?: number;
   fundamentalScore?: number;
+  filterConditions?: YieldFilterCondition[];
 }
 
 export interface ExecutionSplitResult {
@@ -79,6 +82,25 @@ function limitFromAtr(spot: number, atrPct: number, multiplier: number): number 
 function pullbackPct(spot: number, limitPrice: number): number {
   if (spot <= 0 || limitPrice <= 0) return 0;
   return round1(((spot - limitPrice) / spot) * 100);
+}
+
+function buildYieldEntrySignal(input: {
+  rsi: number;
+  filtersPassed: number;
+  fundamental: number;
+  filterConditions?: YieldFilterCondition[];
+  minOrderRule: boolean;
+}): string {
+  const filterSummary = summarizeYieldFilterConditions(
+    input.filterConditions,
+    input.filtersPassed,
+  );
+
+  if (input.minOrderRule) {
+    return `ENTRY SIGNAL: ${rsiLabel(input.rsi)} (${input.rsi.toFixed(0)}) • MIN ORDER RULE • ${filterSummary}`;
+  }
+
+  return `ENTRY SIGNAL: ${rsiLabel(input.rsi)} (${input.rsi.toFixed(0)}) • Momentum OK • ${filterSummary} (skóre ${Math.round(input.fundamental)})`;
 }
 
 function rsiLabel(rsi: number): string {
@@ -139,8 +161,8 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   const entrySignal = `ENTRY SIGNAL: ${fgPart} • ${smaPart} • Final Score ${round1(input.finalScore)}`;
 
   const splitExplanation = safetyBrakeActive
-    ? `SPLIT: Safety Brake aktívny (+${distSma200.toFixed(1)} % vs 200D SMA) — posilnený Limit ${round1(100 - marketShare)} %`
-    : `SPLIT: Core bias ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT podľa Final Score ${round1(input.finalScore)}`;
+    ? `SPLIT: BTC stav: Safety Brake (+${distSma200.toFixed(1)} % vs 200D SMA) — F&G ${Math.round(input.fearGreedValue)} kontribuuje ${input.fearGreedValue <= 25 ? "+6 % MKT" : input.fearGreedValue >= 75 ? "−8 % MKT" : "neutrálne"} • Limit ${round1(100 - marketShare)} %`
+    : `SPLIT: BTC stav: V norme • F&G ${Math.round(input.fearGreedValue)} kontribuuje ${input.fearGreedValue <= 25 ? "+6 % MKT" : input.fearGreedValue >= 75 ? "−8 % MKT" : "neutrálne"} • Core bias ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT (Final Score ${round1(input.finalScore)})`;
 
   return {
     marketShare: round1(marketShare),
@@ -158,8 +180,24 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
 
 function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   const spot = input.spotPrice;
-  const rsi = input.rsi14 ?? 50;
-  const atrPct = input.atr14dPct ?? 2.8;
+  const rsi = input.rsi14;
+  const atrPct = input.atr14dPct;
+
+  if (rsi == null || atrPct == null) {
+    const marketShare = computeBaseMarketPct(input.finalScore);
+    return {
+      marketShare: round1(marketShare),
+      limitShare: round1(100 - marketShare),
+      limitPrice: 0,
+      limitPullbackPct: 0,
+      whyLimit: "Čakáme na live RSI/ATR pre výpočet limitného cieľa.",
+      entrySignal: `ENTRY SIGNAL: čakáme na live RSI/ATR • Final Score ${round1(input.finalScore)}`,
+      splitExplanation: `SPLIT: Satellites — live metriky sa načítavajú (Final Score ${round1(input.finalScore)})`,
+      yieldMergeActive: false,
+      minOrderRuleActive: false,
+      safetyBrakeActive: false,
+    };
+  }
 
   let marketShare = computeBaseMarketPct(input.finalScore);
 
@@ -198,14 +236,39 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
 
 function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   const spot = input.spotPrice;
-  const rsi = input.rsi14 ?? 50;
-  const atrPct = input.atr14dPct ?? 6;
-  const filtersPassed = input.filtersPassedCount ?? 3;
+  const rsi = input.rsi14;
+  const atrPct = input.atr14dPct;
+  const filtersPassed = input.filtersPassedCount ?? 0;
   const fundamental = input.fundamentalScore ?? 0;
-  const minOrderRuleActive = rsi < YIELD_MIN_ORDER_RSI_THRESHOLD;
+  const minOrderRuleActive =
+    rsi != null && rsi < YIELD_MIN_ORDER_RSI_THRESHOLD;
+
+  if (rsi == null || atrPct == null) {
+    const marketShare = computeBaseMarketPct(input.finalScore);
+    const limitShare = round1(100 - marketShare);
+    return {
+      marketShare: round1(marketShare),
+      limitShare,
+      limitPrice: 0,
+      limitPullbackPct: 0,
+      whyLimit: "Čakáme na live RSI/ATR pre výpočet yield limitného cieľa.",
+      entrySignal: `ENTRY SIGNAL: čakáme na live metriky • Fundamentals ${filtersPassed}/3 podmienok`,
+      splitExplanation: `SPLIT: Yield — live metriky sa načítavajú (Final Score ${round1(input.finalScore)})`,
+      yieldMergeActive: false,
+      minOrderRuleActive: false,
+      safetyBrakeActive: false,
+    };
+  }
 
   if (minOrderRuleActive) {
-    const entrySignal = `ENTRY SIGNAL: ${rsiLabel(rsi)} (${rsi.toFixed(0)}) • MIN ORDER RULE • Fundamentals ${filtersPassed}/3 podmienok`;
+    const entrySignal = buildYieldEntrySignal({
+      rsi,
+      filtersPassed,
+      fundamental,
+      filterConditions: input.filterConditions,
+      minOrderRule: true,
+    });
+
     return {
       marketShare: 100,
       limitShare: 0,
@@ -220,8 +283,10 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     };
   }
 
-  const marketShare = 33;
-  const limitShare = 67;
+  const marketShare = round1(
+    clamp(100 - computeBaseMarketPct(input.finalScore), 15, 70),
+  );
+  const limitShare = round1(100 - marketShare);
   const limitPrice = limitFromAtr(spot, atrPct, 2.0);
   const limitPullbackPct = pullbackPct(spot, limitPrice);
 
@@ -230,9 +295,15 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       ? `Yield altcoin — cielime na ${limitPullbackPct.toFixed(1)} % pullback na ${formatPrice(limitPrice)} (Spot − 2.0× ATR ${atrPct.toFixed(1)} %) pre chytenie likvidačných knôtov.`
       : "Čakáme na live cenu pre výpočet limitného cieľa.";
 
-  const entrySignal = `ENTRY SIGNAL: ${rsiLabel(rsi)} (${rsi.toFixed(0)}) • Momentum OK • Fundamentals ${filtersPassed}/3 podmienok (skóre ${Math.round(fundamental)})`;
+  const entrySignal = buildYieldEntrySignal({
+    rsi,
+    filtersPassed,
+    fundamental,
+    filterConditions: input.filterConditions,
+    minOrderRule: false,
+  });
 
-  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — hlboké limitné knôty (2.0× ATR)`;
+  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — Final Score ${round1(input.finalScore)} + hlboké limitné knôty (2.0× ATR)`;
 
   return {
     marketShare,
@@ -275,6 +346,7 @@ export function buildExecutionTokenInput(input: {
   marketContext?: ExecutionMarketContext | null;
   filtersPassedCount?: number;
   fundamentalScore?: number;
+  filterConditions?: YieldFilterCondition[];
 }): ExecutionTokenInput {
   const ctx = input.marketContext;
 
@@ -298,6 +370,7 @@ export function buildExecutionTokenInput(input: {
       ...input,
       rsi14: ctx.eth.rsi14 ?? input.rsi14,
       atr14dPct: ctx.eth.atr14dPct ?? input.atr14dPct,
+      filterConditions: input.filterConditions,
     };
   }
 
@@ -306,10 +379,14 @@ export function buildExecutionTokenInput(input: {
       ...input,
       rsi14: ctx.sol.rsi14 ?? input.rsi14,
       atr14dPct: ctx.sol.atr14dPct ?? input.atr14dPct,
+      filterConditions: input.filterConditions,
     };
   }
 
-  return input;
+  return {
+    ...input,
+    filterConditions: input.filterConditions,
+  };
 }
 
 export function toExecutionMarketContext(

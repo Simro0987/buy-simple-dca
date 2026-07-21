@@ -7,6 +7,7 @@ import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
 import type { TradingMode } from "@/lib/exchange/types";
 import { sumExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import {
@@ -17,6 +18,7 @@ import {
 import { useCountUp } from "@/hooks/useCountUp";
 import {
   interactiveCard,
+  smoothColorClass,
   smoothWidthTransition,
 } from "@/lib/motion";
 
@@ -25,6 +27,8 @@ interface ExecutionEngineCardsProps {
   deployedCapital?: number;
   loading?: boolean;
   tradingMode: TradingMode;
+  yieldConvictionCount?: number;
+  yieldUniverseCount?: number;
   onDeployAll: () => Promise<void>;
   onDeployLeg?: (symbol: string, leg: OrderLeg) => Promise<void>;
 }
@@ -36,7 +40,20 @@ const listItemMotion = {
   transition: { duration: 0.5, ease: [0.4, 0, 0.2, 1] as const },
 };
 
-const buttonTransition = "transition-all duration-300 ease-in-out";
+const buttonTransition = "transition-all duration-500 ease-in-out";
+
+const toneClasses: Record<IndicatorTone, string> = {
+  neutral: "border-white/10 bg-white/[0.03] text-zinc-300",
+  bullish: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  bearish: "border-rose-500/20 bg-rose-500/10 text-rose-300",
+  warning: "border-amber-500/20 bg-amber-500/10 text-amber-300",
+};
+
+const statusToneClasses = {
+  ok: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+  brake: "border-amber-500/25 bg-amber-500/10 text-amber-300",
+  watch: "border-blue-500/20 bg-blue-500/10 text-blue-300",
+} as const;
 
 function DeployLegButton({
   leg,
@@ -101,6 +118,57 @@ function OrderAmountDisplay({ value }: { value: number }) {
   );
 }
 
+function ShareDisplay({ value }: { value: number }) {
+  const animated = useCountUp(value, 800);
+  return (
+    <span className="tabular-nums transition-all duration-1000 ease-in-out">
+      {animated.toFixed(1)}%
+    </span>
+  );
+}
+
+function IndicatorChip({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone: IndicatorTone;
+}) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.4, ease: "easeOut" }}
+      className={`rounded-lg border px-2 py-1 transition-all duration-500 ease-in-out ${toneClasses[tone]}`}
+    >
+      <p className="text-[8px] font-semibold uppercase tracking-wider opacity-70">
+        {label}
+      </p>
+      <p className="text-[11px] font-bold tabular-nums">{value}</p>
+    </motion.div>
+  );
+}
+
+function RegimeStatusBadge({
+  label,
+  tone,
+}: {
+  label: string;
+  tone: TokenExecutionPlan["regimeStatusTone"];
+}) {
+  return (
+    <motion.span
+      layout
+      className={`rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide transition-all duration-500 ease-in-out ${statusToneClasses[tone]}`}
+    >
+      {label}
+    </motion.span>
+  );
+}
+
 function ExecutionOrderCard({
   plan,
   loading,
@@ -116,6 +184,11 @@ function ExecutionOrderCard({
   const unitPrice = plan.spotPrice;
   const marketState = getLegState(plan.symbol, "market");
   const limitState = getLegState(plan.symbol, "limit");
+
+  const yieldHeader =
+    plan.category === "yield" && plan.convictionScore != null
+      ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14?.toFixed(0) ?? "—"} • MA ${plan.priceVsSma14Pct != null ? `${plan.priceVsSma14Pct >= 0 ? "+" : ""}${plan.priceVsSma14Pct.toFixed(0)}%` : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
+      : null;
 
   return (
     <motion.article
@@ -149,7 +222,7 @@ function ExecutionOrderCard({
             )}
           </div>
           <div>
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <p className="text-base font-bold text-white">{plan.symbol}</p>
               <span
                 className="rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase"
@@ -160,25 +233,40 @@ function ExecutionOrderCard({
               >
                 {plan.category}
               </span>
+              {plan.tag && (
+                <span className="rounded bg-white/5 px-1.5 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-zinc-500">
+                  {plan.tag}
+                </span>
+              )}
+              <RegimeStatusBadge
+                label={plan.regimeStatusLabel}
+                tone={plan.regimeStatusTone}
+              />
               {plan.yieldMergeActive && (
-                <span className="rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-emerald-400">
-                  Merge
+                <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-300 transition-all duration-500 ease-in-out">
+                  Min Order
                 </span>
               )}
             </div>
             <p className="text-xs text-zinc-500">{plan.name}</p>
-            <p className="mt-0.5 text-[10px] text-zinc-600">
-              {loading ? (
-                <PriceSkeleton className="inline-block h-3 w-20" />
-              ) : plan.marketStatusFallback ? (
-                <span className="text-amber-400/80">
-                  Market Status · {plan.change24h >= 0 ? "+" : ""}
-                  {plan.change24h.toFixed(1)}% 24h
-                </span>
-              ) : (
-                <>Live @ {formatUnitPrice(unitPrice)}</>
-              )}
-            </p>
+            {yieldHeader ? (
+              <p className="mt-0.5 text-[10px] font-medium text-teal-400/90 transition-all duration-500 ease-in-out">
+                {yieldHeader}
+              </p>
+            ) : (
+              <p className="mt-0.5 text-[10px] text-zinc-600">
+                {loading ? (
+                  <PriceSkeleton className="inline-block h-3 w-20" />
+                ) : plan.marketStatusFallback ? (
+                  <span className="text-amber-400/80">
+                    Market Status · {plan.change24h >= 0 ? "+" : ""}
+                    {plan.change24h.toFixed(1)}% 24h
+                  </span>
+                ) : (
+                  <>Live @ {formatUnitPrice(unitPrice)}</>
+                )}
+              </p>
+            )}
           </div>
         </div>
         <div className="text-right">
@@ -189,7 +277,7 @@ function ExecutionOrderCard({
             className="text-lg font-bold tabular-nums transition-all duration-1000 ease-in-out"
             style={{ color: catStyles.color }}
           >
-            {plan.weightPercent}%
+            <ShareDisplay value={plan.weightPercent} />
           </p>
           <p className="text-sm font-semibold tabular-nums text-white transition-all duration-1000 ease-in-out">
             <OrderAmountDisplay value={plan.totalUsd} />
@@ -197,29 +285,63 @@ function ExecutionOrderCard({
         </div>
       </div>
 
-      {plan.entrySignal && (
-        <p className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[10px] font-medium leading-relaxed text-emerald-400 transition-all duration-300 ease-in-out">
-          {plan.entrySignal}
-        </p>
+      {plan.indicatorChips.length > 0 && (
+        <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+          {plan.indicatorChips.map((chip) => (
+            <IndicatorChip
+              key={`${plan.symbol}-${chip.label}`}
+              label={chip.label}
+              value={chip.value}
+              tone={chip.tone}
+            />
+          ))}
+        </div>
       )}
 
-      {plan.minOrderRuleActive && plan.splitExplanation && (
-        <p className="mb-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-300 transition-all duration-300 ease-in-out">
-          {plan.splitExplanation}
-        </p>
-      )}
+      <AnimatePresence mode="wait">
+        {plan.entrySignal && (
+          <motion.p
+            key={plan.entrySignal}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+            className="mb-3 rounded-xl border border-emerald-500/20 bg-emerald-500/5 px-3 py-2 text-[10px] font-medium leading-relaxed text-emerald-400"
+          >
+            {plan.entrySignal}
+          </motion.p>
+        )}
+      </AnimatePresence>
 
-      {!plan.minOrderRuleActive && plan.splitExplanation && (
-        <p className="mb-3 text-[10px] font-medium leading-relaxed text-zinc-500 transition-all duration-300 ease-in-out">
-          {plan.splitExplanation}
-        </p>
-      )}
-
-      {plan.safetyBrakeActive && (
-        <p className="mb-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-1.5 text-[10px] text-amber-400/90 transition-all duration-300 ease-in-out">
-          Safety Brake: BTC vysoko nad 200D SMA — posilnený Limit podiel
-        </p>
-      )}
+      <AnimatePresence mode="wait">
+        {plan.minOrderRuleActive && plan.splitExplanation ? (
+          <motion.p
+            key={`min-${plan.splitExplanation}`}
+            initial={{ opacity: 0, y: 6, scale: 0.98 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.98 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+            className="mb-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-300"
+          >
+            {plan.splitExplanation}
+          </motion.p>
+        ) : (
+          plan.splitExplanation && (
+            <motion.p
+              key={`split-${plan.splitExplanation}`}
+              initial={{ opacity: 0, y: 4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              transition={{ duration: 0.45, ease: "easeInOut" }}
+              className={`mb-3 text-[10px] font-medium leading-relaxed ${smoothColorClass} ${
+                plan.safetyBrakeActive ? "text-amber-400/90" : "text-zinc-500"
+              }`}
+            >
+              {plan.splitExplanation}
+            </motion.p>
+          )
+        )}
+      </AnimatePresence>
 
       <div className="mb-2 flex h-3 overflow-hidden rounded-full bg-zinc-800/80">
         <motion.div
@@ -246,8 +368,8 @@ function ExecutionOrderCard({
             <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-400">
               MKT
             </span>
-            <span className="text-[10px] font-medium tabular-nums text-zinc-500 transition-all duration-1000 ease-in-out">
-              {plan.marketShare}%
+            <span className="text-[10px] font-medium tabular-nums text-zinc-500">
+              <ShareDisplay value={plan.marketShare} />
             </span>
           </div>
           <p className="mt-1 text-base font-bold text-white">
@@ -270,15 +392,15 @@ function ExecutionOrderCard({
             <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
               LMT
             </span>
-            <span className="text-[10px] font-medium tabular-nums text-zinc-500 transition-all duration-1000 ease-in-out">
-              {plan.limitShare}%
+            <span className="text-[10px] font-medium tabular-nums text-zinc-500">
+              <ShareDisplay value={plan.limitShare} />
             </span>
           </div>
           <p className="mt-1 text-base font-bold text-white">
             <OrderAmountDisplay value={plan.limitUsd} />
           </p>
           {plan.limitPrice > 0 && (
-            <p className="mt-0.5 text-[10px] text-orange-400/70">
+            <p className="mt-0.5 text-[10px] text-orange-400/70 transition-all duration-500 ease-in-out">
               @ {formatUnitPrice(plan.limitPrice)}
             </p>
           )}
@@ -295,16 +417,25 @@ function ExecutionOrderCard({
         </div>
       </div>
 
-      {plan.limitShare > 0 && plan.whyLimit && (
-        <div className="mt-3 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
-          <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
-            Prečo limit?
-          </p>
-          <p className="mt-1 text-xs leading-relaxed text-zinc-400">
-            {plan.whyLimit}
-          </p>
-        </div>
-      )}
+      <AnimatePresence mode="wait">
+        {plan.limitShare > 0 && plan.whyLimit && (
+          <motion.div
+            key={plan.whyLimit}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.5, ease: "easeInOut" }}
+            className="mt-3 rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5"
+          >
+            <p className="text-[9px] font-bold uppercase tracking-wider text-zinc-500">
+              Prečo limit?
+            </p>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-400 transition-all duration-500 ease-in-out">
+              {plan.whyLimit}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.article>
   );
 }
@@ -314,6 +445,8 @@ export function ExecutionEngineCards({
   deployedCapital = 0,
   loading = false,
   tradingMode,
+  yieldConvictionCount = 0,
+  yieldUniverseCount = 0,
   onDeployAll,
   onDeployLeg,
 }: ExecutionEngineCardsProps) {
@@ -323,6 +456,16 @@ export function ExecutionEngineCards({
       onDeployAll,
       onDeployLeg,
     });
+
+  const yieldCountLabel = useMemo(() => {
+    if (yieldUniverseCount > 0) {
+      return `${yieldConvictionCount}/${yieldUniverseCount} yield conviction (filter 3/3)`;
+    }
+    const yieldOrders = finalExecutionOrders.filter(
+      (order) => order.category === "yield",
+    ).length;
+    return `${yieldOrders} yield tokenov`;
+  }, [finalExecutionOrders, yieldConvictionCount, yieldUniverseCount]);
 
   const masterLabel = useMemo(() => {
     if (masterState === "loading") return "Odosielam všetky príkazy...";
@@ -353,7 +496,7 @@ export function ExecutionEngineCards({
           Dynamic Split · MKT / LMT
         </h3>
         <p className="mt-1 text-[10px] text-zinc-500">
-          {finalExecutionOrders.length} tokenov • filter 3/3 yield •{" "}
+          {finalExecutionOrders.length} tokenov • {yieldCountLabel} •{" "}
           {tradingMode === "live" ? "Live Trading" : "Simulácia"} • celkom{" "}
           <span className="font-semibold text-emerald-400">
             {formatUsd(ordersTotal)}
@@ -368,7 +511,7 @@ export function ExecutionEngineCards({
       </div>
 
       {deployError && (
-        <p className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-400/90 transition-all duration-300">
+        <p className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-400/90 transition-all duration-500 ease-in-out">
           {deployError}
         </p>
       )}

@@ -310,6 +310,8 @@ export function DcaEngine({
             deployedCapital={totalDeployed}
             loading={loading}
             tradingMode={tradingMode}
+            yieldConvictionCount={bucketing?.yieldAltcoins.conviction.length ?? 0}
+            yieldUniverseCount={bucketing?.yieldAltcoinCount ?? 0}
             onDeployAll={handleDeployAll}
             onDeployLeg={handleDeployLeg}
           />

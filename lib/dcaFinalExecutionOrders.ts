@@ -6,10 +6,12 @@ import {
   toExecutionMarketContext,
   type ExecutionMarketContext,
 } from "@/lib/dcaExecutionLogic";
+import { buildTokenIndicatorSnapshot } from "@/lib/dcaTokenIndicators";
 import type { PortfolioBucketingResult } from "@/lib/dcaPortfolioBucketing";
 import type { ConfidenceLevel, MasterTokenPlan } from "@/lib/masterDcaEngine";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { MarketDataServicePayload } from "@/lib/dcaMarketData";
+import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
@@ -25,6 +27,15 @@ interface AmountRow {
   atr14dPct: number | null;
   filtersPassedCount?: number;
   fundamentalScore?: number;
+  filterConditions?: YieldFilterCondition[];
+  convictionScore?: number;
+  tag?: string;
+  priceVsSma14Pct?: number;
+}
+
+function ema50DeviationPct(spot: number, ema50: number | null | undefined): number | null {
+  if (!spot || !ema50 || ema50 <= 0) return null;
+  return Math.round(((spot - ema50) / ema50) * 1000) / 10;
 }
 
 function collectAmountRows(bucketing: PortfolioBucketingResult): AmountRow[] {
@@ -61,6 +72,10 @@ function collectAmountRows(bucketing: PortfolioBucketingResult): AmountRow[] {
       atr14dPct: conviction.atr14Pct ?? null,
       filtersPassedCount: conviction.filtersPassedCount,
       fundamentalScore: conviction.fundamentalScore,
+      filterConditions: conviction.conditions,
+      convictionScore: conviction.convictionScore,
+      tag: conviction.tag,
+      priceVsSma14Pct: conviction.priceVsSma14Pct,
     });
   }
 
@@ -153,9 +168,28 @@ export function buildFinalExecutionOrders(
         marketContext,
         filtersPassedCount: row.filtersPassedCount,
         fundamentalScore: row.fundamentalScore,
+        filterConditions: row.filterConditions,
       });
 
       const split = resolveCategoryExecutionSplit(tokenInput);
+      const distSma200Pct =
+        category === "core" ? (tokenInput.distSma200Pct ?? null) : null;
+      const ema50 =
+        category === "core"
+          ? (tokenInput.ema50 ?? marketContext?.btc.ema50 ?? null)
+          : null;
+      const indicatorSnapshot = buildTokenIndicatorSnapshot({
+        category,
+        symbol: row.symbol,
+        rsi14: tokenInput.rsi14,
+        atr14dPct: tokenInput.atr14dPct,
+        distSma200Pct,
+        ema50DeviationPct: ema50DeviationPct(spotPrice, ema50),
+        priceVsSma14Pct: row.priceVsSma14Pct ?? null,
+        fundamentalScore: row.fundamentalScore ?? null,
+        convictionScore: row.convictionScore ?? null,
+        safetyBrakeActive: split.safetyBrakeActive,
+      });
       const totalUsd = row.amountUsd;
       const { marketUsd, limitUsd } = splitUsdAmounts(
         totalUsd,
@@ -194,6 +228,20 @@ export function buildFinalExecutionOrders(
         minOrderRuleActive: split.minOrderRuleActive,
         safetyBrakeActive: split.safetyBrakeActive,
         limitPullbackPct: split.limitPullbackPct,
+        indicatorChips: indicatorSnapshot.chips,
+        regimeStatusLabel: indicatorSnapshot.regimeStatusLabel,
+        regimeStatusTone: indicatorSnapshot.regimeStatusTone,
+        fearGreedValue: input.fearGreedValue,
+        rsi14: tokenInput.rsi14,
+        atr14dPct: tokenInput.atr14dPct,
+        distSma200Pct,
+        ema50DeviationPct: ema50DeviationPct(spotPrice, ema50),
+        fundamentalScore: row.fundamentalScore ?? null,
+        filtersPassedCount: row.filtersPassedCount ?? null,
+        filterConditions: row.filterConditions ?? [],
+        convictionScore: row.convictionScore ?? null,
+        tag: row.tag ?? null,
+        priceVsSma14Pct: row.priceVsSma14Pct ?? null,
       };
     });
 }

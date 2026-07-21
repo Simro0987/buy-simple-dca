@@ -1,5 +1,10 @@
+import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
+import type {
+  RegimeStatusTone,
+  TokenIndicatorChip,
+} from "@/lib/dcaTokenIndicators";
 
 export const DEFAULT_WEEKLY_INVESTMENT = 431;
 
@@ -30,6 +35,20 @@ export interface TokenExecutionPlan {
   minOrderRuleActive: boolean;
   safetyBrakeActive: boolean;
   limitPullbackPct: number;
+  indicatorChips: TokenIndicatorChip[];
+  regimeStatusLabel: string;
+  regimeStatusTone: RegimeStatusTone;
+  fearGreedValue: number;
+  rsi14: number | null;
+  atr14dPct: number | null;
+  distSma200Pct: number | null;
+  ema50DeviationPct: number | null;
+  fundamentalScore: number | null;
+  filtersPassedCount: number | null;
+  filterConditions: YieldFilterCondition[];
+  convictionScore: number | null;
+  tag: string | null;
+  priceVsSma14Pct: number | null;
 }
 
 export interface RegimeFactorDisplay {
