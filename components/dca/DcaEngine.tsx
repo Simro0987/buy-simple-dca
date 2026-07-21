@@ -2,6 +2,7 @@
 
 import { LayoutGroup, motion } from "framer-motion";
 import { DcaMarketRegimeCard } from "@/components/dca/DcaHeroDashboard";
+import { DcaBacktestModule } from "@/components/dca/DcaBacktestModule";
 import { ExtremeMarketAlertBanner } from "@/components/dca/ExtremeMarketAlertBanner";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
@@ -304,6 +305,15 @@ export function DcaEngine({
             onDeployLeg={handleDeployLeg}
           />
         </>
+      )}
+
+      {displayResult && (
+        <DcaBacktestModule
+          finalScore={displayResult.confluenceScore}
+          fearGreed={displayResult.fearGreedValue}
+          regimeLabel={displayResult.regimeLabel}
+          allocationPercent={displayResult.allocationPercent}
+        />
       )}
 
       <motion.div
