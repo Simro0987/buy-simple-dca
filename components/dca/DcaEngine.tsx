@@ -2,6 +2,7 @@
 
 import { LayoutGroup, motion } from "framer-motion";
 import { DcaMarketRegimeCard } from "@/components/dca/DcaHeroDashboard";
+import { ExtremeMarketAlertBanner } from "@/components/dca/ExtremeMarketAlertBanner";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
@@ -236,6 +237,13 @@ export function DcaEngine({
           </button>
         </div>
       </motion.div>
+
+      {displayResult && (
+        <ExtremeMarketAlertBanner
+          finalScore={displayResult.confluenceScore}
+          fearGreed={displayResult.fearGreedValue}
+        />
+      )}
 
       {/* A — Weekly investment + capital pipeline */}
       <motion.div layout className="space-y-6">
