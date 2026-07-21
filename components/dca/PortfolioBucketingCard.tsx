@@ -5,6 +5,7 @@ import { Check, Loader2, Shield, X } from "lucide-react";
 import { useCountUp } from "@/hooks/useCountUp";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUsd } from "@/lib/data";
+import { formatPct } from "@/lib/numberFormat";
 import {
   smoothColorClass,
   smoothWidthClass,
@@ -79,7 +80,7 @@ function TokenRow({ row }: { row: TokenAllocationRow }) {
             {formatUsd(animatedAmount)}
           </p>
           <p className="text-[10px] text-zinc-500">
-            {row.percentOfTotal.toFixed(1)}% celku
+            {formatPct(row.percentOfTotal, 1)} celku
           </p>
         </div>
       </div>
@@ -175,7 +176,7 @@ function YieldAltcoinRowItem({
               {Math.round(convictionRow.weight).toLocaleString("en-US")}
             </p>
             <p className="text-[10px] font-semibold tabular-nums text-teal-300/90">
-              {convictionRow.shareOfYieldPercent.toFixed(1)}% Yield kôša •{" "}
+              {formatPct(convictionRow.shareOfYieldPercent, 1)} Yield kôša •{" "}
               {formatUsd(convictionRow.amountUsd)}
             </p>
             <div className="mt-2 h-1 overflow-hidden rounded-full bg-zinc-800">

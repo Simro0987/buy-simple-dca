@@ -6,6 +6,7 @@ import {
   EXTREME_MARKET_ALERT_COPY,
   resolveExtremeMarketAlert,
 } from "@/lib/dcaExtremeMarketAlert";
+import { formatDecimal } from "@/lib/numberFormat";
 
 interface ExtremeMarketAlertBannerProps {
   finalScore: number;
@@ -64,7 +65,7 @@ export function ExtremeMarketAlertBanner({
                 {EXTREME_MARKET_ALERT_COPY[alertKind]}
               </p>
               <p className="mt-1.5 text-[10px] tabular-nums text-zinc-600 transition-all duration-500 ease-in-out">
-                Final Score {finalScore.toFixed(1)} • Fear & Greed{" "}
+                Final Score {formatDecimal(finalScore, 1)} • Fear & Greed{" "}
                 {Math.round(fearGreed)}
               </p>
             </div>

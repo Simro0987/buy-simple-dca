@@ -9,6 +9,11 @@ import { useConfluenceOctagon } from "@/hooks/useConfluenceOctagon";
 import { useTokenExecutionAdvisor } from "@/hooks/useTokenExecutionAdvisor";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { Transaction, TrackedAsset } from "@/lib/portfolioStorage";
+import {
+  formatMultiplier,
+  formatPct,
+  formatSignedPct,
+} from "@/lib/numberFormat";
 
 const GRADE_COLORS: Record<string, string> = {
   A: "text-emerald-300",
@@ -146,17 +151,17 @@ export function ExecutionPerformanceSection({
         >
           <MetricTile
             label="Alpha vs Market"
-            value={`${advisor.alphaVsMarketPct >= 0 ? "+" : ""}${advisor.alphaVsMarketPct.toFixed(1)} %`}
+            value={formatSignedPct(advisor.alphaVsMarketPct, 1)}
             tone={advisor.alphaVsMarketPct >= 0 ? "positive" : "negative"}
           />
           <MetricTile
             label="7D Market DCA"
-            value={`${advisor.marketDcaBaselinePct >= 0 ? "+" : ""}${advisor.marketDcaBaselinePct.toFixed(1)} %`}
+            value={formatSignedPct(advisor.marketDcaBaselinePct, 1)}
             tone="neutral"
           />
           <MetricTile
             label="Ø Reward"
-            value={`${advisor.rewardScore >= 0 ? "+" : ""}${advisor.rewardScore.toFixed(1)}`}
+            value={formatSignedPct(advisor.rewardScore, 1)}
             tone={advisor.rewardScore >= 0 ? "positive" : "negative"}
           />
           <div className="rounded-2xl border border-white/5 bg-white/[0.02] px-3 py-2.5">
@@ -186,7 +191,7 @@ export function ExecutionPerformanceSection({
             >
               <MetricTile
                 label="APY výnos"
-                value={`${advisor.yieldSatelliteMetrics.apyPct.toFixed(1)} %`}
+                value={formatPct(advisor.yieldSatelliteMetrics.apyPct, 1)}
                 sublabel={
                   advisor.yieldSatelliteMetrics.apyIsEstimated
                     ? advisor.yieldSatelliteMetrics.apySourceLabel
@@ -196,17 +201,17 @@ export function ExecutionPerformanceSection({
               />
               <MetricTile
                 label="IL Risk / Reward"
-                value={`${advisor.yieldSatelliteMetrics.ilRiskRewardRatio.toFixed(1)}×`}
+                value={formatMultiplier(advisor.yieldSatelliteMetrics.ilRiskRewardRatio, 1)}
                 tone="neutral"
               />
               <MetricTile
                 label="Staking Multiplier"
-                value={`${advisor.yieldSatelliteMetrics.stakingYieldMultiplier.toFixed(2)}×`}
+                value={formatMultiplier(advisor.yieldSatelliteMetrics.stakingYieldMultiplier, 2)}
                 tone="positive"
               />
               <MetricTile
                 label="Limitný pás"
-                value={`${advisor.yieldSatelliteMetrics.atrLimitMultiplier.toFixed(1)}×ATR`}
+                value={`${formatMultiplier(advisor.yieldSatelliteMetrics.atrLimitMultiplier, 1)}ATR`}
                 tone="neutral"
               />
             </motion.div>

@@ -1,17 +1,12 @@
-/** Clipboard-friendly amounts with comma decimal separator (SK style). */
+/** Clipboard-friendly amounts and limit prices (SK comma style). */
 
-function formatDecimal(value: number, fractionDigits: number): string {
-  return new Intl.NumberFormat("sk-SK", {
-    minimumFractionDigits: fractionDigits,
-    maximumFractionDigits: fractionDigits,
-    useGrouping: false,
-  }).format(value);
-}
+import {
+  formatCopyAmount4,
+  formatDecimal,
+  formatNumber4,
+} from "@/lib/numberFormat";
 
-/** Market / Limit purchase sum — exactly 2 decimal places, comma separator. */
-export function formatCopyAmount2(value: number): string {
-  return formatDecimal(Math.max(0, value), 2);
-}
+export { formatCopyAmount4, formatCopyAmount2 } from "@/lib/numberFormat";
 
 /**
  * Rounds to 4 decimal places and ensures the 4th digit is 1–9 (never 0).
@@ -40,3 +35,6 @@ export function formatCopyLimitPrice4(value: number): string {
   const normalized = normalizeLimitPrice(value);
   return formatDecimal(normalized, 4);
 }
+
+/** @deprecated Use formatNumber4 */
+export const formatCopyLimitPrice = formatNumber4;

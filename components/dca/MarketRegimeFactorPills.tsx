@@ -8,6 +8,7 @@ import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { useMarketRegimeFactors } from "@/hooks/useMarketRegimeFactors";
 import { buildMarketRegimeFactors } from "@/lib/dcaMarketRegimeFactors";
 import { formatUnitPrice } from "@/lib/data";
+import { formatDecimal, formatPct } from "@/lib/numberFormat";
 import { getScoreColor } from "@/lib/dcaScoreColors";
 import { smoothColorClass } from "@/lib/motion";
 
@@ -135,7 +136,7 @@ export function MarketRegimeFactorPills() {
                 }`}
               >
                 {data.distWmaPct >= 0 ? "+" : ""}
-                {data.distWmaPct.toFixed(2)}%
+                {formatPct(data.distWmaPct, 2)}
               </span>
               {loading && (
                 <span className="text-[9px] text-zinc-600">• obnovujem…</span>

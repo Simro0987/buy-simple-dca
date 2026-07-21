@@ -5,11 +5,12 @@ import Image from "next/image";
 import { useMemo } from "react";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { CopyValueButton } from "@/components/ui/CopyValueButton";
-import { formatUnitPrice, formatUsd } from "@/lib/data";
+import { formatUsd, formatUnitPrice } from "@/lib/data";
 import {
-  formatCopyAmount2,
+  formatCopyAmount4,
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
+import { formatPct, formatSignedPct } from "@/lib/numberFormat";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -138,39 +139,26 @@ function DeployLegButton({
   );
 }
 
-function CopyableAmountRow({
-  label,
+function OrderAmountDisplay({
   value,
-  formatted,
+  copyable = false,
 }: {
-  label: string;
   value: number;
-  formatted: string;
+  copyable?: boolean;
 }) {
-  if (value <= 0) return null;
+  const animated = useCountUp(value, 1000);
+  const formatted = formatCopyAmount4(animated);
 
   return (
-    <div className="mt-1.5">
-      <p className="text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
-        {label}
-      </p>
-      <div className="mt-0.5 flex items-center gap-1">
-        <p className="text-xs font-bold tabular-nums text-white">{formatted}</p>
+    <span className="inline-flex items-center gap-1 tabular-nums transition-all duration-1000 ease-in-out">
+      {formatUsd(animated)}
+      {copyable && value > 0 ? (
         <CopyValueButton
           compact
           value={formatted}
           label="Kopírovať sumu"
         />
-      </div>
-    </div>
-  );
-}
-
-function OrderAmountDisplay({ value }: { value: number }) {
-  const animated = useCountUp(value, 1000);
-  return (
-    <span className="tabular-nums transition-all duration-1000 ease-in-out">
-      {formatUsd(animated)}
+      ) : null}
     </span>
   );
 }
@@ -179,7 +167,7 @@ function ShareDisplay({ value }: { value: number }) {
   const animated = useCountUp(value, 800);
   return (
     <span className="tabular-nums transition-all duration-1000 ease-in-out">
-      {animated.toFixed(1)}%
+      {formatPct(animated, 1)}
     </span>
   );
 }
@@ -248,12 +236,12 @@ function ExecutionOrderCard({
 
   const yieldHeader =
     plan.category === "yield" && plan.convictionScore != null
-      ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14?.toFixed(0) ?? "—"} • MA ${plan.priceVsSma14Pct != null ? `${plan.priceVsSma14Pct >= 0 ? "+" : ""}${plan.priceVsSma14Pct.toFixed(0)}%` : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
+      ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14?.toFixed(0) ?? "—"} • MA ${plan.priceVsSma14Pct != null ? formatSignedPct(plan.priceVsSma14Pct, 0) : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
       : null;
 
   const yieldAllocationLabel =
     plan.category === "yield" && plan.shareOfYieldPercent != null
-      ? `${plan.shareOfYieldPercent.toFixed(1)}% Yield kôša • ${formatUsd(plan.totalUsd)}${
+      ? `${formatPct(plan.shareOfYieldPercent, 1)} Yield kôša • ${formatUsd(plan.totalUsd)}${
           plan.yieldWeight != null
             ? ` • váha S^${YIELD_FILTER_THRESHOLDS.weightExponent} = ${Math.round(plan.yieldWeight).toLocaleString("en-US")}`
             : ""
@@ -334,8 +322,7 @@ function ExecutionOrderCard({
                   <PriceSkeleton className="inline-block h-3 w-20" />
                 ) : plan.marketStatusFallback ? (
                   <span className="text-amber-400/80">
-                    Market Status · {plan.change24h >= 0 ? "+" : ""}
-                    {plan.change24h.toFixed(1)}% 24h
+                    Market Status · {formatSignedPct(plan.change24h, 1)} 24h
                   </span>
                 ) : (
                   <>Live @ {formatUnitPrice(unitPrice)}</>
@@ -455,13 +442,8 @@ function ExecutionOrderCard({
             </span>
           </div>
           <p className="mt-1 text-base font-bold text-white">
-            <OrderAmountDisplay value={plan.marketUsd} />
+            <OrderAmountDisplay value={plan.marketUsd} copyable />
           </p>
-          <CopyableAmountRow
-            label="Suma za nákup (Market)"
-            value={plan.marketUsd}
-            formatted={formatCopyAmount2(plan.marketUsd)}
-          />
           {plan.marketUsd > 0 && (
             <div className="mt-2.5">
               <DeployLegButton
@@ -485,13 +467,8 @@ function ExecutionOrderCard({
             </span>
           </div>
           <p className="mt-1 text-base font-bold text-white">
-            <OrderAmountDisplay value={plan.limitUsd} />
+            <OrderAmountDisplay value={plan.limitUsd} copyable />
           </p>
-          <CopyableAmountRow
-            label="Suma za nákup (Limit)"
-            value={plan.limitUsd}
-            formatted={formatCopyAmount2(plan.limitUsd)}
-          />
           {plan.limitPrice > 0 && (
             <div className="mt-1.5">
               <div className="flex flex-wrap items-center gap-1.5">

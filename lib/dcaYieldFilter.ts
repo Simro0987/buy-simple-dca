@@ -1,5 +1,6 @@
 import { DCA_YIELD_TOKENS } from "@/lib/dcaMarketData";
 import { clamp, lerpScore } from "@/lib/dcaTechnicalIndicators";
+import type { YieldApySource } from "@/lib/yieldDataSources";
 
 export const YIELD_FILTER_THRESHOLDS = {
   rsiMax: 50,
@@ -15,8 +16,6 @@ export interface YieldFilterCondition {
   passed: boolean;
   detail: string;
 }
-
-import type { YieldApySource } from "@/lib/yieldDataSources";
 
 export interface YieldTokenMetrics {
   symbol: string;

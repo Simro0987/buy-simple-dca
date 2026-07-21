@@ -39,6 +39,7 @@ import {
 import { fetchAllTokenOctagonSnapshots } from "@/lib/tokenOctagonData";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
+import { formatUsd } from "@/lib/data";
 import { RefreshCw, ShoppingCart } from "lucide-react";
 import { useCallback, useEffect, useMemo } from "react";
 
@@ -469,7 +470,7 @@ export function DcaEngine({
           Celková týždenná alokácia
         </p>
         <p className="mt-0.5 text-2xl font-bold text-emerald-400">
-          ${totalDeployed.toFixed(2)}
+          {formatUsd(totalDeployed)}
         </p>
         {displayResult?.brakeActive && (
           <p className="mt-1 text-[10px] font-medium text-orange-400">

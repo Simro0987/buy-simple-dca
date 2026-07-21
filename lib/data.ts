@@ -29,33 +29,19 @@ export const portfolioData = {
   assets: [],
 };
 
-export function formatUsd(value: number, options?: { showSign?: boolean }) {
-  const formatted = new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(Math.abs(value));
+export {
+  formatCopyAmount4,
+  formatDecimal,
+  formatNumber4,
+  formatPct,
+  formatSignedPct,
+  formatUnitPrice,
+  formatUsd,
+} from "@/lib/numberFormat";
 
-  if (options?.showSign && value > 0) return `+${formatted}`;
-  if (options?.showSign && value < 0) return `-${formatted}`;
-  return formatted;
-}
+import { formatDecimal } from "@/lib/numberFormat";
 
 export function formatCrypto(value: number, symbol: string) {
-  const decimals = symbol === "BTC" ? 4 : symbol === "ETH" ? 3 : 2;
-  return `${value.toFixed(decimals)} ${symbol}`;
-}
-
-export function formatUnitPrice(value: number) {
-  if (value >= 1000) {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  }
-
-  return formatUsd(value);
+  const decimals = symbol === "BTC" ? 4 : symbol === "ETH" ? 4 : 4;
+  return `${formatDecimal(value, decimals)} ${symbol}`;
 }

@@ -9,6 +9,7 @@ import {
   type DcaBacktestStrategyMetrics,
 } from "@/lib/dcaBacktestMetrics";
 import { smoothColorClass } from "@/lib/motion";
+import { formatDecimal, formatSignedPct } from "@/lib/numberFormat";
 
 interface DcaBacktestModuleProps {
   finalScore: number;
@@ -86,12 +87,12 @@ function StrategyColumn({
       <div className="space-y-2">
         <MetricRow
           label="Cost basis index (12M)"
-          value={animatedCostIndex.toFixed(1)}
+          value={formatDecimal(animatedCostIndex, 1)}
           accentClass={isDynamic ? "text-emerald-400" : "text-zinc-300"}
         />
         <MetricRow
           label="Efektívnosť akumulácie"
-          value={`${animatedEfficiency.toFixed(1)} / 100`}
+          value={`${formatDecimal(animatedEfficiency, 1)} / 100`}
           accentClass={isDynamic ? "text-emerald-400" : "text-zinc-300"}
         />
         <MetricRow
@@ -171,7 +172,7 @@ export function DcaBacktestModule({
           </div>
         </div>
         <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-[10px] font-bold text-emerald-400 transition-all duration-700 ease-in-out">
-          +{animatedAdvantage.toFixed(1)} % edge
+          {formatSignedPct(animatedAdvantage, 1)} edge
         </span>
       </div>
 

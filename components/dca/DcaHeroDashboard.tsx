@@ -6,6 +6,7 @@ import { useCountUp } from "@/hooks/useCountUp";
 import type { ConfidenceLevel } from "@/lib/masterDcaEngine";
 import { getScoreColor } from "@/lib/dcaScoreColors";
 import { formatUsd } from "@/lib/data";
+import { formatDecimal, formatPct } from "@/lib/numberFormat";
 import { smoothColorClass, smoothWidthTransition } from "@/lib/motion";
 
 interface DcaHeroSharedProps {
@@ -95,7 +96,7 @@ export function DcaMarketRegimeCard({
         >
           <Shield className="h-3 w-3" />
           Confidence {CONFIDENCE_LABELS[confidence]} • ×
-          {confidenceMultiplier.toFixed(2)}
+          {formatDecimal(confidenceMultiplier, 2)}
         </span>
       </div>
 
@@ -108,7 +109,7 @@ export function DcaMarketRegimeCard({
             <span
               className={`text-5xl font-black tabular-nums leading-none ${smoothColorClass} ${scoreColor.text}`}
             >
-              {animatedScore.toFixed(1)}
+              {formatDecimal(animatedScore, 1)}
             </span>
             <span className="text-lg font-medium text-zinc-600">/100</span>
           </p>
@@ -130,11 +131,11 @@ export function DcaMarketRegimeCard({
             Alokácia
           </p>
           <p className="mt-2 text-5xl font-black tabular-nums leading-none text-white transition-all duration-700 ease-out">
-            {animatedAllocation.toFixed(1)}%
+            {formatPct(animatedAllocation, 1)}
           </p>
           <p className="mt-2 text-[11px] text-zinc-500">
-            anchor {dynamicAnchor.toFixed(2)} − score×{dynamicSlope.toFixed(2)}{" "}
-            • × {confidenceMultiplier.toFixed(2)}
+            anchor {formatDecimal(dynamicAnchor, 2)} − score×{formatDecimal(dynamicSlope, 2)}{" "}
+            • × {formatDecimal(confidenceMultiplier, 2)}
           </p>
           <p
             className={`mt-4 text-xl font-bold ${smoothColorClass} ${scoreColor.text}`}

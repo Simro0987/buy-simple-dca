@@ -1,5 +1,6 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
+import { formatDecimal, formatSignedPct } from "@/lib/numberFormat";
 
 export interface LimitReasoningInput {
   symbol: string;
@@ -29,7 +30,7 @@ export function computeBelowSpotPercent(
 
 export function formatBelowSpotLabel(pct: number): string {
   if (pct <= 0) return "na úrovni spotu";
-  return `−${pct.toFixed(1)}% pod spotom`;
+  return `−${formatDecimal(pct, 1)}% pod spotom`;
 }
 
 function emaDeviationPct(spot: number, ema50: number): number | null {
@@ -53,12 +54,12 @@ function buildCoreReasoning(input: LimitReasoningInput, belowPct: number): strin
     emaDev == null
       ? "50D EMA nie je k dispozícii"
       : emaDev >= 0
-        ? `${emaDev.toFixed(1)}% nad 50D EMA`
-        : `${Math.abs(emaDev).toFixed(1)}% pod 50D EMA`;
+        ? `${formatDecimal(emaDev, 1)}% nad 50D EMA`
+        : `${formatDecimal(Math.abs(emaDev), 1)}% pod 50D EMA`;
   const smaText =
     distSma >= 0
-      ? `${distSma.toFixed(1)}% nad 200D SMA`
-      : `${Math.abs(distSma).toFixed(1)}% pod 200D SMA`;
+      ? `${formatDecimal(distSma, 1)}% nad 200D SMA`
+      : `${formatDecimal(Math.abs(distSma), 1)}% pod 200D SMA`;
 
   const brakeNote = input.safetyBrakeActive
     ? "Safety Brake posúva limit hlbšie pod trh."
@@ -66,7 +67,7 @@ function buildCoreReasoning(input: LimitReasoningInput, belowPct: number): strin
 
   return (
     `BTC Core: ${smaText}, ${emaText}. ` +
-    `Limit ${formatBelowSpotLabel(belowPct)} (ATR ${atr.toFixed(1)}%, cieľ ${belowPct.toFixed(1)}% pod spotom). ` +
+    `Limit ${formatBelowSpotLabel(belowPct)} (ATR ${formatDecimal(atr, 1)}%, cieľ ${formatDecimal(belowPct, 1)}% pod spotom). ` +
     `F&G ${Math.round(input.fearGreedValue ?? 50)}. ${brakeNote}`
   );
 }
@@ -83,11 +84,11 @@ function buildSatelliteReasoning(
   const rsi = input.rsi14 ?? 50;
   const atr = input.atr14dPct ?? 0;
   const mult = input.atrMultiplier ?? 1.8;
-  const depth = (mult * atr).toFixed(1);
+  const depth = formatDecimal(mult * atr, 1);
 
   return (
     `${input.symbol} Satellite: RSI ${rsi.toFixed(0)} (${rsiTone(rsi)}). ` +
-    `ATR ${atr.toFixed(1)}% → limit Spot − ${mult}×ATR (−${depth}% hĺbka). ` +
+    `ATR ${formatDecimal(atr, 1)}% → limit Spot − ${mult}×ATR (−${depth}% hĺbka). ` +
     `Finálna vzdialenosť ${formatBelowSpotLabel(belowPct)} od aktuálnej ceny.`
   );
 }
@@ -107,11 +108,11 @@ function buildYieldReasoning(input: LimitReasoningInput, belowPct: number): stri
   const maText =
     ma == null
       ? "MA14 N/A"
-      : `${ma >= 0 ? "+" : ""}${ma.toFixed(1)}% vs MA14`;
+      : `${formatSignedPct(ma, 1)} vs MA14`;
 
   return (
     `${input.symbol} Yield: ${maText}, RSI ${rsi.toFixed(0)}, fundament ${Math.round(fund)} (${filters}/3 filter). ` +
-    `Limit ${formatBelowSpotLabel(belowPct)} cez ${mult}×ATR (${atr.toFixed(1)}%) — ` +
+    `Limit ${formatBelowSpotLabel(belowPct)} cez ${mult}×ATR (${formatDecimal(atr, 1)}%) — ` +
     `hľadáme likvidačný knot bez preplatenia altcoinu.`
   );
 }

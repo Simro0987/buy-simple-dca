@@ -1,6 +1,12 @@
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
+import {
+  formatDecimal,
+  formatMultiplier,
+  formatPct,
+  formatSignedPct,
+} from "@/lib/numberFormat";
 
 export type IndicatorTone = "neutral" | "bullish" | "bearish" | "warning";
 
@@ -22,9 +28,8 @@ function round1(value: number): number {
   return Math.round(value * 10) / 10;
 }
 
-function formatSignedPct(value: number): string {
-  const sign = value >= 0 ? "+" : "";
-  return `${sign}${round1(value)}%`;
+function formatSignedPctValue(value: number): string {
+  return formatSignedPct(value, 1);
 }
 
 function rsiTone(rsi: number): IndicatorTone {
@@ -55,7 +60,7 @@ export function buildTokenIndicatorSnapshot(input: {
     if (input.distSma200Pct != null) {
       chips.push({
         label: "200D SMA",
-        value: formatSignedPct(input.distSma200Pct),
+        value: formatSignedPctValue(input.distSma200Pct),
         tone:
           input.distSma200Pct >= 15
             ? "warning"
@@ -76,7 +81,7 @@ export function buildTokenIndicatorSnapshot(input: {
     if (input.ema50DeviationPct != null) {
       chips.push({
         label: "50D EMA",
-        value: formatSignedPct(input.ema50DeviationPct),
+        value: formatSignedPctValue(input.ema50DeviationPct),
         tone:
           input.ema50DeviationPct >= 0 ? "warning" : "bullish",
       });
@@ -100,12 +105,12 @@ export function buildTokenIndicatorSnapshot(input: {
       chips.push(
         {
           label: apyLabel,
-          value: `${metrics.apyPct.toFixed(1)}%`,
+          value: formatPct(metrics.apyPct, 1),
           tone: metrics.apyPct >= 6 ? "bullish" : "neutral",
         },
         {
           label: "IL R/R",
-          value: `${metrics.ilRiskRewardRatio.toFixed(1)}×`,
+          value: formatMultiplier(metrics.ilRiskRewardRatio, 1),
           tone:
             metrics.ilRiskRewardRatio >= 1.5
               ? "bullish"
@@ -115,12 +120,12 @@ export function buildTokenIndicatorSnapshot(input: {
         },
         {
           label: "Staking",
-          value: `${metrics.stakingYieldMultiplier.toFixed(2)}×`,
+          value: formatMultiplier(metrics.stakingYieldMultiplier, 2),
           tone: "bullish",
         },
         {
           label: "ATR pás",
-          value: `${metrics.atrLimitMultiplier.toFixed(1)}×`,
+          value: formatMultiplier(metrics.atrLimitMultiplier, 1),
           tone: "neutral",
         },
       );
@@ -135,7 +140,7 @@ export function buildTokenIndicatorSnapshot(input: {
       if (atr != null) {
         chips.push({
           label: "ATR",
-          value: `${round1(atr)}%`,
+          value: `${formatDecimal(atr, 1)}%`,
           tone: "neutral",
         });
       }
@@ -160,12 +165,12 @@ export function buildTokenIndicatorSnapshot(input: {
     chips.push(
       {
         label: apyLabel,
-        value: `${metrics.apyPct.toFixed(1)}%`,
+        value: formatPct(metrics.apyPct, 1),
         tone: metrics.apyPct >= 8 ? "bullish" : "neutral",
       },
       {
         label: "IL R/R",
-        value: `${metrics.ilRiskRewardRatio.toFixed(1)}×`,
+        value: formatMultiplier(metrics.ilRiskRewardRatio, 1),
         tone:
           metrics.ilRiskRewardRatio >= 1.2
             ? "bullish"
@@ -175,12 +180,12 @@ export function buildTokenIndicatorSnapshot(input: {
       },
       {
         label: "Compound",
-        value: `${metrics.stakingYieldMultiplier.toFixed(2)}×`,
+        value: formatMultiplier(metrics.stakingYieldMultiplier, 2),
         tone: "bullish",
       },
       {
         label: "Limit pás",
-        value: `${metrics.atrLimitMultiplier.toFixed(1)}×ATR`,
+        value: `${formatMultiplier(metrics.atrLimitMultiplier, 1)}ATR`,
         tone: "neutral",
       },
     );
