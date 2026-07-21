@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { AddAssetButton } from "@/components/AddAssetButton";
 import { ApiStatusBanner } from "@/components/ApiStatusBanner";
 import { SwapPanel } from "@/components/SwapPanel";
@@ -17,12 +17,15 @@ import { PortfolioBubbleAllocation } from "@/components/PortfolioBubbleAllocatio
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
 import { Toast } from "@/components/Toast";
+import { TradeHistoryPanel } from "@/components/TradeHistoryPanel";
+import { TradingModeToggle } from "@/components/TradingModeToggle";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { TransactionModal } from "@/components/TransactionModal";
 import type { LiveAsset } from "@/hooks/usePortfolio";
 import { usePortfolio } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
+import { useAppStore } from "@/src/store/useAppStore";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
@@ -30,6 +33,11 @@ export function Dashboard() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [selectedAsset, setSelectedAsset] = useState<LiveAsset | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const hydrateTradingMode = useAppStore((state) => state.hydrateTradingMode);
+
+  useEffect(() => {
+    hydrateTradingMode();
+  }, [hydrateTradingMode]);
 
   const {
     assets,
@@ -126,6 +134,7 @@ export function Dashboard() {
             <p className="text-sm font-medium text-zinc-400">Terminal v2.0</p>
           </div>
           <div className="flex items-center gap-2">
+            <TradingModeToggle compact />
             <SettingsButton onClick={() => setIsSettingsOpen(true)} />
             <LiveIndicator isLive={isLive} loading={loading} />
           </div>
@@ -185,6 +194,7 @@ export function Dashboard() {
               />
               <AddAssetButton onClick={() => setIsAddAssetOpen(true)} />
               <TransactionHistory transactions={transactions} />
+              <TradeHistoryPanel />
             </motion.div>
           )}
 

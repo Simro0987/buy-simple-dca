@@ -34,9 +34,18 @@ function allKeysSuccessful(
   return keys.length > 0 && keys.every((key) => states[key] === "success");
 }
 
-export function useExecutionDeployState(orders: TokenExecutionPlan[]) {
+interface UseExecutionDeployStateOptions {
+  onDeployAll?: () => Promise<void>;
+  onDeployLeg?: (symbol: string, leg: OrderLeg) => Promise<void>;
+}
+
+export function useExecutionDeployState(
+  orders: TokenExecutionPlan[],
+  options?: UseExecutionDeployStateOptions,
+) {
   const [legStates, setLegStates] = useState<Record<string, DeployState>>({});
   const [masterState, setMasterState] = useState<DeployState>("idle");
+  const [deployError, setDeployError] = useState<string | null>(null);
   const legStatesRef = useRef(legStates);
   const deployRunRef = useRef(0);
 
@@ -56,6 +65,7 @@ export function useExecutionDeployState(orders: TokenExecutionPlan[]) {
   useEffect(() => {
     setLegStates({});
     setMasterState("idle");
+    setDeployError(null);
     deployRunRef.current += 1;
   }, [orderSignature]);
 
@@ -85,18 +95,31 @@ export function useExecutionDeployState(orders: TokenExecutionPlan[]) {
       if (current === "loading" || current === "success") return;
 
       const runId = deployRunRef.current;
+      setDeployError(null);
       setLegStates((prev) => ({ ...prev, [key]: "loading" }));
 
-      await delay(750 + Math.random() * 350);
-      if (runId !== deployRunRef.current) return;
+      try {
+        if (options?.onDeployLeg) {
+          await options.onDeployLeg(symbol, leg);
+        } else {
+          await delay(750 + Math.random() * 350);
+        }
+        if (runId !== deployRunRef.current) return;
 
-      setLegStates((prev) => {
-        const next = { ...prev, [key]: "success" as const };
-        syncMasterState(next);
-        return next;
-      });
+        setLegStates((prev) => {
+          const next = { ...prev, [key]: "success" as const };
+          syncMasterState(next);
+          return next;
+        });
+      } catch (error) {
+        if (runId !== deployRunRef.current) return;
+        setLegStates((prev) => ({ ...prev, [key]: "idle" }));
+        setDeployError(
+          error instanceof Error ? error.message : "Deploy leg failed",
+        );
+      }
     },
-    [eligibleKeys, syncMasterState],
+    [eligibleKeys, options, syncMasterState],
   );
 
   const deployAll = useCallback(async () => {
@@ -111,6 +134,7 @@ export function useExecutionDeployState(orders: TokenExecutionPlan[]) {
     }
 
     const runId = deployRunRef.current;
+    setDeployError(null);
     setMasterState("loading");
     setLegStates((prev) => {
       const next = { ...prev };
@@ -120,20 +144,34 @@ export function useExecutionDeployState(orders: TokenExecutionPlan[]) {
       return next;
     });
 
-    for (let index = 0; index < pendingKeys.length; index += 1) {
-      await delay(420);
-      if (runId !== deployRunRef.current) return;
-      const key = pendingKeys[index];
-      setLegStates((prev) => ({ ...prev, [key]: "success" }));
-    }
+    try {
+      if (options?.onDeployAll) {
+        await options.onDeployAll();
+      }
 
-    await delay(280);
-    if (runId !== deployRunRef.current) return;
-    setMasterState("success");
-  }, [eligibleKeys, masterState]);
+      for (let index = 0; index < pendingKeys.length; index += 1) {
+        await delay(420);
+        if (runId !== deployRunRef.current) return;
+        const key = pendingKeys[index];
+        setLegStates((prev) => ({ ...prev, [key]: "success" }));
+      }
+
+      await delay(280);
+      if (runId !== deployRunRef.current) return;
+      setMasterState("success");
+    } catch (error) {
+      if (runId !== deployRunRef.current) return;
+      setMasterState("idle");
+      setLegStates({});
+      setDeployError(
+        error instanceof Error ? error.message : "Deploy All failed",
+      );
+    }
+  }, [eligibleKeys, masterState, options]);
 
   return {
     masterState,
+    deployError,
     getLegState,
     deployLeg,
     deployAll,

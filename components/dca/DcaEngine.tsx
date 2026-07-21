@@ -7,16 +7,25 @@ import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPill
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
 import { PortfolioBucketingCard } from "@/components/dca/PortfolioBucketingCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
+import { TradingModeToggle } from "@/components/TradingModeToggle";
 import { usePortfolioBucketing } from "@/hooks/usePortfolioBucketing";
+import type { OrderLeg } from "@/hooks/useExecutionDeployState";
 import { useDcaEngine } from "@/hooks/useDcaEngine";
 import { useDcaLiveEngine } from "@/hooks/useDcaLiveEngine";
+import { buildExchangeExecuteOrders } from "@/lib/exchange/buildExecutePayload";
+import type { ExchangeExecuteResponse } from "@/lib/exchange/types";
 import { buildFinalExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { Transaction } from "@/lib/portfolioStorage";
+import {
+  appendTradeRound,
+  createSimulatedTradeRound,
+  createTradeRound,
+} from "@/lib/tradeHistory";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
 import { RefreshCw, ShoppingCart } from "lucide-react";
-import { useEffect, useMemo } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 interface DcaEngineProps {
   portfolioSymbols?: string[];
@@ -35,6 +44,7 @@ export function DcaEngine({
   const setWeeklyBudget = useAppStore((state) => state.setWeeklyBudget);
   const setDcaResult = useAppStore((state) => state.setDcaResult);
   const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
+  const tradingMode = useAppStore((state) => state.tradingMode);
 
   const { snapshot, loading: engineLoading, refresh: refreshTokens } =
     useDcaEngine({
@@ -98,6 +108,77 @@ export function DcaEngine({
 
   const totalDeployed = displayResult?.capitalPipeline.dDeployedCapital ?? 0;
 
+  const handleDeployAll = useCallback(async () => {
+    if (!displayResult) {
+      throw new Error("DCA výsledok nie je pripravený");
+    }
+
+    if (tradingMode === "simulation") {
+      appendTradeRound(
+        createSimulatedTradeRound({
+          totalInvestedUsd: totalDeployed,
+          finalScore: displayResult.confluenceScore,
+          regimeLabel: displayResult.regimeLabel,
+          regimeKey: displayResult.regimeKey,
+          plans: finalExecutionOrders,
+        }),
+      );
+      return;
+    }
+
+    const orders = buildExchangeExecuteOrders(finalExecutionOrders);
+    const response = await fetch("/api/exchange/execute", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ orders }),
+    });
+    const json = (await response.json()) as ExchangeExecuteResponse;
+
+    if (!json.results || (!json.success && !json.totalExecutedUsd)) {
+      throw new Error(json.error ?? "Live execution failed");
+    }
+
+    appendTradeRound(
+      createTradeRound({
+        mode: "live",
+        totalInvestedUsd: json.totalExecutedUsd ?? totalDeployed,
+        finalScore: displayResult.confluenceScore,
+        regimeLabel: displayResult.regimeLabel,
+        regimeKey: displayResult.regimeKey,
+        results: json.results,
+      }),
+    );
+
+    if (!json.success) {
+      throw new Error(json.error ?? "Čiastočná exekúcia — skontroluj históriu");
+    }
+  }, [displayResult, finalExecutionOrders, totalDeployed, tradingMode]);
+
+  const handleDeployLeg = useCallback(
+    async (symbol: string, leg: OrderLeg) => {
+      if (tradingMode === "simulation") return;
+
+      const plan = finalExecutionOrders.find((item) => item.symbol === symbol);
+      if (!plan) throw new Error(`Token ${symbol} not found`);
+
+      const orders = buildExchangeExecuteOrders([plan]).filter(
+        (order) => order.leg === leg,
+      );
+      if (orders.length === 0) return;
+
+      const response = await fetch("/api/exchange/execute", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orders }),
+      });
+      const json = (await response.json()) as ExchangeExecuteResponse;
+      if (!json.success) {
+        throw new Error(json.error ?? "Order execution failed");
+      }
+    },
+    [finalExecutionOrders, tradingMode],
+  );
+
   const handleRecordPurchase = () => {
     onRecordPurchase(finalExecutionOrders);
   };
@@ -140,22 +221,29 @@ export function DcaEngine({
             Master Dynamic Allocation
           </h2>
         </div>
-        <button
-          type="button"
-          onClick={handleRefresh}
-          disabled={loading}
-          className="rounded-full border border-white/10 bg-white/5 p-2 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
-          aria-label="Obnoviť dáta"
-        >
-          <RefreshCw
-            className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
-          />
-        </button>
+        <div className="flex items-center gap-2">
+          <TradingModeToggle compact />
+          <button
+            type="button"
+            onClick={handleRefresh}
+            disabled={loading}
+            className="rounded-full border border-white/10 bg-white/5 p-2 text-zinc-400 transition-colors hover:text-white disabled:opacity-50"
+            aria-label="Obnoviť dáta"
+          >
+            <RefreshCw
+              className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`}
+            />
+          </button>
+        </div>
       </motion.div>
 
       {/* A — Weekly investment + capital pipeline */}
       <motion.div layout className="space-y-6">
-        <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyBudget} />
+        <WeeklyInvestmentCard
+          value={weeklyAmount}
+          onChange={setWeeklyBudget}
+          tradingMode={tradingMode}
+        />
         {displayResult && allocationProps && (
           <MasterAllocationCard {...allocationProps} section="capital" />
         )}
@@ -203,6 +291,9 @@ export function DcaEngine({
             finalExecutionOrders={finalExecutionOrders}
             deployedCapital={totalDeployed}
             loading={loading}
+            tradingMode={tradingMode}
+            onDeployAll={handleDeployAll}
+            onDeployLeg={handleDeployLeg}
           />
         </>
       )}

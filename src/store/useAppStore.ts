@@ -3,6 +3,7 @@ import type { LiveAsset } from "@/hooks/usePortfolio";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import { DEFAULT_WEEKLY_INVESTMENT } from "@/lib/dcaEngineConfig";
 import type { NewsArticle } from "@/lib/newsEngine";
+import type { TradingMode } from "@/lib/exchange/types";
 import type { MasterDcaResult } from "@/lib/masterDcaEngine";
 import {
   DEFAULT_API_STATUS,
@@ -15,6 +16,7 @@ import {
   writePortfolioToStorage,
   type PortfolioData,
 } from "@/lib/portfolioStorage";
+import { readTradingMode, writeTradingMode } from "@/lib/tradeHistory";
 
 export type NewsFeedMode = "portfolio" | "all";
 
@@ -44,6 +46,7 @@ interface AppStore {
   dcaPlan: DcaPlanState;
   newsFeed: NewsFeedState;
   apiStatus: ApiStatusState;
+  tradingMode: TradingMode;
 
   hydratePortfolio: () => void;
   setPortfolioData: (
@@ -68,6 +71,8 @@ interface AppStore {
   setNewsError: (error: string | null) => void;
 
   setApiStatus: (key: keyof ApiStatusState, status: ApiSourceHealth) => void;
+  setTradingMode: (mode: TradingMode) => void;
+  hydrateTradingMode: () => void;
 }
 
 const defaultNewsFeed: NewsFeedState = {
@@ -95,6 +100,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
   dcaPlan: defaultDcaPlan,
   newsFeed: defaultNewsFeed,
   apiStatus: DEFAULT_API_STATUS,
+  tradingMode: "simulation",
 
   hydratePortfolio: () => {
     if (get().isPortfolioHydrated) return;
@@ -209,6 +215,15 @@ export const useAppStore = create<AppStore>((set, get) => ({
       },
     }));
   },
+
+  setTradingMode: (mode) => {
+    writeTradingMode(mode);
+    set({ tradingMode: mode });
+  },
+
+  hydrateTradingMode: () => {
+    set({ tradingMode: readTradingMode() });
+  },
 }));
 
 export function usePortfolioAssets() {
@@ -225,4 +240,8 @@ export function useNewsFeedState() {
 
 export function useApiStatus() {
   return useAppStore((state) => state.apiStatus);
+}
+
+export function useTradingMode() {
+  return useAppStore((state) => state.tradingMode);
 }

@@ -7,6 +7,7 @@ import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import type { TradingMode } from "@/lib/exchange/types";
 import { sumExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import {
   useExecutionDeployState,
@@ -23,6 +24,9 @@ interface ExecutionEngineCardsProps {
   finalExecutionOrders: TokenExecutionPlan[];
   deployedCapital?: number;
   loading?: boolean;
+  tradingMode: TradingMode;
+  onDeployAll: () => Promise<void>;
+  onDeployLeg?: (symbol: string, leg: OrderLeg) => Promise<void>;
 }
 
 const listItemMotion = {
@@ -309,10 +313,16 @@ export function ExecutionEngineCards({
   finalExecutionOrders,
   deployedCapital = 0,
   loading = false,
+  tradingMode,
+  onDeployAll,
+  onDeployLeg,
 }: ExecutionEngineCardsProps) {
   const ordersTotal = sumExecutionOrders(finalExecutionOrders);
-  const { masterState, getLegState, deployLeg, deployAll } =
-    useExecutionDeployState(finalExecutionOrders);
+  const { masterState, deployError, getLegState, deployLeg, deployAll } =
+    useExecutionDeployState(finalExecutionOrders, {
+      onDeployAll,
+      onDeployLeg,
+    });
 
   const masterLabel = useMemo(() => {
     if (masterState === "loading") return "Odosielam všetky príkazy...";
@@ -343,7 +353,8 @@ export function ExecutionEngineCards({
           Dynamic Split · MKT / LMT
         </h3>
         <p className="mt-1 text-[10px] text-zinc-500">
-          {finalExecutionOrders.length} tokenov • filter 3/3 yield • celkom{" "}
+          {finalExecutionOrders.length} tokenov • filter 3/3 yield •{" "}
+          {tradingMode === "live" ? "Live Trading" : "Simulácia"} • celkom{" "}
           <span className="font-semibold text-emerald-400">
             {formatUsd(ordersTotal)}
           </span>
@@ -355,6 +366,12 @@ export function ExecutionEngineCards({
           )}
         </p>
       </div>
+
+      {deployError && (
+        <p className="rounded-xl border border-rose-500/20 bg-rose-500/5 px-3 py-2 text-[11px] text-rose-400/90 transition-all duration-300">
+          {deployError}
+        </p>
+      )}
 
       <button
         type="button"

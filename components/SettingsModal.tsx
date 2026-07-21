@@ -8,6 +8,7 @@ import {
   readBackupFile,
 } from "@/lib/portfolioBackup";
 import type { PortfolioData } from "@/lib/portfolioStorage";
+import { TradingModeToggle } from "@/components/TradingModeToggle";
 import { interactiveButton } from "@/lib/motion";
 
 interface SettingsModalProps {
@@ -178,6 +179,10 @@ export function SettingsModal({
                 ich zálohuj, aby si ich mohol presunúť medzi mobilom, tabletom
                 alebo PC bez straty dát.
               </p>
+
+              <div className="mb-6">
+                <TradingModeToggle />
+              </div>
 
               <div className="space-y-3">
                 <motion.button
