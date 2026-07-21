@@ -16,6 +16,10 @@ import {
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 import type { PortfolioYieldContext, ResolvedYieldApy } from "@/lib/yieldDataSources";
+import {
+  finalizeLimitWithSupportSnap,
+  type SupportResistanceLevels,
+} from "@/lib/supportResistanceLevels";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const MIN_ORDER_USD_THRESHOLD = 10;
@@ -99,6 +103,9 @@ export interface ExecutionSplitResult {
   yieldMergeActive: boolean;
   minOrderRuleActive: boolean;
   safetyBrakeActive: boolean;
+  supportResistance: SupportResistanceLevels | null;
+  supportSnapApplied: boolean;
+  supportSnapNote: string | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -147,10 +154,29 @@ function rsiLabel(rsi: number): string {
   return "RSI Neutral";
 }
 
+function applySupportAwareLimit(
+  input: ExecutionTokenInput,
+  rawLimitPrice: number,
+) {
+  return finalizeLimitWithSupportSnap({
+    spotPrice: input.spotPrice,
+    limitPrice: rawLimitPrice,
+    ema50: input.ema50,
+    priceVsSma14Pct: input.priceVsSma14Pct,
+    distSma200Pct: input.distSma200Pct,
+    atr14dPct: input.atr14dPct,
+  });
+}
+
 function buildWhyLimit(
   input: ExecutionTokenInput,
   limitPrice: number,
-  options?: { atrMultiplier?: number; safetyBrakeActive?: boolean },
+  options?: {
+    atrMultiplier?: number;
+    safetyBrakeActive?: boolean;
+    supportResistance?: SupportResistanceLevels | null;
+    supportSnapNote?: string | null;
+  },
 ): string {
   const belowPct = computeBelowSpotPercent(input.spotPrice, limitPrice);
   const atrMultiplier =
@@ -182,6 +208,8 @@ function buildWhyLimit(
     safetyBrakeActive: options?.safetyBrakeActive ?? input.brakeActive,
     atrMultiplier,
     yieldSatelliteMetrics,
+    supportResistance: options?.supportResistance ?? null,
+    supportSnapNote: options?.supportSnapNote ?? null,
   });
 }
 
@@ -210,10 +238,15 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     ema50 > 0 && ema50 < spot
       ? Math.max(ema50, pullbackPrice)
       : pullbackPrice;
-  const limitPrice = normalizeLimitPrice(rawLimit);
-
-  const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
-  const whyLimit = buildWhyLimit(input, limitPrice, { safetyBrakeActive });
+  const rawLimitPrice = normalizeLimitPrice(rawLimit);
+  const snapped = applySupportAwareLimit(input, rawLimitPrice);
+  const limitPrice = snapped.limitPrice;
+  const limitPullbackPct = snapped.limitPullbackPct;
+  const whyLimit = buildWhyLimit(input, limitPrice, {
+    safetyBrakeActive,
+    supportResistance: snapped.supportResistance,
+    supportSnapNote: snapped.supportSnapNote,
+  });
 
   const fgPart =
     input.fearGreedValue <= 30
@@ -244,6 +277,9 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive,
+    supportResistance: snapped.supportResistance,
+    supportSnapApplied: snapped.supportSnapApplied,
+    supportSnapNote: snapped.supportSnapNote,
   };
 }
 
@@ -265,6 +301,9 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
       yieldMergeActive: false,
       minOrderRuleActive: false,
       safetyBrakeActive: false,
+      supportResistance: null,
+      supportSnapApplied: false,
+      supportSnapNote: null,
     };
   }
 
@@ -277,10 +316,18 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     marketShare = clamp(marketShare - 10, 0, 100);
   }
 
-  const limitPrice = limitFromAtr(spot, atrPct, SATELLITE_ATR_LIMIT_MULTIPLIER);
-  const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
+  const rawLimitPrice = limitFromAtr(
+    spot,
+    atrPct,
+    SATELLITE_ATR_LIMIT_MULTIPLIER,
+  );
+  const snapped = applySupportAwareLimit(input, rawLimitPrice);
+  const limitPrice = snapped.limitPrice;
+  const limitPullbackPct = snapped.limitPullbackPct;
   const whyLimit = buildWhyLimit(input, limitPrice, {
     atrMultiplier: SATELLITE_ATR_LIMIT_MULTIPLIER,
+    supportResistance: snapped.supportResistance,
+    supportSnapNote: snapped.supportSnapNote,
   });
 
   const entrySignal = `ENTRY SIGNAL: Satellite staking • ATR ${atrPct.toFixed(1)} % • širší pás ${SATELLITE_ATR_LIMIT_MULTIPLIER}×ATR • RSI ${rsi.toFixed(0)}`;
@@ -298,6 +345,9 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive: false,
+    supportResistance: snapped.supportResistance,
+    supportSnapApplied: snapped.supportSnapApplied,
+    supportSnapNote: snapped.supportSnapNote,
   };
 }
 
@@ -324,6 +374,9 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       yieldMergeActive: false,
       minOrderRuleActive: false,
       safetyBrakeActive: false,
+      supportResistance: null,
+      supportSnapApplied: false,
+      supportSnapNote: null,
     };
   }
 
@@ -347,6 +400,9 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       yieldMergeActive: true,
       minOrderRuleActive: true,
       safetyBrakeActive: false,
+      supportResistance: null,
+      supportSnapApplied: false,
+      supportSnapNote: null,
     };
   }
 
@@ -354,10 +410,14 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     clamp(100 - computeBaseMarketPct(input.finalScore), 15, 70),
   );
   const limitShare = round1(100 - marketShare);
-  const limitPrice = limitFromAtr(spot, atrPct, YIELD_ATR_LIMIT_MULTIPLIER);
-  const limitPullbackPct = computeBelowSpotPercent(spot, limitPrice);
+  const rawLimitPrice = limitFromAtr(spot, atrPct, YIELD_ATR_LIMIT_MULTIPLIER);
+  const snapped = applySupportAwareLimit(input, rawLimitPrice);
+  const limitPrice = snapped.limitPrice;
+  const limitPullbackPct = snapped.limitPullbackPct;
   const whyLimit = buildWhyLimit(input, limitPrice, {
     atrMultiplier: YIELD_ATR_LIMIT_MULTIPLIER,
+    supportResistance: snapped.supportResistance,
+    supportSnapNote: snapped.supportSnapNote,
   });
 
   const entrySignal = buildYieldEntrySignal({
@@ -381,6 +441,9 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive: false,
+    supportResistance: snapped.supportResistance,
+    supportSnapApplied: snapped.supportSnapApplied,
+    supportSnapNote: snapped.supportSnapNote,
   };
 }
 

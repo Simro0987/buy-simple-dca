@@ -1,5 +1,7 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
+import type { SupportResistanceLevels } from "@/lib/supportResistanceLevels";
+import { formatSupportResistanceSummary } from "@/lib/supportResistanceLevels";
 import { formatDecimal, formatSignedPct } from "@/lib/numberFormat";
 
 export interface LimitReasoningInput {
@@ -18,6 +20,8 @@ export interface LimitReasoningInput {
   safetyBrakeActive?: boolean;
   atrMultiplier?: number;
   yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
+  supportResistance?: SupportResistanceLevels | null;
+  supportSnapNote?: string | null;
 }
 
 export function computeBelowSpotPercent(
@@ -124,14 +128,32 @@ export function buildDynamicLimitReasoning(input: LimitReasoningInput): string {
 
   const belowPct = computeBelowSpotPercent(input.spotPrice, input.limitPrice);
 
+  let base: string;
   switch (input.category) {
     case "core":
-      return buildCoreReasoning(input, belowPct);
+      base = buildCoreReasoning(input, belowPct);
+      break;
     case "satellite":
-      return buildSatelliteReasoning(input, belowPct);
+      base = buildSatelliteReasoning(input, belowPct);
+      break;
     case "yield":
-      return buildYieldReasoning(input, belowPct);
+      base = buildYieldReasoning(input, belowPct);
+      break;
     default:
-      return buildSatelliteReasoning(input, belowPct);
+      base = buildSatelliteReasoning(input, belowPct);
   }
+
+  const srSummary = input.supportResistance
+    ? formatSupportResistanceSummary(input.supportResistance)
+    : null;
+
+  const parts = [base];
+  if (srSummary && srSummary !== "S/R úrovne sa načítavajú…") {
+    parts.push(`S/R: ${srSummary}.`);
+  }
+  if (input.supportSnapNote) {
+    parts.push(input.supportSnapNote);
+  }
+
+  return parts.join(" ");
 }

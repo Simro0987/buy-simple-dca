@@ -1,6 +1,7 @@
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
+import type { SupportResistanceLevels } from "@/lib/supportResistanceLevels";
 import {
   formatDecimal,
   formatMultiplier,
@@ -34,6 +35,30 @@ function rsiTone(rsi: number): IndicatorTone {
   return "neutral";
 }
 
+function appendSupportResistanceChips(
+  chips: TokenIndicatorChip[],
+  levels?: SupportResistanceLevels | null,
+): TokenIndicatorChip[] {
+  if (!levels) return chips;
+
+  const next = [...chips];
+  if (levels.support1 != null && levels.distToSupportPct != null) {
+    next.push({
+      label: `S1 ${levels.supportSource}`,
+      value: formatSignedPct(levels.distToSupportPct, 1),
+      tone: levels.distToSupportPct <= -1 ? "bullish" : "neutral",
+    });
+  }
+  if (levels.resistance1 != null && levels.distToResistancePct != null) {
+    next.push({
+      label: `R1 ${levels.resistanceSource}`,
+      value: formatSignedPct(levels.distToResistancePct, 1),
+      tone: levels.distToResistancePct >= 3 ? "warning" : "neutral",
+    });
+  }
+  return next;
+}
+
 export function buildTokenIndicatorSnapshot(input: {
   category: AssetCategory;
   symbol: string;
@@ -46,6 +71,7 @@ export function buildTokenIndicatorSnapshot(input: {
   convictionScore?: number | null;
   safetyBrakeActive: boolean;
   yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
+  supportResistance?: SupportResistanceLevels | null;
 }): TokenIndicatorSnapshot {
   const rsi = input.rsi14;
   const atr = input.atr14dPct;
@@ -84,7 +110,7 @@ export function buildTokenIndicatorSnapshot(input: {
     }
 
     return {
-      chips,
+      chips: appendSupportResistanceChips(chips, input.supportResistance),
       regimeStatusLabel: input.safetyBrakeActive ? "SAFETY BRAKE" : "V NORME",
       regimeStatusTone: input.safetyBrakeActive ? "brake" : "ok",
     };
@@ -145,7 +171,7 @@ export function buildTokenIndicatorSnapshot(input: {
     const watch = rsi != null && rsi > 65;
 
     return {
-      chips,
+      chips: appendSupportResistanceChips(chips, input.supportResistance),
       regimeStatusLabel: watch ? "MOMENTUM WATCH" : "STAKING OK",
       regimeStatusTone: watch ? "watch" : "ok",
     };
@@ -222,7 +248,7 @@ export function buildTokenIndicatorSnapshot(input: {
   }
 
   return {
-    chips,
+    chips: appendSupportResistanceChips(chips, input.supportResistance),
     regimeStatusLabel:
       metrics && metrics.apyPct >= 10
         ? "YIELD COMPOUND"

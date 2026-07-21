@@ -231,6 +231,7 @@ export function buildFinalExecutionOrders(
         convictionScore: row.convictionScore ?? null,
         safetyBrakeActive: split.safetyBrakeActive,
         yieldSatelliteMetrics,
+        supportResistance: split.supportResistance,
       });
       const totalUsd = row.amountUsd;
       const ema50Dev = ema50DeviationPct(spotPrice, ema50);
@@ -332,6 +333,9 @@ export function buildFinalExecutionOrders(
         shareOfYieldPercent: row.shareOfYieldPercent ?? null,
         yieldWeight: row.yieldWeight ?? null,
         yieldSatelliteMetrics,
+        supportResistance: split.supportResistance,
+        supportSnapApplied: split.supportSnapApplied,
+        supportSnapNote: split.supportSnapNote,
       };
     });
 }

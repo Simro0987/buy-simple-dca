@@ -10,7 +10,7 @@ import {
   formatCopyAmount2,
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
-import { formatPct, formatSignedPct } from "@/lib/numberFormat";
+import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -475,6 +475,18 @@ function ExecutionOrderCard({
                 <span className="rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold tabular-nums text-orange-300 transition-all duration-500 ease-in-out">
                   {formatBelowSpotLabel(plan.limitPullbackPct)}
                 </span>
+                {plan.supportResistance?.support1 != null &&
+                  plan.supportResistance.distToSupportPct != null && (
+                    <span className="rounded-full border border-emerald-500/20 bg-emerald-500/10 px-2 py-0.5 text-[9px] font-semibold tabular-nums text-emerald-300">
+                      S1 {formatSignedPct(plan.supportResistance.distToSupportPct, 1)}
+                    </span>
+                  )}
+                {plan.supportResistance?.resistance1 != null &&
+                  plan.supportResistance.distToResistancePct != null && (
+                    <span className="rounded-full border border-rose-500/20 bg-rose-500/10 px-2 py-0.5 text-[9px] font-semibold tabular-nums text-rose-300">
+                      R1 {formatSignedPct(plan.supportResistance.distToResistancePct, 1)}
+                    </span>
+                  )}
               </div>
               <p className="mt-1 text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
                 Limitná cena nákupu
@@ -515,6 +527,26 @@ function ExecutionOrderCard({
       </div>
 
       <AnimatePresence mode="wait">
+        {plan.supportSnapApplied && plan.supportSnapNote && (
+          <motion.div
+            key={`snap-${plan.symbol}-${plan.supportSnapNote}`}
+            initial={{ opacity: 0, y: 4 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -4 }}
+            transition={{ duration: 0.45, ease: "easeInOut" }}
+            className="mt-3 rounded-2xl border border-amber-500/25 bg-amber-500/10 px-3 py-2.5"
+          >
+            <p className="text-[9px] font-bold uppercase tracking-wider text-amber-300">
+              Smart Snap · S1 zóna
+            </p>
+            <p className="mt-1 text-[11px] leading-relaxed text-amber-100/90">
+              {plan.supportSnapNote}
+            </p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence mode="wait">
         {plan.limitShare > 0 && plan.whyLimit && (
           <motion.div
             key={`${plan.symbol}-${plan.whyLimit}`}
@@ -534,6 +566,38 @@ function ExecutionOrderCard({
             <p className="mt-1 text-xs leading-relaxed text-zinc-400 transition-all duration-500 ease-in-out">
               {plan.whyLimit}
             </p>
+            {plan.supportResistance &&
+              (plan.supportResistance.support1 != null ||
+                plan.supportResistance.resistance1 != null) && (
+                <p className="mt-2 text-[10px] leading-relaxed text-zinc-500">
+                  {plan.supportResistance.support1 != null && (
+                    <>
+                      Support S1 ({plan.supportResistance.supportSource}):{" "}
+                      <span className="font-semibold tabular-nums text-emerald-300/90">
+                        {formatDecimal(plan.supportResistance.support1, 4)}
+                      </span>
+                      {plan.supportResistance.distToSupportPct != null
+                        ? ` · ${formatSignedPct(plan.supportResistance.distToSupportPct, 1)} od spotu`
+                        : null}
+                    </>
+                  )}
+                  {plan.supportResistance.support1 != null &&
+                  plan.supportResistance.resistance1 != null
+                    ? " · "
+                    : null}
+                  {plan.supportResistance.resistance1 != null && (
+                    <>
+                      Rezistencia R1 ({plan.supportResistance.resistanceSource}):{" "}
+                      <span className="font-semibold tabular-nums text-rose-300/90">
+                        {formatDecimal(plan.supportResistance.resistance1, 4)}
+                      </span>
+                      {plan.supportResistance.distToResistancePct != null
+                        ? ` · ${formatSignedPct(plan.supportResistance.distToResistancePct, 1)} od spotu`
+                        : null}
+                    </>
+                  )}
+                </p>
+              )}
           </motion.div>
         )}
       </AnimatePresence>
