@@ -1,10 +1,6 @@
 /** Clipboard-friendly amounts and limit prices (SK comma style). */
 
-import {
-  formatCopyAmount4,
-  formatDecimal,
-  formatNumber4,
-} from "@/lib/numberFormat";
+import { formatDecimal } from "@/lib/numberFormat";
 
 export { formatCopyAmount4, formatCopyAmount2 } from "@/lib/numberFormat";
 
@@ -36,5 +32,5 @@ export function formatCopyLimitPrice4(value: number): string {
   return formatDecimal(normalized, 4);
 }
 
-/** @deprecated Use formatNumber4 */
-export const formatCopyLimitPrice = formatNumber4;
+/** @deprecated Use formatNumber4 from @/lib/numberFormat */
+export { formatNumber4 as formatCopyLimitPrice } from "@/lib/numberFormat";

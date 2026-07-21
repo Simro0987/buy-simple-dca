@@ -24,10 +24,6 @@ export interface TokenIndicatorSnapshot {
   regimeStatusTone: RegimeStatusTone;
 }
 
-function round1(value: number): number {
-  return Math.round(value * 10) / 10;
-}
-
 function formatSignedPctValue(value: number): string {
   return formatSignedPct(value, 1);
 }
