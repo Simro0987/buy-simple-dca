@@ -16,6 +16,7 @@ interface PortfolioBucketingCardProps {
   bucketing: PortfolioBucketingResult | null;
   loading?: boolean;
   metricsError?: string | null;
+  section?: "all" | "macro" | "tokens";
 }
 
 const listTransition = {
@@ -233,6 +234,7 @@ export function PortfolioBucketingCard({
   bucketing,
   loading = false,
   metricsError = null,
+  section = "all",
 }: PortfolioBucketingCardProps) {
   if (!bucketing) {
     return (
@@ -248,6 +250,9 @@ export function PortfolioBucketingCard({
     );
   }
 
+  const showMacro = section === "all" || section === "macro";
+  const showTokens = section === "all" || section === "tokens";
+
   return (
     <motion.section
       layout
@@ -256,53 +261,61 @@ export function PortfolioBucketingCard({
       transition={{ duration: 0.4, delay: 0.1, ease: "easeOut" }}
       className="rounded-2xl border border-white/5 bg-[#0d0d0f] p-5"
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-blue-400 transition-all duration-700">
-          <Shield className="h-3.5 w-3.5" />
-          {bucketing.badgeTitle}
-        </span>
-        <span className="text-[11px] font-medium text-zinc-500 transition-all duration-700">
-          {bucketing.badgeSubtitle}
-        </span>
-      </div>
+      {showMacro && (
+        <>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="inline-flex items-center gap-2 rounded-full border border-blue-500/25 bg-blue-500/10 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wide text-blue-400 transition-all duration-700">
+              <Shield className="h-3.5 w-3.5" />
+              {bucketing.badgeTitle}
+            </span>
+            <span className="text-[11px] font-medium text-zinc-500 transition-all duration-700">
+              {bucketing.badgeSubtitle}
+            </span>
+          </div>
 
-      {bucketing.spilloverActive && (
-        <motion.p
-          layout
-          className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] text-amber-400/90 transition-all duration-700"
-        >
-          Spillover aktívny — {formatUsd(bucketing.spilloverAmount)} z Yield
-          presunuté do CORE/SATELLITES (žiadny token neprešiel filtrom 3/3).
-        </motion.p>
+          {bucketing.spilloverActive && (
+            <motion.p
+              layout
+              className="mt-3 rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-2 text-[10px] text-amber-400/90 transition-all duration-700"
+            >
+              Spillover aktívny — {formatUsd(bucketing.spilloverAmount)} z Yield
+              presunuté do CORE/SATELLITES (žiadny token neprešiel filtrom 3/3).
+            </motion.p>
+          )}
+
+          <div className="mt-5 flex justify-between gap-2 text-[9px] font-bold uppercase tracking-[0.14em]">
+            {bucketing.buckets.map((bucket) => (
+              <span
+                key={bucket.category}
+                className={`transition-colors duration-700 ${bucket.textClass}`}
+              >
+                {bucket.label} • {bucket.subtitle}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-3">
+            <MultiColorSplitBar buckets={bucketing.buckets} />
+          </div>
+
+          <div className="mt-2.5 grid grid-cols-3 gap-2">
+            {bucketing.buckets.map((bucket) => (
+              <BucketAmountLabel
+                key={bucket.category}
+                percent={bucket.percent}
+                amountUsd={bucket.amountUsd}
+                textClass={bucket.textClass}
+              />
+            ))}
+          </div>
+        </>
       )}
 
-      <div className="mt-5 flex justify-between gap-2 text-[9px] font-bold uppercase tracking-[0.14em]">
-        {bucketing.buckets.map((bucket) => (
-          <span
-            key={bucket.category}
-            className={`transition-colors duration-700 ${bucket.textClass}`}
+      {showTokens && (
+        <>
+          <div
+            className={`${showMacro ? "mt-6 border-t border-white/5 pt-5" : ""}`}
           >
-            {bucket.label} • {bucket.subtitle}
-          </span>
-        ))}
-      </div>
-
-      <div className="mt-3">
-        <MultiColorSplitBar buckets={bucketing.buckets} />
-      </div>
-
-      <div className="mt-2.5 grid grid-cols-3 gap-2">
-        {bucketing.buckets.map((bucket) => (
-          <BucketAmountLabel
-            key={bucket.category}
-            percent={bucket.percent}
-            amountUsd={bucket.amountUsd}
-            textClass={bucket.textClass}
-          />
-        ))}
-      </div>
-
-      <div className="mt-6 border-t border-white/5 pt-5">
         <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
           Token alokácia • Amount to buy (live)
         </p>
@@ -415,6 +428,8 @@ export function PortfolioBucketingCard({
           ))}
         </ul>
       </div>
+        </>
+      )}
     </motion.section>
   );
 }

@@ -27,6 +27,7 @@ interface MasterAllocationCardProps {
   dynamicSlope: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
+  section?: "all" | "factors" | "capital" | "accordion";
 }
 
 const FACTOR_ICONS: Record<string, LucideIcon> = {
@@ -98,9 +99,44 @@ export function MasterAllocationCard({
   dynamicSlope,
   confidence,
   confidenceMultiplier,
+  section = "all",
 }: MasterAllocationCardProps) {
   const animatedReserve = useCountUp(cashReserve, 700);
   const animatedCapital = useCountUp(weeklyCapital, 700);
+
+  const showFactors = section === "all" || section === "factors";
+  const showCapital = section === "all" || section === "capital";
+  const showAccordion = section === "all" || section === "accordion";
+
+  if (section === "capital") {
+    return (
+      <motion.section
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, delay: 0.04, ease: "easeOut" }}
+        className="rounded-2xl border border-white/5 bg-[#0d0d0f] px-5 py-4"
+      >
+        <div className="flex gap-4">
+          <div className="flex-1">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+              Hotovosť rezerva
+            </p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
+              {formatUsd(animatedReserve)}
+            </p>
+          </div>
+          <div className="flex-1 text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+              Týždenný kapitál
+            </p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
+              {formatUsd(animatedCapital)}
+            </p>
+          </div>
+        </div>
+      </motion.section>
+    );
+  }
 
   return (
     <motion.section
@@ -109,53 +145,67 @@ export function MasterAllocationCard({
       transition={{ duration: 0.4, delay: 0.08, ease: "easeOut" }}
       className="rounded-2xl border border-white/5 bg-[#0d0d0f] p-5"
     >
-      <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        5 Faktorov
-      </p>
-
-      <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
-        {factors.map((factor, index) => (
-          <FactorPill key={factor.id} factor={factor} index={index} />
-        ))}
-      </div>
-
-      <p className="mt-3 text-[10px] leading-relaxed text-zinc-600">
-        Lineárna interpolácia: Value (−40%…+40% vs SMA200) • Trend (EMA50 vs
-        SMA200) • Sentiment & Momentum & Risk priamo z F&G / RSI / ATR.
-      </p>
-
-      <div className="mt-5 flex gap-4">
-        <div className="flex-1">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-            Hotovosť rezerva
+      {showFactors && (
+        <>
+          <p className="mb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            5 Faktorov
           </p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
-            {formatUsd(animatedReserve)}
+
+          <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 scrollbar-none">
+            {factors.map((factor, index) => (
+              <FactorPill key={factor.id} factor={factor} index={index} />
+            ))}
+          </div>
+
+          <p className="mt-3 text-[10px] leading-relaxed text-zinc-600">
+            Lineárna interpolácia: Value (−40%…+40% vs SMA200) • Trend (EMA50 vs
+            SMA200) • Sentiment & Momentum & Risk priamo z F&G / RSI / ATR.
           </p>
+        </>
+      )}
+
+      {showCapital && section === "all" && (
+        <div className={`flex gap-4 ${showFactors ? "mt-5" : ""}`}>
+          <div className="flex-1">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+              Hotovosť rezerva
+            </p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
+              {formatUsd(animatedReserve)}
+            </p>
+          </div>
+          <div className="flex-1 text-right">
+            <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
+              Týždenný kapitál
+            </p>
+            <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
+              {formatUsd(animatedCapital)}
+            </p>
+          </div>
         </div>
-        <div className="flex-1 text-right">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-zinc-500">
-            Týždenný kapitál
-          </p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-white transition-all duration-700 ease-out">
-            {formatUsd(animatedCapital)}
-          </p>
-        </div>
-      </div>
+      )}
 
-      <div className="mt-5 border-t border-white/5 pt-4">
-        <DcaAllocationAccordion
-          regimeLabel={regimeLabel}
-          confluenceScore={confluenceScore}
-          baseAllocationPercent={baseAllocationPercent}
-          allocationPercent={allocationPercent}
-          dynamicAnchor={dynamicAnchor}
-          dynamicSlope={dynamicSlope}
-          confidence={confidence}
-          confidenceMultiplier={confidenceMultiplier}
-          factors={factors}
-        />
-      </div>
+      {showAccordion && (
+        <div
+          className={
+            showFactors || (showCapital && section === "all")
+              ? "mt-5 border-t border-white/5 pt-4"
+              : ""
+          }
+        >
+          <DcaAllocationAccordion
+            regimeLabel={regimeLabel}
+            confluenceScore={confluenceScore}
+            baseAllocationPercent={baseAllocationPercent}
+            allocationPercent={allocationPercent}
+            dynamicAnchor={dynamicAnchor}
+            dynamicSlope={dynamicSlope}
+            confidence={confidence}
+            confidenceMultiplier={confidenceMultiplier}
+            factors={factors}
+          />
+        </div>
+      )}
     </motion.section>
   );
 }

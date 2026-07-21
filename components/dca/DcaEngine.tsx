@@ -1,10 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import {
-  DcaMarketRegimeCard,
-  DcaMoneyModeBar,
-} from "@/components/dca/DcaHeroDashboard";
+import { DcaMarketRegimeCard } from "@/components/dca/DcaHeroDashboard";
 import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
 import { MarketRegimeFactorPills } from "@/components/dca/MarketRegimeFactorPills";
 import { MasterAllocationCard } from "@/components/dca/MasterAllocationCard";
@@ -95,18 +92,19 @@ export function DcaEngine({
     void refreshLive();
   };
 
-  const heroProps = displayResult
+  const allocationProps = displayResult
     ? {
-        regimeLabel: displayResult.regimeLabel,
-        regimeDescription: displayResult.regimeDescription,
-        moneyMode: displayResult.regimeLabel,
+        factors: displayResult.factors,
         confluenceScore: displayResult.confluenceScore,
+        cashReserve: displayResult.capitalPipeline.eReserveCapital,
+        weeklyCapital: displayResult.capitalPipeline.aWeeklyBudget,
+        regimeLabel: displayResult.regimeLabel,
+        baseAllocationPercent: displayResult.baseAllocationPercent,
         allocationPercent: displayResult.allocationPercent,
         dynamicAnchor: displayResult.dynamicAnchor,
         dynamicSlope: displayResult.dynamicSlope,
         confidence: displayResult.confidence,
         confidenceMultiplier: displayResult.confidenceMultiplier,
-        investmentAmount: displayResult.capitalPipeline.dDeployedCapital,
       }
     : null;
 
@@ -139,56 +137,52 @@ export function DcaEngine({
         </button>
       </motion.div>
 
-      {displayResult && heroProps && (
+      {/* A — Weekly investment budget (user starts here) */}
+      <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyBudget} />
+
+      {displayResult && allocationProps && (
         <>
-          {/* 1. Money Mode header */}
-          <DcaMoneyModeBar
-            moneyMode={heroProps.moneyMode}
-            confluenceScore={heroProps.confluenceScore}
-          />
+          {/* A — Hotovosť rezerva + Týždenný kapitál */}
+          <MasterAllocationCard {...allocationProps} section="capital" />
 
-          {/* 2. Five market regime input factors */}
-          <MarketRegimeFactorPills />
+          {/* B — 5 scoring factors (VALUE, TREND, SENTIMENT…) */}
+          <MasterAllocationCard {...allocationProps} section="factors" />
 
-          {/* 3. Market regime + Final Score (derived from factors) */}
+          {/* C — Trhový režim + Final Score + Alokácia */}
           <DcaMarketRegimeCard
-            regimeLabel={heroProps.regimeLabel}
-            regimeDescription={heroProps.regimeDescription}
-            confluenceScore={heroProps.confluenceScore}
-            allocationPercent={heroProps.allocationPercent}
-            dynamicAnchor={heroProps.dynamicAnchor}
-            dynamicSlope={heroProps.dynamicSlope}
-            confidence={heroProps.confidence}
-            confidenceMultiplier={heroProps.confidenceMultiplier}
-            investmentAmount={heroProps.investmentAmount}
-          />
-
-          {/* 4. Portfolio bucketing: Core / Sat / Yield + yield filter */}
-          <PortfolioBucketingCard
-            bucketing={bucketing}
-            loading={bucketingMetricsLoading}
-            metricsError={bucketingMetricsError}
-          />
-
-          <WeeklyInvestmentCard
-            value={weeklyAmount}
-            onChange={setWeeklyBudget}
-          />
-
-          <MasterAllocationCard
-            factors={displayResult.factors}
-            confluenceScore={displayResult.confluenceScore}
-            cashReserve={displayResult.capitalPipeline.eReserveCapital}
-            weeklyCapital={displayResult.capitalPipeline.aWeeklyBudget}
             regimeLabel={displayResult.regimeLabel}
-            baseAllocationPercent={displayResult.baseAllocationPercent}
+            regimeDescription={displayResult.regimeDescription}
+            confluenceScore={displayResult.confluenceScore}
             allocationPercent={displayResult.allocationPercent}
             dynamicAnchor={displayResult.dynamicAnchor}
             dynamicSlope={displayResult.dynamicSlope}
             confidence={displayResult.confidence}
             confidenceMultiplier={displayResult.confidenceMultiplier}
+            investmentAmount={displayResult.capitalPipeline.dDeployedCapital}
           />
 
+          {/* D — 5 circular macro regime factors */}
+          <MarketRegimeFactorPills />
+
+          {/* E — Akumulačný Core bias (tri-color bar) */}
+          <PortfolioBucketingCard
+            bucketing={bucketing}
+            loading={bucketingMetricsLoading}
+            metricsError={bucketingMetricsError}
+            section="macro"
+          />
+
+          {/* F — Token split + Yield filter + narratív */}
+          <PortfolioBucketingCard
+            bucketing={bucketing}
+            loading={bucketingMetricsLoading}
+            metricsError={bucketingMetricsError}
+            section="tokens"
+          />
+
+          <MasterAllocationCard {...allocationProps} section="accordion" />
+
+          {/* G — Execution engine */}
           <ExecutionEngineCards plans={executionPlans} loading={loading} />
         </>
       )}
