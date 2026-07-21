@@ -1,10 +1,8 @@
-export interface ConfluenceMetric {
-  subject: string;
-  shortLabel: string;
-  value: number;
-  fullMark: number;
-}
+import type { ConfluenceMetric } from "@/lib/confluenceOctagon";
 
+export type { ConfluenceMetric };
+
+/** @deprecated Use live data from useConfluenceOctagon / lib/confluenceOctagon */
 export const confluenceMetrics: ConfluenceMetric[] = [
   { subject: "W-RSI", shortLabel: "W-RSI", value: 42, fullMark: 100 },
   { subject: "Macro MFI", shortLabel: "Macro", value: 53, fullMark: 100 },
