@@ -20,6 +20,7 @@ import {
 import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
 import { GTT_TOOLTIP, LIMIT_VALIDITY_DAYS } from "@/lib/limitDepthEngine";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
+import { MACRO_TREND_BADGES } from "@/lib/macroTrend";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
@@ -222,6 +223,29 @@ function RegimeStatusBadge({
   );
 }
 
+function MacroTrendBadge({
+  macroTrend,
+}: {
+  macroTrend: TokenExecutionPlan["macroTrend"];
+}) {
+  if (!macroTrend) return null;
+
+  const badge = MACRO_TREND_BADGES[macroTrend];
+  const toneClasses =
+    badge.tone === "bull"
+      ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+      : "border-rose-500/30 bg-rose-500/10 text-rose-300";
+
+  return (
+    <motion.span
+      layout
+      className={`rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide transition-all duration-500 ease-in-out ${toneClasses}`}
+    >
+      {badge.label}
+    </motion.span>
+  );
+}
+
 function ExecutionOrderCard({
   plan,
   loading,
@@ -325,6 +349,7 @@ function ExecutionOrderCard({
                 label={plan.regimeStatusLabel}
                 tone={plan.regimeStatusTone}
               />
+              <MacroTrendBadge macroTrend={plan.macroTrend} />
               {(plan.minOrderMergeActive || plan.yieldMergeActive) && (
                 <span className="rounded-full bg-blue-500/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-blue-300 transition-all duration-500 ease-in-out">
                   {plan.minOrderMergeActive ? "Merged" : "Min Order"}

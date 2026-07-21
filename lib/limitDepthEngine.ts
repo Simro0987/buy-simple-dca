@@ -7,6 +7,10 @@ import {
   resolveFluidLimitBadge,
 } from "@/lib/rsiInterpolation";
 import {
+  applyBearMarketBlendFactor,
+  type MacroTrend,
+} from "@/lib/macroTrend";
+import {
   computeSupportResistance,
   SNAP_ABOVE_SUPPORT_PCT,
   type SupportResistanceLevels,
@@ -69,8 +73,9 @@ function resolveInterpolatedLimit(input: {
   atr14dPct: number;
   support1: number | null;
   support2: number | null;
+  macroTrend?: MacroTrend | null;
 }): LimitResolution | null {
-  const { spotPrice, rsi14, atr14dPct } = input;
+  const { spotPrice, rsi14, atr14dPct, macroTrend } = input;
   const s1Limit = supportSnapPrice(input.support1);
   const s2Raw = input.support2 ?? input.support1;
   const s2Limit = supportSnapPrice(s2Raw);
@@ -79,7 +84,8 @@ function resolveInterpolatedLimit(input: {
     return null;
   }
 
-  const blendFactor = computeRsiS2BlendFactor(rsi14);
+  const rsiBlend = computeRsiS2BlendFactor(rsi14);
+  const blendFactor = applyBearMarketBlendFactor(rsiBlend, macroTrend ?? null);
   const effectiveS2 = s2Limit > 0 && s2Limit < s1Limit ? s2Limit : s1Limit;
   const interpolated = normalizeLimitPrice(
     s1Limit + blendFactor * (effectiveS2 - s1Limit),
@@ -131,6 +137,7 @@ export function computeAutonomousLimit(input: {
   support2Source?: string;
   priceVsSma14Pct?: number | null;
   distSma200Pct?: number | null;
+  macroTrend?: MacroTrend | null;
 }): AutonomousLimitResult | null {
   void input.symbol;
   void input.category;
@@ -164,6 +171,7 @@ export function computeAutonomousLimit(input: {
     atr14dPct: input.atr14dPct,
     support1: supportResistance.support1,
     support2: supportResistance.support2,
+    macroTrend: input.macroTrend,
   });
 
   if (!resolution) {
@@ -186,9 +194,11 @@ export function computeAutonomousLimit(input: {
 
   const snapNote = atrGuardrailApplied
     ? `Limit korigovaný 7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14) — interpolácia S1→S2 presiahla 7-dňový dosah.`
-    : blendFactor > 0
-      ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
-      : `Limit prichytený na S1 — RSI ${input.rsi14.toFixed(1)} drží neutrálny rozsah.`;
+    : input.macroTrend === "bear"
+      ? `Defenzívny Bear režim — limit posunutý smerom k S2 (${Math.round(blendFactor * 100)} % blend, minimum 50 %).`
+      : blendFactor > 0
+        ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
+        : `Limit prichytený na S1 — RSI ${input.rsi14.toFixed(1)} drží neutrálny rozsah.`;
 
   return {
     limitPrice,

@@ -295,6 +295,7 @@ export function buildFinalExecutionOrders(
         baseLimitUsd,
         tokenInput.rsi14,
         blendFactor,
+        tokenInput.macroTrend,
       );
       if (positionSizing.boostPct > 0 && limitUsd > 0) {
         limitUsd = positionSizing.limitUsd;
@@ -350,6 +351,8 @@ export function buildFinalExecutionOrders(
         rsi14: tokenInput.rsi14,
         atr14dPct: tokenInput.atr14dPct,
         distSma200Pct,
+        sma200: tokenInput.sma200 ?? null,
+        macroTrend: tokenInput.macroTrend ?? null,
         ema50DeviationPct: ema50DeviationPct(spotPrice, ema50),
         fundamentalScore: row.fundamentalScore ?? null,
         filtersPassedCount: row.filtersPassedCount ?? null,

@@ -10,6 +10,7 @@ import {
   computeRsi14,
   computeSma,
 } from "@/lib/dcaTechnicalIndicators";
+import { detectMacroTrend, type MacroTrend } from "@/lib/macroTrend";
 
 export interface TokenExecutionTechnicals {
   symbol: string;
@@ -19,6 +20,7 @@ export interface TokenExecutionTechnicals {
   ema50: number;
   sma14: number;
   sma200: number;
+  macroTrend: MacroTrend | null;
   support1: number | null;
   support2: number | null;
   support1Source: string;
@@ -107,7 +109,7 @@ export function buildTokenExecutionTechnicalsFromBars(
   symbol: string,
   bars: OhlcBar[],
 ): TokenExecutionTechnicals | null {
-  if (bars.length < 16) return null;
+  if (bars.length < 200) return null;
 
   const recentBars = bars.slice(-BINANCE_KLINE_LIMIT);
   const closes = recentBars.map((bar) => bar.close);
@@ -119,6 +121,7 @@ export function buildTokenExecutionTechnicalsFromBars(
   const ema50 = round2(computeEma(closes, 50));
   const sma14 = round2(computeSma(closes, 14));
   const sma200 = round2(computeSma(closes, 200));
+  const macroTrend = detectMacroTrend(price, sma200);
   const supports = pickSupportsFromBars(price, recentBars, ema50, sma14, sma200);
 
   return {
@@ -129,6 +132,7 @@ export function buildTokenExecutionTechnicalsFromBars(
     ema50,
     sma14,
     sma200,
+    macroTrend,
     support1: supports.support1 ? round2(supports.support1) : null,
     support2: supports.support2 ? round2(supports.support2) : null,
     support1Source: supports.support1Source,
@@ -140,7 +144,7 @@ export function buildTokenExecutionTechnicalsFromBars(
 
 async function fetchCoinGeckoDailyBars(
   coingeckoId: string,
-  days = 120,
+  days = BINANCE_KLINE_LIMIT,
 ): Promise<OhlcBar[]> {
   const url = `https://api.coingecko.com/api/v3/coins/${coingeckoId}/market_chart?vs_currency=usd&days=${days}&interval=daily`;
   const res = await fetch(url, {

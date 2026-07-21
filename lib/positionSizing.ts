@@ -1,4 +1,5 @@
 import { computeRsiS2BlendFactor } from "@/lib/rsiInterpolation";
+import type { MacroTrend } from "@/lib/macroTrend";
 
 export const MAX_POSITION_BOOST_PCT = 15;
 export const NEUTRAL_RSI_LOW = 40;
@@ -20,7 +21,12 @@ function round2(value: number): number {
 export function computePositionSizeMultiplier(
   rsi: number,
   blendFactor?: number,
+  macroTrend?: MacroTrend | null,
 ): number {
+  if (macroTrend === "bear") {
+    return 1;
+  }
+
   const value = clamp(rsi, 0, 100);
   const blend = blendFactor ?? computeRsiS2BlendFactor(value);
 
@@ -62,6 +68,7 @@ export function applyPositionSizeToLimitUsd(
   baseLimitUsd: number,
   rsi: number | null,
   blendFactor: number,
+  macroTrend?: MacroTrend | null,
 ): {
   limitUsd: number;
   multiplier: number;
@@ -71,7 +78,7 @@ export function applyPositionSizeToLimitUsd(
     return { limitUsd: baseLimitUsd, multiplier: 1, boostPct: 0 };
   }
 
-  const multiplier = computePositionSizeMultiplier(rsi, blendFactor);
+  const multiplier = computePositionSizeMultiplier(rsi, blendFactor, macroTrend);
   const boostPct = computePositionBoostPct(multiplier);
 
   return {

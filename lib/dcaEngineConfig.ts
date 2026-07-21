@@ -7,6 +7,7 @@ import type {
   RegimeStatusTone,
   TokenIndicatorChip,
 } from "@/lib/dcaTokenIndicators";
+import type { MacroTrend } from "@/lib/macroTrend";
 
 export const DEFAULT_WEEKLY_INVESTMENT = 431;
 
@@ -48,6 +49,8 @@ export interface TokenExecutionPlan {
   rsi14: number | null;
   atr14dPct: number | null;
   distSma200Pct: number | null;
+  sma200: number | null;
+  macroTrend: MacroTrend | null;
   ema50DeviationPct: number | null;
   fundamentalScore: number | null;
   filtersPassedCount: number | null;

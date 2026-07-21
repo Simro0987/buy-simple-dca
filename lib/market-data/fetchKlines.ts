@@ -11,7 +11,8 @@ type RawKline = [number, string, string, string, string, string, ...unknown[]];
 
 const BINANCE_KLINES_BASE = "https://data-api.binance.vision/api/v3/klines";
 
-export const BINANCE_KLINE_LIMIT = 30;
+/** Daily bars needed for SMA 200 plus pivot/support context. */
+export const BINANCE_KLINE_LIMIT = 250;
 
 export async function fetchBinanceKlines(
   symbol: string,

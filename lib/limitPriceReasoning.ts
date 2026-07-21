@@ -27,6 +27,7 @@ export interface LimitReasoningInput {
   supportResistance?: SupportResistanceLevels | null;
   supportSnapNote?: string | null;
   limitDepthNarrative?: string | null;
+  macroTrendNarrative?: string | null;
 }
 
 export function computeBelowSpotPercent(
@@ -158,6 +159,9 @@ export function buildDynamicLimitReasoning(input: LimitReasoningInput): string {
   }
   if (input.supportSnapNote) {
     parts.push(input.supportSnapNote);
+  }
+  if (input.macroTrendNarrative) {
+    parts.push(input.macroTrendNarrative);
   }
   if (input.limitDepthNarrative) {
     parts.push(input.limitDepthNarrative);

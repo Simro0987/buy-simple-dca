@@ -21,6 +21,7 @@ import {
   LIMIT_VALIDITY_DAYS,
   type LimitDepthMode,
 } from "@/lib/limitDepthEngine";
+import { detectMacroTrend, buildMacroTrendNarrative, type MacroTrend } from "@/lib/macroTrend";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const MIN_ORDER_USD_THRESHOLD = 10;
@@ -86,6 +87,7 @@ export interface ExecutionTokenInput {
   sma14?: number | null;
   sma200?: number | null;
   distSma200Pct?: number | null;
+  macroTrend?: MacroTrend | null;
   support1?: number | null;
   support2?: number | null;
   support1Source?: string;
@@ -205,6 +207,7 @@ function buildWhyLimit(
     supportResistance: options?.supportResistance ?? null,
     supportSnapNote: options?.supportSnapNote ?? null,
     limitDepthNarrative: options?.limitDepthNarrative ?? null,
+    macroTrendNarrative: buildMacroTrendNarrative(input.macroTrend ?? null),
   });
 }
 
@@ -231,6 +234,7 @@ function resolveAutonomousLimitFields(
     support2Source: input.support2Source,
     priceVsSma14Pct: input.priceVsSma14Pct,
     distSma200Pct: input.distSma200Pct,
+    macroTrend: input.macroTrend,
   });
 
   if (!autonomous) return null;
@@ -773,6 +777,7 @@ export function buildExecutionTokenInput(input: {
     ema50: number;
     sma14: number;
     sma200: number;
+    macroTrend?: MacroTrend | null;
     support1: number | null;
     support2: number | null;
     support1Source: string;
@@ -782,76 +787,89 @@ export function buildExecutionTokenInput(input: {
 }): ExecutionTokenInput {
   const ctx = input.marketContext;
 
+  const enrich = (partial: ExecutionTokenInput): ExecutionTokenInput => ({
+    ...partial,
+    macroTrend:
+      partial.macroTrend ??
+      detectMacroTrend(partial.spotPrice, partial.sma200),
+  });
+
   if (input.category === "core" && ctx) {
     const tech = input.tokenTechnicals;
-    return {
+    const spotPrice = input.spotPrice || ctx.btc.price;
+    const sma200 = tech?.sma200 ?? ctx.btc.sma200d;
+    return enrich({
       symbol: input.symbol,
       category: input.category,
       finalScore: input.finalScore,
       fearGreedValue: input.fearGreedValue,
-      spotPrice: input.spotPrice || ctx.btc.price,
+      spotPrice,
       brakeActive: input.brakeActive,
       rsi14: tech?.rsi14 ?? ctx.btc.rsi14 ?? input.rsi14,
       atr14dPct: tech?.atr14dPct ?? ctx.btc.atr14dPct ?? input.atr14dPct,
       ema50: tech?.ema50 ?? ctx.btc.ema50,
       sma14: tech?.sma14,
-      sma200: ctx.btc.sma200d,
+      sma200,
       distSma200Pct: ctx.btc.distSma200Pct,
+      macroTrend: tech?.macroTrend ?? null,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
       support2Source: tech?.support2Source,
-    };
+    });
   }
 
   if (input.symbol === "ETH" && ctx) {
     const tech = input.tokenTechnicals;
-    return {
+    return enrich({
       ...input,
       rsi14: tech?.rsi14 ?? ctx.eth.rsi14 ?? input.rsi14,
       atr14dPct: tech?.atr14dPct ?? ctx.eth.atr14dPct ?? input.atr14dPct,
       ema50: tech?.ema50,
       sma14: tech?.sma14,
       sma200: tech?.sma200,
+      macroTrend: tech?.macroTrend ?? null,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
       support2Source: tech?.support2Source,
       filterConditions: input.filterConditions,
-    };
+    });
   }
 
   if (input.symbol === "SOL" && ctx) {
     const tech = input.tokenTechnicals;
-    return {
+    return enrich({
       ...input,
       rsi14: tech?.rsi14 ?? ctx.sol.rsi14 ?? input.rsi14,
       atr14dPct: tech?.atr14dPct ?? ctx.sol.atr14dPct ?? input.atr14dPct,
       ema50: tech?.ema50,
       sma14: tech?.sma14,
       sma200: tech?.sma200,
+      macroTrend: tech?.macroTrend ?? null,
       support1: tech?.support1,
       support2: tech?.support2,
       support1Source: tech?.support1Source,
       support2Source: tech?.support2Source,
       filterConditions: input.filterConditions,
-    };
+    });
   }
 
   const tech = input.tokenTechnicals;
-  return {
+  return enrich({
     ...input,
     rsi14: tech?.rsi14 ?? input.rsi14,
     atr14dPct: tech?.atr14dPct ?? input.atr14dPct,
     ema50: tech?.ema50,
     sma14: tech?.sma14,
     sma200: tech?.sma200,
+    macroTrend: tech?.macroTrend ?? null,
     support1: tech?.support1,
     support2: tech?.support2,
     support1Source: tech?.support1Source,
     support2Source: tech?.support2Source,
     filterConditions: input.filterConditions,
-  };
+  });
 }
 
 export function toExecutionMarketContext(
