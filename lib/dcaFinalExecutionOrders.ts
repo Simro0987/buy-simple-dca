@@ -18,6 +18,10 @@ import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { MarketDataServicePayload } from "@/lib/dcaMarketData";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
 import type { TokenExecutionTechnicalsMap } from "@/lib/tokenExecutionTechnicals";
+import {
+  applyPositionSizeToLimitUsd,
+  buildPositionSizingNarrative,
+} from "@/lib/positionSizing";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
@@ -284,9 +288,29 @@ export function buildFinalExecutionOrders(
         routerReasoning = minOrderMerge.routerReasoning;
       }
 
+      const blendFactor =
+        split.rsiS2BlendPct != null ? split.rsiS2BlendPct / 100 : 0;
+      const baseLimitUsd = limitUsd;
+      const positionSizing = applyPositionSizeToLimitUsd(
+        baseLimitUsd,
+        tokenInput.rsi14,
+        blendFactor,
+      );
+      if (positionSizing.boostPct > 0 && limitUsd > 0) {
+        limitUsd = positionSizing.limitUsd;
+      }
+      const positionNarrative = buildPositionSizingNarrative(
+        positionSizing.boostPct,
+      );
+      const whyLimit = positionNarrative
+        ? `${split.whyLimit} ${positionNarrative}`
+        : split.whyLimit;
+
+      const adjustedTotalUsd = roundUsd(marketUsd + limitUsd);
+
       const weightPercent =
         deployedCapital > 0
-          ? Math.round((totalUsd / deployedCapital) * 1000) / 10
+          ? Math.round((adjustedTotalUsd / deployedCapital) * 1000) / 10
           : 0;
 
       return {
@@ -295,13 +319,13 @@ export function buildFinalExecutionOrders(
         category,
         logoUrl: existing?.logoUrl || def?.logoUrl || "",
         weightPercent,
-        totalUsd,
+        totalUsd: adjustedTotalUsd,
         marketUsd,
         limitUsd,
         marketShare,
         limitShare,
         limitPrice: split.limitPrice,
-        whyLimit: split.whyLimit,
+        whyLimit,
         spotPrice: spotPrice || existing?.spotPrice || 0,
         change24h: existing?.change24h ?? 0,
         yieldMergeActive,
@@ -344,6 +368,9 @@ export function buildFinalExecutionOrders(
         limitDepthNarrative: split.limitDepthNarrative,
         limitValidityDays: split.limitValidityDays,
         rsiS2BlendPct: split.rsiS2BlendPct,
+        limitUsdBase: baseLimitUsd > 0 ? baseLimitUsd : null,
+        positionSizeMultiplier: positionSizing.multiplier,
+        positionSizeBoostPct: positionSizing.boostPct,
       };
     });
 }

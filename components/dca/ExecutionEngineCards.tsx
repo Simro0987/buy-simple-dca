@@ -475,8 +475,14 @@ function ExecutionOrderCard({
           <p className="mt-1 text-base font-bold text-white">
             <OrderAmountDisplay value={plan.limitUsd} copyable />
           </p>
-          {plan.limitPrice > 0 && (
+          {plan.limitUsd > 0 && (
             <div className="mt-1.5">
+              {plan.positionSizeBoostPct > 0 && (
+                <p className="mb-1.5 text-[9px] font-semibold text-cyan-300/90">
+                  Dynamická suma +{formatDecimal(plan.positionSizeBoostPct, 0)} % (RSI
+                  conviction)
+                </p>
+              )}
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="rounded-full border border-orange-500/25 bg-orange-500/10 px-2 py-0.5 text-[9px] font-bold tabular-nums text-orange-300 transition-all duration-500 ease-in-out">
                   {formatBelowSpotLabel(plan.limitPullbackPct)}

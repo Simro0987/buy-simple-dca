@@ -66,6 +66,9 @@ export interface TokenExecutionPlan {
   limitDepthNarrative: string | null;
   limitValidityDays: number;
   rsiS2BlendPct: number | null;
+  limitUsdBase: number | null;
+  positionSizeMultiplier: number;
+  positionSizeBoostPct: number;
 }
 
 export interface RegimeFactorDisplay {
