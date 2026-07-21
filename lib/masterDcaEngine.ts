@@ -650,6 +650,7 @@ export function toExecutionPlans(result: MasterDcaResult) {
     minOrderMergeActive: false,
     mergedExecutionRoute: null,
     mergedTotalUsd: 0,
+    routerReasoning: null,
     brakeActive: plan.brakeActive,
     hasLiveData: plan.hasLiveData,
     marketStatusFallback: plan.marketStatusFallback,

@@ -211,6 +211,7 @@ export function buildFinalExecutionOrders(
       let minOrderMergeActive = false;
       let mergedExecutionRoute: "market" | "limit" | null = null;
       let mergedTotalUsd = 0;
+      let routerReasoning: string | null = null;
 
       const minOrderMerge = applyMinOrderAmountMerge({
         symbol: row.symbol,
@@ -240,6 +241,7 @@ export function buildFinalExecutionOrders(
         minOrderMergeActive = true;
         mergedExecutionRoute = minOrderMerge.mergedExecutionRoute;
         mergedTotalUsd = minOrderMerge.mergedTotalUsd;
+        routerReasoning = minOrderMerge.routerReasoning;
       }
 
       const weightPercent =
@@ -256,8 +258,8 @@ export function buildFinalExecutionOrders(
         totalUsd,
         marketUsd,
         limitUsd,
-        marketShare: split.marketShare,
-        limitShare: split.limitShare,
+        marketShare,
+        limitShare,
         limitPrice: split.limitPrice,
         whyLimit: split.whyLimit,
         spotPrice: spotPrice || existing?.spotPrice || 0,
@@ -266,6 +268,7 @@ export function buildFinalExecutionOrders(
         minOrderMergeActive,
         mergedExecutionRoute,
         mergedTotalUsd,
+        routerReasoning,
         brakeActive: split.safetyBrakeActive || input.brakeActive,
         hasLiveData: existing?.hasLiveData ?? spotPrice > 0,
         marketStatusFallback:

@@ -29,6 +29,7 @@ export interface TokenExecutionPlan {
   minOrderMergeActive: boolean;
   mergedExecutionRoute: "market" | "limit" | null;
   mergedTotalUsd: number;
+  routerReasoning: string | null;
   brakeActive: boolean;
   hasLiveData: boolean;
   marketStatusFallback: boolean;

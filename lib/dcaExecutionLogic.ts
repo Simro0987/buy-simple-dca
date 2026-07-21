@@ -13,6 +13,9 @@ import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const MIN_ORDER_USD_THRESHOLD = 10;
 export const MIN_ORDER_MERGE_SYMBOLS = new Set(["HYPE", "JUP", "SOL"]);
+export const ROUTER_RSI_MARKET_MIN = 60;
+export const ROUTER_RSI_LIMIT_MAX = 45;
+export const ROUTER_ATR_LOW_MAX = 4;
 export const CORE_PULLBACK_PCT = 2.5;
 export const SAFETY_BRAKE_SMA200_THRESHOLD_PCT = 15;
 
@@ -28,6 +31,11 @@ export interface SmartRouterInput {
   fundamentalScore?: number | null;
 }
 
+export interface SmartRouterDecision {
+  route: MergedExecutionRoute;
+  reasoning: string;
+}
+
 export interface MinOrderMergeResult {
   marketUsd: number;
   limitUsd: number;
@@ -37,6 +45,7 @@ export interface MinOrderMergeResult {
   mergedExecutionRoute: MergedExecutionRoute | null;
   mergedTotalUsd: number;
   splitExplanation: string | null;
+  routerReasoning: string | null;
 }
 
 export interface ExecutionMarketContext {
@@ -358,57 +367,161 @@ function buildMinOrderMergeExplanation(
   return `MERGED: MIN ORDER RULE (<${MIN_ORDER_USD_THRESHOLD} USD limit) • Zlúčené do ${routeLabel} (Spolu: ${formatCopyAmount2(mergedTotalUsd)} USD)`;
 }
 
-/**
- * Smart execution router — evaluates RSI, volatility, score, and MA distance
- * to route a merged order to Market (buy now) or Limit (wait for pullback).
- */
-export function evaluateSmartExecutionRoute(
+function resolveRouterScore(input: SmartRouterInput): number {
+  return Math.round(
+    input.convictionScore ?? input.fundamentalScore ?? input.finalScore,
+  );
+}
+
+function formatEma50Label(dev: number | null | undefined): string {
+  if (dev == null) return "bez EMA50 dát";
+  if (dev > 0) return `${round1(dev)} % nad 50D EMA`;
+  if (dev < 0) return `${round1(Math.abs(dev))} % pod 50D EMA`;
+  return "na 50D EMA";
+}
+
+function qualifiesForMarketRoute(input: SmartRouterInput): boolean {
+  const { rsi14, ema50DeviationPct, atr14dPct } = input;
+  if (rsi14 == null || ema50DeviationPct == null || atr14dPct == null) {
+    return false;
+  }
+  return (
+    rsi14 > ROUTER_RSI_MARKET_MIN &&
+    ema50DeviationPct > 0 &&
+    atr14dPct < ROUTER_ATR_LOW_MAX
+  );
+}
+
+function qualifiesForLimitRoute(input: SmartRouterInput): boolean {
+  const { rsi14, ema50DeviationPct, atr14dPct } = input;
+  if (rsi14 == null || ema50DeviationPct == null || atr14dPct == null) {
+    return false;
+  }
+  return (
+    rsi14 < ROUTER_RSI_LIMIT_MAX &&
+    ema50DeviationPct <= 0 &&
+    atr14dPct >= ROUTER_ATR_LOW_MAX
+  );
+}
+
+function buildMarketRouterReasoning(input: SmartRouterInput): string {
+  const rsi = input.rsi14 ?? 0;
+  const atr = input.atr14dPct ?? 0;
+  const score = resolveRouterScore(input);
+  const emaLabel = formatEma50Label(input.ema50DeviationPct);
+  return `Smerované do Marketu: RSI je silné (${rsi.toFixed(0)}), cena drží ${emaLabel}, ATR ${round1(atr)} % (nízka volatilita), skóre ${score} — bez nutnosti čakať na limit.`;
+}
+
+function buildLimitRouterReasoning(input: SmartRouterInput): string {
+  const rsi = input.rsi14 ?? 0;
+  const atr = input.atr14dPct ?? 0;
+  const score = resolveRouterScore(input);
+  const emaLabel = formatEma50Label(input.ema50DeviationPct);
+  return `Smerované do Limitu: RSI je v ochladzovaní (${rsi.toFixed(0)}), cena ${emaLabel}, ATR ${round1(atr)} % (priestor pre pokles), skóre ${score} — čakáme na hlbší limit.`;
+}
+
+function buildAutoMarketReasoning(mergedTotalUsd: number): string {
+  return `Smerované do Marketu: celková suma ${formatCopyAmount2(mergedTotalUsd)} USD je pod ${MIN_ORDER_USD_THRESHOLD} USD — pod minimálnym limitom, okamžitý nákup v Markete.`;
+}
+
+function buildFallbackRouterReasoning(
   input: SmartRouterInput,
-): MergedExecutionRoute {
-  let marketScore = 0;
-  let limitScore = 0;
+  route: MergedExecutionRoute,
+): string {
+  const rsi = input.rsi14;
+  const atr = input.atr14dPct;
+  const ema = input.ema50DeviationPct;
+  const score = resolveRouterScore(input);
+  const emaLabel = formatEma50Label(ema);
+
+  if (route === "market") {
+    const rsiPart =
+      rsi != null
+        ? rsi > ROUTER_RSI_MARKET_MIN
+          ? `RSI silné (${rsi.toFixed(0)})`
+          : `RSI neutrálne (${rsi.toFixed(0)})`
+        : "RSI bez dát";
+    const atrPart =
+      atr != null
+        ? atr < ROUTER_ATR_LOW_MAX
+          ? `ATR ${round1(atr)} % (nízka volatilita)`
+          : `ATR ${round1(atr)} %`
+        : "ATR bez dát";
+    return `Smerované do Marketu: ${rsiPart}, cena ${emaLabel}, ${atrPart}, skóre ${score} — indikátory favorizujú okamžitý nákup.`;
+  }
+
+  const rsiPart =
+    rsi != null
+      ? rsi < ROUTER_RSI_LIMIT_MAX
+        ? `RSI v ochladzovaní (${rsi.toFixed(0)})`
+        : `RSI neutrálne (${rsi.toFixed(0)})`
+      : "RSI bez dát";
+  const atrPart =
+    atr != null
+      ? atr >= ROUTER_ATR_LOW_MAX
+        ? `ATR ${round1(atr)} % (priestor pre pokles)`
+        : `ATR ${round1(atr)} %`
+      : "ATR bez dát";
+  return `Smerované do Limitu: ${rsiPart}, cena ${emaLabel}, ${atrPart}, skóre ${score} — indikátory favorizujú čakanie na limit.`;
+}
+
+function resolveFallbackRoute(input: SmartRouterInput): MergedExecutionRoute {
+  let marketVotes = 0;
+  let limitVotes = 0;
 
   const rsi = input.rsi14;
   if (rsi != null) {
-    if (rsi < 38) marketScore += 3;
-    else if (rsi < 45) marketScore += 1;
-    else if (rsi > 65) limitScore += 2;
-    else if (rsi > 55) limitScore += 1;
+    if (rsi > ROUTER_RSI_MARKET_MIN) marketVotes += 2;
+    else if (rsi < ROUTER_RSI_LIMIT_MAX) limitVotes += 2;
+    else if (rsi >= 50) marketVotes += 1;
+    else limitVotes += 1;
+  }
+
+  const ema = input.ema50DeviationPct;
+  if (ema != null) {
+    if (ema > 0) marketVotes += 2;
+    else if (ema <= 0) limitVotes += 2;
   }
 
   const atr = input.atr14dPct;
   if (atr != null) {
-    if (atr >= 6) limitScore += 2;
-    else if (atr >= 4) limitScore += 1;
-    else marketScore += 1;
+    if (atr < ROUTER_ATR_LOW_MAX) marketVotes += 1;
+    else limitVotes += 1;
   }
 
-  const score = input.convictionScore ?? input.finalScore;
-  if (score >= 70) marketScore += 2;
-  else if (score >= 55) marketScore += 1;
-  else if (score < 40) limitScore += 1;
+  const score = resolveRouterScore(input);
+  if (score >= 60) marketVotes += 1;
+  else if (score < 45) limitVotes += 1;
 
-  const sma14 = input.priceVsSma14Pct;
-  if (sma14 != null) {
-    if (sma14 <= -3) marketScore += 2;
-    else if (sma14 < 0) marketScore += 1;
-    else if (sma14 >= 5) limitScore += 2;
-    else if (sma14 > 0) limitScore += 1;
+  return marketVotes >= limitVotes ? "market" : "limit";
+}
+
+/**
+ * Indicator-driven smart router — RSI, 50D EMA, ATR, and score decide
+ * Market (buy now) vs Limit (wait for pullback) with cited reasoning.
+ */
+export function evaluateSmartExecutionRoute(
+  input: SmartRouterInput,
+): SmartRouterDecision {
+  if (qualifiesForMarketRoute(input)) {
+    return {
+      route: "market",
+      reasoning: buildMarketRouterReasoning(input),
+    };
   }
 
-  const ema50 = input.ema50DeviationPct;
-  if (ema50 != null) {
-    if (ema50 <= -5) marketScore += 1;
-    else if (ema50 >= 8) limitScore += 1;
+  if (qualifiesForLimitRoute(input)) {
+    return {
+      route: "limit",
+      reasoning: buildLimitRouterReasoning(input),
+    };
   }
 
-  const fundamental = input.fundamentalScore;
-  if (fundamental != null) {
-    if (fundamental >= 70) marketScore += 1;
-    else if (fundamental < 45) limitScore += 1;
-  }
-
-  return marketScore >= limitScore ? "market" : "limit";
+  const route = resolveFallbackRoute(input);
+  return {
+    route,
+    reasoning: buildFallbackRouterReasoning(input, route),
+  };
 }
 
 /**
@@ -432,6 +545,7 @@ export function applyMinOrderAmountMerge(input: {
     mergedExecutionRoute: null as MergedExecutionRoute | null,
     mergedTotalUsd: 0,
     splitExplanation: null as string | null,
+    routerReasoning: null as string | null,
   };
 
   if (!MIN_ORDER_MERGE_SYMBOLS.has(input.symbol)) {
@@ -454,12 +568,13 @@ export function applyMinOrderAmountMerge(input: {
       mergedExecutionRoute: "market",
       mergedTotalUsd,
       splitExplanation: buildMinOrderMergeExplanation("market", mergedTotalUsd),
+      routerReasoning: buildAutoMarketReasoning(mergedTotalUsd),
     };
   }
 
-  const route = evaluateSmartExecutionRoute(input.router);
+  const decision = evaluateSmartExecutionRoute(input.router);
 
-  if (route === "market") {
+  if (decision.route === "market") {
     return {
       marketUsd: mergedTotalUsd,
       limitUsd: 0,
@@ -469,6 +584,7 @@ export function applyMinOrderAmountMerge(input: {
       mergedExecutionRoute: "market",
       mergedTotalUsd,
       splitExplanation: buildMinOrderMergeExplanation("market", mergedTotalUsd),
+      routerReasoning: decision.reasoning,
     };
   }
 
@@ -481,6 +597,7 @@ export function applyMinOrderAmountMerge(input: {
     mergedExecutionRoute: "limit",
     mergedTotalUsd,
     splitExplanation: buildMinOrderMergeExplanation("limit", mergedTotalUsd),
+    routerReasoning: decision.reasoning,
   };
 }
 

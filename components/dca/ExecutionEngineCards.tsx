@@ -390,16 +390,23 @@ function ExecutionOrderCard({
 
       <AnimatePresence mode="wait">
         {(plan.minOrderRuleActive || plan.minOrderMergeActive) && plan.splitExplanation ? (
-          <motion.p
-            key={`min-${plan.splitExplanation}`}
+          <motion.div
+            key={`min-${plan.splitExplanation}-${plan.routerReasoning ?? ""}`}
             initial={{ opacity: 0, y: 6, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -6, scale: 0.98 }}
             transition={{ duration: 0.5, ease: "easeInOut" }}
-            className="mb-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2 text-[10px] font-bold leading-relaxed text-blue-300"
+            className="mb-3 space-y-1.5 rounded-xl border border-blue-500/30 bg-blue-500/10 px-3 py-2"
           >
-            {plan.splitExplanation}
-          </motion.p>
+            <p className="text-[10px] font-bold leading-relaxed text-blue-300">
+              {plan.splitExplanation}
+            </p>
+            {plan.routerReasoning ? (
+              <p className="text-[10px] font-medium leading-relaxed text-blue-200/90">
+                {plan.routerReasoning}
+              </p>
+            ) : null}
+          </motion.div>
         ) : (
           plan.splitExplanation && (
             <motion.p
