@@ -17,6 +17,7 @@ import type { ConfidenceLevel, MasterTokenPlan } from "@/lib/masterDcaEngine";
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { MarketDataServicePayload } from "@/lib/dcaMarketData";
 import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
+import type { TokenExecutionTechnicalsMap } from "@/lib/tokenExecutionTechnicals";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
@@ -135,6 +136,7 @@ export interface BuildFinalExecutionOrdersInput {
   portfolioYieldContext?: PortfolioYieldContext | null;
   yieldMetrics?: Record<string, YieldTokenMetrics>;
   stakingApy?: Record<string, number>;
+  tokenTechnicals?: TokenExecutionTechnicalsMap;
 }
 
 /**
@@ -183,6 +185,7 @@ export function buildFinalExecutionOrders(
         filterConditions: row.filterConditions,
         priceVsSma14Pct: row.priceVsSma14Pct,
         convictionScore: row.convictionScore ?? null,
+        tokenTechnicals: input.tokenTechnicals?.[row.symbol],
       });
 
       const yieldMetric = input.yieldMetrics?.[row.symbol];
@@ -336,6 +339,10 @@ export function buildFinalExecutionOrders(
         supportResistance: split.supportResistance,
         supportSnapApplied: split.supportSnapApplied,
         supportSnapNote: split.supportSnapNote,
+        limitDepthMode: split.limitDepthMode,
+        limitDepthBadge: split.limitDepthBadge,
+        limitDepthNarrative: split.limitDepthNarrative,
+        limitValidityDays: split.limitValidityDays,
       };
     });
 }

@@ -1,13 +1,16 @@
 import { normalizeLimitPrice } from "@/lib/executionFormatting";
 import { formatDecimal, formatSignedPct } from "@/lib/numberFormat";
 
-/** Nearest strong horizontal support (S1) and resistance (R1) for a token. */
+/** Nearest strong horizontal support (S1, S2) and resistance (R1) for a token. */
 export interface SupportResistanceLevels {
   support1: number | null;
+  support2: number | null;
   resistance1: number | null;
   distToSupportPct: number | null;
+  distToSupport2Pct: number | null;
   distToResistancePct: number | null;
   supportSource: string;
+  support2Source: string;
   resistanceSource: string;
 }
 
@@ -69,10 +72,6 @@ function pickNearestResistance(
   return above.sort((a, b) => a.price - b.price)[0];
 }
 
-/**
- * Compute S1/R1 from static levels available in the execution pipeline
- * (EMA, SMA, swing proxy from ATR).
- */
 export function computeSupportResistance(input: {
   spotPrice: number;
   ema50?: number | null;
@@ -81,15 +80,22 @@ export function computeSupportResistance(input: {
   priceVsSma14Pct?: number | null;
   distSma200Pct?: number | null;
   atr14dPct?: number | null;
+  support1?: number | null;
+  support2?: number | null;
+  support1Source?: string;
+  support2Source?: string;
 }): SupportResistanceLevels {
   const spot = input.spotPrice;
   if (spot <= 0) {
     return {
       support1: null,
+      support2: null,
       resistance1: null,
       distToSupportPct: null,
+      distToSupport2Pct: null,
       distToResistancePct: null,
       supportSource: "—",
+      support2Source: "—",
       resistanceSource: "—",
     };
   }
@@ -104,12 +110,40 @@ export function computeSupportResistance(input: {
   const swingLow = spot * (1 - (Math.min(atr, 12) * 2) / 100);
   const swingHigh = spot * (1 + (Math.min(atr, 12) * 1.5) / 100);
 
-  const support = pickNearestSupport(spot, [
-    { price: input.ema50 ?? 0, source: "EMA50" },
-    { price: sma14 ?? 0, source: "SMA14" },
-    { price: sma200 ?? 0, source: "SMA200" },
-    { price: swingLow, source: "Swing Low" },
-  ]);
+  const klineSupport1 =
+    input.support1 && input.support1 > 0
+      ? { price: input.support1, source: input.support1Source ?? "Kline S1" }
+      : null;
+  const klineSupport2 =
+    input.support2 && input.support2 > 0
+      ? { price: input.support2, source: input.support2Source ?? "Kline S2" }
+      : null;
+
+  const support = klineSupport1 ??
+    pickNearestSupport(spot, [
+      { price: input.ema50 ?? 0, source: "EMA50" },
+      { price: sma14 ?? 0, source: "SMA14" },
+      { price: sma200 ?? 0, source: "SMA200" },
+      { price: swingLow, source: "Swing Low" },
+    ]);
+
+  const support2 =
+    klineSupport2 ??
+    (() => {
+      const candidates = [
+        { price: input.ema50 ?? 0, source: "EMA50" },
+        { price: sma200 ?? 0, source: "SMA200" },
+        { price: swingLow * 0.985, source: "Swing Low L2" },
+      ];
+      const below = candidates
+        .filter(
+          (candidate) =>
+            candidate.price > 0 &&
+            candidate.price < (support?.price ?? spot) * 0.995,
+        )
+        .sort((a, b) => b.price - a.price);
+      return below[0] ?? null;
+    })();
 
   const resistance = pickNearestResistance(spot, [
     { price: input.ema50 ?? 0, source: "EMA50" },
@@ -120,10 +154,13 @@ export function computeSupportResistance(input: {
 
   return {
     support1: support?.price ?? null,
+    support2: support2?.price ?? null,
     resistance1: resistance?.price ?? null,
     distToSupportPct: support ? distancePct(spot, support.price) : null,
+    distToSupport2Pct: support2 ? distancePct(spot, support2.price) : null,
     distToResistancePct: resistance ? distancePct(spot, resistance.price) : null,
     supportSource: support?.source ?? "—",
+    support2Source: support2?.source ?? "—",
     resistanceSource: resistance?.source ?? "—",
   };
 }
@@ -207,6 +244,12 @@ export function formatSupportResistanceSummary(
     );
   }
 
+  if (levels.support2 != null && levels.distToSupport2Pct != null) {
+    parts.push(
+      `S2 ${levels.support2Source} ${formatDecimal(levels.support2, 4)} (${formatSignedPct(levels.distToSupport2Pct, 1)})`,
+    );
+  }
+
   if (levels.resistance1 != null && levels.distToResistancePct != null) {
     parts.push(
       `R1 ${levels.resistanceSource} ${formatDecimal(levels.resistance1, 4)} (${formatSignedPct(levels.distToResistancePct, 1)})`,
@@ -225,6 +268,10 @@ export function finalizeLimitWithSupportSnap(input: {
   priceVsSma14Pct?: number | null;
   distSma200Pct?: number | null;
   atr14dPct?: number | null;
+  support1?: number | null;
+  support2?: number | null;
+  support1Source?: string;
+  support2Source?: string;
 }): {
   limitPrice: number;
   limitPullbackPct: number;

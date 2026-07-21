@@ -73,6 +73,9 @@ export function DcaEngine({
   const setDcaResult = useAppStore((state) => state.setDcaResult);
   const setExecutionPlans = useAppStore((state) => state.setExecutionPlans);
   const tradingMode = useAppStore((state) => state.tradingMode);
+  const tokenTechnicals = useAppStore(
+    (state) => state.globalLiveData.tokenTechnicals,
+  );
   const { timing, loading: timingLoading, executionAllowed } =
     useSmartMondayTiming();
 
@@ -134,6 +137,7 @@ export function DcaEngine({
             portfolioYieldContext,
             yieldMetrics,
             stakingApy,
+            tokenTechnicals,
           })
         : [],
     [
@@ -143,6 +147,7 @@ export function DcaEngine({
       portfolioYieldContext,
       yieldMetrics,
       stakingApy,
+      tokenTechnicals,
     ],
   );
 

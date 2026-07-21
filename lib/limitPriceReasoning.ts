@@ -2,6 +2,7 @@ import type { AssetCategory } from "@/lib/portfolioStorage";
 import type { YieldSatelliteMetrics } from "@/lib/yieldSatelliteMetrics";
 import type { SupportResistanceLevels } from "@/lib/supportResistanceLevels";
 import { formatSupportResistanceSummary } from "@/lib/supportResistanceLevels";
+import { LIMIT_VALIDITY_INSTRUCTION } from "@/lib/limitDepthEngine";
 import { formatDecimal, formatSignedPct } from "@/lib/numberFormat";
 
 export interface LimitReasoningInput {
@@ -22,6 +23,7 @@ export interface LimitReasoningInput {
   yieldSatelliteMetrics?: YieldSatelliteMetrics | null;
   supportResistance?: SupportResistanceLevels | null;
   supportSnapNote?: string | null;
+  limitDepthNarrative?: string | null;
 }
 
 export function computeBelowSpotPercent(
@@ -154,6 +156,10 @@ export function buildDynamicLimitReasoning(input: LimitReasoningInput): string {
   if (input.supportSnapNote) {
     parts.push(input.supportSnapNote);
   }
+  if (input.limitDepthNarrative) {
+    parts.push(input.limitDepthNarrative);
+  }
+  parts.push(LIMIT_VALIDITY_INSTRUCTION);
 
   return parts.join(" ");
 }

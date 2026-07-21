@@ -17,6 +17,7 @@ import {
   type DcaTokenFilter,
 } from "@/components/dca/DcaTokenFilterBar";
 import { formatDecimal, formatPct, formatSignedPct } from "@/lib/numberFormat";
+import { GTT_TOOLTIP, LIMIT_VALIDITY_DAYS } from "@/lib/limitDepthEngine";
 import { formatBelowSpotLabel } from "@/lib/limitPriceReasoning";
 import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
@@ -441,7 +442,7 @@ function ExecutionOrderCard({
         </div>
 
         <div className="rounded-2xl border border-orange-500/15 bg-orange-500/5 p-3">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-orange-400">
               LMT
             </span>
@@ -449,6 +450,17 @@ function ExecutionOrderCard({
               <ShareDisplay value={plan.limitShare} />
             </span>
           </div>
+          {plan.limitDepthBadge && plan.limitUsd > 0 && (
+            <span
+              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
+                plan.limitDepthMode === "deep_wick"
+                  ? "border-orange-500/35 bg-orange-500/15 text-orange-300"
+                  : "border-emerald-500/30 bg-emerald-500/12 text-emerald-300"
+              }`}
+            >
+              {plan.limitDepthBadge}
+            </span>
+          )}
           <p className="mt-1 text-base font-bold text-white">
             <OrderAmountDisplay value={plan.limitUsd} copyable />
           </p>
@@ -474,16 +486,22 @@ function ExecutionOrderCard({
               <p className="mt-1 text-[8px] font-semibold uppercase tracking-wider text-zinc-600">
                 Limitná cena nákupu
               </p>
-              <div className="mt-0.5 flex items-center gap-1">
-                <p className="text-xs font-bold tabular-nums text-orange-300">
+              <div className="mt-0.5 flex items-center gap-1.5">
+                <p className="text-sm font-bold tabular-nums text-orange-300">
                   {formatCopyLimitPrice4(plan.limitPrice)}
                 </p>
                 <CopyValueButton
                   compact
                   value={formatCopyLimitPrice4(plan.limitPrice)}
-                  label="Kopírovať cenu"
+                  label="Kopírovať limitnú cenu"
                 />
               </div>
+              <p
+                title={GTT_TOOLTIP}
+                className="mt-2 inline-flex cursor-help rounded-full border border-blue-500/25 bg-blue-500/10 px-2 py-0.5 text-[8px] font-semibold uppercase tracking-wide text-blue-300"
+              >
+                Platnosť príkazu: {plan.limitValidityDays ?? LIMIT_VALIDITY_DAYS} dní
+              </p>
             </div>
           )}
           {plan.limitUsd > 0 && (

@@ -61,6 +61,10 @@ export interface TokenExecutionPlan {
   supportResistance: SupportResistanceLevels | null;
   supportSnapApplied: boolean;
   supportSnapNote: string | null;
+  limitDepthMode: "standard" | "deep_wick" | null;
+  limitDepthBadge: string | null;
+  limitDepthNarrative: string | null;
+  limitValidityDays: number;
 }
 
 export interface RegimeFactorDisplay {

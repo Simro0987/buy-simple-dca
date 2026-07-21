@@ -1,7 +1,6 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import {
   formatCopyAmount2,
-  normalizeLimitPrice,
 } from "@/lib/executionFormatting";
 import {
   buildDynamicLimitReasoning,
@@ -13,13 +12,15 @@ import {
   SATELLITE_ATR_LIMIT_MULTIPLIER,
   YIELD_ATR_LIMIT_MULTIPLIER,
 } from "@/lib/yieldSatelliteMetrics";
-import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
-import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 import type { PortfolioYieldContext, ResolvedYieldApy } from "@/lib/yieldDataSources";
+import type { YieldFilterCondition } from "@/lib/dcaYieldFilter";
+import type { SupportResistanceLevels } from "@/lib/supportResistanceLevels";
+import { summarizeYieldFilterConditions } from "@/lib/dcaTokenIndicators";
 import {
-  finalizeLimitWithSupportSnap,
-  type SupportResistanceLevels,
-} from "@/lib/supportResistanceLevels";
+  computeAutonomousLimit,
+  LIMIT_VALIDITY_DAYS,
+  type LimitDepthMode,
+} from "@/lib/limitDepthEngine";
 
 export const YIELD_MIN_ORDER_RSI_THRESHOLD = 38;
 export const MIN_ORDER_USD_THRESHOLD = 10;
@@ -65,7 +66,7 @@ export interface ExecutionMarketContext {
     sma200d: number;
     ema50: number;
     atr14dPct: number;
-    rsi14: number;
+    rsi14: number | null;
     distSma200Pct: number;
   };
   eth: { atr14dPct: number; rsi14: number | null };
@@ -82,7 +83,13 @@ export interface ExecutionTokenInput {
   rsi14: number | null;
   atr14dPct: number | null;
   ema50?: number | null;
+  sma14?: number | null;
+  sma200?: number | null;
   distSma200Pct?: number | null;
+  support1?: number | null;
+  support2?: number | null;
+  support1Source?: string;
+  support2Source?: string;
   filtersPassedCount?: number;
   fundamentalScore?: number;
   filterConditions?: YieldFilterCondition[];
@@ -106,6 +113,10 @@ export interface ExecutionSplitResult {
   supportResistance: SupportResistanceLevels | null;
   supportSnapApplied: boolean;
   supportSnapNote: string | null;
+  limitDepthMode: LimitDepthMode | null;
+  limitDepthBadge: string | null;
+  limitDepthNarrative: string | null;
+  limitValidityDays: number;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -120,11 +131,6 @@ function round1(value: number): number {
 export function computeBaseMarketPct(finalScore: number): number {
   const clamped = clamp(finalScore, 0, 100);
   return 40 + (clamped / 100) * 50;
-}
-
-function limitFromAtr(spot: number, atrPct: number, multiplier: number): number {
-  if (spot <= 0) return 0;
-  return normalizeLimitPrice(spot * (1 - (multiplier * atrPct) / 100));
 }
 
 function buildYieldEntrySignal(input: {
@@ -154,20 +160,6 @@ function rsiLabel(rsi: number): string {
   return "RSI Neutral";
 }
 
-function applySupportAwareLimit(
-  input: ExecutionTokenInput,
-  rawLimitPrice: number,
-) {
-  return finalizeLimitWithSupportSnap({
-    spotPrice: input.spotPrice,
-    limitPrice: rawLimitPrice,
-    ema50: input.ema50,
-    priceVsSma14Pct: input.priceVsSma14Pct,
-    distSma200Pct: input.distSma200Pct,
-    atr14dPct: input.atr14dPct,
-  });
-}
-
 function buildWhyLimit(
   input: ExecutionTokenInput,
   limitPrice: number,
@@ -176,6 +168,7 @@ function buildWhyLimit(
     safetyBrakeActive?: boolean;
     supportResistance?: SupportResistanceLevels | null;
     supportSnapNote?: string | null;
+    limitDepthNarrative?: string | null;
   },
 ): string {
   const belowPct = computeBelowSpotPercent(input.spotPrice, limitPrice);
@@ -210,12 +203,78 @@ function buildWhyLimit(
     yieldSatelliteMetrics,
     supportResistance: options?.supportResistance ?? null,
     supportSnapNote: options?.supportSnapNote ?? null,
+    limitDepthNarrative: options?.limitDepthNarrative ?? null,
   });
 }
 
+function resolveAutonomousLimitFields(
+  input: ExecutionTokenInput,
+  options?: {
+    safetyBrakeActive?: boolean;
+    atrMultiplier?: number;
+  },
+) {
+  const autonomous = computeAutonomousLimit({
+    symbol: input.symbol,
+    category: input.category,
+    spotPrice: input.spotPrice,
+    fearGreedValue: input.fearGreedValue,
+    rsi14: input.rsi14,
+    atr14dPct: input.atr14dPct,
+    ema50: input.ema50,
+    sma14: input.sma14,
+    sma200: input.sma200,
+    support1: input.support1,
+    support2: input.support2,
+    support1Source: input.support1Source,
+    support2Source: input.support2Source,
+    priceVsSma14Pct: input.priceVsSma14Pct,
+    distSma200Pct: input.distSma200Pct,
+  });
+
+  if (!autonomous) return null;
+
+  return {
+    ...autonomous,
+    whyLimit: buildWhyLimit(input, autonomous.limitPrice, {
+      atrMultiplier: options?.atrMultiplier,
+      safetyBrakeActive: options?.safetyBrakeActive ?? input.brakeActive,
+      supportResistance: autonomous.supportResistance,
+      supportSnapNote: autonomous.supportSnapNote,
+      limitDepthNarrative: autonomous.limitDepthNarrative,
+    }),
+    limitValidityDays: LIMIT_VALIDITY_DAYS,
+  };
+}
+
+function emptyLimitFields(): Pick<
+  ExecutionSplitResult,
+  | "limitPrice"
+  | "limitPullbackPct"
+  | "whyLimit"
+  | "supportResistance"
+  | "supportSnapApplied"
+  | "supportSnapNote"
+  | "limitDepthMode"
+  | "limitDepthBadge"
+  | "limitDepthNarrative"
+  | "limitValidityDays"
+> {
+  return {
+    limitPrice: 0,
+    limitPullbackPct: 0,
+    whyLimit: "Čakáme na live RSI/ATR a klines pre výpočet limitného cieľa.",
+    supportResistance: null,
+    supportSnapApplied: false,
+    supportSnapNote: null,
+    limitDepthMode: null,
+    limitDepthBadge: null,
+    limitDepthNarrative: null,
+    limitValidityDays: LIMIT_VALIDITY_DAYS,
+  };
+}
+
 function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
-  const spot = input.spotPrice;
-  const ema50 = input.ema50 ?? 0;
   const distSma200 = input.distSma200Pct ?? 0;
   const safetyBrakeActive =
     input.brakeActive || distSma200 >= SAFETY_BRAKE_SMA200_THRESHOLD_PCT;
@@ -233,20 +292,8 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     marketShare = clamp(marketShare - 8, 0, 100);
   }
 
-  const pullbackPrice = spot > 0 ? spot * (1 - CORE_PULLBACK_PCT / 100) : 0;
-  const rawLimit =
-    ema50 > 0 && ema50 < spot
-      ? Math.max(ema50, pullbackPrice)
-      : pullbackPrice;
-  const rawLimitPrice = normalizeLimitPrice(rawLimit);
-  const snapped = applySupportAwareLimit(input, rawLimitPrice);
-  const limitPrice = snapped.limitPrice;
-  const limitPullbackPct = snapped.limitPullbackPct;
-  const whyLimit = buildWhyLimit(input, limitPrice, {
-    safetyBrakeActive,
-    supportResistance: snapped.supportResistance,
-    supportSnapNote: snapped.supportSnapNote,
-  });
+  const limitFields =
+    resolveAutonomousLimitFields(input, { safetyBrakeActive }) ?? emptyLimitFields();
 
   const fgPart =
     input.fearGreedValue <= 30
@@ -269,22 +316,25 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   return {
     marketShare: round1(marketShare),
     limitShare: round1(100 - marketShare),
-    limitPrice,
-    limitPullbackPct,
-    whyLimit,
+    limitPrice: limitFields.limitPrice,
+    limitPullbackPct: limitFields.limitPullbackPct,
+    whyLimit: limitFields.whyLimit,
     entrySignal,
     splitExplanation,
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive,
-    supportResistance: snapped.supportResistance,
-    supportSnapApplied: snapped.supportSnapApplied,
-    supportSnapNote: snapped.supportSnapNote,
+    supportResistance: limitFields.supportResistance,
+    supportSnapApplied: limitFields.supportSnapApplied,
+    supportSnapNote: limitFields.supportSnapNote,
+    limitDepthMode: limitFields.limitDepthMode,
+    limitDepthBadge: limitFields.limitDepthBadge,
+    limitDepthNarrative: limitFields.limitDepthNarrative,
+    limitValidityDays: limitFields.limitValidityDays,
   };
 }
 
 function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult {
-  const spot = input.spotPrice;
   const rsi = input.rsi14;
   const atrPct = input.atr14dPct;
 
@@ -293,17 +343,12 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     return {
       marketShare: round1(marketShare),
       limitShare: round1(100 - marketShare),
-      limitPrice: 0,
-      limitPullbackPct: 0,
-      whyLimit: "Čakáme na live RSI/ATR pre výpočet limitného cieľa.",
       entrySignal: `ENTRY SIGNAL: čakáme na live RSI/ATR • Final Score ${round1(input.finalScore)}`,
       splitExplanation: `SPLIT: Satellites — live metriky sa načítavajú (Final Score ${round1(input.finalScore)})`,
       yieldMergeActive: false,
       minOrderRuleActive: false,
       safetyBrakeActive: false,
-      supportResistance: null,
-      supportSnapApplied: false,
-      supportSnapNote: null,
+      ...emptyLimitFields(),
     };
   }
 
@@ -316,38 +361,33 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     marketShare = clamp(marketShare - 10, 0, 100);
   }
 
-  const rawLimitPrice = limitFromAtr(
-    spot,
-    atrPct,
-    SATELLITE_ATR_LIMIT_MULTIPLIER,
-  );
-  const snapped = applySupportAwareLimit(input, rawLimitPrice);
-  const limitPrice = snapped.limitPrice;
-  const limitPullbackPct = snapped.limitPullbackPct;
-  const whyLimit = buildWhyLimit(input, limitPrice, {
-    atrMultiplier: SATELLITE_ATR_LIMIT_MULTIPLIER,
-    supportResistance: snapped.supportResistance,
-    supportSnapNote: snapped.supportSnapNote,
-  });
+  const limitFields =
+    resolveAutonomousLimitFields(input, {
+      atrMultiplier: SATELLITE_ATR_LIMIT_MULTIPLIER,
+    }) ?? emptyLimitFields();
 
-  const entrySignal = `ENTRY SIGNAL: Satellite staking • ATR ${atrPct.toFixed(1)} % • širší pás ${SATELLITE_ATR_LIMIT_MULTIPLIER}×ATR • RSI ${rsi.toFixed(0)}`;
+  const entrySignal = `ENTRY SIGNAL: Satellite staking • ATR ${atrPct.toFixed(1)} % • ${limitFields.limitDepthBadge ?? "autonómny limit"} • RSI ${rsi.toFixed(0)}`;
 
-  const splitExplanation = `SPLIT: Satellites ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT — ${SATELLITE_ATR_LIMIT_MULTIPLIER}×ATR limitný pás (vyššia volatilita)`;
+  const splitExplanation = `SPLIT: Satellites ${round1(marketShare)} % MKT / ${round1(100 - marketShare)} % LMT — autonómny ${limitFields.limitDepthMode === "deep_wick" ? "Deep Wick" : "Standard"} limit`;
 
   return {
     marketShare: round1(marketShare),
     limitShare: round1(100 - marketShare),
-    limitPrice,
-    limitPullbackPct,
-    whyLimit,
+    limitPrice: limitFields.limitPrice,
+    limitPullbackPct: limitFields.limitPullbackPct,
+    whyLimit: limitFields.whyLimit,
     entrySignal,
     splitExplanation,
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive: false,
-    supportResistance: snapped.supportResistance,
-    supportSnapApplied: snapped.supportSnapApplied,
-    supportSnapNote: snapped.supportSnapNote,
+    supportResistance: limitFields.supportResistance,
+    supportSnapApplied: limitFields.supportSnapApplied,
+    supportSnapNote: limitFields.supportSnapNote,
+    limitDepthMode: limitFields.limitDepthMode,
+    limitDepthBadge: limitFields.limitDepthBadge,
+    limitDepthNarrative: limitFields.limitDepthNarrative,
+    limitValidityDays: limitFields.limitValidityDays,
   };
 }
 
@@ -366,17 +406,12 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     return {
       marketShare: round1(marketShare),
       limitShare,
-      limitPrice: 0,
-      limitPullbackPct: 0,
-      whyLimit: "Čakáme na live RSI/ATR pre výpočet yield limitného cieľa.",
       entrySignal: `ENTRY SIGNAL: čakáme na live metriky • Fundamentals ${filtersPassed}/3 podmienok`,
       splitExplanation: `SPLIT: Yield — live metriky sa načítavajú (Final Score ${round1(input.finalScore)})`,
       yieldMergeActive: false,
       minOrderRuleActive: false,
       safetyBrakeActive: false,
-      supportResistance: null,
-      supportSnapApplied: false,
-      supportSnapNote: null,
+      ...emptyLimitFields(),
     };
   }
 
@@ -392,17 +427,21 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     return {
       marketShare: 100,
       limitShare: 0,
-      limitPrice: 0,
-      limitPullbackPct: 0,
       whyLimit: "",
       entrySignal,
       splitExplanation: `MERGED: MIN ORDER RULE — RSI ${rsi.toFixed(0)} < ${YIELD_MIN_ORDER_RSI_THRESHOLD} ➔ 100 % MARKET (OVERSOLD, KÚP HNEĎ)`,
       yieldMergeActive: true,
       minOrderRuleActive: true,
       safetyBrakeActive: false,
+      limitPrice: 0,
+      limitPullbackPct: 0,
       supportResistance: null,
       supportSnapApplied: false,
       supportSnapNote: null,
+      limitDepthMode: null,
+      limitDepthBadge: null,
+      limitDepthNarrative: null,
+      limitValidityDays: LIMIT_VALIDITY_DAYS,
     };
   }
 
@@ -410,15 +449,10 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     clamp(100 - computeBaseMarketPct(input.finalScore), 15, 70),
   );
   const limitShare = round1(100 - marketShare);
-  const rawLimitPrice = limitFromAtr(spot, atrPct, YIELD_ATR_LIMIT_MULTIPLIER);
-  const snapped = applySupportAwareLimit(input, rawLimitPrice);
-  const limitPrice = snapped.limitPrice;
-  const limitPullbackPct = snapped.limitPullbackPct;
-  const whyLimit = buildWhyLimit(input, limitPrice, {
-    atrMultiplier: YIELD_ATR_LIMIT_MULTIPLIER,
-    supportResistance: snapped.supportResistance,
-    supportSnapNote: snapped.supportSnapNote,
-  });
+  const limitFields =
+    resolveAutonomousLimitFields(input, {
+      atrMultiplier: YIELD_ATR_LIMIT_MULTIPLIER,
+    }) ?? emptyLimitFields();
 
   const entrySignal = buildYieldEntrySignal({
     rsi,
@@ -428,22 +462,26 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     minOrderRule: false,
   });
 
-  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — ${YIELD_ATR_LIMIT_MULTIPLIER}×ATR pás pre maximalizáciu nákupu pred auto-kompaundáciou`;
+  const splitExplanation = `SPLIT: Yield ${marketShare} % MKT / ${limitShare} % LMT — autonómny ${limitFields.limitDepthMode === "deep_wick" ? "Deep Wick" : "Standard"} limit`;
 
   return {
     marketShare,
     limitShare,
-    limitPrice,
-    limitPullbackPct,
-    whyLimit,
+    limitPrice: limitFields.limitPrice,
+    limitPullbackPct: limitFields.limitPullbackPct,
+    whyLimit: limitFields.whyLimit,
     entrySignal,
     splitExplanation,
     yieldMergeActive: false,
     minOrderRuleActive: false,
     safetyBrakeActive: false,
-    supportResistance: snapped.supportResistance,
-    supportSnapApplied: snapped.supportSnapApplied,
-    supportSnapNote: snapped.supportSnapNote,
+    supportResistance: limitFields.supportResistance,
+    supportSnapApplied: limitFields.supportSnapApplied,
+    supportSnapNote: limitFields.supportSnapNote,
+    limitDepthMode: limitFields.limitDepthMode,
+    limitDepthBadge: limitFields.limitDepthBadge,
+    limitDepthNarrative: limitFields.limitDepthNarrative,
+    limitValidityDays: limitFields.limitValidityDays,
   };
 }
 
@@ -723,10 +761,23 @@ export function buildExecutionTokenInput(input: {
   filterConditions?: YieldFilterCondition[];
   priceVsSma14Pct?: number | null;
   convictionScore?: number | null;
+  tokenTechnicals?: {
+    rsi14: number;
+    atr14dPct: number;
+    ema50: number;
+    sma14: number;
+    sma200: number;
+    support1: number | null;
+    support2: number | null;
+    support1Source: string;
+    support2Source: string;
+    price: number;
+  } | null;
 }): ExecutionTokenInput {
   const ctx = input.marketContext;
 
   if (input.category === "core" && ctx) {
+    const tech = input.tokenTechnicals;
     return {
       symbol: input.symbol,
       category: input.category,
@@ -734,33 +785,65 @@ export function buildExecutionTokenInput(input: {
       fearGreedValue: input.fearGreedValue,
       spotPrice: input.spotPrice || ctx.btc.price,
       brakeActive: input.brakeActive,
-      rsi14: ctx.btc.rsi14,
-      atr14dPct: ctx.btc.atr14dPct,
-      ema50: ctx.btc.ema50,
+      rsi14: tech?.rsi14 ?? ctx.btc.rsi14 ?? input.rsi14,
+      atr14dPct: tech?.atr14dPct ?? ctx.btc.atr14dPct ?? input.atr14dPct,
+      ema50: tech?.ema50 ?? ctx.btc.ema50,
+      sma14: tech?.sma14,
+      sma200: ctx.btc.sma200d,
       distSma200Pct: ctx.btc.distSma200Pct,
+      support1: tech?.support1,
+      support2: tech?.support2,
+      support1Source: tech?.support1Source,
+      support2Source: tech?.support2Source,
     };
   }
 
   if (input.symbol === "ETH" && ctx) {
+    const tech = input.tokenTechnicals;
     return {
       ...input,
-      rsi14: ctx.eth.rsi14 ?? input.rsi14,
-      atr14dPct: ctx.eth.atr14dPct ?? input.atr14dPct,
+      rsi14: tech?.rsi14 ?? ctx.eth.rsi14 ?? input.rsi14,
+      atr14dPct: tech?.atr14dPct ?? ctx.eth.atr14dPct ?? input.atr14dPct,
+      ema50: tech?.ema50,
+      sma14: tech?.sma14,
+      sma200: tech?.sma200,
+      support1: tech?.support1,
+      support2: tech?.support2,
+      support1Source: tech?.support1Source,
+      support2Source: tech?.support2Source,
       filterConditions: input.filterConditions,
     };
   }
 
   if (input.symbol === "SOL" && ctx) {
+    const tech = input.tokenTechnicals;
     return {
       ...input,
-      rsi14: ctx.sol.rsi14 ?? input.rsi14,
-      atr14dPct: ctx.sol.atr14dPct ?? input.atr14dPct,
+      rsi14: tech?.rsi14 ?? ctx.sol.rsi14 ?? input.rsi14,
+      atr14dPct: tech?.atr14dPct ?? ctx.sol.atr14dPct ?? input.atr14dPct,
+      ema50: tech?.ema50,
+      sma14: tech?.sma14,
+      sma200: tech?.sma200,
+      support1: tech?.support1,
+      support2: tech?.support2,
+      support1Source: tech?.support1Source,
+      support2Source: tech?.support2Source,
       filterConditions: input.filterConditions,
     };
   }
 
+  const tech = input.tokenTechnicals;
   return {
     ...input,
+    rsi14: tech?.rsi14 ?? input.rsi14,
+    atr14dPct: tech?.atr14dPct ?? input.atr14dPct,
+    ema50: tech?.ema50,
+    sma14: tech?.sma14,
+    sma200: tech?.sma200,
+    support1: tech?.support1,
+    support2: tech?.support2,
+    support1Source: tech?.support1Source,
+    support2Source: tech?.support2Source,
     filterConditions: input.filterConditions,
   };
 }
@@ -791,7 +874,7 @@ export function toExecutionMarketContext(
       sma200d,
       ema50: marketData.btc.ema50 ?? 0,
       atr14dPct: marketData.btc.atr14d,
-      rsi14: marketData.btc.rsi14 ?? 50,
+      rsi14: marketData.btc.rsi14 ?? null,
       distSma200Pct,
     },
     eth: {

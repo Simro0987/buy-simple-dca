@@ -48,10 +48,11 @@ export function GlobalDataSync({
       ? `?tokens=${encodeURIComponent(tokensParam)}`
       : "";
 
-    const [dcaRes, yieldRes, regimeRes, newsRes] = await Promise.allSettled([
+    const [dcaRes, yieldRes, regimeRes, technicalsRes, newsRes] = await Promise.allSettled([
       fetch(`/api/dca${dcaQuery ? `?${dcaQuery}` : ""}`, { cache: "no-store" }),
       fetch("/api/dca/yield-metrics", { cache: "no-store" }),
       fetch("/api/dca/market-regime-factors", { cache: "no-store" }),
+      fetch("/api/dca/token-technicals", { cache: "no-store" }),
       fetch(`/api/news${newsQuery}`, { cache: "no-store" }),
     ]);
 
@@ -95,6 +96,16 @@ export function GlobalDataSync({
       };
       if (json.success && json.data) {
         setGlobalLiveData({ regimeFactors: json.data });
+      }
+    }
+
+    if (technicalsRes.status === "fulfilled" && technicalsRes.value.ok) {
+      const json = (await technicalsRes.value.json()) as {
+        success: boolean;
+        technicals?: Record<string, import("@/lib/tokenExecutionTechnicals").TokenExecutionTechnicals>;
+      };
+      if (json.success && json.technicals) {
+        setGlobalLiveData({ tokenTechnicals: json.technicals });
       }
     }
 

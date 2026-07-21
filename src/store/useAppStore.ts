@@ -19,6 +19,7 @@ import {
 import type { DcaMarketSnapshot } from "@/lib/dcaMarketData";
 import type { YieldTokenMetrics } from "@/lib/dcaYieldFilter";
 import type { LiveMarketRegimeRawData } from "@/lib/fetchMarketRegimeFactors";
+import type { TokenExecutionTechnicalsMap } from "@/lib/tokenExecutionTechnicals";
 import { readTradingMode, writeTradingMode } from "@/lib/tradeHistory";
 
 export type NewsFeedMode = "portfolio" | "all";
@@ -46,6 +47,7 @@ export interface GlobalLiveDataState {
   yieldMetrics: Record<string, YieldTokenMetrics>;
   stakingApy: Record<string, number>;
   regimeFactors: LiveMarketRegimeRawData | null;
+  tokenTechnicals: TokenExecutionTechnicalsMap;
 }
 
 export interface GlobalRefreshState {
@@ -58,6 +60,7 @@ const defaultGlobalLiveData: GlobalLiveDataState = {
   yieldMetrics: {},
   stakingApy: {},
   regimeFactors: null,
+  tokenTechnicals: {},
 };
 
 const defaultGlobalRefresh: GlobalRefreshState = {
