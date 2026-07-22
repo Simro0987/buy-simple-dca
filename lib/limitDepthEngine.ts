@@ -148,6 +148,7 @@ export function computeAutonomousLimit(input: {
   rsi14: number | null;
   atr14dPct: number | null;
   ema50?: number | null;
+  ema21?: number | null;
   sma14?: number | null;
   sma200?: number | null;
   support1?: number | null;
@@ -234,6 +235,11 @@ export function computeAutonomousLimit(input: {
     atr14dPct: input.atr14dPct,
     s1Limit: resolution.interpolatedFromS1,
     s2Limit: resolution.interpolatedFromS2,
+    sma200: input.sma200,
+    ema21: input.ema21,
+    rsi14: input.rsi14,
+    shortTermTrend: input.shortTermTrend,
+    macroTrend: input.macroTrend,
     averagePanicWickPct: input.averagePanicWickPct,
   });
 

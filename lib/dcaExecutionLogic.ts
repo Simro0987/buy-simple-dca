@@ -238,6 +238,7 @@ function resolveAutonomousLimitFields(
     rsi14: input.rsi14,
     atr14dPct: input.atr14dPct,
     ema50: input.ema50,
+    ema21: input.ema21,
     sma14: input.sma14,
     sma200: input.sma200,
     support1: input.support1,
