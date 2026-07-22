@@ -232,6 +232,7 @@ export function computeAutonomousLimit(input: {
     spotPrice: input.spotPrice,
     limitPrice,
     atr14dPct: input.atr14dPct,
+    s1Limit: resolution.interpolatedFromS1,
     s2Limit: resolution.interpolatedFromS2,
     averagePanicWickPct: input.averagePanicWickPct,
   });

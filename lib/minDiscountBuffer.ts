@@ -5,11 +5,8 @@ import { resolvePanicWickLimit } from "@/lib/panicWickAnalysis";
 /** Matches 7-day ATR guardrail in limitDepthEngine. */
 const ATR_GUARDRAIL_MULTIPLIER = 1.5;
 
-/** Limits closer than this % below spot are treated as noise. */
-export const MIN_DISCOUNT_BUFFER_PCT = 2.0;
-
-/** Target minimum discount after S2 / panic-wick fallback. */
-export const FALLBACK_TARGET_DISCOUNT_PCT = 2.5;
+/** Noise zone = this fraction of daily ATR (e.g. 0.3 × ATR14%). */
+export const NOISE_ATR_FRACTION = 0.3;
 
 export type MinDiscountFallbackSource = "s2" | "panic_wick";
 
@@ -22,6 +19,25 @@ export function computeDiscountPct(spotPrice: number, limitPrice: number): numbe
   return round1(((spotPrice - limitPrice) / spotPrice) * 100);
 }
 
+/** Dynamic noise threshold: 30 % of the token's typical daily range. */
+export function computeNoiseThresholdPct(atr14dPct: number): number {
+  if (atr14dPct <= 0) return 0;
+  return round1(NOISE_ATR_FRACTION * atr14dPct);
+}
+
+export function isSupportInNoiseZone(input: {
+  spotPrice: number;
+  supportPrice: number;
+  atr14dPct: number;
+}): boolean {
+  if (input.supportPrice <= 0 || input.supportPrice >= input.spotPrice) {
+    return false;
+  }
+  const discountPct = computeDiscountPct(input.spotPrice, input.supportPrice);
+  const noiseThreshold = computeNoiseThresholdPct(input.atr14dPct);
+  return discountPct < noiseThreshold;
+}
+
 function atrGuardrailFloor(spotPrice: number, atr14dPct: number): number {
   if (spotPrice <= 0 || atr14dPct <= 0) return 0;
   return normalizeLimitPrice(
@@ -31,19 +47,24 @@ function atrGuardrailFloor(spotPrice: number, atr14dPct: number): number {
 }
 
 export function buildMinDiscountFallbackNarrative(input: {
-  originalDiscountPct: number;
+  atr14dPct: number;
+  noiseThresholdPct: number;
+  s1DiscountPct: number;
   newDiscountPct: number;
   fallbackSource: MinDiscountFallbackSource;
 }): string {
-  const original = formatDecimal(input.originalDiscountPct, 1);
-  const target = formatDecimal(input.newDiscountPct, 1);
   const levelLabel =
     input.fallbackSource === "panic_wick" ? "panický knot" : "S2";
+  const atr = formatDecimal(input.atr14dPct, 1);
+  const noise = formatDecimal(input.noiseThresholdPct, 1);
+  const s1 = formatDecimal(input.s1DiscountPct, 1);
+  const target = formatDecimal(input.newDiscountPct, 1);
 
   return (
-    `Najbližší S1 support bol príliš blízko (len ${original} % pod spotom), čo je v kryptách len cenový šum. ` +
-    `Systém automaticky posunul limitnú cenu na hlbšiu úroveň ${levelLabel} (${target} % pod spotom), ` +
-    "aby zabezpečil reálnu nákupnú zľavu."
+    `Najbližší support bol vyhodnotený ako bežný cenový šum vzhľadom na vysokú volatilitu ` +
+    `(ATR ${atr} %, zóna šumu ${noise} %) tohto tokenu — S1 bol len ${s1} % pod spotom. ` +
+    `Systém zvolil hlbšiu zľavu na úrovni ${levelLabel} (${target} % pod spotom), ` +
+    "adekvátnu volatilite tokenu."
   );
 }
 
@@ -51,6 +72,7 @@ export function applyMinDiscountBuffer(input: {
   spotPrice: number;
   limitPrice: number;
   atr14dPct: number;
+  s1Limit: number;
   s2Limit: number;
   averagePanicWickPct?: number | null;
 }): {
@@ -58,21 +80,38 @@ export function applyMinDiscountBuffer(input: {
   fallbackApplied: boolean;
   fallbackSource: MinDiscountFallbackSource | null;
   originalDiscountPct: number;
+  s1DiscountPct: number;
+  noiseThresholdPct: number;
   discountPct: number;
   narrative: string | null;
   atrGuardrailApplied: boolean;
 } {
+  const noiseThresholdPct = computeNoiseThresholdPct(input.atr14dPct);
   const originalDiscountPct = computeDiscountPct(
     input.spotPrice,
     input.limitPrice,
   );
+  const s1DiscountPct =
+    input.s1Limit > 0
+      ? computeDiscountPct(input.spotPrice, input.s1Limit)
+      : originalDiscountPct;
 
-  if (originalDiscountPct >= MIN_DISCOUNT_BUFFER_PCT) {
+  const s1InNoiseZone = isSupportInNoiseZone({
+    spotPrice: input.spotPrice,
+    supportPrice: input.s1Limit,
+    atr14dPct: input.atr14dPct,
+  });
+
+  const limitInNoiseZone = originalDiscountPct < noiseThresholdPct;
+
+  if (!s1InNoiseZone && !limitInNoiseZone) {
     return {
       limitPrice: input.limitPrice,
       fallbackApplied: false,
       fallbackSource: null,
       originalDiscountPct,
+      s1DiscountPct,
+      noiseThresholdPct,
       discountPct: originalDiscountPct,
       narrative: null,
       atrGuardrailApplied: false,
@@ -88,7 +127,7 @@ export function applyMinDiscountBuffer(input: {
 
   if (input.s2Limit > 0 && input.s2Limit < input.spotPrice) {
     const discountPct = computeDiscountPct(input.spotPrice, input.s2Limit);
-    if (discountPct >= MIN_DISCOUNT_BUFFER_PCT) {
+    if (discountPct >= noiseThresholdPct) {
       candidates.push({
         price: input.s2Limit,
         source: "s2",
@@ -104,7 +143,7 @@ export function applyMinDiscountBuffer(input: {
       atr14dPct: input.atr14dPct,
     });
     const discountPct = computeDiscountPct(input.spotPrice, panic.limitPrice);
-    if (discountPct >= MIN_DISCOUNT_BUFFER_PCT) {
+    if (discountPct >= noiseThresholdPct) {
       candidates.push({
         price: panic.limitPrice,
         source: "panic_wick",
@@ -117,13 +156,8 @@ export function applyMinDiscountBuffer(input: {
     (candidate) => guardrail <= 0 || candidate.price >= guardrail,
   );
 
-  const preferred = aboveGuardrail.filter(
-    (candidate) => candidate.discountPct >= FALLBACK_TARGET_DISCOUNT_PCT,
-  );
-  const pool = preferred.length > 0 ? preferred : aboveGuardrail;
-
-  if (pool.length > 0) {
-    const best = pool.reduce((deepest, candidate) =>
+  if (aboveGuardrail.length > 0) {
+    const best = aboveGuardrail.reduce((deepest, candidate) =>
       candidate.price < deepest.price ? candidate : deepest,
     );
 
@@ -132,9 +166,13 @@ export function applyMinDiscountBuffer(input: {
       fallbackApplied: true,
       fallbackSource: best.source,
       originalDiscountPct,
+      s1DiscountPct,
+      noiseThresholdPct,
       discountPct: best.discountPct,
       narrative: buildMinDiscountFallbackNarrative({
-        originalDiscountPct,
+        atr14dPct: input.atr14dPct,
+        noiseThresholdPct,
+        s1DiscountPct,
         newDiscountPct: best.discountPct,
         fallbackSource: best.source,
       }),
@@ -149,9 +187,13 @@ export function applyMinDiscountBuffer(input: {
       fallbackApplied: true,
       fallbackSource: "s2",
       originalDiscountPct,
+      s1DiscountPct,
+      noiseThresholdPct,
       discountPct: guardrailDiscount,
       narrative: buildMinDiscountFallbackNarrative({
-        originalDiscountPct,
+        atr14dPct: input.atr14dPct,
+        noiseThresholdPct,
+        s1DiscountPct,
         newDiscountPct: guardrailDiscount,
         fallbackSource: "s2",
       }),
@@ -164,6 +206,8 @@ export function applyMinDiscountBuffer(input: {
     fallbackApplied: false,
     fallbackSource: null,
     originalDiscountPct,
+    s1DiscountPct,
+    noiseThresholdPct,
     discountPct: originalDiscountPct,
     narrative: null,
     atrGuardrailApplied: false,
