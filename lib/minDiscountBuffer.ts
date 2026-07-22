@@ -1,9 +1,13 @@
 import { normalizeLimitPrice } from "@/lib/executionFormatting";
 import { formatDecimal, formatRsi } from "@/lib/numberFormat";
-import { resolvePanicWickLimit } from "@/lib/panicWickAnalysis";
 import { SNAP_ABOVE_SUPPORT_PCT } from "@/lib/supportResistanceLevels";
 import type { MacroTrend } from "@/lib/macroTrend";
 import type { ShortTermTrend } from "@/lib/shortTermTrend";
+import {
+  buildSmartTargetNarrative,
+  resolveSmartFallbackTarget,
+  type SmartTargetSelection,
+} from "@/lib/smartTargetSelector";
 
 /** Matches 7-day ATR guardrail in limitDepthEngine. */
 const ATR_GUARDRAIL_MULTIPLIER = 1.5;
@@ -146,6 +150,7 @@ export interface DiscountLogicBreakdown {
   tokenMinFloorBinding: boolean;
   s1DistancePct: number;
   s1Accepted: boolean;
+  smartTarget: SmartTargetSelection | null;
 }
 
 export type DiscountLogicMetrics = Omit<DiscountLogicBreakdown, "symbol">;
@@ -161,11 +166,17 @@ export interface PerTokenDiscountLogicInput {
   macroTrend: MacroTrend | null;
   shortTermTrend: ShortTermTrend | null;
   support1: number | null;
+  support2?: number | null;
+  averagePanicWickPct?: number | null;
+}
+
+function resolveSnappedSupportLimitPrice(support: number | null): number {
+  if (!support || support <= 0) return 0;
+  return normalizeLimitPrice(support * (1 + SNAP_ABOVE_SUPPORT_PCT / 100));
 }
 
 function resolveSnappedS1LimitPrice(support1: number | null): number {
-  if (!support1 || support1 <= 0) return 0;
-  return normalizeLimitPrice(support1 * (1 + SNAP_ABOVE_SUPPORT_PCT / 100));
+  return resolveSnappedSupportLimitPrice(support1);
 }
 
 /**
@@ -179,6 +190,8 @@ export function buildPerTokenDiscountLogicBreakdown(
     spotPrice: token.spotPrice,
     atr14dPct: token.atr14dPct,
     s1LimitPrice: resolveSnappedS1LimitPrice(token.support1),
+    s2LimitPrice: resolveSnappedSupportLimitPrice(token.support2 ?? null),
+    averagePanicWickPct: token.averagePanicWickPct ?? null,
     sma200: token.sma200,
     ema21: token.ema21,
     rsi14: token.rsi14,
@@ -204,6 +217,8 @@ export function computeDiscountLogicBreakdown(input: {
   spotPrice: number;
   atr14dPct: number | null;
   s1LimitPrice: number;
+  s2LimitPrice?: number;
+  averagePanicWickPct?: number | null;
   sma200?: number | null;
   ema21?: number | null;
   rsi14?: number | null;
@@ -241,6 +256,17 @@ export function computeDiscountLogicBreakdown(input: {
       ? computeDiscountPct(input.spotPrice, input.s1LimitPrice)
       : 0;
 
+  const s1Accepted = s1DistancePct >= tokenMinFloorPct;
+  const smartTarget = !s1Accepted
+    ? resolveSmartFallbackTarget({
+        spotPrice: input.spotPrice,
+        atr14dPct: input.atr14dPct,
+        s2Limit: input.s2LimitPrice ?? 0,
+        averagePanicWickPct: input.averagePanicWickPct ?? null,
+        minDiscountPct: tokenMinFloorPct,
+      })
+    : null;
+
   return {
     atr14dPct: round1(input.atr14dPct),
     noiseTrendRegime,
@@ -254,7 +280,8 @@ export function computeDiscountLogicBreakdown(input: {
       noiseTrendRegime,
     ),
     s1DistancePct,
-    s1Accepted: s1DistancePct >= tokenMinFloorPct,
+    s1Accepted,
+    smartTarget,
   };
 }
 
@@ -504,58 +531,22 @@ export function applyMinDiscountBuffer(input: {
     input.spotPrice,
     noiseThresholdPct,
   );
-  const candidates: Array<{
-    price: number;
-    source: MinDiscountFallbackSource;
-    discountPct: number;
-  }> = [];
 
-  if (input.s2Limit > 0 && input.s2Limit < input.spotPrice) {
-    const discountPct = computeDiscountPct(input.spotPrice, input.s2Limit);
-    if (discountPct >= noiseThresholdPct) {
-      candidates.push({
-        price: input.s2Limit,
-        source: "s2",
-        discountPct,
-      });
-    }
-  }
+  const smartTarget = resolveSmartFallbackTarget({
+    spotPrice: input.spotPrice,
+    atr14dPct: input.atr14dPct,
+    s2Limit: input.s2Limit,
+    averagePanicWickPct: input.averagePanicWickPct ?? null,
+    minDiscountPct: noiseThresholdPct,
+  });
 
-  if (input.averagePanicWickPct != null && input.averagePanicWickPct > 0) {
-    const panic = resolvePanicWickLimit({
-      spotPrice: input.spotPrice,
-      averagePanicWickPct: input.averagePanicWickPct,
-      atr14dPct: input.atr14dPct,
-    });
-    const discountPct = computeDiscountPct(input.spotPrice, panic.limitPrice);
-    if (discountPct >= noiseThresholdPct) {
-      candidates.push({
-        price: panic.limitPrice,
-        source: "panic_wick",
-        discountPct,
-      });
-    }
-  }
-
-  const aboveGuardrail = candidates.filter(
-    (candidate) => guardrail <= 0 || candidate.price >= guardrail,
-  );
-
-  if (aboveGuardrail.length > 0) {
-    const best = aboveGuardrail.reduce((deepest, candidate) =>
-      candidate.price < deepest.price ? candidate : deepest,
-    );
-
+  if (smartTarget) {
     return buildResult({
-      limitPrice: best.price,
+      limitPrice: smartTarget.limitPrice,
       fallbackApplied: true,
-      fallbackSource: best.source,
-      atrGuardrailApplied: false,
-      narrative: buildMinDiscountFallbackNarrative({
-        ...narrativeInput,
-        newDiscountPct: best.discountPct,
-        fallbackSource: best.source,
-      }),
+      fallbackSource: smartTarget.selectedSource,
+      atrGuardrailApplied: smartTarget.atrGuardrailApplied,
+      narrative: buildSmartTargetNarrative(smartTarget),
     });
   }
 

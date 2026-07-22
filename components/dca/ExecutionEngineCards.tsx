@@ -344,6 +344,8 @@ function ExecutionOrderCard({
         macroTrend: plan.macroTrend,
         shortTermTrend: plan.shortTermTrend,
         support1: plan.supportResistance?.support1 ?? null,
+        support2: plan.supportResistance?.support2 ?? null,
+        averagePanicWickPct: plan.averagePanicWickPct ?? null,
       }),
     [
       plan.symbol,
@@ -355,6 +357,8 @@ function ExecutionOrderCard({
       plan.macroTrend,
       plan.shortTermTrend,
       plan.supportResistance?.support1,
+      plan.supportResistance?.support2,
+      plan.averagePanicWickPct,
     ],
   );
 

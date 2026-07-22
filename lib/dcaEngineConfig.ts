@@ -65,6 +65,7 @@ export interface TokenExecutionPlan {
   shareOfYieldPercent: number | null;
   yieldWeight: number | null;
   yieldSatelliteMetrics: YieldSatelliteMetrics | null;
+  averagePanicWickPct?: number | null;
   supportResistance: SupportResistanceLevels | null;
   supportSnapApplied: boolean;
   supportSnapNote: string | null;

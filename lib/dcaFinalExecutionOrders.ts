@@ -402,6 +402,7 @@ export function buildFinalExecutionOrders(
         shareOfYieldPercent: row.shareOfYieldPercent ?? null,
         yieldWeight: row.yieldWeight ?? null,
         yieldSatelliteMetrics,
+        averagePanicWickPct: tokenInput.averagePanicWickPct ?? null,
         supportResistance: split.supportResistance,
         supportSnapApplied: split.supportSnapApplied,
         supportSnapNote: split.supportSnapNote,

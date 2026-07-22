@@ -5,6 +5,7 @@ import {
   TOKEN_MIN_FLOOR_ATR_FRACTION,
   type DiscountLogicBreakdown,
 } from "@/lib/minDiscountBuffer";
+import { buildSmartTargetNarrative } from "@/lib/smartTargetSelector";
 
 interface DiscountLogicBreakdownPanelProps {
   breakdown: DiscountLogicBreakdown;
@@ -89,6 +90,11 @@ export function DiscountLogicBreakdownPanel({
             </>
           )}
         </div>
+        {!breakdown.s1Accepted && breakdown.smartTarget ? (
+          <div className="rounded-lg border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-violet-100">
+            {buildSmartTargetNarrative(breakdown.smartTarget)}
+          </div>
+        ) : null}
       </div>
     </div>
   );
