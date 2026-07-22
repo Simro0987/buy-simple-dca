@@ -45,7 +45,7 @@ export function DiscountLogicBreakdownPanel({
   return (
     <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5">
       <p className="text-[9px] font-bold uppercase tracking-wider text-cyan-300/90">
-        Logika výpočtu zľavy
+        Logika výpočtu zľavy · {breakdown.symbol}
       </p>
       <div className="mt-2 space-y-2">
         <MetricRow label="Denná volatilita (ATR)" value={`${atr} %`} />

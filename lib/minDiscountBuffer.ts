@@ -1,6 +1,7 @@
 import { normalizeLimitPrice } from "@/lib/executionFormatting";
 import { formatDecimal, formatRsi } from "@/lib/numberFormat";
 import { resolvePanicWickLimit } from "@/lib/panicWickAnalysis";
+import { SNAP_ABOVE_SUPPORT_PCT } from "@/lib/supportResistanceLevels";
 import type { MacroTrend } from "@/lib/macroTrend";
 import type { ShortTermTrend } from "@/lib/shortTermTrend";
 
@@ -109,6 +110,7 @@ export function isAbsoluteDiscountFloorActive(
 }
 
 export interface DiscountLogicBreakdown {
+  symbol: string;
   atr14dPct: number;
   noiseTrendRegime: NoiseTrendRegime;
   trendMultiplier: number;
@@ -118,6 +120,47 @@ export interface DiscountLogicBreakdown {
   absoluteFloorActive: boolean;
   s1DistancePct: number;
   s1Accepted: boolean;
+}
+
+export type DiscountLogicMetrics = Omit<DiscountLogicBreakdown, "symbol">;
+
+/** Inputs scoped to a single token — no shared/global market context. */
+export interface PerTokenDiscountLogicInput {
+  symbol: string;
+  spotPrice: number;
+  atr14dPct: number | null;
+  sma200: number | null;
+  ema21: number | null;
+  rsi14: number | null;
+  macroTrend: MacroTrend | null;
+  shortTermTrend: ShortTermTrend | null;
+  support1: number | null;
+}
+
+function resolveSnappedS1LimitPrice(support1: number | null): number {
+  if (!support1 || support1 <= 0) return 0;
+  return normalizeLimitPrice(support1 * (1 + SNAP_ABOVE_SUPPORT_PCT / 100));
+}
+
+/**
+ * Recomputes discount/noise metrics for one token object only.
+ * Call once per token card — never cache across symbols.
+ */
+export function buildPerTokenDiscountLogicBreakdown(
+  token: PerTokenDiscountLogicInput,
+): DiscountLogicBreakdown | null {
+  const breakdown = computeDiscountLogicBreakdown({
+    spotPrice: token.spotPrice,
+    atr14dPct: token.atr14dPct,
+    s1LimitPrice: resolveSnappedS1LimitPrice(token.support1),
+    sma200: token.sma200,
+    ema21: token.ema21,
+    rsi14: token.rsi14,
+    shortTermTrend: token.shortTermTrend,
+    macroTrend: token.macroTrend,
+  });
+  if (!breakdown) return null;
+  return { ...breakdown, symbol: token.symbol };
 }
 
 export function formatNoiseTrendRegimeLabel(regime: NoiseTrendRegime): string {
@@ -140,7 +183,7 @@ export function computeDiscountLogicBreakdown(input: {
   rsi14?: number | null;
   shortTermTrend?: ShortTermTrend | null;
   macroTrend?: MacroTrend | null;
-}): DiscountLogicBreakdown | null {
+}): DiscountLogicMetrics | null {
   if (
     input.spotPrice <= 0 ||
     input.atr14dPct == null ||

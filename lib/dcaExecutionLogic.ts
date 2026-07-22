@@ -21,7 +21,6 @@ import {
   LIMIT_VALIDITY_DAYS,
   type LimitDepthMode,
 } from "@/lib/limitDepthEngine";
-import type { DiscountLogicBreakdown } from "@/lib/minDiscountBuffer";
 import { detectMacroTrend, type MacroTrend } from "@/lib/macroTrend";
 import {
   buildCombinedTrendNarrative,
@@ -130,7 +129,6 @@ export interface ExecutionSplitResult {
   limitDepthNarrative: string | null;
   limitValidityDays: number;
   rsiS2BlendPct: number | null;
-  discountLogicBreakdown: DiscountLogicBreakdown | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -283,7 +281,6 @@ function emptyLimitFields(): Pick<
   | "limitDepthNarrative"
   | "limitValidityDays"
   | "rsiS2BlendPct"
-  | "discountLogicBreakdown"
 > {
   return {
     limitPrice: 0,
@@ -297,7 +294,6 @@ function emptyLimitFields(): Pick<
     limitDepthNarrative: null,
     limitValidityDays: LIMIT_VALIDITY_DAYS,
     rsiS2BlendPct: null,
-    discountLogicBreakdown: null,
   };
 }
 
@@ -359,7 +355,6 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     limitDepthNarrative: limitFields.limitDepthNarrative,
     limitValidityDays: limitFields.limitValidityDays,
     rsiS2BlendPct: limitFields.rsiS2BlendPct,
-    discountLogicBreakdown: limitFields.discountLogicBreakdown,
   };
 }
 
@@ -418,7 +413,6 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
     limitDepthNarrative: limitFields.limitDepthNarrative,
     limitValidityDays: limitFields.limitValidityDays,
     rsiS2BlendPct: limitFields.rsiS2BlendPct,
-    discountLogicBreakdown: limitFields.discountLogicBreakdown,
   };
 }
 
@@ -473,7 +467,6 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       limitDepthNarrative: null,
       limitValidityDays: LIMIT_VALIDITY_DAYS,
       rsiS2BlendPct: null,
-      discountLogicBreakdown: null,
     };
   }
 
@@ -515,7 +508,6 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
     limitDepthNarrative: limitFields.limitDepthNarrative,
     limitValidityDays: limitFields.limitValidityDays,
     rsiS2BlendPct: limitFields.rsiS2BlendPct,
-    discountLogicBreakdown: limitFields.discountLogicBreakdown,
   };
 }
 

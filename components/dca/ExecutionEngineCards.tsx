@@ -12,6 +12,7 @@ import {
 } from "@/lib/executionFormatting";
 import { DcaCollapsibleDetails } from "@/components/dca/DcaCollapsibleDetails";
 import { DiscountLogicBreakdownPanel } from "@/components/dca/DiscountLogicBreakdownPanel";
+import { buildPerTokenDiscountLogicBreakdown } from "@/lib/minDiscountBuffer";
 import { TokenRsiGauge } from "@/components/dca/TokenRsiGauge";
 import {
   DcaTokenFilterBar,
@@ -331,6 +332,32 @@ function ExecutionOrderCard({
   const limitState = getLegState(plan.symbol, "limit");
   const isNoTrade = plan.noTradeActive;
 
+  const perTokenDiscountBreakdown = useMemo(
+    () =>
+      buildPerTokenDiscountLogicBreakdown({
+        symbol: plan.symbol,
+        spotPrice: plan.spotPrice,
+        atr14dPct: plan.atr14dPct,
+        sma200: plan.sma200,
+        ema21: plan.ema21,
+        rsi14: plan.rsi14,
+        macroTrend: plan.macroTrend,
+        shortTermTrend: plan.shortTermTrend,
+        support1: plan.supportResistance?.support1 ?? null,
+      }),
+    [
+      plan.symbol,
+      plan.spotPrice,
+      plan.atr14dPct,
+      plan.sma200,
+      plan.ema21,
+      plan.rsi14,
+      plan.macroTrend,
+      plan.shortTermTrend,
+      plan.supportResistance?.support1,
+    ],
+  );
+
   const yieldHeader =
     plan.category === "yield" && plan.convictionScore != null
       ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14 != null ? formatRsi(plan.rsi14) : "—"} • MA ${plan.priceVsSma14Pct != null ? formatSignedPct(plan.priceVsSma14Pct, 0) : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
@@ -357,7 +384,7 @@ function ExecutionOrderCard({
       plan.entrySignal ||
       plan.splitExplanation ||
       (plan.supportSnapApplied && plan.supportSnapNote) ||
-      plan.discountLogicBreakdown ||
+      perTokenDiscountBreakdown ||
       (plan.limitShare > 0 && plan.whyLimit),
   );
 
@@ -733,11 +760,11 @@ function ExecutionOrderCard({
             </div>
           )}
 
-          {plan.discountLogicBreakdown &&
+          {perTokenDiscountBreakdown &&
             plan.limitShare > 0 &&
             !plan.noTradeActive && (
               <DiscountLogicBreakdownPanel
-                breakdown={plan.discountLogicBreakdown}
+                breakdown={perTokenDiscountBreakdown}
               />
             )}
 
