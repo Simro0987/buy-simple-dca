@@ -7,6 +7,9 @@ import type { ShortTermTrend } from "@/lib/shortTermTrend";
 /** Matches 7-day ATR guardrail in limitDepthEngine. */
 const ATR_GUARDRAIL_MULTIPLIER = 1.5;
 
+/** Hard stop — no limit may sit closer than this discount below spot. */
+export const ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT = 1.5;
+
 /** Default neutral noise multiplier (30 % of ATR). */
 export const NOISE_MULTIPLIER_NEUTRAL = 0.3;
 
@@ -77,13 +80,66 @@ export function resolveNoiseMultiplier(regime: NoiseTrendRegime): number {
   }
 }
 
-/** Trend-adjusted noise threshold: Multiplier × ATR14%. */
-export function computeNoiseThresholdPct(
+/** Trend-adjusted noise threshold before the absolute floor: Multiplier × ATR14%. */
+export function computeTrendAdjustedNoiseThresholdPct(
   atr14dPct: number,
   regime: NoiseTrendRegime = "neutral",
 ): number {
   if (atr14dPct <= 0) return 0;
   return round1(resolveNoiseMultiplier(regime) * atr14dPct);
+}
+
+/** Final noise threshold: MAX(Trend_Adjusted_Noise, Absolute_Floor). */
+export function computeNoiseThresholdPct(
+  atr14dPct: number,
+  regime: NoiseTrendRegime = "neutral",
+): number {
+  const trendAdjusted = computeTrendAdjustedNoiseThresholdPct(atr14dPct, regime);
+  return round1(
+    Math.max(trendAdjusted, ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT),
+  );
+}
+
+export function isAbsoluteDiscountFloorActive(
+  atr14dPct: number,
+  regime: NoiseTrendRegime = "neutral",
+): boolean {
+  const trendAdjusted = computeTrendAdjustedNoiseThresholdPct(atr14dPct, regime);
+  return trendAdjusted < ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT;
+}
+
+function absoluteDiscountFloorPrice(spotPrice: number): number {
+  if (spotPrice <= 0) return 0;
+  return normalizeLimitPrice(
+    spotPrice * (1 - ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT / 100),
+  );
+}
+
+function enforceAbsoluteDiscountFloor(
+  spotPrice: number,
+  limitPrice: number,
+): {
+  limitPrice: number;
+  discountPct: number;
+  applied: boolean;
+} {
+  const floorPrice = absoluteDiscountFloorPrice(spotPrice);
+  const discountPct = computeDiscountPct(spotPrice, limitPrice);
+
+  if (
+    floorPrice <= 0 ||
+    limitPrice <= 0 ||
+    limitPrice <= floorPrice ||
+    discountPct >= ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT
+  ) {
+    return { limitPrice, discountPct, applied: false };
+  }
+
+  return {
+    limitPrice: floorPrice,
+    discountPct: ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT,
+    applied: true,
+  };
 }
 
 export function isSupportInNoiseZone(input: {
@@ -124,10 +180,20 @@ export function buildMinDiscountFallbackNarrative(input: {
   newDiscountPct: number;
   fallbackSource: MinDiscountFallbackSource;
   rsi14?: number | null;
+  absoluteFloorApplied?: boolean;
 }): string {
   const levelLabel =
     input.fallbackSource === "panic_wick" ? "panický knot" : "S2";
   const target = formatDecimal(input.newDiscountPct, 1);
+
+  if (input.absoluteFloorApplied) {
+    return (
+      "Volatilita tokenu je aktuálne extrémne nízka. Systém aplikoval pravidlo absolútneho minima " +
+      `(${formatDecimal(ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT, 1)} %) a posunul limit na hlbšiu úroveň ` +
+      `(${levelLabel}, ${target} % pod spotom), aby zabezpečil aspoň základnú nákupnú zľavu.`
+    );
+  }
+
   const multPct = formatMultiplierPct(input.noiseMultiplier);
 
   if (input.noiseTrendRegime === "bear") {
@@ -185,6 +251,7 @@ export function applyMinDiscountBuffer(input: {
   discountPct: number;
   narrative: string | null;
   atrGuardrailApplied: boolean;
+  absoluteFloorApplied: boolean;
 } {
   const noiseTrendRegime = resolveNoiseTrendRegime({
     spotPrice: input.spotPrice,
@@ -196,6 +263,10 @@ export function applyMinDiscountBuffer(input: {
   });
   const noiseMultiplier = resolveNoiseMultiplier(noiseTrendRegime);
   const noiseThresholdPct = computeNoiseThresholdPct(
+    input.atr14dPct,
+    noiseTrendRegime,
+  );
+  const absoluteFloorActive = isAbsoluteDiscountFloorActive(
     input.atr14dPct,
     noiseTrendRegime,
   );
@@ -218,23 +289,64 @@ export function applyMinDiscountBuffer(input: {
 
   const limitInNoiseZone = originalDiscountPct < noiseThresholdPct;
 
-  if (!s1InNoiseZone && !limitInNoiseZone) {
+  const narrativeInput = {
+    atr14dPct: input.atr14dPct,
+    noiseThresholdPct,
+    noiseTrendRegime,
+    noiseMultiplier,
+    s1DiscountPct,
+    rsi14: input.rsi14,
+    absoluteFloorApplied: absoluteFloorActive,
+  };
+
+  const buildResult = (result: {
+    limitPrice: number;
+    fallbackApplied: boolean;
+    fallbackSource: MinDiscountFallbackSource | null;
+    atrGuardrailApplied: boolean;
+    narrative?: string | null;
+  }) => {
+    const enforced = enforceAbsoluteDiscountFloor(
+      input.spotPrice,
+      result.limitPrice,
+    );
+    const fallbackApplied = result.fallbackApplied || enforced.applied;
+    const narrative = enforced.applied
+      ? buildMinDiscountFallbackNarrative({
+          ...narrativeInput,
+          absoluteFloorApplied: true,
+          newDiscountPct: enforced.discountPct,
+          fallbackSource: result.fallbackSource ?? "s2",
+        })
+      : (result.narrative ?? null);
+
     return {
-      limitPrice: input.limitPrice,
-      fallbackApplied: false,
-      fallbackSource: null,
+      limitPrice: enforced.limitPrice,
+      fallbackApplied,
+      fallbackSource: result.fallbackSource,
       originalDiscountPct,
       s1DiscountPct,
       noiseThresholdPct,
       noiseTrendRegime,
       noiseMultiplier,
-      discountPct: originalDiscountPct,
-      narrative: null,
-      atrGuardrailApplied: false,
+      discountPct: enforced.discountPct,
+      narrative,
+      atrGuardrailApplied: result.atrGuardrailApplied,
+      absoluteFloorApplied: absoluteFloorActive || enforced.applied,
     };
+  };
+
+  if (!s1InNoiseZone && !limitInNoiseZone) {
+    return buildResult({
+      limitPrice: input.limitPrice,
+      fallbackApplied: false,
+      fallbackSource: null,
+      atrGuardrailApplied: false,
+    });
   }
 
   const guardrail = atrGuardrailFloor(input.spotPrice, input.atr14dPct);
+  const absoluteFloor = absoluteDiscountFloorPrice(input.spotPrice);
   const candidates: Array<{
     price: number;
     source: MinDiscountFallbackSource;
@@ -272,73 +384,68 @@ export function applyMinDiscountBuffer(input: {
     (candidate) => guardrail <= 0 || candidate.price >= guardrail,
   );
 
-  const narrativeInput = {
-    atr14dPct: input.atr14dPct,
-    noiseThresholdPct,
-    noiseTrendRegime,
-    noiseMultiplier,
-    s1DiscountPct,
-    rsi14: input.rsi14,
-  };
-
   if (aboveGuardrail.length > 0) {
     const best = aboveGuardrail.reduce((deepest, candidate) =>
       candidate.price < deepest.price ? candidate : deepest,
     );
 
-    return {
+    return buildResult({
       limitPrice: best.price,
       fallbackApplied: true,
       fallbackSource: best.source,
-      originalDiscountPct,
-      s1DiscountPct,
-      noiseThresholdPct,
-      noiseTrendRegime,
-      noiseMultiplier,
-      discountPct: best.discountPct,
+      atrGuardrailApplied: false,
       narrative: buildMinDiscountFallbackNarrative({
         ...narrativeInput,
         newDiscountPct: best.discountPct,
         fallbackSource: best.source,
       }),
-      atrGuardrailApplied: false,
-    };
+    });
   }
 
   if (guardrail > 0 && guardrail < input.spotPrice) {
-    const guardrailDiscount = computeDiscountPct(input.spotPrice, guardrail);
-    return {
-      limitPrice: guardrail,
+    const effectiveGuardrail =
+      absoluteFloor > 0 && guardrail > absoluteFloor
+        ? absoluteFloor
+        : guardrail;
+    const guardrailDiscount = computeDiscountPct(
+      input.spotPrice,
+      effectiveGuardrail,
+    );
+    return buildResult({
+      limitPrice: effectiveGuardrail,
       fallbackApplied: true,
       fallbackSource: "s2",
-      originalDiscountPct,
-      s1DiscountPct,
-      noiseThresholdPct,
-      noiseTrendRegime,
-      noiseMultiplier,
-      discountPct: guardrailDiscount,
+      atrGuardrailApplied: effectiveGuardrail === guardrail,
       narrative: buildMinDiscountFallbackNarrative({
         ...narrativeInput,
         newDiscountPct: guardrailDiscount,
         fallbackSource: "s2",
       }),
-      atrGuardrailApplied: true,
-    };
+    });
   }
 
-  return {
+  if (absoluteFloor > 0 && absoluteFloor < input.spotPrice) {
+    const floorDiscount = computeDiscountPct(input.spotPrice, absoluteFloor);
+    return buildResult({
+      limitPrice: absoluteFloor,
+      fallbackApplied: true,
+      fallbackSource: "s2",
+      atrGuardrailApplied: false,
+      narrative: buildMinDiscountFallbackNarrative({
+        ...narrativeInput,
+        absoluteFloorApplied: true,
+        newDiscountPct: floorDiscount,
+        fallbackSource: "s2",
+      }),
+    });
+  }
+
+  return buildResult({
     limitPrice: input.limitPrice,
     fallbackApplied: false,
     fallbackSource: null,
-    originalDiscountPct,
-    s1DiscountPct,
-    noiseThresholdPct,
-    noiseTrendRegime,
-    noiseMultiplier,
-    discountPct: originalDiscountPct,
-    narrative: null,
     atrGuardrailApplied: false,
-  };
+  });
 }
 
 /** @deprecated Use NOISE_MULTIPLIER_NEUTRAL */
