@@ -1,4 +1,8 @@
 import { DCA_SATELLITE_TOKENS, DCA_YIELD_TOKENS } from "@/lib/dcaMarketData";
+import {
+  fetchJupiterGovernanceStakingApy,
+  resolveOfficialEthStakingApy,
+} from "@/lib/officialStakingSources";
 
 export interface DefiLlamaPool {
   symbol?: string;
@@ -70,6 +74,9 @@ let cachedPools: DefiLlamaPool[] | null = null;
 let cacheFetchedAt = 0;
 const CACHE_TTL_MS = 5 * 60_000;
 
+let cachedJupGovernanceApy: number | null | undefined;
+let jupGovernanceCacheFetchedAt = 0;
+
 async function loadDefiLlamaPools(): Promise<DefiLlamaPool[]> {
   const now = Date.now();
   if (cachedPools && now - cacheFetchedAt < CACHE_TTL_MS) {
@@ -89,35 +96,76 @@ async function loadDefiLlamaPools(): Promise<DefiLlamaPool[]> {
   }
 }
 
+async function loadJupiterGovernanceApy(): Promise<number | null> {
+  const now = Date.now();
+  if (
+    cachedJupGovernanceApy !== undefined &&
+    now - jupGovernanceCacheFetchedAt < CACHE_TTL_MS
+  ) {
+    return cachedJupGovernanceApy;
+  }
+
+  const apy = await fetchJupiterGovernanceStakingApy();
+  cachedJupGovernanceApy = apy;
+  jupGovernanceCacheFetchedAt = now;
+  return apy;
+}
+
+function resolveGenericDefillamaApy(
+  pools: DefiLlamaPool[],
+  symbol: string,
+): number | null {
+  const pool = pickHighestTvlDefillamaPool(pools, symbol);
+  if (!pool) return null;
+
+  const apy = poolApy(pool);
+  if (apy < 0 || apy >= 200 || !Number.isFinite(apy)) return null;
+
+  return round1(apy);
+}
+
 /**
- * DeFiLlama staking APY per symbol from the highest-TVL single-sided pool.
- * `null` = queried but no eligible pool (show N/A / 0 %, no mock fallback).
+ * Staking APY per symbol.
+ * - ETH → Rocket Pool rETH, fallback Lido stETH (official liquid staking)
+ * - JUP → Jupiter governance locker + ASR emission schedule
+ * - Others → highest-TVL single-sided DefiLlama pool
+ *
+ * `null` = queried but no eligible source (UI hides the metric).
  */
 export async function fetchDefillamaApyMap(
   symbols: string[] = ALL_YIELD_SYMBOLS,
 ): Promise<Record<string, number | null>> {
-  const pools = await loadDefiLlamaPools();
+  const needsDefillama = symbols.some(
+    (symbol) => symbol !== "JUP" && symbol !== "ETH",
+  );
+  const needsEth = symbols.includes("ETH");
+  const needsJup = symbols.includes("JUP");
+
+  const [pools, jupApy] = await Promise.all([
+    needsDefillama || needsEth ? loadDefiLlamaPools() : Promise.resolve([]),
+    needsJup ? loadJupiterGovernanceApy() : Promise.resolve(null),
+  ]);
+
   const result: Record<string, number | null> = {};
 
   for (const symbol of symbols) {
+    if (symbol === "JUP") {
+      result[symbol] = jupApy;
+      continue;
+    }
+
+    if (symbol === "ETH") {
+      result[symbol] =
+        pools.length > 0 ? resolveOfficialEthStakingApy(pools) : null;
+      continue;
+    }
+
     if (pools.length === 0) {
       result[symbol] = null;
       continue;
     }
 
-    const pool = pickHighestTvlDefillamaPool(pools, symbol);
-    if (!pool) {
-      result[symbol] = null;
-      continue;
-    }
-
-    const apy = poolApy(pool);
-    if (apy < 0 || apy >= 200 || !Number.isFinite(apy)) {
-      result[symbol] = null;
-      continue;
-    }
-
-    result[symbol] = round1(apy);
+    result[symbol] = resolveGenericDefillamaApy(pools, symbol);
   }
 
   return result;
