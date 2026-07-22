@@ -8,7 +8,10 @@ import type { ShortTermTrend } from "@/lib/shortTermTrend";
 /** Matches 7-day ATR guardrail in limitDepthEngine. */
 const ATR_GUARDRAIL_MULTIPLIER = 1.5;
 
-/** Hard stop — no limit may sit closer than this discount below spot. */
+/** Token min floor scales with each coin's ATR: 0.5 × ATR14%. */
+export const TOKEN_MIN_FLOOR_ATR_FRACTION = 0.5;
+
+/** @deprecated Use TOKEN_MIN_FLOOR_ATR_FRACTION + computeTokenMinFloorPct */
 export const ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT = 1.5;
 
 /** Default neutral noise multiplier (30 % of ATR). */
@@ -81,7 +84,7 @@ export function resolveNoiseMultiplier(regime: NoiseTrendRegime): number {
   }
 }
 
-/** Trend-adjusted noise threshold before the absolute floor: Multiplier × ATR14%. */
+/** Trend-adjusted dynamic noise: Multiplier × ATR14%. */
 export function computeTrendAdjustedNoiseThresholdPct(
   atr14dPct: number,
   regime: NoiseTrendRegime = "neutral",
@@ -90,23 +93,45 @@ export function computeTrendAdjustedNoiseThresholdPct(
   return round1(resolveNoiseMultiplier(regime) * atr14dPct);
 }
 
-/** Final noise threshold: MAX(Trend_Adjusted_Noise, Absolute_Floor). */
+/** ATR-scaled component of the per-token minimum: 0.5 × ATR14%. */
+export function computeTokenAtrScaledMinFloorPct(atr14dPct: number): number {
+  if (atr14dPct <= 0) return 0;
+  return round1(TOKEN_MIN_FLOOR_ATR_FRACTION * atr14dPct);
+}
+
+/** Per-token minimum discount: max(Dynamic_Noise, 0.5 × ATR). */
+export function computeTokenMinFloorPct(
+  atr14dPct: number,
+  regime: NoiseTrendRegime = "neutral",
+): number {
+  const dynamicNoise = computeTrendAdjustedNoiseThresholdPct(atr14dPct, regime);
+  const atrScaledMin = computeTokenAtrScaledMinFloorPct(atr14dPct);
+  return round1(Math.max(dynamicNoise, atrScaledMin));
+}
+
+/** Final noise threshold — alias for per-token min floor. */
 export function computeNoiseThresholdPct(
   atr14dPct: number,
   regime: NoiseTrendRegime = "neutral",
 ): number {
-  const trendAdjusted = computeTrendAdjustedNoiseThresholdPct(atr14dPct, regime);
-  return round1(
-    Math.max(trendAdjusted, ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT),
-  );
+  return computeTokenMinFloorPct(atr14dPct, regime);
 }
 
+export function isTokenMinFloorBinding(
+  atr14dPct: number,
+  regime: NoiseTrendRegime = "neutral",
+): boolean {
+  const dynamicNoise = computeTrendAdjustedNoiseThresholdPct(atr14dPct, regime);
+  const atrScaledMin = computeTokenAtrScaledMinFloorPct(atr14dPct);
+  return atrScaledMin > dynamicNoise;
+}
+
+/** @deprecated Use isTokenMinFloorBinding */
 export function isAbsoluteDiscountFloorActive(
   atr14dPct: number,
   regime: NoiseTrendRegime = "neutral",
 ): boolean {
-  const trendAdjusted = computeTrendAdjustedNoiseThresholdPct(atr14dPct, regime);
-  return trendAdjusted < ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT;
+  return isTokenMinFloorBinding(atr14dPct, regime);
 }
 
 export interface DiscountLogicBreakdown {
@@ -116,8 +141,9 @@ export interface DiscountLogicBreakdown {
   trendMultiplier: number;
   trendMultiplierLabel: string;
   dynamicNoisePct: number;
-  finalDiscountPct: number;
-  absoluteFloorActive: boolean;
+  atrScaledMinPct: number;
+  tokenMinFloorPct: number;
+  tokenMinFloorBinding: boolean;
   s1DistancePct: number;
   s1Accepted: boolean;
 }
@@ -205,7 +231,8 @@ export function computeDiscountLogicBreakdown(input: {
     input.atr14dPct,
     noiseTrendRegime,
   );
-  const finalDiscountPct = computeNoiseThresholdPct(
+  const atrScaledMinPct = computeTokenAtrScaledMinFloorPct(input.atr14dPct);
+  const tokenMinFloorPct = computeTokenMinFloorPct(
     input.atr14dPct,
     noiseTrendRegime,
   );
@@ -220,46 +247,46 @@ export function computeDiscountLogicBreakdown(input: {
     trendMultiplier,
     trendMultiplierLabel: formatNoiseTrendRegimeLabel(noiseTrendRegime),
     dynamicNoisePct,
-    finalDiscountPct,
-    absoluteFloorActive: isAbsoluteDiscountFloorActive(
+    atrScaledMinPct,
+    tokenMinFloorPct,
+    tokenMinFloorBinding: isTokenMinFloorBinding(
       input.atr14dPct,
       noiseTrendRegime,
     ),
     s1DistancePct,
-    s1Accepted: s1DistancePct >= finalDiscountPct,
+    s1Accepted: s1DistancePct >= tokenMinFloorPct,
   };
 }
 
-function absoluteDiscountFloorPrice(spotPrice: number): number {
-  if (spotPrice <= 0) return 0;
-  return normalizeLimitPrice(
-    spotPrice * (1 - ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT / 100),
-  );
+function tokenMinFloorPrice(spotPrice: number, minFloorPct: number): number {
+  if (spotPrice <= 0 || minFloorPct <= 0) return 0;
+  return normalizeLimitPrice(spotPrice * (1 - minFloorPct / 100));
 }
 
-function enforceAbsoluteDiscountFloor(
+function enforceTokenMinFloor(
   spotPrice: number,
   limitPrice: number,
+  minFloorPct: number,
 ): {
   limitPrice: number;
   discountPct: number;
   applied: boolean;
 } {
-  const floorPrice = absoluteDiscountFloorPrice(spotPrice);
+  const floorPrice = tokenMinFloorPrice(spotPrice, minFloorPct);
   const discountPct = computeDiscountPct(spotPrice, limitPrice);
 
   if (
     floorPrice <= 0 ||
     limitPrice <= 0 ||
     limitPrice <= floorPrice ||
-    discountPct >= ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT
+    discountPct >= minFloorPct
   ) {
     return { limitPrice, discountPct, applied: false };
   }
 
   return {
     limitPrice: floorPrice,
-    discountPct: ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT,
+    discountPct: minFloorPct,
     applied: true,
   };
 }
@@ -302,17 +329,19 @@ export function buildMinDiscountFallbackNarrative(input: {
   newDiscountPct: number;
   fallbackSource: MinDiscountFallbackSource;
   rsi14?: number | null;
-  absoluteFloorApplied?: boolean;
+  tokenMinFloorApplied?: boolean;
+  tokenMinFloorPct?: number;
 }): string {
   const levelLabel =
     input.fallbackSource === "panic_wick" ? "panický knot" : "S2";
   const target = formatDecimal(input.newDiscountPct, 1);
 
-  if (input.absoluteFloorApplied) {
+  if (input.tokenMinFloorApplied) {
+    const floor = formatDecimal(input.tokenMinFloorPct ?? 0, 1);
     return (
-      "Volatilita tokenu je aktuálne extrémne nízka. Systém aplikoval pravidlo absolútneho minima " +
-      `(${formatDecimal(ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT, 1)} %) a posunul limit na hlbšiu úroveň ` +
-      `(${levelLabel}, ${target} % pod spotom), aby zabezpečil aspoň základnú nákupnú zľavu.`
+      "Systém aplikoval token-špecifické minimum zľavy " +
+      `(max(dynamický šum, 0,5×ATR) = ${floor} %) a posunul limit na hlbšiu úroveň ` +
+      `(${levelLabel}, ${target} % pod spotom), aby zabezpečil primeranú nákupnú zľavu pre volatilitu tokenu.`
     );
   }
 
@@ -373,7 +402,7 @@ export function applyMinDiscountBuffer(input: {
   discountPct: number;
   narrative: string | null;
   atrGuardrailApplied: boolean;
-  absoluteFloorApplied: boolean;
+  tokenMinFloorApplied: boolean;
 } {
   const noiseTrendRegime = resolveNoiseTrendRegime({
     spotPrice: input.spotPrice,
@@ -384,11 +413,12 @@ export function applyMinDiscountBuffer(input: {
     macroTrend: input.macroTrend,
   });
   const noiseMultiplier = resolveNoiseMultiplier(noiseTrendRegime);
-  const noiseThresholdPct = computeNoiseThresholdPct(
+  const noiseThresholdPct = computeTokenMinFloorPct(
     input.atr14dPct,
     noiseTrendRegime,
   );
-  const absoluteFloorActive = isAbsoluteDiscountFloorActive(
+  const tokenMinFloorPct = computeTokenAtrScaledMinFloorPct(input.atr14dPct);
+  const tokenMinFloorBinding = isTokenMinFloorBinding(
     input.atr14dPct,
     noiseTrendRegime,
   );
@@ -418,7 +448,7 @@ export function applyMinDiscountBuffer(input: {
     noiseMultiplier,
     s1DiscountPct,
     rsi14: input.rsi14,
-    absoluteFloorApplied: absoluteFloorActive,
+    tokenMinFloorPct: noiseThresholdPct,
   };
 
   const buildResult = (result: {
@@ -428,15 +458,17 @@ export function applyMinDiscountBuffer(input: {
     atrGuardrailApplied: boolean;
     narrative?: string | null;
   }) => {
-    const enforced = enforceAbsoluteDiscountFloor(
+    const enforced = enforceTokenMinFloor(
       input.spotPrice,
       result.limitPrice,
+      noiseThresholdPct,
     );
     const fallbackApplied = result.fallbackApplied || enforced.applied;
     const narrative = enforced.applied
       ? buildMinDiscountFallbackNarrative({
           ...narrativeInput,
-          absoluteFloorApplied: true,
+          tokenMinFloorApplied: true,
+          tokenMinFloorPct: noiseThresholdPct,
           newDiscountPct: enforced.discountPct,
           fallbackSource: result.fallbackSource ?? "s2",
         })
@@ -454,7 +486,7 @@ export function applyMinDiscountBuffer(input: {
       discountPct: enforced.discountPct,
       narrative,
       atrGuardrailApplied: result.atrGuardrailApplied,
-      absoluteFloorApplied: absoluteFloorActive || enforced.applied,
+      tokenMinFloorApplied: tokenMinFloorBinding || enforced.applied,
     };
   };
 
@@ -468,7 +500,10 @@ export function applyMinDiscountBuffer(input: {
   }
 
   const guardrail = atrGuardrailFloor(input.spotPrice, input.atr14dPct);
-  const absoluteFloor = absoluteDiscountFloorPrice(input.spotPrice);
+  const tokenMinFloorLimit = tokenMinFloorPrice(
+    input.spotPrice,
+    noiseThresholdPct,
+  );
   const candidates: Array<{
     price: number;
     source: MinDiscountFallbackSource;
@@ -526,8 +561,8 @@ export function applyMinDiscountBuffer(input: {
 
   if (guardrail > 0 && guardrail < input.spotPrice) {
     const effectiveGuardrail =
-      absoluteFloor > 0 && guardrail > absoluteFloor
-        ? absoluteFloor
+      tokenMinFloorLimit > 0 && guardrail > tokenMinFloorLimit
+        ? tokenMinFloorLimit
         : guardrail;
     const guardrailDiscount = computeDiscountPct(
       input.spotPrice,
@@ -546,16 +581,19 @@ export function applyMinDiscountBuffer(input: {
     });
   }
 
-  if (absoluteFloor > 0 && absoluteFloor < input.spotPrice) {
-    const floorDiscount = computeDiscountPct(input.spotPrice, absoluteFloor);
+  if (tokenMinFloorLimit > 0 && tokenMinFloorLimit < input.spotPrice) {
+    const floorDiscount = computeDiscountPct(
+      input.spotPrice,
+      tokenMinFloorLimit,
+    );
     return buildResult({
-      limitPrice: absoluteFloor,
+      limitPrice: tokenMinFloorLimit,
       fallbackApplied: true,
       fallbackSource: "s2",
       atrGuardrailApplied: false,
       narrative: buildMinDiscountFallbackNarrative({
         ...narrativeInput,
-        absoluteFloorApplied: true,
+        tokenMinFloorApplied: true,
         newDiscountPct: floorDiscount,
         fallbackSource: "s2",
       }),

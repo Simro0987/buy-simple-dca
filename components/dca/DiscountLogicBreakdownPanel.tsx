@@ -2,7 +2,7 @@
 
 import { formatDecimal } from "@/lib/numberFormat";
 import {
-  ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT,
+  TOKEN_MIN_FLOOR_ATR_FRACTION,
   type DiscountLogicBreakdown,
 } from "@/lib/minDiscountBuffer";
 
@@ -38,9 +38,10 @@ export function DiscountLogicBreakdownPanel({
   const atr = formatDecimal(breakdown.atr14dPct, 1);
   const multiplier = formatDecimal(breakdown.trendMultiplier, 2);
   const dynamicNoise = formatDecimal(breakdown.dynamicNoisePct, 1);
-  const finalDiscount = formatDecimal(breakdown.finalDiscountPct, 1);
+  const atrScaledMin = formatDecimal(breakdown.atrScaledMinPct, 1);
+  const tokenMinFloor = formatDecimal(breakdown.tokenMinFloorPct, 1);
   const s1Distance = formatDecimal(breakdown.s1DistancePct, 1);
-  const floor = formatDecimal(ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT, 1);
+  const atrHalf = formatDecimal(TOKEN_MIN_FLOOR_ATR_FRACTION, 1);
 
   return (
     <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5">
@@ -59,13 +60,14 @@ export function DiscountLogicBreakdownPanel({
           hint={`${atr} % × ${multiplier}`}
         />
         <MetricRow
-          label="Finálna požadovaná zľava"
-          value={`${finalDiscount} %`}
-          hint={
-            breakdown.absoluteFloorActive
-              ? `max(${dynamicNoise} %, ${floor} %)`
-              : `max(${dynamicNoise} %, ${floor} %) = ${dynamicNoise} %`
-          }
+          label="ATR minimum (0,5×ATR)"
+          value={`${atrScaledMin} %`}
+          hint={`${atr} % × ${atrHalf}`}
+        />
+        <MetricRow
+          label="Token min floor"
+          value={`${tokenMinFloor} %`}
+          hint={`max(${dynamicNoise} %, ${atrScaledMin} %)`}
         />
         <div
           className={`rounded-lg border px-2.5 py-2 text-[10px] font-medium leading-relaxed ${
@@ -81,7 +83,7 @@ export function DiscountLogicBreakdownPanel({
             </>
           ) : (
             <>
-              ⚠️ Vzdialenosť S1 ({s1Distance} %) &lt; {finalDiscount} % ➔{" "}
+              ⚠️ Vzdialenosť S1 ({s1Distance} %) &lt; {tokenMinFloor} % ➔{" "}
               <span className="font-bold">S1 IGNOROVANÝ</span> (Hľadám hlbší
               limit)
             </>
