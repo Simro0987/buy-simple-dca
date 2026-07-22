@@ -31,8 +31,8 @@ export interface YieldTokenMetrics {
   fetchedAt?: string;
   /** Resolved staking / yield APY (% p.a.) from portfolio → API → DeFiLlama → fallback. */
   apyPct?: number;
-  /** Raw DeFiLlama pool APY before portfolio / technical adjustments. */
-  defillamaApyPct?: number;
+  /** Raw DeFiLlama pool APY; null = no eligible single-sided pool found. */
+  defillamaApyPct?: number | null;
   apySource?: YieldApySource;
   apyIsEstimated?: boolean;
   apySourceLabel?: string;

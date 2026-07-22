@@ -1,55 +1,69 @@
 import { DCA_SATELLITE_TOKENS, DCA_YIELD_TOKENS } from "@/lib/dcaMarketData";
 
-interface DefiLlamaPool {
+export interface DefiLlamaPool {
   symbol?: string;
   project?: string;
   apy?: number;
   apyBase?: number;
   apyReward?: number;
   chain?: string;
+  tvlUsd?: number;
+  ilRisk?: string;
+  exposure?: string;
 }
 
 const DEFILLAMA_POOLS_URL = "https://yields.llama.fi/pools";
-
-/** Known DeFiLlama project slugs per token for staking / yield pool matching. */
-const STAKING_PROJECTS_BY_SYMBOL: Record<string, string[]> = {
-  ETH: ["lido", "rocket-pool", "frax-ether", "coinbase-wrapped-staked-eth"],
-  SOL: ["marinade-finance", "jito", "solayer", "binance-staked-sol"],
-  HYPE: ["hyperliquid"],
-  JUP: ["jupiter-staked-sol", "jupiter"],
-  AAVE: ["aave-v3", "aave"],
-  GMX: ["gmx", "gmx-v2"],
-  PENDLE: ["pendle"],
-  MORPHO: ["morpho", "morpho-v1", "morpho-blue"],
-  LINK: ["chainlink-staking", "ssv-network"],
-};
 
 const ALL_YIELD_SYMBOLS = [
   ...DCA_SATELLITE_TOKENS.map((t) => t.symbol),
   ...DCA_YIELD_TOKENS.map((t) => t.symbol),
 ];
 
-function poolApy(pool: DefiLlamaPool): number {
-  if (typeof pool.apy === "number" && pool.apy > 0) return pool.apy;
+function round1(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+export function poolApy(pool: DefiLlamaPool): number {
+  if (typeof pool.apy === "number" && pool.apy >= 0) return pool.apy;
   const base = pool.apyBase ?? 0;
   const reward = pool.apyReward ?? 0;
   return base + reward;
 }
 
-function matchesSymbol(pool: DefiLlamaPool, symbol: string): boolean {
-  const poolSymbol = (pool.symbol ?? "").toUpperCase();
-  if (poolSymbol === symbol) return true;
-
-  const projects = STAKING_PROJECTS_BY_SYMBOL[symbol] ?? [];
-  const project = (pool.project ?? "").toLowerCase();
-  return projects.some((slug) => project.includes(slug));
+/** Exact symbol match — no project-slug guessing. */
+export function matchesExactSymbol(pool: DefiLlamaPool, symbol: string): boolean {
+  return (pool.symbol ?? "").toUpperCase() === symbol.toUpperCase();
 }
 
-function medianTopApys(apys: number[], take = 3): number | null {
-  if (apys.length === 0) return null;
-  const sorted = [...apys].sort((a, b) => b - a);
-  const top = sorted.slice(0, take);
-  return top.reduce((sum, value) => sum + value, 0) / top.length;
+/**
+ * Single-sided staking only: no IL risk, no LP pair symbols (ETH-USDC, ETH/STETH).
+ */
+export function isSingleSidedStakingPool(pool: DefiLlamaPool): boolean {
+  const symbol = (pool.symbol ?? "").trim();
+  if (!symbol) return false;
+  if (pool.ilRisk != null && pool.ilRisk !== "no") return false;
+  if (/[\/\-]/.test(symbol)) return false;
+  if (pool.exposure != null && pool.exposure !== "single") return false;
+  return true;
+}
+
+/** Pick the highest-TVL eligible pool — never the highest APY. */
+export function pickHighestTvlDefillamaPool(
+  pools: DefiLlamaPool[],
+  symbol: string,
+): DefiLlamaPool | null {
+  const eligible = pools.filter(
+    (pool) =>
+      matchesExactSymbol(pool, symbol) &&
+      isSingleSidedStakingPool(pool) &&
+      (pool.tvlUsd ?? 0) > 0,
+  );
+
+  if (eligible.length === 0) return null;
+
+  return eligible.reduce((best, pool) =>
+    (pool.tvlUsd ?? 0) > (best.tvlUsd ?? 0) ? pool : best,
+  );
 }
 
 let cachedPools: DefiLlamaPool[] | null = null;
@@ -76,27 +90,34 @@ async function loadDefiLlamaPools(): Promise<DefiLlamaPool[]> {
 }
 
 /**
- * Fetch on-chain / protocol staking APY from DeFiLlama yields API.
- * Returns median of top matching pools per symbol.
+ * DeFiLlama staking APY per symbol from the highest-TVL single-sided pool.
+ * `null` = queried but no eligible pool (show N/A / 0 %, no mock fallback).
  */
 export async function fetchDefillamaApyMap(
   symbols: string[] = ALL_YIELD_SYMBOLS,
-): Promise<Record<string, number>> {
+): Promise<Record<string, number | null>> {
   const pools = await loadDefiLlamaPools();
-  if (pools.length === 0) return {};
-
-  const result: Record<string, number> = {};
+  const result: Record<string, number | null> = {};
 
   for (const symbol of symbols) {
-    const matchingApys = pools
-      .filter((pool) => matchesSymbol(pool, symbol))
-      .map(poolApy)
-      .filter((apy) => apy > 0 && apy < 200);
-
-    const median = medianTopApys(matchingApys);
-    if (median != null) {
-      result[symbol] = Math.round(median * 10) / 10;
+    if (pools.length === 0) {
+      result[symbol] = null;
+      continue;
     }
+
+    const pool = pickHighestTvlDefillamaPool(pools, symbol);
+    if (!pool) {
+      result[symbol] = null;
+      continue;
+    }
+
+    const apy = poolApy(pool);
+    if (apy < 0 || apy >= 200 || !Number.isFinite(apy)) {
+      result[symbol] = null;
+      continue;
+    }
+
+    result[symbol] = round1(apy);
   }
 
   return result;

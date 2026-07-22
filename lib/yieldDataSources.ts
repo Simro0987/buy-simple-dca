@@ -203,7 +203,18 @@ export function resolveYieldApy(input: {
     };
   }
 
-  if (input.defillamaApyPct != null && input.defillamaApyPct > 0) {
+  if (input.defillamaApyPct === null) {
+    return {
+      symbol,
+      apyPct: 0,
+      source: "defillama",
+      isEstimated: false,
+      sourceLabel: YIELD_APY_SOURCE_LABELS.defillama,
+      fetchedAt: new Date().toISOString(),
+    };
+  }
+
+  if (input.defillamaApyPct != null && input.defillamaApyPct >= 0) {
     return {
       symbol,
       apyPct: round1(

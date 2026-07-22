@@ -155,7 +155,7 @@ export type YieldMetricsMap = Record<string, YieldTokenMetrics>;
 
 function attachResolvedApy(
   metrics: YieldTokenMetrics,
-  defillamaApy: number | undefined,
+  defillamaApy: number | null | undefined,
 ): YieldTokenMetrics {
   const resolved = resolveYieldApy({
     symbol: metrics.symbol,
