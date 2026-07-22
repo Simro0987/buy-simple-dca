@@ -1,10 +1,10 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ArrowLeftRight, Home, Newspaper, PieChart, Repeat } from "lucide-react";
+import { ArrowLeftRight, Coins, Home, Newspaper, PieChart, Repeat } from "lucide-react";
 import { interactiveButton } from "@/lib/motion";
 
-export type Tab = "home" | "news" | "portfolio" | "dca" | "swap";
+export type Tab = "home" | "news" | "portfolio" | "dca" | "swap" | "stake";
 
 interface BottomNavProps {
   activeTab: Tab;
@@ -16,6 +16,7 @@ const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
   { id: "news", label: "Novinky", icon: Newspaper },
   { id: "portfolio", label: "Portfólio", icon: PieChart },
   { id: "dca", label: "DCA", icon: Repeat },
+  { id: "stake", label: "Stake", icon: Coins },
   { id: "swap", label: "Swap", icon: ArrowLeftRight },
 ];
 

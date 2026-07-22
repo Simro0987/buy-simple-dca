@@ -6,6 +6,7 @@ import { AddAssetButton } from "@/components/AddAssetButton";
 import { ApiStatusBanner } from "@/components/ApiStatusBanner";
 import { GlobalDataSync } from "@/components/GlobalDataSync";
 import { GlobalLastUpdated } from "@/components/GlobalLastUpdated";
+import { StakeDefiMozogSection } from "@/components/stake/StakeDefiMozogSection";
 import { SwapPanel } from "@/components/SwapPanel";
 import { AddAssetModal } from "@/components/AddAssetModal";
 import { AssetList } from "@/components/AssetList";
@@ -91,6 +92,7 @@ export function Dashboard() {
   const showDca = activeTab === "dca";
   const showNews = activeTab === "news";
   const showSwap = activeTab === "swap";
+  const showStake = activeTab === "stake";
 
   const handleRecordMarketLeg = useCallback(
     (plan: TokenExecutionPlan) => {
@@ -279,6 +281,11 @@ export function Dashboard() {
           {showNews && (
             <motion.div key="news" {...pageTransition}>
               <NewsFeed />
+            </motion.div>
+          )}
+          {showStake && (
+            <motion.div key="stake" {...pageTransition}>
+              <StakeDefiMozogSection onToast={setToastMessage} />
             </motion.div>
           )}
           {showSwap && (
