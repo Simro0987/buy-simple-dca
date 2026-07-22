@@ -5,7 +5,7 @@ import {
   TOKEN_MIN_FLOOR_ATR_FRACTION,
   type DiscountLogicBreakdown,
 } from "@/lib/minDiscountBuffer";
-import { buildSmartTargetNarrative } from "@/lib/smartTargetSelector";
+import { buildSmoothBlendNarrative } from "@/lib/smartTargetSelector";
 
 interface DiscountLogicBreakdownPanelProps {
   breakdown: DiscountLogicBreakdown;
@@ -43,6 +43,7 @@ export function DiscountLogicBreakdownPanel({
   const tokenMinFloor = formatDecimal(breakdown.tokenMinFloorPct, 1);
   const s1Distance = formatDecimal(breakdown.s1DistancePct, 1);
   const atrHalf = formatDecimal(TOKEN_MIN_FLOOR_ATR_FRACTION, 1);
+  const blend = breakdown.smoothBlend;
 
   return (
     <div className="rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2.5">
@@ -70,30 +71,46 @@ export function DiscountLogicBreakdownPanel({
           value={`${tokenMinFloor} %`}
           hint={`max(${dynamicNoise} %, ${atrScaledMin} %)`}
         />
-        <div
-          className={`rounded-lg border px-2.5 py-2 text-[10px] font-medium leading-relaxed ${
-            breakdown.s1Accepted
-              ? "border-emerald-500/25 bg-emerald-500/10 text-emerald-200"
-              : "border-orange-500/25 bg-orange-500/10 text-orange-200"
-          }`}
-        >
-          {breakdown.s1Accepted ? (
-            <>
-              ✅ Vzdialenosť S1 ({s1Distance} %) spĺňa minimum ➔{" "}
-              <span className="font-bold">S1 AKCEPTOVANÝ</span>
-            </>
-          ) : (
-            <>
-              ⚠️ Vzdialenosť S1 ({s1Distance} %) &lt; {tokenMinFloor} % ➔{" "}
-              <span className="font-bold">S1 IGNOROVANÝ</span> (Hľadám hlbší
-              limit)
-            </>
-          )}
-        </div>
-        {!breakdown.s1Accepted && breakdown.smartTarget ? (
-          <div className="rounded-lg border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-violet-100">
-            {buildSmartTargetNarrative(breakdown.smartTarget)}
-          </div>
+        {blend ? (
+          <>
+            <MetricRow
+              label="Vzdialenosť S1"
+              value={`${s1Distance} %`}
+              hint={`váha S1 = min(1, S1 / ${tokenMinFloor})`}
+            />
+            <MetricRow
+              label="Hlboký cieľ"
+              value={`${formatDecimal(blend.deepTargetPct, 1)} %`}
+              hint={
+                blend.deepTargetSource === "panic_wick"
+                  ? "Panický knot"
+                  : blend.deepTargetSource === "s2"
+                    ? "S2"
+                    : "S1 fallback"
+              }
+            />
+            <MetricRow
+              label="Finálna zľava"
+              value={`${formatDecimal(blend.finalDiscountPct, 1)} %`}
+              hint="plynulý blend S1 + hlboký cieľ"
+            />
+            <div className="rounded-lg border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-cyan-100">
+              Váha zľavy:{" "}
+              <span className="font-bold tabular-nums">
+                {blend.s1WeightPct} % S1
+              </span>{" "}
+              +{" "}
+              <span className="font-bold tabular-nums">
+                {blend.deepWeightPct} % Hlboký cieľ
+              </span>{" "}
+              <span className="text-cyan-200/80">(Plynulý prechod)</span>
+            </div>
+            {blend.s1Weight < 0.999 ? (
+              <div className="rounded-lg border border-violet-500/25 bg-violet-500/10 px-2.5 py-2 text-[10px] font-medium leading-relaxed text-violet-100">
+                {buildSmoothBlendNarrative(blend)}
+              </div>
+            ) : null}
+          </>
         ) : null}
       </div>
     </div>

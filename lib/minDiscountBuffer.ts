@@ -4,9 +4,9 @@ import { SNAP_ABOVE_SUPPORT_PCT } from "@/lib/supportResistanceLevels";
 import type { MacroTrend } from "@/lib/macroTrend";
 import type { ShortTermTrend } from "@/lib/shortTermTrend";
 import {
-  buildSmartTargetNarrative,
-  resolveSmartFallbackTarget,
-  type SmartTargetSelection,
+  buildSmoothBlendNarrative,
+  resolveSmoothDiscountBlend,
+  type SmoothDiscountBlend,
 } from "@/lib/smartTargetSelector";
 
 /** Matches 7-day ATR guardrail in limitDepthEngine. */
@@ -149,8 +149,7 @@ export interface DiscountLogicBreakdown {
   tokenMinFloorPct: number;
   tokenMinFloorBinding: boolean;
   s1DistancePct: number;
-  s1Accepted: boolean;
-  smartTarget: SmartTargetSelection | null;
+  smoothBlend: SmoothDiscountBlend | null;
 }
 
 export type DiscountLogicMetrics = Omit<DiscountLogicBreakdown, "symbol">;
@@ -256,16 +255,14 @@ export function computeDiscountLogicBreakdown(input: {
       ? computeDiscountPct(input.spotPrice, input.s1LimitPrice)
       : 0;
 
-  const s1Accepted = s1DistancePct >= tokenMinFloorPct;
-  const smartTarget = !s1Accepted
-    ? resolveSmartFallbackTarget({
-        spotPrice: input.spotPrice,
-        atr14dPct: input.atr14dPct,
-        s2Limit: input.s2LimitPrice ?? 0,
-        averagePanicWickPct: input.averagePanicWickPct ?? null,
-        minDiscountPct: tokenMinFloorPct,
-      })
-    : null;
+  const smoothBlend = resolveSmoothDiscountBlend({
+    spotPrice: input.spotPrice,
+    atr14dPct: input.atr14dPct,
+    s1Limit: input.s1LimitPrice,
+    s2Limit: input.s2LimitPrice ?? 0,
+    averagePanicWickPct: input.averagePanicWickPct ?? null,
+    noiseThresholdPct: tokenMinFloorPct,
+  });
 
   return {
     atr14dPct: round1(input.atr14dPct),
@@ -280,8 +277,7 @@ export function computeDiscountLogicBreakdown(input: {
       noiseTrendRegime,
     ),
     s1DistancePct,
-    s1Accepted,
-    smartTarget,
+    smoothBlend,
   };
 }
 
@@ -459,14 +455,14 @@ export function applyMinDiscountBuffer(input: {
       ? computeDiscountPct(input.spotPrice, input.s1Limit)
       : originalDiscountPct;
 
-  const s1InNoiseZone = isSupportInNoiseZone({
+  const smoothBlend = resolveSmoothDiscountBlend({
     spotPrice: input.spotPrice,
-    supportPrice: input.s1Limit,
     atr14dPct: input.atr14dPct,
-    regime: noiseTrendRegime,
+    s1Limit: input.s1Limit,
+    s2Limit: input.s2Limit,
+    averagePanicWickPct: input.averagePanicWickPct ?? null,
+    noiseThresholdPct,
   });
-
-  const limitInNoiseZone = originalDiscountPct < noiseThresholdPct;
 
   const narrativeInput = {
     atr14dPct: input.atr14dPct,
@@ -517,7 +513,7 @@ export function applyMinDiscountBuffer(input: {
     };
   };
 
-  if (!s1InNoiseZone && !limitInNoiseZone) {
+  if (!smoothBlend || smoothBlend.limitPrice <= 0) {
     return buildResult({
       limitPrice: input.limitPrice,
       fallbackApplied: false,
@@ -526,76 +522,25 @@ export function applyMinDiscountBuffer(input: {
     });
   }
 
-  const guardrail = atrGuardrailFloor(input.spotPrice, input.atr14dPct);
-  const tokenMinFloorLimit = tokenMinFloorPrice(
-    input.spotPrice,
-    noiseThresholdPct,
-  );
+  const blendActive =
+    smoothBlend.s1Weight < 0.999 ||
+    smoothBlend.finalDiscountPct > originalDiscountPct + 0.05;
 
-  const smartTarget = resolveSmartFallbackTarget({
-    spotPrice: input.spotPrice,
-    atr14dPct: input.atr14dPct,
-    s2Limit: input.s2Limit,
-    averagePanicWickPct: input.averagePanicWickPct ?? null,
-    minDiscountPct: noiseThresholdPct,
-  });
-
-  if (smartTarget) {
+  if (!blendActive) {
     return buildResult({
-      limitPrice: smartTarget.limitPrice,
-      fallbackApplied: true,
-      fallbackSource: smartTarget.selectedSource,
-      atrGuardrailApplied: smartTarget.atrGuardrailApplied,
-      narrative: buildSmartTargetNarrative(smartTarget),
-    });
-  }
-
-  if (guardrail > 0 && guardrail < input.spotPrice) {
-    const effectiveGuardrail =
-      tokenMinFloorLimit > 0 && guardrail > tokenMinFloorLimit
-        ? tokenMinFloorLimit
-        : guardrail;
-    const guardrailDiscount = computeDiscountPct(
-      input.spotPrice,
-      effectiveGuardrail,
-    );
-    return buildResult({
-      limitPrice: effectiveGuardrail,
-      fallbackApplied: true,
-      fallbackSource: "s2",
-      atrGuardrailApplied: effectiveGuardrail === guardrail,
-      narrative: buildMinDiscountFallbackNarrative({
-        ...narrativeInput,
-        newDiscountPct: guardrailDiscount,
-        fallbackSource: "s2",
-      }),
-    });
-  }
-
-  if (tokenMinFloorLimit > 0 && tokenMinFloorLimit < input.spotPrice) {
-    const floorDiscount = computeDiscountPct(
-      input.spotPrice,
-      tokenMinFloorLimit,
-    );
-    return buildResult({
-      limitPrice: tokenMinFloorLimit,
-      fallbackApplied: true,
-      fallbackSource: "s2",
+      limitPrice: input.limitPrice,
+      fallbackApplied: false,
+      fallbackSource: null,
       atrGuardrailApplied: false,
-      narrative: buildMinDiscountFallbackNarrative({
-        ...narrativeInput,
-        tokenMinFloorApplied: true,
-        newDiscountPct: floorDiscount,
-        fallbackSource: "s2",
-      }),
     });
   }
 
   return buildResult({
-    limitPrice: input.limitPrice,
-    fallbackApplied: false,
-    fallbackSource: null,
-    atrGuardrailApplied: false,
+    limitPrice: smoothBlend.limitPrice,
+    fallbackApplied: smoothBlend.s1Weight < 0.999,
+    fallbackSource: smoothBlend.deepTargetSource,
+    atrGuardrailApplied: smoothBlend.atrGuardrailApplied,
+    narrative: buildSmoothBlendNarrative(smoothBlend),
   });
 }
 
