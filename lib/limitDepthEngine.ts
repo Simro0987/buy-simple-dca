@@ -1,5 +1,8 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
-import { normalizeLimitPrice } from "@/lib/executionFormatting";
+import {
+  normalizeLimitPrice,
+  resolveSafeLimitPrice,
+} from "@/lib/executionFormatting";
 import { formatDecimal, formatRsi } from "@/lib/numberFormat";
 import {
   buildRsiInterpolationNarrative,
@@ -251,11 +254,6 @@ export function computeAutonomousLimit(input: {
     panicWickNarrative = minDiscount.narrative;
   }
 
-  const limitPullbackPct =
-    input.spotPrice > 0
-      ? round1(((input.spotPrice - limitPrice) / input.spotPrice) * 100)
-      : 0;
-
   const narrative = minDiscount.narrative
     ? minDiscount.narrative
     : panicWickNarrative
@@ -285,12 +283,18 @@ export function computeAutonomousLimit(input: {
               ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
               : `Limit prichytený na S1 — RSI ${formatRsi(input.rsi14)} drží neutrálny rozsah.`;
 
+  const safeLimitPrice = resolveSafeLimitPrice(input.spotPrice, limitPrice);
+  const safePullbackPct =
+    input.spotPrice > 0
+      ? round1(((input.spotPrice - safeLimitPrice) / input.spotPrice) * 100)
+      : 0;
+
   return {
-    limitPrice,
-    limitPullbackPct,
+    limitPrice: safeLimitPrice,
+    limitPullbackPct: safePullbackPct,
     limitDepthMode: badge.mode,
     limitDepthBadge: badge.badge,
-    limitDepthNarrative: `${narrative} Cieľ ${formatDecimal(limitPrice, 4)}.`,
+    limitDepthNarrative: `${narrative} Cieľ ${formatDecimal(safeLimitPrice, 4)}.`,
     rsiS2BlendPct: Math.round(blendFactor * 100),
     supportResistance,
     supportSnapApplied: true,

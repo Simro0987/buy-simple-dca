@@ -677,11 +677,11 @@ function ExecutionOrderCard({
               </p>
               <div className="mt-0.5 flex items-center gap-1.5">
                 <p className="text-sm font-bold tabular-nums text-orange-300">
-                  {formatCopyLimitPrice4(plan.limitPrice)}
+                  {formatCopyLimitPrice4(plan.limitPrice, plan.spotPrice)}
                 </p>
                 <CopyValueButton
                   compact
-                  value={formatCopyLimitPrice4(plan.limitPrice)}
+                  value={formatCopyLimitPrice4(plan.limitPrice, plan.spotPrice)}
                   label="Kopírovať limitnú cenu"
                   disabled={isNoTrade}
                   onCopied={() =>

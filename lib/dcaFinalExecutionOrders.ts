@@ -23,6 +23,7 @@ import {
   buildPositionSizingNarrative,
 } from "@/lib/positionSizing";
 import { evaluateNoTradeZone } from "@/lib/noTradeZones";
+import { resolveSafeLimitPrice } from "@/lib/executionFormatting";
 
 function roundUsd(value: number): number {
   return Math.round(value * 100) / 100;
@@ -342,6 +343,17 @@ export function buildFinalExecutionOrders(
         limitUsdBase = null;
         positionSizeMultiplier = 1;
         positionSizeBoostPct = 0;
+      } else if (limitUsd > 0 && spotPrice > 0) {
+        const safeLimitPrice = resolveSafeLimitPrice(spotPrice, limitPrice);
+        if (safeLimitPrice !== limitPrice) {
+          limitPrice = safeLimitPrice;
+          limitPullbackPct =
+            spotPrice > 0
+              ? Math.round(
+                  ((spotPrice - safeLimitPrice) / spotPrice) * 1000,
+                ) / 10
+              : 0;
+        }
       }
 
       const adjustedTotalUsd = roundUsd(marketUsd + limitUsd);

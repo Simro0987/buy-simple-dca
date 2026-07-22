@@ -1,6 +1,7 @@
 import type { AssetCategory } from "@/lib/portfolioStorage";
 import {
   formatCopyAmount2,
+  resolveSafeLimitPrice,
 } from "@/lib/executionFormatting";
 import {
   buildDynamicLimitReasoning,
@@ -255,9 +256,20 @@ function resolveAutonomousLimitFields(
 
   if (!autonomous) return null;
 
+  const safeLimitPrice = resolveSafeLimitPrice(
+    input.spotPrice,
+    autonomous.limitPrice,
+  );
+  const safePullbackPct =
+    input.spotPrice > 0
+      ? round1(((input.spotPrice - safeLimitPrice) / input.spotPrice) * 100)
+      : 0;
+
   return {
     ...autonomous,
-    whyLimit: buildWhyLimit(input, autonomous.limitPrice, {
+    limitPrice: safeLimitPrice,
+    limitPullbackPct: safePullbackPct,
+    whyLimit: buildWhyLimit(input, safeLimitPrice, {
       atrMultiplier: options?.atrMultiplier,
       safetyBrakeActive: options?.safetyBrakeActive ?? input.brakeActive,
       supportResistance: autonomous.supportResistance,
@@ -268,7 +280,7 @@ function resolveAutonomousLimitFields(
   };
 }
 
-function emptyLimitFields(): Pick<
+function emptyLimitFields(spotPrice = 0): Pick<
   ExecutionSplitResult,
   | "limitPrice"
   | "limitPullbackPct"
@@ -282,8 +294,11 @@ function emptyLimitFields(): Pick<
   | "limitValidityDays"
   | "rsiS2BlendPct"
 > {
+  const safeLimitPrice =
+    spotPrice > 0 ? resolveSafeLimitPrice(spotPrice, null) : 0;
+
   return {
-    limitPrice: 0,
+    limitPrice: safeLimitPrice,
     limitPullbackPct: 0,
     whyLimit: "Čakáme na live RSI/ATR a klines pre výpočet limitného cieľa.",
     supportResistance: null,
@@ -316,7 +331,8 @@ function resolveCoreLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   }
 
   const limitFields =
-    resolveAutonomousLimitFields(input, { safetyBrakeActive }) ?? emptyLimitFields();
+    resolveAutonomousLimitFields(input, { safetyBrakeActive }) ??
+    emptyLimitFields(input.spotPrice);
 
   const fgPart =
     input.fearGreedValue <= 30
@@ -372,7 +388,7 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
       yieldMergeActive: false,
       minOrderRuleActive: false,
       safetyBrakeActive: false,
-      ...emptyLimitFields(),
+      ...emptyLimitFields(input.spotPrice),
     };
   }
 
@@ -388,7 +404,7 @@ function resolveSatelliteLogic(input: ExecutionTokenInput): ExecutionSplitResult
   const limitFields =
     resolveAutonomousLimitFields(input, {
       atrMultiplier: SATELLITE_ATR_LIMIT_MULTIPLIER,
-    }) ?? emptyLimitFields();
+    }) ?? emptyLimitFields(input.spotPrice);
 
   const entrySignal = `ENTRY SIGNAL: Satellite staking • ATR ${atrPct.toFixed(1)} % • ${limitFields.limitDepthBadge ?? "autonómny limit"} • RSI ${rsi.toFixed(0)}`;
 
@@ -435,7 +451,7 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
       yieldMergeActive: false,
       minOrderRuleActive: false,
       safetyBrakeActive: false,
-      ...emptyLimitFields(),
+      ...emptyLimitFields(input.spotPrice),
     };
   }
 
@@ -477,7 +493,7 @@ function resolveYieldLogic(input: ExecutionTokenInput): ExecutionSplitResult {
   const limitFields =
     resolveAutonomousLimitFields(input, {
       atrMultiplier: YIELD_ATR_LIMIT_MULTIPLIER,
-    }) ?? emptyLimitFields();
+    }) ?? emptyLimitFields(input.spotPrice);
 
   const entrySignal = buildYieldEntrySignal({
     rsi,

@@ -1,4 +1,7 @@
-import { normalizeLimitPrice } from "@/lib/executionFormatting";
+import {
+  normalizeLimitPrice,
+  resolveSafeLimitPrice,
+} from "@/lib/executionFormatting";
 import { formatDecimal, formatRsi } from "@/lib/numberFormat";
 import { SNAP_ABOVE_SUPPORT_PCT } from "@/lib/supportResistanceLevels";
 import type { MacroTrend } from "@/lib/macroTrend";
@@ -498,7 +501,10 @@ export function applyMinDiscountBuffer(input: {
       : (result.narrative ?? null);
 
     return {
-      limitPrice: enforced.limitPrice,
+      limitPrice: resolveSafeLimitPrice(
+        input.spotPrice,
+        enforced.limitPrice,
+      ),
       fallbackApplied,
       fallbackSource: result.fallbackSource,
       originalDiscountPct,

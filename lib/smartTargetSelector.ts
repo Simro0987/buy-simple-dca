@@ -1,4 +1,4 @@
-import { normalizeLimitPrice } from "@/lib/executionFormatting";
+import { computeLimitPriceFromDiscount } from "@/lib/executionFormatting";
 import { formatDecimal } from "@/lib/numberFormat";
 
 /** 7-day fill feasibility cap — matches limitDepthEngine guardrail. */
@@ -21,11 +21,6 @@ function clamp01(value: number): number {
 function discountPct(spotPrice: number, limitPrice: number): number {
   if (spotPrice <= 0 || limitPrice <= 0) return 0;
   return round1(((spotPrice - limitPrice) / spotPrice) * 100);
-}
-
-function limitPriceFromDiscount(spotPrice: number, discountPctValue: number): number {
-  if (spotPrice <= 0 || discountPctValue <= 0) return 0;
-  return normalizeLimitPrice(spotPrice * (1 - discountPctValue / 100));
 }
 
 export function atrGuardrailCapPct(atr14dPct: number): number {
@@ -124,7 +119,10 @@ export function resolveSmoothDiscountBlend(input: {
   const finalDiscountPct = round1(
     s1Weight * s1DiscountPct + deepWeight * deepTargetPct,
   );
-  const limitPrice = limitPriceFromDiscount(input.spotPrice, finalDiscountPct);
+  const limitPrice = computeLimitPriceFromDiscount(
+    input.spotPrice,
+    finalDiscountPct,
+  );
 
   return {
     s1DiscountPct,
