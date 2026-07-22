@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { EthDefiMozogPanel } from "@/components/stake/EthDefiMozogPanel";
+import { LinkDefiMozogPanel } from "@/components/stake/LinkDefiMozogPanel";
 import { SolDefiMozogPanel } from "@/components/stake/SolDefiMozogPanel";
 import {
   DefiTokenSelector,
@@ -20,8 +21,10 @@ export function StakeDefiMozogSection({ onToast }: StakeDefiMozogSectionProps) {
       <DefiTokenSelector active={activeToken} onChange={setActiveToken} />
       {activeToken === "ETH" ? (
         <EthDefiMozogPanel onToast={onToast} />
-      ) : (
+      ) : activeToken === "SOL" ? (
         <SolDefiMozogPanel onToast={onToast} />
+      ) : (
+        <LinkDefiMozogPanel onToast={onToast} />
       )}
     </div>
   );

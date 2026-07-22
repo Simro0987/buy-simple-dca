@@ -5,7 +5,7 @@ import { Shield } from "lucide-react";
 import { interactiveCard } from "@/lib/motion";
 import { formatPct } from "@/lib/numberFormat";
 
-export type DefiTokenTab = "ETH" | "SOL";
+export type DefiTokenTab = "ETH" | "SOL" | "LINK";
 
 const ACTIVE_TAB_COLOR = "#8B5CF6";
 
@@ -18,7 +18,7 @@ export function DefiTokenSelector({
 }) {
   return (
     <div className="flex items-center justify-center gap-2 rounded-2xl border border-white/5 bg-[#111113] p-1.5">
-      {(["ETH", "SOL"] as const).map((token) => {
+      {(["ETH", "SOL", "LINK"] as const).map((token) => {
         const isActive = active === token;
         return (
           <button
