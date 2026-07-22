@@ -19,6 +19,7 @@ import {
   buildPanicWickNarrative,
   resolvePanicWickLimit,
 } from "@/lib/panicWickAnalysis";
+import { applyMinDiscountBuffer } from "@/lib/minDiscountBuffer";
 import {
   computeSupportResistance,
   SNAP_ABOVE_SUPPORT_PCT,
@@ -227,23 +228,43 @@ export function computeAutonomousLimit(input: {
     });
   }
 
+  const minDiscount = applyMinDiscountBuffer({
+    spotPrice: input.spotPrice,
+    limitPrice,
+    atr14dPct: input.atr14dPct,
+    s2Limit: resolution.interpolatedFromS2,
+    averagePanicWickPct: input.averagePanicWickPct,
+  });
+
+  if (minDiscount.fallbackApplied) {
+    limitPrice = minDiscount.limitPrice;
+    if (minDiscount.atrGuardrailApplied) {
+      atrGuardrailApplied = true;
+    }
+    panicWickNarrative = minDiscount.narrative;
+  }
+
   const limitPullbackPct =
     input.spotPrice > 0
       ? round1(((input.spotPrice - limitPrice) / input.spotPrice) * 100)
       : 0;
 
-  const narrative = panicWickNarrative
-    ? panicWickNarrative
-    : buildRsiInterpolationNarrative({
+  const narrative = minDiscount.narrative
+    ? minDiscount.narrative
+    : panicWickNarrative
+      ? panicWickNarrative
+      : buildRsiInterpolationNarrative({
         rsi14: input.rsi14,
         blendFactor,
         atrGuardrailApplied,
         limitPrice,
       });
 
-  const snapNote = panicWickNarrative
-    ? panicWickNarrative
-    : atrGuardrailApplied
+  const snapNote = minDiscount.narrative
+    ? minDiscount.narrative
+    : panicWickNarrative
+      ? panicWickNarrative
+      : atrGuardrailApplied
     ? `Limit korigovaný 7-dňovým ATR mantinelom (${formatDecimal(DEEP_WICK_ATR_GUARDRAIL_MULTIPLIER, 1)}×ATR14) — interpolácia S1→S2 presiahla 7-dňový dosah.`
     : input.shortTermTrend === "sideways"
       ? "Týždenný SIDEWAYS trend — limit defenzívne na S1, bez lovu hlbokých knotov."
