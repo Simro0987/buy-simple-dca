@@ -11,6 +11,7 @@ import {
   formatCopyLimitPrice4,
 } from "@/lib/executionFormatting";
 import { DcaCollapsibleDetails } from "@/components/dca/DcaCollapsibleDetails";
+import { DiscountLogicBreakdownPanel } from "@/components/dca/DiscountLogicBreakdownPanel";
 import { TokenRsiGauge } from "@/components/dca/TokenRsiGauge";
 import {
   DcaTokenFilterBar,
@@ -356,6 +357,7 @@ function ExecutionOrderCard({
       plan.entrySignal ||
       plan.splitExplanation ||
       (plan.supportSnapApplied && plan.supportSnapNote) ||
+      plan.discountLogicBreakdown ||
       (plan.limitShare > 0 && plan.whyLimit),
   );
 
@@ -730,6 +732,14 @@ function ExecutionOrderCard({
               </p>
             </div>
           )}
+
+          {plan.discountLogicBreakdown &&
+            plan.limitShare > 0 &&
+            !plan.noTradeActive && (
+              <DiscountLogicBreakdownPanel
+                breakdown={plan.discountLogicBreakdown}
+              />
+            )}
 
           {(plan.noTradeActive || (plan.limitShare > 0 && plan.whyLimit)) && plan.whyLimit && (
             <div

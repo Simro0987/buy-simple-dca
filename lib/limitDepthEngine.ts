@@ -19,7 +19,8 @@ import {
   buildPanicWickNarrative,
   resolvePanicWickLimit,
 } from "@/lib/panicWickAnalysis";
-import { applyMinDiscountBuffer } from "@/lib/minDiscountBuffer";
+import { applyMinDiscountBuffer, computeDiscountLogicBreakdown } from "@/lib/minDiscountBuffer";
+import type { DiscountLogicBreakdown } from "@/lib/minDiscountBuffer";
 import {
   computeSupportResistance,
   SNAP_ABOVE_SUPPORT_PCT,
@@ -138,6 +139,7 @@ export interface AutonomousLimitResult {
   supportResistance: SupportResistanceLevels;
   supportSnapApplied: boolean;
   supportSnapNote: string | null;
+  discountLogicBreakdown: DiscountLogicBreakdown | null;
 }
 
 export function computeAutonomousLimit(input: {
@@ -285,6 +287,17 @@ export function computeAutonomousLimit(input: {
               ? `Dynamická interpolácia S1→S2 podľa RSI (${Math.round(blendFactor * 100)} % smerom k S2).`
               : `Limit prichytený na S1 — RSI ${formatRsi(input.rsi14)} drží neutrálny rozsah.`;
 
+  const discountLogicBreakdown = computeDiscountLogicBreakdown({
+    spotPrice: input.spotPrice,
+    atr14dPct: input.atr14dPct,
+    s1LimitPrice: resolution.interpolatedFromS1,
+    sma200: input.sma200,
+    ema21: input.ema21,
+    rsi14: input.rsi14,
+    shortTermTrend: input.shortTermTrend,
+    macroTrend: input.macroTrend,
+  });
+
   return {
     limitPrice,
     limitPullbackPct,
@@ -295,6 +308,7 @@ export function computeAutonomousLimit(input: {
     supportResistance,
     supportSnapApplied: true,
     supportSnapNote: snapNote,
+    discountLogicBreakdown,
   };
 }
 

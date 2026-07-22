@@ -416,6 +416,7 @@ export function buildFinalExecutionOrders(
         noTradeActive: noTrade != null,
         noTradeZone: noTrade?.zone ?? null,
         noTradeBadge: noTrade?.badge ?? null,
+        discountLogicBreakdown: split.discountLogicBreakdown,
       };
     });
 }

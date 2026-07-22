@@ -108,6 +108,85 @@ export function isAbsoluteDiscountFloorActive(
   return trendAdjusted < ABSOLUTE_MIN_DISCOUNT_FLOOR_PCT;
 }
 
+export interface DiscountLogicBreakdown {
+  atr14dPct: number;
+  noiseTrendRegime: NoiseTrendRegime;
+  trendMultiplier: number;
+  trendMultiplierLabel: string;
+  dynamicNoisePct: number;
+  finalDiscountPct: number;
+  absoluteFloorActive: boolean;
+  s1DistancePct: number;
+  s1Accepted: boolean;
+}
+
+export function formatNoiseTrendRegimeLabel(regime: NoiseTrendRegime): string {
+  switch (regime) {
+    case "strong_bull":
+      return "Bull";
+    case "bear":
+      return "Bear";
+    default:
+      return "Neutrál";
+  }
+}
+
+export function computeDiscountLogicBreakdown(input: {
+  spotPrice: number;
+  atr14dPct: number | null;
+  s1LimitPrice: number;
+  sma200?: number | null;
+  ema21?: number | null;
+  rsi14?: number | null;
+  shortTermTrend?: ShortTermTrend | null;
+  macroTrend?: MacroTrend | null;
+}): DiscountLogicBreakdown | null {
+  if (
+    input.spotPrice <= 0 ||
+    input.atr14dPct == null ||
+    input.atr14dPct <= 0
+  ) {
+    return null;
+  }
+
+  const noiseTrendRegime = resolveNoiseTrendRegime({
+    spotPrice: input.spotPrice,
+    sma200: input.sma200,
+    ema21: input.ema21,
+    rsi14: input.rsi14,
+    shortTermTrend: input.shortTermTrend,
+    macroTrend: input.macroTrend,
+  });
+  const trendMultiplier = resolveNoiseMultiplier(noiseTrendRegime);
+  const dynamicNoisePct = computeTrendAdjustedNoiseThresholdPct(
+    input.atr14dPct,
+    noiseTrendRegime,
+  );
+  const finalDiscountPct = computeNoiseThresholdPct(
+    input.atr14dPct,
+    noiseTrendRegime,
+  );
+  const s1DistancePct =
+    input.s1LimitPrice > 0 && input.s1LimitPrice < input.spotPrice
+      ? computeDiscountPct(input.spotPrice, input.s1LimitPrice)
+      : 0;
+
+  return {
+    atr14dPct: round1(input.atr14dPct),
+    noiseTrendRegime,
+    trendMultiplier,
+    trendMultiplierLabel: formatNoiseTrendRegimeLabel(noiseTrendRegime),
+    dynamicNoisePct,
+    finalDiscountPct,
+    absoluteFloorActive: isAbsoluteDiscountFloorActive(
+      input.atr14dPct,
+      noiseTrendRegime,
+    ),
+    s1DistancePct,
+    s1Accepted: s1DistancePct >= finalDiscountPct,
+  };
+}
+
 function absoluteDiscountFloorPrice(spotPrice: number): number {
   if (spotPrice <= 0) return 0;
   return normalizeLimitPrice(

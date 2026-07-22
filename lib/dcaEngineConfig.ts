@@ -10,6 +10,7 @@ import type {
 import type { MacroTrend } from "@/lib/macroTrend";
 import type { ShortTermTrend } from "@/lib/shortTermTrend";
 import type { NoTradeZone } from "@/lib/noTradeZones";
+import type { DiscountLogicBreakdown } from "@/lib/minDiscountBuffer";
 
 export const DEFAULT_WEEKLY_INVESTMENT = 431;
 
@@ -79,6 +80,7 @@ export interface TokenExecutionPlan {
   noTradeActive: boolean;
   noTradeZone: NoTradeZone | null;
   noTradeBadge: string | null;
+  discountLogicBreakdown: DiscountLogicBreakdown | null;
 }
 
 export interface RegimeFactorDisplay {
