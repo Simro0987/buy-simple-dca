@@ -14,6 +14,7 @@ import {
   formatPct,
   formatSignedPct,
 } from "@/lib/numberFormat";
+import { isSignificantApyPct } from "@/lib/yieldDataSources";
 
 const GRADE_COLORS: Record<string, string> = {
   A: "text-emerald-300",
@@ -189,16 +190,18 @@ export function ExecutionPerformanceSection({
               transition={tokenSwitchTransition}
               className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-4"
             >
-              <MetricTile
-                label="APY výnos"
-                value={formatPct(advisor.yieldSatelliteMetrics.apyPct, 1)}
-                sublabel={
-                  advisor.yieldSatelliteMetrics.apyIsEstimated
-                    ? advisor.yieldSatelliteMetrics.apySourceLabel
-                    : `Live · ${advisor.yieldSatelliteMetrics.apySourceLabel}`
-                }
-                tone="positive"
-              />
+              {isSignificantApyPct(advisor.yieldSatelliteMetrics.apyPct) ? (
+                <MetricTile
+                  label="APY výnos"
+                  value={formatPct(advisor.yieldSatelliteMetrics.apyPct, 1)}
+                  sublabel={
+                    advisor.yieldSatelliteMetrics.apyIsEstimated
+                      ? advisor.yieldSatelliteMetrics.apySourceLabel
+                      : `Live · ${advisor.yieldSatelliteMetrics.apySourceLabel}`
+                  }
+                  tone="positive"
+                />
+              ) : null}
               <MetricTile
                 label="IL Risk / Reward"
                 value={formatMultiplier(advisor.yieldSatelliteMetrics.ilRiskRewardRatio, 1)}

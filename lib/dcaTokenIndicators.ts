@@ -9,6 +9,7 @@ import {
   formatRsi,
   formatSignedPct,
 } from "@/lib/numberFormat";
+import { isSignificantApyPct } from "@/lib/yieldDataSources";
 
 export type IndicatorTone = "neutral" | "bullish" | "bearish" | "warning";
 
@@ -122,15 +123,19 @@ export function buildTokenIndicatorSnapshot(input: {
     const chips: TokenIndicatorChip[] = [];
 
     if (metrics) {
-      const apyLabel = metrics.apyIsEstimated
-        ? `APY (${metrics.apySourceLabel ?? "Odhad"})`
-        : `APY · ${metrics.apySourceLabel ?? "Live"}`;
-      chips.push(
-        {
+      const apyChips: TokenIndicatorChip[] = [];
+      if (isSignificantApyPct(metrics.apyPct)) {
+        const apyLabel = metrics.apyIsEstimated
+          ? `APY (${metrics.apySourceLabel ?? "Odhad"})`
+          : `APY · ${metrics.apySourceLabel ?? "Live"}`;
+        apyChips.push({
           label: apyLabel,
           value: formatPct(metrics.apyPct, 1),
           tone: metrics.apyPct >= 6 ? "bullish" : "neutral",
-        },
+        });
+      }
+      chips.push(
+        ...apyChips,
         {
           label: "IL R/R",
           value: formatMultiplier(metrics.ilRiskRewardRatio, 1),
@@ -182,15 +187,19 @@ export function buildTokenIndicatorSnapshot(input: {
   const chips: TokenIndicatorChip[] = [];
 
   if (metrics) {
-    const apyLabel = metrics.apyIsEstimated
-      ? `APY (${metrics.apySourceLabel ?? "Odhad"})`
-      : `APY · ${metrics.apySourceLabel ?? "Live"}`;
-    chips.push(
-      {
+    const apyChips: TokenIndicatorChip[] = [];
+    if (isSignificantApyPct(metrics.apyPct)) {
+      const apyLabel = metrics.apyIsEstimated
+        ? `APY (${metrics.apySourceLabel ?? "Odhad"})`
+        : `APY · ${metrics.apySourceLabel ?? "Live"}`;
+      apyChips.push({
         label: apyLabel,
         value: formatPct(metrics.apyPct, 1),
         tone: metrics.apyPct >= 8 ? "bullish" : "neutral",
-      },
+      });
+    }
+    chips.push(
+      ...apyChips,
       {
         label: "IL R/R",
         value: formatMultiplier(metrics.ilRiskRewardRatio, 1),

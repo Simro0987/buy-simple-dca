@@ -32,6 +32,14 @@ export const YIELD_APY_SOURCE_LABELS: Record<YieldApySource, string> = {
   fallback: "Odhad",
 };
 
+/** APY below this threshold is treated as insignificant and hidden in the UI. */
+export const MIN_SIGNIFICANT_APY_PCT = 1.0;
+
+/** Whether a numeric APY (percent) is worth showing in chips / metric tiles. */
+export function isSignificantApyPct(apyPct: number | null | undefined): boolean {
+  return apyPct != null && Number.isFinite(apyPct) && apyPct >= MIN_SIGNIFICANT_APY_PCT;
+}
+
 /** Safe local fallback APY (% p.a.) per token / network when live data is unavailable. */
 export const FALLBACK_APY_BY_SYMBOL: Record<
   string,
