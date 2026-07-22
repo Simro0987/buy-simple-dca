@@ -13,6 +13,10 @@ import {
 import { DcaCollapsibleDetails } from "@/components/dca/DcaCollapsibleDetails";
 import { DiscountLogicBreakdownPanel } from "@/components/dca/DiscountLogicBreakdownPanel";
 import { buildPerTokenDiscountLogicBreakdown } from "@/lib/minDiscountBuffer";
+import {
+  LMT_TYPE_BADGE_STYLES,
+  resolveLmtTypeDisplay,
+} from "@/lib/lmtTypeBadge";
 import { TokenRsiGauge } from "@/components/dca/TokenRsiGauge";
 import {
   DcaTokenFilterBar,
@@ -362,6 +366,20 @@ function ExecutionOrderCard({
     ],
   );
 
+  const lmtTypeDisplay = useMemo(
+    () =>
+      resolveLmtTypeDisplay({
+        smoothBlend: perTokenDiscountBreakdown?.smoothBlend,
+        limitDepthMode: plan.limitDepthMode,
+        fallbackBadge: plan.limitDepthBadge,
+      }),
+    [
+      perTokenDiscountBreakdown?.smoothBlend,
+      plan.limitDepthMode,
+      plan.limitDepthBadge,
+    ],
+  );
+
   const yieldHeader =
     plan.category === "yield" && plan.convictionScore != null
       ? `S ${Math.round(plan.convictionScore)} • RSI ${plan.rsi14 != null ? formatRsi(plan.rsi14) : "—"} • MA ${plan.priceVsSma14Pct != null ? formatSignedPct(plan.priceVsSma14Pct, 0) : "—"} • Fund. ${plan.fundamentalScore != null ? Math.round(plan.fundamentalScore) : "—"}`
@@ -615,17 +633,11 @@ function ExecutionOrderCard({
             </div>
           ) : (
             <>
-          {plan.limitDepthBadge && plan.limitUsd > 0 && (
+          {plan.limitUsd > 0 && (
             <span
-              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
-                plan.limitDepthMode === "deep_wick"
-                  ? "border-orange-500/35 bg-orange-500/15 text-orange-300"
-                  : plan.rsi14 != null && plan.rsi14 < 50 && plan.rsiS2BlendPct != null && plan.rsiS2BlendPct > 0
-                    ? "border-cyan-500/30 bg-cyan-500/12 text-cyan-300"
-                    : "border-emerald-500/30 bg-emerald-500/12 text-emerald-300"
-              }`}
+              className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide transition-all duration-500 ease-in-out ${LMT_TYPE_BADGE_STYLES[lmtTypeDisplay.tone]}`}
             >
-              {plan.limitDepthBadge}
+              {lmtTypeDisplay.label}
             </span>
           )}
           <p className="mt-1 text-base font-bold text-white">
