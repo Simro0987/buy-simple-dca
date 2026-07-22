@@ -37,11 +37,13 @@ import {
   registerOpenLimitOrder,
 } from "@/lib/openLimitOrders";
 import { fetchAllTokenOctagonSnapshots } from "@/lib/tokenOctagonData";
+import { DcaJournalModal } from "@/components/dca/DcaJournalModal";
+import { appendDcaJournalEntry, type DcaJournalTrigger } from "@/lib/dcaJournal";
 import { interactiveButton } from "@/lib/motion";
 import { useAppStore } from "@/src/store/useAppStore";
 import { formatUsd } from "@/lib/data";
-import { RefreshCw, ShoppingCart } from "lucide-react";
-import { useCallback, useEffect, useMemo } from "react";
+import { RefreshCw, History, ShoppingCart } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 interface DcaEngineProps {
   portfolioSymbols?: string[];
@@ -68,6 +70,7 @@ export function DcaEngine({
   onRecordPurchase,
   onRecordMarketLeg,
 }: DcaEngineProps) {
+  const [journalOpen, setJournalOpen] = useState(false);
   const weeklyAmount = useAppStore((state) => state.dcaPlan.weeklyBudget);
   const setWeeklyBudget = useAppStore((state) => state.setWeeklyBudget);
   const setDcaResult = useAppStore((state) => state.setDcaResult);
@@ -302,6 +305,7 @@ export function DcaEngine({
           limitUsd: plan.limitUsd,
           createdAt: new Date().toISOString(),
         });
+        appendDcaJournalEntry({ plan, trigger: "activate_limit" });
       }
 
       void logSingleLegPerformance(plan, leg);
@@ -312,6 +316,13 @@ export function DcaEngine({
   const handleCancelLimit = useCallback((symbol: string) => {
     cancelOpenLimitOrder(symbol);
   }, []);
+
+  const handleJournalLimit = useCallback(
+    (plan: TokenExecutionPlan, trigger: DcaJournalTrigger) => {
+      appendDcaJournalEntry({ plan, trigger });
+    },
+    [],
+  );
 
   const handleRecordPurchase = () => {
     const recorded = onRecordPurchase(finalExecutionOrders);
@@ -360,6 +371,14 @@ export function DcaEngine({
         </div>
         <div className="flex items-center gap-2">
           <TradingModeToggle compact />
+          <button
+            type="button"
+            onClick={() => setJournalOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-zinc-400 transition-colors hover:text-white"
+          >
+            <History className="h-3.5 w-3.5" />
+            DCA Denník
+          </button>
           <button
             type="button"
             onClick={handleRefresh}
@@ -461,6 +480,7 @@ export function DcaEngine({
             onDeployAll={handleDeployAll}
             onDeployLeg={handleDeployLeg}
             onCancelLimit={handleCancelLimit}
+            onJournalLimit={handleJournalLimit}
           />
         </>
       )}
@@ -494,6 +514,8 @@ export function DcaEngine({
         <ShoppingCart className="h-5 w-5" />
         Zaznamenať nákup
       </motion.button>
+
+      <DcaJournalModal open={journalOpen} onClose={() => setJournalOpen(false)} />
     </div>
     </LayoutGroup>
   );

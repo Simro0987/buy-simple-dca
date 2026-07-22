@@ -27,6 +27,7 @@ import { getCategoryStyles } from "@/lib/assetStyles";
 import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
 import type { IndicatorTone } from "@/lib/dcaTokenIndicators";
 import type { TradingMode } from "@/lib/exchange/types";
+import type { DcaJournalTrigger } from "@/lib/dcaJournal";
 import { sumExecutionOrders } from "@/lib/dcaFinalExecutionOrders";
 import { YIELD_FILTER_THRESHOLDS } from "@/lib/dcaYieldFilter";
 import {
@@ -56,6 +57,7 @@ interface ExecutionEngineCardsProps {
     plan: TokenExecutionPlan,
   ) => Promise<void>;
   onCancelLimit?: (symbol: string) => void;
+  onJournalLimit?: (plan: TokenExecutionPlan, trigger: DcaJournalTrigger) => void;
 }
 
 const listItemMotion = {
@@ -310,6 +312,7 @@ function ExecutionOrderCard({
   getLegState,
   onDeployLeg,
   onCancelLimit,
+  onJournalLimit,
   cardRef,
 }: {
   plan: TokenExecutionPlan;
@@ -318,6 +321,7 @@ function ExecutionOrderCard({
   getLegState: (symbol: string, leg: OrderLeg) => DeployState;
   onDeployLeg: (symbol: string, leg: OrderLeg) => void;
   onCancelLimit: (symbol: string) => void;
+  onJournalLimit?: (plan: TokenExecutionPlan, trigger: DcaJournalTrigger) => void;
   cardRef?: (node: HTMLElement | null) => void;
 }) {
   const catStyles = getCategoryStyles(plan.category);
@@ -635,6 +639,9 @@ function ExecutionOrderCard({
                   value={formatCopyLimitPrice4(plan.limitPrice)}
                   label="Kopírovať limitnú cenu"
                   disabled={isNoTrade}
+                  onCopied={() =>
+                    onJournalLimit?.(plan, "copy_limit_price")
+                  }
                 />
               </div>
               <p
@@ -800,6 +807,7 @@ export function ExecutionEngineCards({
   onDeployAll,
   onDeployLeg,
   onCancelLimit,
+  onJournalLimit,
 }: ExecutionEngineCardsProps) {
   const [activeFilter, setActiveFilter] = useState<DcaTokenFilter>("all");
   const cardRefs = useRef<Record<string, HTMLElement | null>>({});
@@ -927,6 +935,7 @@ export function ExecutionEngineCards({
               getLegState={getLegState}
               onDeployLeg={(symbol, leg) => void deployLeg(symbol, leg)}
               onCancelLimit={(symbol) => cancelLimit(symbol)}
+              onJournalLimit={onJournalLimit}
               cardRef={(node) => {
                 cardRefs.current[plan.symbol] = node;
               }}

@@ -11,6 +11,7 @@ interface CopyValueButtonProps {
   compact?: boolean;
   className?: string;
   disabled?: boolean;
+  onCopied?: () => void;
 }
 
 export function CopyValueButton({
@@ -19,6 +20,7 @@ export function CopyValueButton({
   compact = false,
   className = "",
   disabled = false,
+  onCopied,
 }: CopyValueButtonProps) {
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<number | null>(null);
@@ -35,6 +37,7 @@ export function CopyValueButton({
     if (disabled) return;
     try {
       await navigator.clipboard.writeText(value);
+      onCopied?.();
       setCopied(true);
       if (timeoutRef.current != null) {
         window.clearTimeout(timeoutRef.current);
@@ -46,7 +49,7 @@ export function CopyValueButton({
     } catch {
       setCopied(false);
     }
-  }, [disabled, value]);
+  }, [disabled, onCopied, value]);
 
   const copiedClass = copied
     ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300 shadow-[0_0_12px_rgba(52,211,153,0.25)]"
