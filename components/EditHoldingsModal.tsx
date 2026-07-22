@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import {
   ASSET_DEFINITIONS,
   type HoldingsMap,
+  type LegacyCryptoSymbol,
 } from "@/lib/portfolioStorage";
 
 interface EditHoldingsModalProps {
@@ -113,7 +114,9 @@ export function EditHoldingsModal({
               </div>
 
               <div className="space-y-4">
-                {ASSET_DEFINITIONS.map((asset) => (
+                {ASSET_DEFINITIONS.map((asset) => {
+                  const symbol = asset.symbol as LegacyCryptoSymbol;
+                  return (
                   <label
                     key={asset.symbol}
                     className="block rounded-2xl border border-white/5 bg-[#111113] p-4"
@@ -131,18 +134,19 @@ export function EditHoldingsModal({
                       min="0"
                       step="any"
                       inputMode="decimal"
-                      value={draft[asset.symbol]}
+                      value={draft[symbol]}
                       onChange={(event) =>
                         setDraft((current) => ({
                           ...current,
-                          [asset.symbol]: Number(event.target.value),
+                          [symbol]: Number(event.target.value),
                         }))
                       }
                       className={`w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-sm font-medium text-white outline-none transition placeholder:text-zinc-600 focus:ring-2 ${accentRing[asset.accent]}`}
                       placeholder="0.00"
                     />
                   </label>
-                ))}
+                  );
+                })}
               </div>
 
               <div className="mt-6 flex gap-3">
