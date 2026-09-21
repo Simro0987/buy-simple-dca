@@ -144,8 +144,6 @@ export function DcaEngine({
         pricesReady={pricesReady}
       />
 
-      <DcaActivityCard transactions={transactions} />
-
       <div className="space-y-2">
         <p id="dca-record-hint" className="px-1 text-[11px] leading-relaxed text-zinc-500">
           {recordHint}
@@ -165,6 +163,8 @@ export function DcaEngine({
             : "Zaznamenať nákup"}
         </motion.button>
       </div>
+
+      <DcaActivityCard transactions={transactions} />
 
       <ConfirmPurchaseSheet
         open={confirmOpen}
