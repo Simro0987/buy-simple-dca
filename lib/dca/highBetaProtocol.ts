@@ -117,32 +117,16 @@ function evaluateAntiFomo(tokenData: HighBetaTokenData): {
   items: HighBetaCheckItem[];
 } {
   const { price, dailyCandles, upcomingUnlock } = tokenData;
-  const last30 = dailyCandles.slice(-30);
-  const peak30 =
-    last30.length > 0 ? Math.max(...last30.map((candle) => candle.high)) : 0;
   const close30d = dailyCandles[dailyCandles.length - 31]?.close ?? 0;
   const change30dPct = pctChange(price, close30d);
-  const distancePct =
-    peak30 > 0 && price > 0 ? ((price - peak30) / peak30) * 100 : Number.NaN;
-
-  const hasPeakData = peak30 > 0 && last30.length >= 20;
-  const belowPeak = hasPeakData && price <= 0.85 * peak30;
   const hasChangeData = Number.isFinite(change30dPct);
   const notParabolic = hasChangeData && change30dPct <= 80;
   const noUnlock = upcomingUnlock === false;
 
   const items: HighBetaCheckItem[] = [
     {
-      id: "local-ath",
-      label: "Odstup od lokálneho ATH",
-      passed: belowPeak,
-      detail: !hasPeakData
-        ? "Nedostatok 30-dňových dát"
-        : `Cena je ${formatPct(distancePct)} od 30d high (limit ≤ -15%)`,
-    },
-    {
       id: "fast-growth",
-      label: "30-dňový rast",
+      label: "Rýchlosť rastu (Max +80% za 30 dní)",
       passed: notParabolic,
       detail: !hasChangeData
         ? "Chýba close pred 30 dňami"
@@ -150,7 +134,7 @@ function evaluateAntiFomo(tokenData: HighBetaTokenData): {
     },
     {
       id: "unlocks",
-      label: "Nadchádzajúce unlocky",
+      label: "Tokenomika (Žiadne masívne unlocky)",
       passed: noUnlock,
       detail: noUnlock
         ? "Žiadny masívny unlock"
@@ -159,18 +143,16 @@ function evaluateAntiFomo(tokenData: HighBetaTokenData): {
   ];
 
   let reason = "";
-  if (!belowPeak) {
-    reason = hasPeakData
-      ? "Anti-FOMO: Príliš blízko lokálneho ATH"
+  if (!notParabolic) {
+    reason = hasChangeData
+      ? "Anti-FOMO: Príliš rýchly rast"
       : "Anti-FOMO: Nedostatok denných dát";
-  } else if (!notParabolic) {
-    reason = "Anti-FOMO: Príliš rýchly rast";
   } else if (!noUnlock) {
     reason = "Anti-FOMO: Nadchádzajúci veľký unlock";
   }
 
   return {
-    passed: belowPeak && notParabolic && noUnlock,
+    passed: notParabolic && noUnlock,
     reason,
     items,
   };

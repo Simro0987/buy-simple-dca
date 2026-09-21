@@ -88,6 +88,11 @@ function HighBetaAnalytics({ evaluation }: { evaluation: HighBetaEvaluation }) {
             </ul>
           </div>
         ))}
+        <p className="px-0.5 text-[11px] leading-relaxed text-zinc-400">
+          {evaluation.approved
+            ? `Skóre ${evaluation.score}/3 — nákup schválený, jednorazová exekúcia cez MKT alebo LMT.`
+            : `Skóre ${evaluation.score}/3 — nákup zamietnutý, kapitál sa dynamicky presúva do Core (BTC).`}
+        </p>
       </div>
     </details>
   );
@@ -196,18 +201,23 @@ export function TokenExecutionCard({
       </div>
 
       {approved && highBeta && (
-        <div className="mb-3 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-[12px] font-bold uppercase tracking-wide text-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.25)]">
-          ✅ NÁKUP SCHVÁLENÝ (Skóre {highBeta.score}/3)
+        <div className="mb-3 space-y-1 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 shadow-[0_0_18px_rgba(52,211,153,0.25)]">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-emerald-300">
+            ✅ NÁKUP SCHVÁLENÝ (Skóre {highBeta.score}/3)
+          </p>
+          <p className="text-[11px] font-medium leading-relaxed text-emerald-100/90">
+            Jednorazový nákup ihneď cez MKT alebo LMT.
+          </p>
         </div>
       )}
       {rejected && highBeta && (
         <div className="mb-3 space-y-1 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/15 to-rose-500/10 px-3 py-2">
           <p className="text-[12px] font-bold uppercase tracking-wide text-amber-200">
-            ⚠️ NÁKUP ZAMIETNUTÝ
+            ⚠️ NÁKUP ZAMIETNUTÝ (Skóre {highBeta.score}/3)
           </p>
           <p className="text-[11px] font-medium leading-relaxed text-amber-100/90">
             Dôvod: {highBeta.reason}. {formatUsd(plan.highBetaRedirectedUsd)}{" "}
-            presmerovaných do Core (BTC).
+            dynamicky presmerovaných do Core (BTC).
           </p>
         </div>
       )}
