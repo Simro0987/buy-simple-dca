@@ -46,7 +46,10 @@ export async function GET() {
   const geckoDaily = (id: string) => {
     const cached = geckoInflight.get(id);
     if (cached) return cached;
-    const request = fetchCoinGeckoCandles(id, 1600);
+    const request = fetchCoinGeckoCandles(id, 365).then(async (candles) => {
+      if (candles.length > 0) return candles;
+      return fetchCoinGeckoCandles(id, 250);
+    });
     geckoInflight.set(id, request);
     return request;
   };
