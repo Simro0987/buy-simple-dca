@@ -114,6 +114,34 @@ export interface HighBetaBtcData {
   weeklyCandles: OhlcvCandle[];
 }
 
+export interface SatelliteTokenData {
+  symbol: DcaSymbol | string;
+  price: number;
+  dailyCandles: OhlcvCandle[];
+  weeklyCandles: OhlcvCandle[];
+}
+
+export interface SatelliteChecklist {
+  step0: {
+    passed: boolean;
+    label: string;
+    items: HighBetaCheckItem[];
+  };
+  step1: {
+    passed: boolean;
+    skipped: boolean;
+    label: string;
+    items: HighBetaCheckItem[];
+  };
+}
+
+export interface SatelliteEvaluation {
+  approved: boolean;
+  reason: string;
+  stepFailed: number | null;
+  checklist: SatelliteChecklist;
+}
+
 export interface FactorBreakdown {
   id: "value" | "trend" | "sentiment" | "momentum" | "risk";
   label: string;
@@ -169,6 +197,8 @@ export interface TokenExecutionPlan {
   stopped: boolean;
   highBeta: HighBetaEvaluation | null;
   highBetaRedirectedUsd: number;
+  satellite: SatelliteEvaluation | null;
+  satelliteRedirectedUsd: number;
 }
 
 export interface WeeklyDcaPlan {
@@ -184,6 +214,8 @@ export interface WeeklyDcaPlan {
   stoppedSymbols: DcaSymbol[];
   highBetaRejectedSymbols: DcaSymbol[];
   highBetaRedirectedUsd: number;
+  satellitePausedSymbols: DcaSymbol[];
+  satelliteRedirectedUsd: number;
   plans: TokenExecutionPlan[];
   narrative: string[];
   allocationLabel: string;

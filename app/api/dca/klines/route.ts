@@ -12,7 +12,17 @@ const COINGECKO_IDS: Partial<Record<DcaSymbol, string>> = {
   HYPE: "hyperliquid",
 };
 
-const WEEKLY_SYMBOLS = new Set<DcaSymbol>(["BTC", "HYPE", "ZEC", "INJ"]);
+const WEEKLY_SYMBOLS = new Set<DcaSymbol>([
+  "BTC",
+  "ETH",
+  "SOL",
+  "LINK",
+  "AAVE",
+  "UNI",
+  "HYPE",
+  "ZEC",
+  "INJ",
+]);
 
 async function fetchCoinGeckoCandles(
   id: string,

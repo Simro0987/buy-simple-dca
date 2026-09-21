@@ -10,6 +10,7 @@ import type {
   ExecutionStatus,
   HighBetaCheckItem,
   HighBetaEvaluation,
+  SatelliteEvaluation,
   TokenExecutionPlan,
 } from "@/lib/dca/types";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
@@ -98,6 +99,58 @@ function HighBetaAnalytics({ evaluation }: { evaluation: HighBetaEvaluation }) {
   );
 }
 
+function SatelliteAnalytics({ evaluation }: { evaluation: SatelliteEvaluation }) {
+  const step1Status = evaluation.checklist.step1.skipped
+    ? "SKIP"
+    : evaluation.checklist.step1.passed
+      ? "PASS"
+      : "FAIL";
+  const step1Color = evaluation.checklist.step1.skipped
+    ? "text-cyan-300"
+    : evaluation.checklist.step1.passed
+      ? "text-emerald-400"
+      : "text-rose-400";
+
+  return (
+    <details className="group mt-3 rounded-2xl border border-white/10 bg-zinc-950/40 p-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-300 [&::-webkit-details-marker]:hidden">
+        Analytické detaily
+        <ChevronDown className="h-4 w-4 text-zinc-500 transition group-open:rotate-180" />
+      </summary>
+      <div className="mt-3 space-y-3">
+        <div className={`${glassInset} p-2.5`}>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+            Krok 0 · {evaluation.checklist.step0.label} ·{" "}
+            <span
+              className={
+                evaluation.checklist.step0.passed ? "text-emerald-400" : "text-rose-400"
+              }
+            >
+              {evaluation.checklist.step0.passed ? "PASS" : "FAIL"}
+            </span>
+          </p>
+          <ul className="space-y-1.5">
+            {evaluation.checklist.step0.items.map((item) => (
+              <CheckRow key={item.id} item={item} />
+            ))}
+          </ul>
+        </div>
+        <div className={`${glassInset} p-2.5`}>
+          <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+            Krok 1 · {evaluation.checklist.step1.label} ·{" "}
+            <span className={step1Color}>{step1Status}</span>
+          </p>
+          <ul className="space-y-1.5">
+            {evaluation.checklist.step1.items.map((item) => (
+              <CheckRow key={item.id} item={item} />
+            ))}
+          </ul>
+        </div>
+      </div>
+    </details>
+  );
+}
+
 function RsiGauge({ rsi }: { rsi: number }) {
   const left = Math.min(98, Math.max(2, rsi));
   return (
@@ -130,16 +183,19 @@ export function TokenExecutionCard({
   onActivateLimit,
 }: TokenExecutionCardProps) {
   const highBeta = plan.highBeta;
-  const rejected = Boolean(highBeta && !highBeta.approved);
-  const approved = Boolean(highBeta && highBeta.approved);
+  const satellite = plan.satellite;
+  const highBetaRejected = Boolean(highBeta && !highBeta.approved);
+  const highBetaApproved = Boolean(highBeta && highBeta.approved);
+  const satellitePaused = Boolean(satellite && !satellite.approved);
+  const locked = highBetaRejected || satellitePaused;
 
   return (
     <motion.article
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${glassPanel} p-4 ${rejected ? "border-amber-500/30" : ""}`}
+      className={`${glassPanel} p-4 ${highBetaRejected ? "border-amber-500/30" : satellitePaused ? "border-cyan-500/30" : ""}`}
     >
-      <div className={`mb-3 flex items-start justify-between gap-3 ${rejected ? "opacity-55 grayscale" : ""}`}>
+      <div className={`mb-3 flex items-start justify-between gap-3 ${locked ? "opacity-55 grayscale" : ""}`}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-white/20 to-white/5 text-xs font-bold text-white ring-1 ring-white/20">
             {plan.symbol.slice(0, 1)}
@@ -166,14 +222,14 @@ export function TokenExecutionCard({
                   Býčí trh · cena &gt; SMA 200
                 </span>
               )}
-              {!rejected && (
+              {!locked && (
                 <span
                   className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${statusClass[plan.status]}`}
                 >
                   {statusCopy[plan.status]}
                 </span>
               )}
-              {rejected && (
+              {locked && (
                 <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-rose-500/20 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">
                   <Lock className="h-3 w-3" />
                   Zamknuté
@@ -200,7 +256,7 @@ export function TokenExecutionCard({
         </div>
       </div>
 
-      {approved && highBeta && (
+      {highBetaApproved && highBeta && (
         <div className="mb-3 space-y-1 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 shadow-[0_0_18px_rgba(52,211,153,0.25)]">
           <p className="text-[12px] font-bold uppercase tracking-wide text-emerald-300">
             ✅ NÁKUP SCHVÁLENÝ (Skóre {highBeta.score}/3)
@@ -210,7 +266,7 @@ export function TokenExecutionCard({
           </p>
         </div>
       )}
-      {rejected && highBeta && (
+      {highBetaRejected && highBeta && (
         <div className="mb-3 space-y-1 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/15 to-rose-500/10 px-3 py-2">
           <p className="text-[12px] font-bold uppercase tracking-wide text-amber-200">
             ⚠️ NÁKUP ZAMIETNUTÝ (Skóre {highBeta.score}/3)
@@ -221,8 +277,19 @@ export function TokenExecutionCard({
           </p>
         </div>
       )}
+      {satellitePaused && satellite && (
+        <div className="mb-3 space-y-1 rounded-2xl border border-cyan-400/40 bg-gradient-to-br from-cyan-500/15 to-slate-900/40 px-3 py-2">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-cyan-200">
+            ⏸️ DCA POZASTAVENÉ
+          </p>
+          <p className="text-[11px] font-medium leading-relaxed text-cyan-100/90">
+            Dôvod: {satellite.reason} {formatUsd(plan.satelliteRedirectedUsd)}{" "}
+            presmerovaných do Core (BTC).
+          </p>
+        </div>
+      )}
 
-      <div className={`mb-3 grid grid-cols-2 gap-2 ${rejected ? "opacity-50 grayscale" : ""}`}>
+      <div className={`mb-3 grid grid-cols-2 gap-2 ${locked ? "opacity-50 grayscale" : ""}`}>
         <div className={`${glassInset} p-2.5`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             Trend
@@ -261,7 +328,7 @@ export function TokenExecutionCard({
         </div>
       </div>
 
-      {!rejected && (
+      {!locked && (
         <>
           <RsiGauge rsi={plan.rsi} />
 
@@ -336,6 +403,7 @@ export function TokenExecutionCard({
       )}
 
       {highBeta && <HighBetaAnalytics evaluation={highBeta} />}
+      {satellite && <SatelliteAnalytics evaluation={satellite} />}
     </motion.article>
   );
 }

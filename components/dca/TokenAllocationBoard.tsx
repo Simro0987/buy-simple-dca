@@ -20,19 +20,21 @@ function Row({
   detail: string;
 }) {
   const rejected = Boolean(plan.highBeta && !plan.highBeta.approved);
+  const paused = Boolean(plan.satellite && !plan.satellite.approved);
+  const locked = rejected || paused;
   return (
-    <div className={`space-y-1.5 ${rejected ? "opacity-50 grayscale" : ""}`}>
+    <div className={`space-y-1.5 ${locked ? "opacity-50 grayscale" : ""}`}>
       <div className="flex items-center justify-between gap-2">
         <p className="text-sm font-semibold text-white">
           {plan.symbol}
-          {rejected ? " · zamietnuté" : ""}
+          {rejected ? " · zamietnuté" : paused ? " · pozastavené" : ""}
         </p>
         <p className="text-xs font-medium text-zinc-300">{detail}</p>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-zinc-800/80">
         <div
           className={`h-full rounded-full ${barClass}`}
-          style={{ width: `${Math.min(100, Math.max(plan.weightPercent, rejected ? 0 : 4))}%` }}
+          style={{ width: `${Math.min(100, Math.max(plan.weightPercent, locked ? 0 : 4))}%` }}
         />
       </div>
     </div>
@@ -94,8 +96,16 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
             <Row
               key={item.symbol}
               plan={item}
-              barClass="bg-gradient-to-r from-violet-400 to-purple-600"
-              detail={`${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`}
+              barClass={
+                item.satellite && !item.satellite.approved
+                  ? "bg-zinc-600"
+                  : "bg-gradient-to-r from-violet-400 to-purple-600"
+              }
+              detail={
+                item.satellite && !item.satellite.approved
+                  ? `0$ · ${formatUsd(item.satelliteRedirectedUsd)} → BTC`
+                  : `${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`
+              }
             />
           ))
         )}
@@ -126,6 +136,13 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
           ))
         )}
       </div>
+
+      {plan.satellitePausedSymbols.length > 0 && (
+        <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-cyan-100">
+          Smart DCA pozastavil {plan.satellitePausedSymbols.join(", ")}.{" "}
+          {formatUsd(plan.satelliteRedirectedUsd)} presmerovaných do Core (BTC).
+        </div>
+      )}
 
       {plan.highBetaRejectedSymbols.length > 0 && (
         <div className="rounded-2xl border border-rose-500/30 bg-gradient-to-br from-rose-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-amber-100">

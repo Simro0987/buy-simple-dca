@@ -67,7 +67,9 @@ export function DcaEngine({
 
   const payablePlans = weeklyPlan.plans.filter(
     (plan) =>
-      plan.totalUsd > 0 && !(plan.highBeta && !plan.highBeta.approved),
+      plan.totalUsd > 0 &&
+      !(plan.highBeta && !plan.highBeta.approved) &&
+      !(plan.satellite && !plan.satellite.approved),
   );
   const livePrices = useMemo(() => {
     const map: Record<string, number> = {};
@@ -155,7 +157,8 @@ export function DcaEngine({
               (plan) =>
                 plan.totalUsd > 0 ||
                 plan.symbol === "BTC" ||
-                plan.category === "HIGH_BETA",
+                plan.category === "HIGH_BETA" ||
+                plan.category === "SATELLITE",
             )
             .map((plan) => (
               <TokenExecutionCard
