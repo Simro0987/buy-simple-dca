@@ -42,7 +42,9 @@ export function DcaActivityCard({ transactions }: DcaActivityCardProps) {
           <h3 className="mt-1 text-sm font-bold text-white">Posledné nákupy</h3>
         </div>
         <span className="text-xs text-zinc-500">
-          {transactions.length} záznamov
+          {transactions.length === 0
+            ? "žiadne záznamy"
+            : `${transactions.length} záznamov`}
         </span>
       </div>
 

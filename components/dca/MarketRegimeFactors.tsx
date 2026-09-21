@@ -134,9 +134,11 @@ export function MarketRegimeFactors() {
         </p>
       </div>
 
-      <div className="grid grid-cols-3 gap-x-2 gap-y-4 sm:grid-cols-5">
+      <div className="flex flex-wrap justify-center gap-x-3 gap-y-5">
         {MARKET_REGIME_FACTORS.map((factor, index) => (
-          <FactorOrb key={factor.id} factor={factor} index={index} />
+          <div key={factor.id} className="w-[30%] min-w-[88px] max-w-[112px]">
+            <FactorOrb factor={factor} index={index} />
+          </div>
         ))}
       </div>
 
