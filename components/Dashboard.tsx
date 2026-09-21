@@ -13,18 +13,24 @@ import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
-import { Toast } from "@/components/Toast";
+import { Toast, type ToastVariant } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import {
+  hasUsablePrices,
+  type TokenExecutionPlan,
+} from "@/lib/dcaEngineConfig";
 import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    variant: ToastVariant;
+  } | null>(null);
   const {
     assets,
     holdings,
@@ -34,6 +40,7 @@ export function Dashboard() {
     profitLoss,
     loading,
     isLive,
+    error,
     prices,
     updateHoldings,
     importPortfolio,
@@ -48,11 +55,22 @@ export function Dashboard() {
 
   const handleRecordPurchase = useCallback(
     (plans: TokenExecutionPlan[]) => {
-      if (!prices) return false;
+      if (!hasUsablePrices(prices)) {
+        setToast({
+          message: "Ceny nie sú dostupné. Skús to znova.",
+          variant: "error",
+        });
+        return false;
+      }
 
       const recorded = recordDcaPurchase(plans, prices);
       if (recorded) {
-        setToastMessage("Záznam uložený");
+        setToast({ message: "Záznam uložený", variant: "success" });
+      } else {
+        setToast({
+          message: "Nákup sa nepodarilo uložiť",
+          variant: "error",
+        });
       }
       return recorded;
     },
@@ -118,6 +136,8 @@ export function Dashboard() {
               <DcaEngine
                 prices={prices}
                 loading={loading}
+                priceError={error}
+                transactions={transactions}
                 onRecordPurchase={handleRecordPurchase}
               />
             </motion.div>
@@ -148,9 +168,10 @@ export function Dashboard() {
       />
 
       <Toast
-        message={toastMessage ?? ""}
-        visible={Boolean(toastMessage)}
-        onClose={() => setToastMessage(null)}
+        message={toast?.message ?? ""}
+        visible={Boolean(toast)}
+        variant={toast?.variant}
+        onClose={() => setToast(null)}
       />
     </div>
   );

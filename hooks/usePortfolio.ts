@@ -68,12 +68,20 @@ export function usePortfolio() {
 
   const recordDcaPurchase = useCallback(
     (plans: TokenExecutionPlan[], priceMap: CryptoPricesMap) => {
+      const payablePlans = plans.filter((plan) => plan.totalUsd > 0);
+      if (payablePlans.length === 0) return false;
+
+      const missingPrice = payablePlans.some(
+        (plan) => (priceMap[plan.symbol]?.price ?? 0) <= 0,
+      );
+      if (missingPrice) return false;
+
       const newTransactions: Transaction[] = [];
       const nextHoldings: HoldingsMap = { ...holdings };
 
-      for (const plan of plans) {
+      for (const plan of payablePlans) {
         const unitPrice = priceMap[plan.symbol]?.price ?? 0;
-        if (unitPrice <= 0 || plan.totalUsd <= 0) continue;
+        if (unitPrice <= 0) continue;
 
         const amount = plan.totalUsd / unitPrice;
         nextHoldings[plan.symbol] += amount;
