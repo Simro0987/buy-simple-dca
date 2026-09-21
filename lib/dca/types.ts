@@ -174,6 +174,9 @@ export interface TokenExecutionPlan {
   limitShare: number;
   limitPrice: number;
   discountPct: number;
+  limitFallbackActive: boolean;
+  limitTargetLabel: string;
+  limitBaseTarget: number;
   qty: number;
   marketQty: number;
   limitQty: number;

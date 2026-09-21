@@ -3,6 +3,10 @@
 import { motion } from "framer-motion";
 import { ChevronDown, Lock } from "lucide-react";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
+import {
+  LIMIT_ROLLOVER_NOTE,
+  LIMIT_VALIDITY_DAYS,
+} from "@/lib/dca/executionMath";
 import { formatApy, formatEstimatedQty, formatPercent } from "@/lib/dca/format";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
 import type {
@@ -332,13 +336,22 @@ export function TokenExecutionCard({
         <>
           <RsiGauge rsi={plan.rsi} />
 
-          <div className="mt-3 mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
+          <div className="mt-3 mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
+            <span className="text-emerald-300">
+              MKT {formatPercent(plan.marketShare, 0)}
+            </span>
+            <span className="text-zinc-500">RSI 14 · plynulý split 10–90</span>
+            <span className="text-amber-300">
+              LMT {formatPercent(plan.limitShare, 0)}
+            </span>
+          </div>
+          <div className="mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
             <div
-              className="h-full bg-emerald-400"
+              className="h-full bg-emerald-400 transition-[width] duration-500"
               style={{ width: `${plan.marketShare}%` }}
             />
             <div
-              className="h-full bg-amber-400"
+              className="h-full bg-amber-400 transition-[width] duration-500"
               style={{ width: `${plan.limitShare}%` }}
             />
           </div>
@@ -368,22 +381,41 @@ export function TokenExecutionCard({
               </motion.button>
             </div>
             <div className="rounded-2xl border border-amber-400/20 bg-amber-400/8 p-3">
-              <div className="flex items-center justify-between gap-1">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-                  LMT · {formatPercent(plan.limitShare, 0)}
-                </p>
-                <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-amber-200">
-                  Smart zľava {plan.discountPct.toFixed(1)}%
-                </span>
-              </div>
-              <p className="mt-1 text-sm font-bold text-white">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                LMT · {formatPercent(plan.limitShare, 0)}
+              </p>
+              <span className="mt-1 inline-flex rounded-full border border-amber-400/30 bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-100">
+                Platnosť príkazu: {LIMIT_VALIDITY_DAYS} dní
+              </span>
+              <p className="mt-2 text-sm font-bold text-white">
                 {formatUsd(plan.limitUsd)}
               </p>
               <p className="text-[10px] text-zinc-400">
                 {formatEstimatedQty(plan.limitQty, plan.symbol)}
               </p>
-              <p className="mt-1 text-[10px] text-zinc-500">
+              <p className="mt-1.5 text-[11px] font-semibold text-amber-100">
                 Limit {plan.limitPrice ? formatUnitPrice(plan.limitPrice) : "—"}
+              </p>
+              {plan.limitFallbackActive ? (
+                <div className="mt-1 rounded-xl border border-amber-400/40 bg-amber-500/15 px-2 py-1.5">
+                  <p className="text-[8px] font-bold uppercase tracking-wide text-amber-200">
+                    Fallback aktívny
+                  </p>
+                  <p className="text-[10px] text-amber-100">
+                    {formatUnitPrice(plan.limitPrice)} · Live − 1.5× ATR
+                  </p>
+                  {plan.limitBaseTarget > 0 && (
+                    <p className="text-[9px] text-amber-200/80">
+                      Základný cieľ {formatUnitPrice(plan.limitBaseTarget)} ≥ live{" "}
+                      {formatUnitPrice(plan.price)}
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-zinc-500">{plan.limitTargetLabel}</p>
+              )}
+              <p className="mt-1 text-[9px] leading-relaxed text-zinc-600">
+                {LIMIT_ROLLOVER_NOTE}
               </p>
               <motion.button
                 type="button"

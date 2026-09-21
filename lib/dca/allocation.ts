@@ -1,8 +1,4 @@
-import {
-  limitDiscountFromTrend,
-  marketShareFromRsi,
-  statusFromRsi,
-} from "@/lib/dca/executionMath";
+import { computeUniversalExecution, statusFromRsi } from "@/lib/dca/executionMath";
 import { evaluateHighBetaToken } from "@/lib/dca/highBetaProtocol";
 import { clamp, roundUsd, softmax } from "@/lib/dca/math";
 import { buildMarketRegime } from "@/lib/dca/regime";
@@ -97,17 +93,30 @@ function buildPlan(
   const ind = snapshot.indicators;
   const rsi = ind?.rsi ?? 50;
   const price = snapshot.price;
+  const totalUsd = roundUsd(usd);
   const locked = Boolean(
     (highBeta && !highBeta.approved) || (satellite && !satellite.approved),
   );
-  const marketShare = stopped || locked ? 0 : marketShareFromRsi(rsi, moneyMode);
-  const limitShare = 100 - marketShare;
-  const discount = limitDiscountFromTrend(price, ind?.ema50 ?? price, ind?.atr ?? 0);
-  const totalUsd = roundUsd(usd);
-  const marketUsd = roundUsd(totalUsd * (marketShare / 100));
-  const limitUsd = roundUsd(totalUsd - marketUsd);
+  const execution =
+    stopped || locked || totalUsd <= 0 || price <= 0
+      ? null
+      : computeUniversalExecution({
+          allocatedUsd: totalUsd,
+          rsi,
+          category: meta.category,
+          livePrice: price,
+          ema50: ind?.ema50 ?? 0,
+          atr: ind?.atr ?? 0,
+          dailyCandles: snapshot.dailyCandles,
+        });
+  const marketShare = execution?.mktPercent ?? 0;
+  const limitShare = execution ? execution.lmtPercent : 0;
+  const marketUsd = execution?.mktAmount ?? 0;
+  const limitUsd = execution?.lmtAmount ?? 0;
+  const limitPrice = execution?.limitPrice ?? 0;
   const qty = price > 0 ? totalUsd / price : 0;
   const atrPct = price > 0 && ind ? (ind.atr / price) * 100 : 0;
+  void moneyMode;
 
   return {
     symbol: snapshot.symbol,
@@ -120,11 +129,14 @@ function buildPlan(
     limitUsd,
     marketShare,
     limitShare,
-    limitPrice: price > 0 ? price * (1 - discount) : 0,
-    discountPct: discount * 100,
+    limitPrice,
+    discountPct: execution?.discountPct ?? 0,
+    limitFallbackActive: execution?.fallbackActive ?? false,
+    limitTargetLabel: execution?.targetLabel ?? "",
+    limitBaseTarget: execution?.baseTarget ?? 0,
     qty,
     marketQty: price > 0 ? marketUsd / price : 0,
-    limitQty: price > 0 ? limitUsd / price : 0,
+    limitQty: limitPrice > 0 ? limitUsd / limitPrice : 0,
     score: tokenScore(snapshot),
     status: statusFromRsi(rsi),
     rsi,
@@ -337,6 +349,7 @@ export function buildWeeklyDcaPlan(options: {
       : approvedBeta.length > 0
         ? `High-Beta protokol schválil ${approvedBeta.join(", ")}.`
         : "High-beta vrstva čaká na live dáta protokolu.",
+    "Schválené tokeny idú cez univerzálny engine: MKT% = clamp(10–90, 90 − ((RSI−30)×2)), limit podľa kategórie, ochrana Live − 1.5× ATR, platnosť 7 dní.",
     "Váhy sa menia dynamicky podľa Value, Trend, Sentiment, Momentum a Risk.",
   ];
 
