@@ -1,0 +1,60 @@
+import { ATR, EMA, RSI, SMA } from "technicalindicators";
+import { last } from "@/lib/dca/math";
+import type { OhlcvCandle, TokenIndicators } from "@/lib/dca/types";
+
+function lastNumber(values: number[] | undefined, fallback: number): number {
+  const value = last(values ?? []);
+  return typeof value === "number" && Number.isFinite(value) ? value : fallback;
+}
+
+export function computeTokenIndicators(
+  candles: OhlcvCandle[],
+  livePrice?: number,
+): TokenIndicators | null {
+  if (candles.length < 210) return null;
+
+  const closes = candles.map((candle) => candle.close);
+  const highs = candles.map((candle) => candle.high);
+  const lows = candles.map((candle) => candle.low);
+  const price = livePrice && livePrice > 0 ? livePrice : last(closes) ?? 0;
+  if (price <= 0) return null;
+
+  const sma200Series = SMA.calculate({ period: 200, values: closes });
+  const ema200Series = EMA.calculate({ period: 200, values: closes });
+  const ema50Series = EMA.calculate({ period: 50, values: closes });
+  const rsiSeries = RSI.calculate({ period: 14, values: closes });
+  const atrSeries = ATR.calculate({
+    period: 14,
+    high: highs,
+    low: lows,
+    close: closes,
+  });
+
+  const sma200 = lastNumber(sma200Series, 0);
+  const ema200 = lastNumber(ema200Series, 0);
+  const ema50 = lastNumber(ema50Series, 0);
+  const rsi = lastNumber(rsiSeries, 50);
+  const atr = lastNumber(atrSeries, 0);
+  if (sma200 <= 0 || ema50 <= 0) return null;
+
+  const window = candles.slice(-14);
+  const high14 = Math.max(...window.map((candle) => candle.high));
+  const low14 = Math.min(...window.map((candle) => candle.low));
+  const pivot = (high14 + low14 + price) / 3;
+  const r1 = 2 * pivot - low14;
+  const s1 = 2 * pivot - high14;
+
+  return {
+    sma200,
+    ema200,
+    ema50,
+    rsi,
+    atr,
+    high14,
+    low14,
+    s1,
+    r1,
+    sma200DevPct: ((price - sma200) / sma200) * 100,
+    ema50DevPct: ((price - ema50) / ema50) * 100,
+  };
+}

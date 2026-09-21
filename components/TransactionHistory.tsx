@@ -8,7 +8,7 @@ import {
   listItemVariants,
 } from "@/lib/motion";
 
-const accentStyles = {
+const accentStyles: Record<string, { ring: string; bg: string }> = {
   BTC: {
     ring: "ring-orange-500/30",
     bg: "bg-orange-500",
@@ -21,7 +21,12 @@ const accentStyles = {
     ring: "ring-cyan-400/30",
     bg: "bg-gradient-to-br from-cyan-400 to-blue-500",
   },
-} as const;
+};
+
+const fallbackAccent = {
+  ring: "ring-emerald-400/30",
+  bg: "bg-emerald-500",
+};
 
 function formatTransactionDate(date: string) {
   return new Intl.DateTimeFormat("sk-SK", {
@@ -72,7 +77,7 @@ export function TransactionHistory({ transactions }: TransactionHistoryProps) {
           className="overflow-hidden rounded-3xl border border-white/5 bg-[#111113]"
         >
           {transactions.map((transaction, index) => {
-            const styles = accentStyles[transaction.symbol];
+            const styles = accentStyles[transaction.symbol] ?? fallbackAccent;
 
             return (
               <motion.div

@@ -17,10 +17,7 @@ import { Toast, type ToastVariant } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import {
-  hasUsablePrices,
-  type TokenExecutionPlan,
-} from "@/lib/dcaEngineConfig";
+import type { TokenExecutionPlan } from "@/lib/dca/types";
 import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
@@ -40,8 +37,6 @@ export function Dashboard() {
     profitLoss,
     loading,
     isLive,
-    error,
-    prices,
     updateHoldings,
     importPortfolio,
     recordDcaPurchase,
@@ -54,8 +49,12 @@ export function Dashboard() {
   const showNews = activeTab === "news";
 
   const handleRecordPurchase = useCallback(
-    (plans: TokenExecutionPlan[]) => {
-      if (!hasUsablePrices(prices)) {
+    (plans: TokenExecutionPlan[], livePrices: Record<string, number>) => {
+      const payable = plans.filter((plan) => plan.totalUsd > 0);
+      if (
+        payable.length === 0 ||
+        payable.some((plan) => (livePrices[plan.symbol] ?? 0) <= 0)
+      ) {
         setToast({
           message: "Ceny nie sú dostupné. Skús to znova.",
           variant: "error",
@@ -63,7 +62,7 @@ export function Dashboard() {
         return false;
       }
 
-      const recorded = recordDcaPurchase(plans, prices);
+      const recorded = recordDcaPurchase(plans, livePrices);
       if (recorded) {
         setToast({ message: "Záznam uložený", variant: "success" });
       } else {
@@ -74,7 +73,7 @@ export function Dashboard() {
       }
       return recorded;
     },
-    [prices, recordDcaPurchase],
+    [recordDcaPurchase],
   );
 
   return (
@@ -134,9 +133,6 @@ export function Dashboard() {
           {showDca && (
             <motion.div key="dca" {...pageTransition}>
               <DcaEngine
-                prices={prices}
-                loading={loading}
-                priceError={error}
                 transactions={transactions}
                 onRecordPurchase={handleRecordPurchase}
               />

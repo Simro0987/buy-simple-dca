@@ -7,7 +7,7 @@ import { tokenAccentStyles } from "@/lib/dcaData";
 import {
   estimateTokenQty,
   formatEstimatedQty,
-  type TokenExecutionPlan,
+  type LegacyTokenExecutionPlan,
 } from "@/lib/dcaEngineConfig";
 import type { CryptoPricesMap } from "@/lib/cryptoApi";
 import {
@@ -17,7 +17,7 @@ import {
 } from "@/lib/motion";
 
 interface ExecutionEngineCardsProps {
-  plans: TokenExecutionPlan[];
+  plans: LegacyTokenExecutionPlan[];
   prices?: CryptoPricesMap;
   loading?: boolean;
   pricesReady?: boolean;

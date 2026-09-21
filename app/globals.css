@@ -31,6 +31,13 @@ body {
   scrollbar-width: none;
 }
 
-.scrollbar-none::-webkit-scrollbar {
-  display: none;
+.glass-panel {
+  background: linear-gradient(
+    165deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(24, 24, 27, 0.55) 45%,
+    rgba(9, 9, 11, 0.78) 100%
+  );
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
 }

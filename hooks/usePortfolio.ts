@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCryptoPrices } from "@/hooks/useCryptoPrices";
 import type { PortfolioAsset } from "@/lib/data";
-import type { CryptoPricesMap, CryptoSymbol } from "@/lib/cryptoApi";
-import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import type { CryptoSymbol } from "@/lib/cryptoApi";
+import type { TokenExecutionPlan } from "@/lib/dca/types";
+import { isCoreHoldingSymbol } from "@/lib/dca/universe";
 import { calculatePortfolioPnL } from "@/lib/pnlAnalytics";
 import {
   ASSET_DEFINITIONS,
@@ -67,12 +68,12 @@ export function usePortfolio() {
   );
 
   const recordDcaPurchase = useCallback(
-    (plans: TokenExecutionPlan[], priceMap: CryptoPricesMap) => {
+    (plans: TokenExecutionPlan[], priceMap: Record<string, number>) => {
       const payablePlans = plans.filter((plan) => plan.totalUsd > 0);
       if (payablePlans.length === 0) return false;
 
       const missingPrice = payablePlans.some(
-        (plan) => (priceMap[plan.symbol]?.price ?? 0) <= 0,
+        (plan) => (priceMap[plan.symbol] ?? 0) <= 0,
       );
       if (missingPrice) return false;
 
@@ -80,11 +81,13 @@ export function usePortfolio() {
       const nextHoldings: HoldingsMap = { ...holdings };
 
       for (const plan of payablePlans) {
-        const unitPrice = priceMap[plan.symbol]?.price ?? 0;
+        const unitPrice = priceMap[plan.symbol] ?? 0;
         if (unitPrice <= 0) continue;
 
         const amount = plan.totalUsd / unitPrice;
-        nextHoldings[plan.symbol] += amount;
+        if (isCoreHoldingSymbol(plan.symbol)) {
+          nextHoldings[plan.symbol] += amount;
+        }
 
         newTransactions.push({
           id: createTransactionId(),

@@ -177,7 +177,9 @@ export function summarizeMarketRegime(
   return { averageScore, bullishCount, bearishCount, tone, label, description };
 }
 
-export interface TokenExecutionPlan {
+export type { TokenExecutionPlan } from "@/lib/dca/types";
+
+export interface LegacyTokenExecutionPlan {
   symbol: CryptoSymbol;
   name: string;
   accent: TokenAccent;
@@ -191,7 +193,7 @@ export interface TokenExecutionPlan {
 
 export function calculateWeeklyExecution(
   weeklyAmount: number,
-): TokenExecutionPlan[] {
+): LegacyTokenExecutionPlan[] {
   const safeAmount = Math.max(0, weeklyAmount);
 
   return EXECUTION_ASSETS.map((asset) => {

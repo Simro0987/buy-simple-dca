@@ -1,148 +1,167 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlertTriangle, ShoppingCart, Zap } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { AlertTriangle, ShoppingCart } from "lucide-react";
+import { useMemo, useState } from "react";
+import { AllocationRulesCard } from "@/components/dca/AllocationRulesCard";
 import { ConfirmPurchaseSheet } from "@/components/dca/ConfirmPurchaseSheet";
 import { DcaActivityCard } from "@/components/dca/DcaActivityCard";
-import { ExecutionEngineCards } from "@/components/dca/ExecutionEngineCards";
-import { MarketRegimeFactors } from "@/components/dca/MarketRegimeFactors";
+import { DcaPlanHeader } from "@/components/dca/DcaPlanHeader";
+import { MarketRegimePanel } from "@/components/dca/MarketRegimePanel";
+import { PortfolioSplitSection } from "@/components/dca/PortfolioSplitSection";
+import { RitualSheet } from "@/components/dca/RitualSheet";
+import { TokenAllocationBoard } from "@/components/dca/TokenAllocationBoard";
+import { TokenExecutionCard } from "@/components/dca/TokenExecutionCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
-import {
-  calculateWeeklyExecution,
-  DEFAULT_WEEKLY_INVESTMENT,
-  hasUsablePrices,
-  readWeeklyInvestment,
-  writeWeeklyInvestment,
-  type TokenExecutionPlan,
-} from "@/lib/dcaEngineConfig";
-import type { CryptoPricesMap } from "@/lib/cryptoApi";
-import type { Transaction } from "@/lib/portfolioStorage";
+import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
+import { useDcaHydrated } from "@/hooks/useDcaHydrated";
+import { useDcaMarketData } from "@/hooks/useDcaMarketData";
+import { buildWeeklyDcaPlan } from "@/lib/dca/allocation";
+import { glassPanel } from "@/lib/dca/glass";
+import type { TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
+import { portfolioHoldings } from "@/lib/data";
+import type { Transaction } from "@/lib/portfolioStorage";
+import { useDcaStore } from "@/store/dcaStore";
 
 interface DcaEngineProps {
-  prices?: CryptoPricesMap;
-  loading?: boolean;
-  priceError?: string | null;
   transactions?: Transaction[];
-  onRecordPurchase: (plans: TokenExecutionPlan[]) => boolean;
+  onRecordPurchase: (
+    plans: TokenExecutionPlan[],
+    prices: Record<string, number>,
+  ) => boolean;
 }
 
 export function DcaEngine({
-  prices,
-  loading = false,
-  priceError = null,
   transactions = [],
   onRecordPurchase,
 }: DcaEngineProps) {
-  const [weeklyAmount, setWeeklyAmount] = useState(DEFAULT_WEEKLY_INVESTMENT);
-  const [hydrated, setHydrated] = useState(false);
+  const hydrated = useDcaHydrated();
+  const weeklyAmount = useDcaStore((state) => state.weeklyAmount);
+  const moneyMode = useDcaStore((state) => state.moneyMode);
+  const allocationMode = useDcaStore((state) => state.allocationMode);
+  const ritualOpen = useDcaStore((state) => state.ritualOpen);
+  const whyOpen = useDcaStore((state) => state.whyOpen);
+  const activations = useDcaStore((state) => state.activations);
+  const setWeeklyAmount = useDcaStore((state) => state.setWeeklyAmount);
+  const toggleMoneyMode = useDcaStore((state) => state.toggleMoneyMode);
+  const setAllocationMode = useDcaStore((state) => state.setAllocationMode);
+  const autoFill = useDcaStore((state) => state.autoFill);
+  const setRitualOpen = useDcaStore((state) => state.setRitualOpen);
+  const setWhyOpen = useDcaStore((state) => state.setWhyOpen);
+  const toggleActivation = useDcaStore((state) => state.toggleActivation);
+
+  const { snapshots, loading, error, pricesReady } = useDcaMarketData();
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  useEffect(() => {
-    setWeeklyAmount(readWeeklyInvestment());
-    setHydrated(true);
-  }, []);
-
-  useEffect(() => {
-    if (!hydrated) return;
-    writeWeeklyInvestment(weeklyAmount);
-  }, [hydrated, weeklyAmount]);
-
-  const executionPlans = useMemo(
-    () => calculateWeeklyExecution(weeklyAmount),
-    [weeklyAmount],
+  const weeklyPlan = useMemo(
+    () =>
+      buildWeeklyDcaPlan({
+        weeklyAmount,
+        moneyMode,
+        allocationMode,
+        snapshots,
+      }),
+    [weeklyAmount, moneyMode, allocationMode, snapshots],
   );
 
-  const totalDeployed = useMemo(
-    () => executionPlans.reduce((sum, plan) => sum + plan.totalUsd, 0),
-    [executionPlans],
-  );
+  const payablePlans = weeklyPlan.plans.filter((plan) => plan.totalUsd > 0);
+  const livePrices = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const plan of weeklyPlan.plans) {
+      if (plan.price > 0) map[plan.symbol] = plan.price;
+    }
+    return map;
+  }, [weeklyPlan.plans]);
 
-  const pricesReady = hasUsablePrices(prices);
-  const canRecord = totalDeployed > 0 && pricesReady;
-  const showPriceAlert = Boolean(priceError) && !pricesReady && !loading;
+  const canRecord =
+    payablePlans.length > 0 &&
+    pricesReady &&
+    payablePlans.every((plan) => (livePrices[plan.symbol] ?? 0) > 0);
 
   const recordHint = !hydrated
     ? "Načítavam nastavenia…"
     : loading && !pricesReady
-      ? "Načítavam live ceny…"
+      ? "Načítavam live dáta z Binance…"
       : !pricesReady
         ? "Ceny nie sú dostupné — záznam je dočasne vypnutý."
-        : totalDeployed <= 0
+        : payablePlans.length === 0
           ? "Zadaj týždennú sumu, aby sa dalo uložiť."
-          : "Záznam pripočíta celú sumu do portfólia za live ceny.";
-
-  const handleOpenConfirm = () => {
-    if (!canRecord) return;
-    setConfirmOpen(true);
-  };
-
-  const handleConfirmPurchase = () => {
-    const recorded = onRecordPurchase(executionPlans);
-    if (recorded) {
-      setConfirmOpen(false);
-    }
-  };
+          : "Záznam uloží nákup do portfólia. Príkazy na burze zadávaš ručne.";
 
   return (
     <div className="space-y-5">
-      <motion.div
-        initial={{ opacity: 0, y: 8 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.35, ease: "easeOut" }}
-        className="flex items-start justify-between gap-3"
-      >
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">
-            DCA & Dynamic Execution
-          </p>
-          <h2 className="text-xl font-bold text-white">Týždenný plán</h2>
-          <p className="mt-1 max-w-[16rem] text-xs leading-relaxed text-zinc-500">
-            Nastav sumu, skontroluj split a ulož nákup do portfólia.
-          </p>
-        </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.15)]">
-          <Zap className="h-3 w-3 fill-emerald-400" aria-hidden="true" />
-          Money Mode
-        </span>
-      </motion.div>
+      <DcaPlanHeader
+        moneyMode={moneyMode}
+        onToggleMoneyMode={toggleMoneyMode}
+        onRitual={() => setRitualOpen(true)}
+        onAutoFill={autoFill}
+      />
 
-      {showPriceAlert && (
+      {error && !pricesReady && (
         <div
           role="alert"
           className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3"
         >
-          <AlertTriangle
-            className="mt-0.5 h-4 w-4 shrink-0 text-amber-400"
-            aria-hidden="true"
-          />
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
           <div>
             <p className="text-sm font-semibold text-amber-200">
-              Ceny nie sú dostupné
+              Trhové dáta nie sú dostupné
             </p>
-            <p className="mt-0.5 text-xs leading-relaxed text-amber-200/70">
-              Záznam nákupu je vypnutý, kým sa nenačítajú live ceny. Plán alokácie
-              môžeš medzitým upraviť.
+            <p className="mt-0.5 text-xs text-amber-200/70">
+              Skúsim znova cez Binance REST. WebSocket tickery sa pripoja, keď to
+              sieť dovolí.
             </p>
           </div>
         </div>
       )}
 
-      <WeeklyInvestmentCard
-        value={weeklyAmount}
-        onChange={setWeeklyAmount}
-        plans={executionPlans}
+      <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyAmount} />
+      <MarketRegimePanel regime={weeklyPlan.regime} loading={loading && !pricesReady} />
+      <AllocationRulesCard
+        plan={weeklyPlan}
+        cashReserveUsd={portfolioHoldings.cashUsd}
+        whyOpen={whyOpen}
+        onToggleWhy={() => setWhyOpen(!whyOpen)}
       />
-
-      <MarketRegimeFactors />
-
-      <ExecutionEngineCards
-        plans={executionPlans}
-        prices={prices}
-        loading={loading}
-        pricesReady={pricesReady}
+      <PortfolioSplitSection
+        plan={weeklyPlan}
+        allocationMode={allocationMode}
+        onAllocationMode={setAllocationMode}
       />
+      <TokenAllocationBoard plan={weeklyPlan} />
+
+      <section className="space-y-3">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            Týždenná exekúcia
+          </p>
+          <h3 className="mt-1 text-sm font-bold text-white">
+            Token karty · plynulý MKT / LMT split
+          </h3>
+        </div>
+        {loading && !pricesReady ? (
+          <div className={`${glassPanel} space-y-3 p-4`}>
+            <PriceSkeleton className="h-6 w-40" />
+            <PriceSkeleton className="h-24 w-full" />
+            <PriceSkeleton className="h-24 w-full" />
+          </div>
+        ) : (
+          weeklyPlan.plans
+            .filter((plan) => plan.totalUsd > 0 || plan.symbol === "BTC")
+            .map((plan) => (
+              <TokenExecutionCard
+                key={plan.symbol}
+                plan={plan}
+                loading={loading}
+                marketActive={activations[plan.symbol]?.market}
+                limitActive={activations[plan.symbol]?.limit}
+                onActivateMarket={(symbol) => toggleActivation(symbol, "market")}
+                onActivateLimit={(symbol) => toggleActivation(symbol, "limit")}
+              />
+            ))
+        )}
+      </section>
 
       <div className="space-y-2">
         <p id="dca-record-hint" className="px-1 text-[11px] leading-relaxed text-zinc-500">
@@ -150,29 +169,35 @@ export function DcaEngine({
         </p>
         <motion.button
           type="button"
-          onClick={handleOpenConfirm}
+          onClick={() => canRecord && setConfirmOpen(true)}
           disabled={!canRecord}
           aria-describedby="dca-record-hint"
-          whileHover={canRecord ? { scale: 1.02 } : undefined}
-          whileTap={canRecord ? { scale: 0.97 } : undefined}
-          className="flex w-full items-center justify-center gap-2 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4 text-base font-bold text-emerald-400 shadow-[0_0_32px_rgba(52,211,153,0.18)] transition-colors hover:bg-emerald-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-3xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-4 text-base font-bold text-emerald-400 shadow-[0_0_32px_rgba(52,211,153,0.18)] disabled:cursor-not-allowed disabled:opacity-50"
         >
           <ShoppingCart className="h-5 w-5" aria-hidden="true" />
           {canRecord
-            ? `Zaznamenať nákup · ${formatUsd(totalDeployed)}`
+            ? `Zaznamenať nákup · ${formatUsd(weeklyPlan.deployedUsd)}`
             : "Zaznamenať nákup"}
         </motion.button>
       </div>
 
       <DcaActivityCard transactions={transactions} />
 
+      <RitualSheet
+        open={ritualOpen}
+        plans={weeklyPlan.plans}
+        activations={activations}
+        onClose={() => setRitualOpen(false)}
+      />
       <ConfirmPurchaseSheet
         open={confirmOpen}
-        plans={executionPlans}
-        prices={prices}
-        totalUsd={totalDeployed}
+        plans={payablePlans}
+        totalUsd={weeklyPlan.deployedUsd}
         onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmPurchase}
+        onConfirm={() => {
+          const recorded = onRecordPurchase(payablePlans, livePrices);
+          if (recorded) setConfirmOpen(false);
+        }}
       />
     </div>
   );
