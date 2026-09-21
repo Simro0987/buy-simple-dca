@@ -35,21 +35,54 @@ export function parseKlines(payload: unknown): OhlcvCandle[] {
 export function candlesFromCloses(
   points: [number, number][],
 ): OhlcvCandle[] {
-  return points
+  return candlesFromMarketChart(points, []);
+}
+
+export function candlesFromMarketChart(
+  prices: [number, number][],
+  volumes: [number, number][] = [],
+): OhlcvCandle[] {
+  return prices
     .map(([openTime, close], index) => {
-      const prev = points[index - 1]?.[1] ?? close;
-      const high = Math.max(prev, close);
-      const low = Math.min(prev, close);
+      const prev = prices[index - 1]?.[1] ?? close;
+      const volume = volumes[index]?.[1] ?? 0;
       return {
         openTime,
         open: prev,
-        high,
-        low,
+        high: Math.max(prev, close),
+        low: Math.min(prev, close),
         close,
-        volume: 0,
+        volume: Number.isFinite(volume) ? volume : 0,
       } satisfies OhlcvCandle;
     })
     .filter((candle) => candle.close > 0);
+}
+
+/** Binance 1W candles open Monday 00:00 UTC. Used for CoinGecko daily → weekly fallback. */
+export function aggregateWeekly(daily: OhlcvCandle[]): OhlcvCandle[] {
+  const weeks = new Map<number, OhlcvCandle>();
+  for (const candle of daily) {
+    const date = new Date(candle.openTime);
+    const weekday = date.getUTCDay();
+    const mondayOffset = weekday === 0 ? -6 : 1 - weekday;
+    const monday = Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate() + mondayOffset,
+    );
+    const existing = weeks.get(monday);
+    if (!existing) {
+      weeks.set(monday, { ...candle, openTime: monday });
+      continue;
+    }
+    existing.high = Math.max(existing.high, candle.high);
+    existing.low = Math.min(existing.low, candle.low);
+    existing.close = candle.close;
+    existing.volume += candle.volume;
+  }
+  return [...weeks.entries()]
+    .sort((left, right) => left[0] - right[0])
+    .map(([, candle]) => candle);
 }
 
 export function binancePairFor(symbol: DcaSymbol): string {

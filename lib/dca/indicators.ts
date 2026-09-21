@@ -1,4 +1,4 @@
-import { ATR, EMA, RSI, SMA } from "technicalindicators";
+import { ATR, BollingerBands, EMA, RSI, SMA } from "technicalindicators";
 import { last } from "@/lib/dca/math";
 import type { OhlcvCandle, TokenIndicators } from "@/lib/dca/types";
 
@@ -57,4 +57,40 @@ export function computeTokenIndicators(
     sma200DevPct: ((price - sma200) / sma200) * 100,
     ema50DevPct: ((price - ema50) / ema50) * 100,
   };
+}
+
+export function computeSma(values: number[], period: number): number {
+  if (values.length < period) return 0;
+  return lastNumber(SMA.calculate({ period, values }), 0);
+}
+
+export function computeEma(values: number[], period: number): number {
+  if (values.length < period) return 0;
+  return lastNumber(EMA.calculate({ period, values }), 0);
+}
+
+export function computeRsi(values: number[], period = 14): number {
+  if (values.length < period + 1) return 0;
+  return lastNumber(RSI.calculate({ period, values }), 0);
+}
+
+export function computeBollingerBands(
+  values: number[],
+  period = 20,
+  stdDev = 2,
+): { middle: number; upper: number; lower: number } | null {
+  if (values.length < period) return null;
+  const series = BollingerBands.calculate({ period, stdDev, values });
+  const lastBand = last(series);
+  if (!lastBand || !Number.isFinite(lastBand.lower)) return null;
+  return {
+    middle: lastBand.middle,
+    upper: lastBand.upper,
+    lower: lastBand.lower,
+  };
+}
+
+export function computeVolumeSma(volumes: number[], period = 20): number {
+  if (volumes.length < period) return 0;
+  return lastNumber(SMA.calculate({ period, values: volumes }), 0);
 }

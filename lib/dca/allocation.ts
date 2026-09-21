@@ -3,11 +3,15 @@ import {
   marketShareFromRsi,
   statusFromRsi,
 } from "@/lib/dca/executionMath";
+import { evaluateHighBetaToken } from "@/lib/dca/highBetaProtocol";
 import { clamp, roundUsd, softmax } from "@/lib/dca/math";
 import { buildMarketRegime } from "@/lib/dca/regime";
 import type {
   AllocationMode,
   DcaSymbol,
+  HighBetaBtcData,
+  HighBetaEvaluation,
+  HighBetaTokenData,
   TokenExecutionPlan,
   TokenMarketSnapshot,
   WeeklyDcaPlan,
@@ -32,18 +36,55 @@ function ilRrLabel(apy: number | null, atrPct: number): string {
   return "opatrný";
 }
 
+function emptySnapshot(symbol: DcaSymbol): TokenMarketSnapshot {
+  return {
+    symbol,
+    price: 0,
+    change24h: 0,
+    volume24h: 0,
+    indicators: null,
+    yieldApy: null,
+    yieldProject: null,
+    dailyCandles: [],
+    weeklyCandles: [],
+    upcomingUnlock: false,
+  };
+}
+
+function toHighBetaTokenData(snapshot: TokenMarketSnapshot): HighBetaTokenData {
+  return {
+    symbol: snapshot.symbol,
+    price: snapshot.price,
+    volume24h: snapshot.volume24h,
+    dailyCandles: snapshot.dailyCandles,
+    weeklyCandles: snapshot.weeklyCandles,
+    upcomingUnlock: snapshot.upcomingUnlock,
+  };
+}
+
+function toHighBetaBtcData(btc: TokenMarketSnapshot | undefined): HighBetaBtcData {
+  return {
+    price: btc?.price ?? 0,
+    dailyCandles: btc?.dailyCandles ?? [],
+    weeklyCandles: btc?.weeklyCandles ?? [],
+  };
+}
+
 function buildPlan(
   snapshot: TokenMarketSnapshot,
   usd: number,
   weeklyAmount: number,
   moneyMode: boolean,
   stopped: boolean,
+  highBeta: HighBetaEvaluation | null,
+  highBetaRedirectedUsd: number,
 ): TokenExecutionPlan {
   const meta = TOKEN_BY_SYMBOL[snapshot.symbol];
   const ind = snapshot.indicators;
   const rsi = ind?.rsi ?? 50;
   const price = snapshot.price;
-  const marketShare = stopped ? 0 : marketShareFromRsi(rsi, moneyMode);
+  const locked = Boolean(highBeta && !highBeta.approved);
+  const marketShare = stopped || locked ? 0 : marketShareFromRsi(rsi, moneyMode);
   const limitShare = 100 - marketShare;
   const discount = limitDiscountFromTrend(price, ind?.ema50 ?? price, ind?.atr ?? 0);
   const totalUsd = roundUsd(usd);
@@ -86,6 +127,8 @@ function buildPlan(
     ilRr: ilRrLabel(snapshot.yieldApy, atrPct),
     bullMarket: Boolean(ind && snapshot.price > ind.sma200),
     stopped,
+    highBeta,
+    highBetaRedirectedUsd,
   };
 }
 
@@ -122,11 +165,11 @@ export function buildWeeklyDcaPlan(options: {
   coreUsd = roundUsd(Math.min(deployedUsd, coreUsd));
   let altUsd = roundUsd(Math.max(0, deployedUsd - coreUsd));
 
-  // TODO: Implement specific High-Beta filter logic later
   const highBetaUniverse = DCA_TOKENS.filter((token) => token.category === "HIGH_BETA");
   const satelliteUniverse = DCA_TOKENS.filter((token) => token.category === "SATELLITE");
 
   const isStopped = (symbol: DcaSymbol) => {
+    if (TOKEN_BY_SYMBOL[symbol].category === "HIGH_BETA") return false;
     const rsi = snapshots[symbol]?.indicators?.rsi;
     return typeof rsi === "number" && rsi > 70;
   };
@@ -140,10 +183,10 @@ export function buildWeeklyDcaPlan(options: {
     .filter((snapshot): snapshot is TokenMarketSnapshot => {
       return Boolean(snapshot && snapshot.price > 0 && !isStopped(snapshot.symbol));
     });
-  const activeBeta = highBetaUniverse
+  const betaCandidates = highBetaUniverse
     .map((token) => snapshots[token.symbol])
     .filter((snapshot): snapshot is TokenMarketSnapshot => {
-      return Boolean(snapshot && snapshot.price > 0 && !isStopped(snapshot.symbol));
+      return Boolean(snapshot && snapshot.price > 0);
     });
 
   const redirectedUsd = stoppedSymbols.length > 0 ? altUsd * 0.12 : 0;
@@ -154,30 +197,71 @@ export function buildWeeklyDcaPlan(options: {
   const satBudget = Math.max(0, altUsd - betaBudget);
 
   const satDist = distribute(activeSats, satBudget);
-  const betaDist = distribute(activeBeta, betaBudget);
+  const betaDist = distribute(betaCandidates, betaBudget);
   const unusedBeta = betaBudget - betaDist.reduce((sum, row) => sum + row.usd, 0);
   const unusedSat = satBudget - satDist.reduce((sum, row) => sum + row.usd, 0);
   coreUsd = roundUsd(coreUsd + Math.max(0, unusedBeta) + Math.max(0, unusedSat));
 
+  const btcMacro = toHighBetaBtcData(btc);
+  const verdicts = new Map<DcaSymbol, HighBetaEvaluation>();
+  for (const token of highBetaUniverse) {
+    const snapshot = snapshots[token.symbol] ?? emptySnapshot(token.symbol);
+    verdicts.set(token.symbol, evaluateHighBetaToken(toHighBetaTokenData(snapshot), btcMacro));
+  }
+
   const bySymbol = new Map<DcaSymbol, number>();
   bySymbol.set("BTC", coreUsd);
-  for (const row of [...satDist, ...betaDist]) {
+  for (const row of satDist) {
     bySymbol.set(row.symbol, (bySymbol.get(row.symbol) ?? 0) + row.usd);
   }
 
+  const redirectedBySymbol = new Map<DcaSymbol, number>();
+  let highBetaRedirectedUsd = 0;
+  const highBetaRejectedSymbols: DcaSymbol[] = [];
+  for (const row of betaDist) {
+    const verdict = verdicts.get(row.symbol);
+    if (verdict && !verdict.approved) {
+      const amount = roundUsd(row.usd);
+      highBetaRedirectedUsd += amount;
+      redirectedBySymbol.set(row.symbol, amount);
+      bySymbol.set(row.symbol, 0);
+      highBetaRejectedSymbols.push(row.symbol);
+      continue;
+    }
+    bySymbol.set(row.symbol, (bySymbol.get(row.symbol) ?? 0) + row.usd);
+  }
+  for (const token of highBetaUniverse) {
+    const verdict = verdicts.get(token.symbol);
+    if (verdict && !verdict.approved && !highBetaRejectedSymbols.includes(token.symbol)) {
+      highBetaRejectedSymbols.push(token.symbol);
+    }
+  }
+  highBetaRedirectedUsd = roundUsd(highBetaRedirectedUsd);
+  coreUsd = roundUsd(Math.min(deployedUsd, coreUsd + highBetaRedirectedUsd));
+  bySymbol.set("BTC", coreUsd);
+  altUsd = roundUsd(Math.max(0, deployedUsd - coreUsd));
+
   const plans = DCA_TOKENS.map((meta) => {
-    const snapshot = snapshots[meta.symbol] ?? {
-      symbol: meta.symbol,
-      price: 0,
-      change24h: 0,
-      indicators: null,
-      yieldApy: null,
-      yieldProject: null,
-    };
+    const snapshot = snapshots[meta.symbol] ?? emptySnapshot(meta.symbol);
     const usd = bySymbol.get(meta.symbol) ?? 0;
     const stopped = meta.symbol !== "BTC" && isStopped(meta.symbol);
-    return buildPlan(snapshot, usd, safeWeekly, moneyMode, stopped);
-  }).filter((plan) => plan.totalUsd > 0 || plan.stopped || plan.symbol === "BTC");
+    const highBeta = verdicts.get(meta.symbol) ?? null;
+    return buildPlan(
+      snapshot,
+      usd,
+      safeWeekly,
+      moneyMode,
+      stopped,
+      highBeta,
+      redirectedBySymbol.get(meta.symbol) ?? 0,
+    );
+  }).filter(
+    (plan) =>
+      plan.totalUsd > 0 ||
+      plan.stopped ||
+      plan.symbol === "BTC" ||
+      plan.category === "HIGH_BETA",
+  );
 
   const btcPlan = plans.find((plan) => plan.symbol === "BTC");
   const btcFloorSatisfied =
@@ -195,15 +279,23 @@ export function buildWeeklyDcaPlan(options: {
         ? "Konzervatívna alokácia"
         : "Agresívnejšia alokácia";
 
+  const approvedBeta = highBetaUniverse
+    .map((token) => token.symbol)
+    .filter((symbol) => verdicts.get(symbol)?.approved);
+
   const narrative = [
     `BTC Core drží ${corePercent.toFixed(0)}% nasadeného kapitálu (floor 50%).`,
     allocationMode === "BTC_ONLY"
       ? "Režim BTC ONLY posiela celý nákup do Bitcoinu."
       : "Satelity (ETH, SOL, LINK, AAVE, UNI) dostávajú zvyšok dynamicky podľa skóre.",
-    "High-beta (HYPE, ZEC, INJ) je menšia riziková vrstva — váhy sa menia s RSI a trendom.",
+    highBetaRejectedSymbols.length > 0
+      ? `High-Beta protokol zamietol ${highBetaRejectedSymbols.join(", ")}: ${highBetaRedirectedUsd.toFixed(0)}$ presmerovaných do Core (BTC).`
+      : approvedBeta.length > 0
+        ? `High-Beta protokol schválil ${approvedBeta.join(", ")}.`
+        : "High-beta vrstva čaká na live dáta protokolu.",
     stoppedSymbols.length > 0
       ? `STOP režim pri ${stoppedSymbols.join(", ")}: kapitál sa presúva do BTC Core a aktívnych satelitov.`
-      : "Žiadny token nie je v STOP režime — kapitál ostáva v aktívnom splite.",
+      : "Žiadny satelit nie je v STOP režime — kapitál ostáva v aktívnom splite.",
     "Váhy sa menia dynamicky podľa Value, Trend, Sentiment, Momentum a Risk.",
   ];
 
@@ -218,6 +310,8 @@ export function buildWeeklyDcaPlan(options: {
     altPercent,
     btcFloorSatisfied,
     stoppedSymbols,
+    highBetaRejectedSymbols,
+    highBetaRedirectedUsd,
     plans,
     narrative,
     allocationLabel,

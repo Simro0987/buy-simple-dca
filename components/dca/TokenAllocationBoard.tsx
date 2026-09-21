@@ -19,16 +19,20 @@ function Row({
   barClass: string;
   detail: string;
 }) {
+  const rejected = Boolean(plan.highBeta && !plan.highBeta.approved);
   return (
-    <div className="space-y-1.5">
+    <div className={`space-y-1.5 ${rejected ? "opacity-50 grayscale" : ""}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white">{plan.symbol}</p>
+        <p className="text-sm font-semibold text-white">
+          {plan.symbol}
+          {rejected ? " · zamietnuté" : ""}
+        </p>
         <p className="text-xs font-medium text-zinc-300">{detail}</p>
       </div>
       <div className="h-2 overflow-hidden rounded-full bg-zinc-800/80">
         <div
           className={`h-full rounded-full ${barClass}`}
-          style={{ width: `${Math.min(100, Math.max(plan.weightPercent, 4))}%` }}
+          style={{ width: `${Math.min(100, Math.max(plan.weightPercent, rejected ? 0 : 4))}%` }}
         />
       </div>
     </div>
@@ -108,12 +112,27 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
             <Row
               key={item.symbol}
               plan={item}
-              barClass="bg-gradient-to-r from-fuchsia-400 to-pink-500"
-              detail={`${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`}
+              barClass={
+                item.highBeta && !item.highBeta.approved
+                  ? "bg-zinc-600"
+                  : "bg-gradient-to-r from-fuchsia-400 to-pink-500"
+              }
+              detail={
+                item.highBeta && !item.highBeta.approved
+                  ? `0$ · ${formatUsd(item.highBetaRedirectedUsd)} → BTC`
+                  : `${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`
+              }
             />
           ))
         )}
       </div>
+
+      {plan.highBetaRejectedSymbols.length > 0 && (
+        <div className="rounded-2xl border border-rose-500/30 bg-gradient-to-br from-rose-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-amber-100">
+          High-Beta protokol zamietol {plan.highBetaRejectedSymbols.join(", ")}.{" "}
+          {formatUsd(plan.highBetaRedirectedUsd)} presmerovaných do Core (BTC).
+        </div>
+      )}
 
       {plan.stoppedSymbols.length > 0 && (
         <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-amber-100">

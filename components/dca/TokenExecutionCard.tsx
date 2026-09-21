@@ -1,10 +1,17 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { ChevronDown, Lock } from "lucide-react";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
 import { formatApy, formatEstimatedQty, formatPercent } from "@/lib/dca/format";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
-import type { DcaSymbol, ExecutionStatus, TokenExecutionPlan } from "@/lib/dca/types";
+import type {
+  DcaSymbol,
+  ExecutionStatus,
+  HighBetaCheckItem,
+  HighBetaEvaluation,
+  TokenExecutionPlan,
+} from "@/lib/dca/types";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { interactiveButton } from "@/lib/motion";
 
@@ -33,6 +40,57 @@ interface TokenExecutionCardProps {
   limitActive?: boolean;
   onActivateMarket: (symbol: DcaSymbol) => void;
   onActivateLimit: (symbol: DcaSymbol) => void;
+}
+
+function CheckRow({ item }: { item: HighBetaCheckItem }) {
+  return (
+    <li className="flex items-start gap-2 text-[11px] leading-relaxed">
+      <span className={item.passed ? "text-emerald-400" : "text-rose-400"}>
+        {item.passed ? "✅" : "❌"}
+      </span>
+      <span>
+        <span className="font-semibold text-zinc-200">{item.label}</span>
+        <span className="block text-zinc-500">{item.detail}</span>
+      </span>
+    </li>
+  );
+}
+
+function HighBetaAnalytics({ evaluation }: { evaluation: HighBetaEvaluation }) {
+  return (
+    <details className="group mt-3 rounded-2xl border border-white/10 bg-zinc-950/40 p-3">
+      <summary className="flex cursor-pointer list-none items-center justify-between text-[11px] font-bold uppercase tracking-wider text-zinc-300 [&::-webkit-details-marker]:hidden">
+        Analytické detaily
+        <ChevronDown className="h-4 w-4 text-zinc-500 transition group-open:rotate-180" />
+      </summary>
+      <div className="mt-3 space-y-3">
+        {[
+          { index: 0, step: evaluation.checklist.step0, extra: "" },
+          { index: 1, step: evaluation.checklist.step1, extra: "" },
+          {
+            index: 2,
+            step: evaluation.checklist.step2,
+            extra: ` · ${evaluation.checklist.step2.score}/3`,
+          },
+        ].map(({ index, step, extra }) => (
+          <div key={step.label} className={`${glassInset} p-2.5`}>
+            <p className="mb-2 text-[10px] font-bold uppercase tracking-wider text-zinc-400">
+              Krok {index} · {step.label}
+              {extra} ·{" "}
+              <span className={step.passed ? "text-emerald-400" : "text-rose-400"}>
+                {step.passed ? "PASS" : "FAIL"}
+              </span>
+            </p>
+            <ul className="space-y-1.5">
+              {step.items.map((item) => (
+                <CheckRow key={item.id} item={item} />
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
 }
 
 function RsiGauge({ rsi }: { rsi: number }) {
@@ -66,13 +124,17 @@ export function TokenExecutionCard({
   onActivateMarket,
   onActivateLimit,
 }: TokenExecutionCardProps) {
+  const highBeta = plan.highBeta;
+  const rejected = Boolean(highBeta && !highBeta.approved);
+  const approved = Boolean(highBeta && highBeta.approved);
+
   return (
     <motion.article
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${glassPanel} p-4`}
+      className={`${glassPanel} p-4 ${rejected ? "border-amber-500/30" : ""}`}
     >
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className={`mb-3 flex items-start justify-between gap-3 ${rejected ? "opacity-55 grayscale" : ""}`}>
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-white/20 to-white/5 text-xs font-bold text-white ring-1 ring-white/20">
             {plan.symbol.slice(0, 1)}
@@ -99,11 +161,19 @@ export function TokenExecutionCard({
                   Býčí trh · cena &gt; SMA 200
                 </span>
               )}
-              <span
-                className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${statusClass[plan.status]}`}
-              >
-                {statusCopy[plan.status]}
-              </span>
+              {!rejected && (
+                <span
+                  className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${statusClass[plan.status]}`}
+                >
+                  {statusCopy[plan.status]}
+                </span>
+              )}
+              {rejected && (
+                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-rose-500/20 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">
+                  <Lock className="h-3 w-3" />
+                  Zamknuté
+                </span>
+              )}
             </div>
           </div>
         </div>
@@ -125,7 +195,24 @@ export function TokenExecutionCard({
         </div>
       </div>
 
-      <div className="mb-3 grid grid-cols-2 gap-2">
+      {approved && highBeta && (
+        <div className="mb-3 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 text-[12px] font-bold uppercase tracking-wide text-emerald-300 shadow-[0_0_18px_rgba(52,211,153,0.25)]">
+          ✅ NÁKUP SCHVÁLENÝ (Skóre {highBeta.score}/3)
+        </div>
+      )}
+      {rejected && highBeta && (
+        <div className="mb-3 space-y-1 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/15 to-rose-500/10 px-3 py-2">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-amber-200">
+            ⚠️ NÁKUP ZAMIETNUTÝ
+          </p>
+          <p className="text-[11px] font-medium leading-relaxed text-amber-100/90">
+            Dôvod: {highBeta.reason}. {formatUsd(plan.highBetaRedirectedUsd)}{" "}
+            presmerovaných do Core (BTC).
+          </p>
+        </div>
+      )}
+
+      <div className={`mb-3 grid grid-cols-2 gap-2 ${rejected ? "opacity-50 grayscale" : ""}`}>
         <div className={`${glassInset} p-2.5`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             Trend
@@ -164,75 +251,81 @@ export function TokenExecutionCard({
         </div>
       </div>
 
-      <RsiGauge rsi={plan.rsi} />
+      {!rejected && (
+        <>
+          <RsiGauge rsi={plan.rsi} />
 
-      <div className="mt-3 mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
-        <div
-          className="h-full bg-emerald-400"
-          style={{ width: `${plan.marketShare}%` }}
-        />
-        <div
-          className="h-full bg-amber-400"
-          style={{ width: `${plan.limitShare}%` }}
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/8 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
-            MKT · {formatPercent(plan.marketShare, 0)}
-          </p>
-          <p className="mt-1 text-sm font-bold text-white">
-            {formatUsd(plan.marketUsd)}
-          </p>
-          <p className="text-[10px] text-zinc-400">
-            {formatEstimatedQty(plan.marketQty, plan.symbol)}
-          </p>
-          <motion.button
-            type="button"
-            onClick={() => onActivateMarket(plan.symbol)}
-            {...interactiveButton}
-            className={`mt-2 w-full rounded-xl px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide ${
-              marketActive
-                ? "bg-emerald-400 text-zinc-950"
-                : "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-            }`}
-          >
-            {marketActive ? "Market aktívny" : "Aktivovať Market"}
-          </motion.button>
-        </div>
-        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/8 p-3">
-          <div className="flex items-center justify-between gap-1">
-            <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-              LMT · {formatPercent(plan.limitShare, 0)}
-            </p>
-            <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-amber-200">
-              Smart zľava {plan.discountPct.toFixed(1)}%
-            </span>
+          <div className="mt-3 mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full bg-emerald-400"
+              style={{ width: `${plan.marketShare}%` }}
+            />
+            <div
+              className="h-full bg-amber-400"
+              style={{ width: `${plan.limitShare}%` }}
+            />
           </div>
-          <p className="mt-1 text-sm font-bold text-white">
-            {formatUsd(plan.limitUsd)}
-          </p>
-          <p className="text-[10px] text-zinc-400">
-            {formatEstimatedQty(plan.limitQty, plan.symbol)}
-          </p>
-          <p className="mt-1 text-[10px] text-zinc-500">
-            Limit {plan.limitPrice ? formatUnitPrice(plan.limitPrice) : "—"}
-          </p>
-          <motion.button
-            type="button"
-            onClick={() => onActivateLimit(plan.symbol)}
-            {...interactiveButton}
-            className={`mt-2 w-full rounded-xl px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide ${
-              limitActive
-                ? "bg-amber-400 text-zinc-950"
-                : "border border-amber-400/30 bg-amber-400/10 text-amber-200"
-            }`}
-          >
-            {limitActive ? "Limit aktívny" : "Aktivovať Limit"}
-          </motion.button>
-        </div>
-      </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/8 p-3">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+                MKT · {formatPercent(plan.marketShare, 0)}
+              </p>
+              <p className="mt-1 text-sm font-bold text-white">
+                {formatUsd(plan.marketUsd)}
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                {formatEstimatedQty(plan.marketQty, plan.symbol)}
+              </p>
+              <motion.button
+                type="button"
+                onClick={() => onActivateMarket(plan.symbol)}
+                {...interactiveButton}
+                className={`mt-2 w-full rounded-xl px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide ${
+                  marketActive
+                    ? "bg-emerald-400 text-zinc-950"
+                    : "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
+                }`}
+              >
+                {marketActive ? "Market aktívny" : "Aktivovať Market"}
+              </motion.button>
+            </div>
+            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/8 p-3">
+              <div className="flex items-center justify-between gap-1">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+                  LMT · {formatPercent(plan.limitShare, 0)}
+                </p>
+                <span className="rounded-full bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase text-amber-200">
+                  Smart zľava {plan.discountPct.toFixed(1)}%
+                </span>
+              </div>
+              <p className="mt-1 text-sm font-bold text-white">
+                {formatUsd(plan.limitUsd)}
+              </p>
+              <p className="text-[10px] text-zinc-400">
+                {formatEstimatedQty(plan.limitQty, plan.symbol)}
+              </p>
+              <p className="mt-1 text-[10px] text-zinc-500">
+                Limit {plan.limitPrice ? formatUnitPrice(plan.limitPrice) : "—"}
+              </p>
+              <motion.button
+                type="button"
+                onClick={() => onActivateLimit(plan.symbol)}
+                {...interactiveButton}
+                className={`mt-2 w-full rounded-xl px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide ${
+                  limitActive
+                    ? "bg-amber-400 text-zinc-950"
+                    : "border border-amber-400/30 bg-amber-400/10 text-amber-200"
+                }`}
+              >
+                {limitActive ? "Limit aktívny" : "Aktivovať Limit"}
+              </motion.button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {highBeta && <HighBetaAnalytics evaluation={highBeta} />}
     </motion.article>
   );
 }

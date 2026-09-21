@@ -16,4 +16,16 @@ declare module "technicalindicators" {
       close: number[];
     }): number[];
   }
+  export class BollingerBands {
+    static calculate(input: {
+      period: number;
+      stdDev: number;
+      values: number[];
+    }): Array<{
+      middle: number;
+      upper: number;
+      lower: number;
+      pb: number;
+    }>;
+  }
 }

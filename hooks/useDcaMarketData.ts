@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { BINANCE_WS_URLS, buildTickerStreamUrl } from "@/lib/dca/binance";
+import { checkUpcomingUnlocks } from "@/lib/dca/highBetaProtocol";
 import { computeTokenIndicators } from "@/lib/dca/indicators";
 import type {
   DcaSymbol,
@@ -13,6 +14,7 @@ import { DCA_TOKENS } from "@/lib/dca/universe";
 interface TickerPayload {
   price: number;
   change24h: number;
+  volume24h: number;
 }
 
 interface YieldPayload {
@@ -24,16 +26,42 @@ export function useDcaMarketData() {
   const [klines, setKlines] = useState<Partial<Record<DcaSymbol, OhlcvCandle[]>>>(
     {},
   );
+  const [weeklyKlines, setWeeklyKlines] = useState<
+    Partial<Record<DcaSymbol, OhlcvCandle[]>>
+  >({});
   const [tickers, setTickers] = useState<Partial<Record<DcaSymbol, TickerPayload>>>(
     {},
   );
   const [yields, setYields] = useState<Partial<Record<DcaSymbol, YieldPayload>>>(
     {},
   );
+  const [unlocks, setUnlocks] = useState<Partial<Record<DcaSymbol, boolean>>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [live, setLive] = useState(false);
   const wsRef = useRef<WebSocket | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadUnlocks() {
+      const highBeta = DCA_TOKENS.filter((token) => token.category === "HIGH_BETA");
+      const entries = await Promise.all(
+        highBeta.map(async (token) => {
+          const flagged = await checkUpcomingUnlocks(token.symbol);
+          return [token.symbol, flagged] as const;
+        }),
+      );
+      if (!cancelled) {
+        setUnlocks(Object.fromEntries(entries) as Partial<Record<DcaSymbol, boolean>>);
+      }
+    }
+
+    void loadUnlocks();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +76,7 @@ export function useDcaMarketData() {
 
         const klinesJson = (await klinesRes.json()) as {
           klines?: Partial<Record<DcaSymbol, OhlcvCandle[]>>;
+          weeklyKlines?: Partial<Record<DcaSymbol, OhlcvCandle[]>>;
         };
         const tickersJson = (await tickersRes.json()) as {
           tickers?: Partial<Record<DcaSymbol, TickerPayload>>;
@@ -58,6 +87,7 @@ export function useDcaMarketData() {
 
         if (cancelled) return;
         setKlines(klinesJson.klines ?? {});
+        setWeeklyKlines(klinesJson.weeklyKlines ?? {});
         setTickers(tickersJson.tickers ?? {});
         setYields(yieldsJson.yields ?? {});
         setError(null);
@@ -126,7 +156,7 @@ export function useDcaMarketData() {
       socket.onmessage = (event) => {
         try {
           const message = JSON.parse(String(event.data)) as {
-            data?: { s?: string; c?: string; P?: string };
+            data?: { s?: string; c?: string; P?: string; v?: string };
           };
           const pair = message.data?.s;
           const price = Number(message.data?.c);
@@ -138,6 +168,7 @@ export function useDcaMarketData() {
             [symbol]: {
               price,
               change24h: Number(message.data?.P) || current[symbol]?.change24h || 0,
+              volume24h: Number(message.data?.v) || current[symbol]?.volume24h || 0,
             },
           }));
         } catch {
@@ -159,21 +190,27 @@ export function useDcaMarketData() {
     const map: Partial<Record<DcaSymbol, TokenMarketSnapshot>> = {};
     for (const token of DCA_TOKENS) {
       const candles = klines[token.symbol] ?? [];
+      const weekly = weeklyKlines[token.symbol] ?? [];
       const ticker = tickers[token.symbol];
       const lastClose = candles[candles.length - 1]?.close ?? 0;
+      const lastVolume = candles[candles.length - 1]?.volume ?? 0;
       const price = ticker?.price && ticker.price > 0 ? ticker.price : lastClose;
       const yieldInfo = yields[token.symbol];
       map[token.symbol] = {
         symbol: token.symbol,
         price,
         change24h: ticker?.change24h ?? 0,
+        volume24h: ticker?.volume24h && ticker.volume24h > 0 ? ticker.volume24h : lastVolume,
         indicators: computeTokenIndicators(candles, price),
         yieldApy: yieldInfo?.apy ?? null,
         yieldProject: yieldInfo?.project ?? null,
+        dailyCandles: candles,
+        weeklyCandles: weekly,
+        upcomingUnlock: unlocks[token.symbol] ?? false,
       };
     }
     return map;
-  }, [klines, tickers, yields]);
+  }, [klines, weeklyKlines, tickers, yields, unlocks]);
 
   const pricesReady = Boolean(
     snapshots.BTC && snapshots.BTC.price > 0 && snapshots.ETH && snapshots.ETH.price > 0,

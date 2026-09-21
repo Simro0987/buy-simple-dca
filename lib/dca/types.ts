@@ -56,9 +56,62 @@ export interface TokenMarketSnapshot {
   symbol: DcaSymbol;
   price: number;
   change24h: number;
+  volume24h: number;
   indicators: TokenIndicators | null;
   yieldApy: number | null;
   yieldProject: string | null;
+  dailyCandles: OhlcvCandle[];
+  weeklyCandles: OhlcvCandle[];
+  upcomingUnlock: boolean;
+}
+
+export interface HighBetaCheckItem {
+  id: string;
+  label: string;
+  passed: boolean;
+  detail: string;
+}
+
+export interface HighBetaChecklist {
+  step0: {
+    passed: boolean;
+    label: string;
+    items: HighBetaCheckItem[];
+  };
+  step1: {
+    passed: boolean;
+    label: string;
+    items: HighBetaCheckItem[];
+  };
+  step2: {
+    passed: boolean;
+    label: string;
+    score: number;
+    items: HighBetaCheckItem[];
+  };
+}
+
+export interface HighBetaEvaluation {
+  approved: boolean;
+  reason: string;
+  stepFailed: number | null;
+  score: number;
+  checklist: HighBetaChecklist;
+}
+
+export interface HighBetaTokenData {
+  symbol: DcaSymbol | string;
+  price: number;
+  volume24h: number;
+  dailyCandles: OhlcvCandle[];
+  weeklyCandles: OhlcvCandle[];
+  upcomingUnlock: boolean;
+}
+
+export interface HighBetaBtcData {
+  price: number;
+  dailyCandles: OhlcvCandle[];
+  weeklyCandles: OhlcvCandle[];
 }
 
 export interface FactorBreakdown {
@@ -114,6 +167,8 @@ export interface TokenExecutionPlan {
   ilRr: string;
   bullMarket: boolean;
   stopped: boolean;
+  highBeta: HighBetaEvaluation | null;
+  highBetaRedirectedUsd: number;
 }
 
 export interface WeeklyDcaPlan {
@@ -127,6 +182,8 @@ export interface WeeklyDcaPlan {
   altPercent: number;
   btcFloorSatisfied: boolean;
   stoppedSymbols: DcaSymbol[];
+  highBetaRejectedSymbols: DcaSymbol[];
+  highBetaRedirectedUsd: number;
   plans: TokenExecutionPlan[];
   narrative: string[];
   allocationLabel: string;

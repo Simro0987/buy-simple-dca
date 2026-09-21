@@ -16,12 +16,14 @@ async function fetchCoinGeckoTicker(id: string) {
   const json = (await response.json()) as {
     current_price?: number;
     price_change_percentage_24h?: number;
+    total_volume?: number;
   }[];
   const coin = json[0];
   if (!coin?.current_price) return null;
   return {
     price: coin.current_price,
     change24h: coin.price_change_percentage_24h ?? 0,
+    volume24h: coin.total_volume ?? 0,
   };
 }
 
@@ -31,12 +33,21 @@ export async function GET() {
       try {
         const data = (await fetchBinanceJson(
           `/api/v3/ticker/24hr?symbol=${token.binance}`,
-        )) as { lastPrice?: string; priceChangePercent?: string; msg?: string };
+        )) as {
+          lastPrice?: string;
+          priceChangePercent?: string;
+          volume?: string;
+          msg?: string;
+        };
         const price = Number(data.lastPrice) || 0;
         if (price > 0) {
           return [
             token.symbol,
-            { price, change24h: Number(data.priceChangePercent) || 0 },
+            {
+              price,
+              change24h: Number(data.priceChangePercent) || 0,
+              volume24h: Number(data.volume) || 0,
+            },
           ] as const;
         }
       } catch {
@@ -54,7 +65,9 @@ export async function GET() {
 
   const tickers = Object.fromEntries(
     entries.filter(([, value]) => value !== null),
-  ) as Partial<Record<DcaSymbol, { price: number; change24h: number }>>;
+  ) as Partial<
+    Record<DcaSymbol, { price: number; change24h: number; volume24h: number }>
+  >;
 
   return NextResponse.json({ tickers });
 }
