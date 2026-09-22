@@ -1,11 +1,20 @@
 "use client";
 
+import { Activity, Droplets, Gauge, TrendingUp, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
-import type { MarketRegime } from "@/lib/dca/types";
+import type { FactorBreakdown, MarketRegime, RegimeFactorId } from "@/lib/dca/types";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
 import { formatUsd } from "@/lib/data";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { interactiveButton } from "@/lib/motion";
+
+const factorIcons: Record<RegimeFactorId, typeof Gauge> = {
+  valuation: Wallet,
+  trend: TrendingUp,
+  sentiment: Gauge,
+  momentum: Activity,
+  risk: Droplets,
+};
 
 interface MarketRegimePanelProps {
   regime: MarketRegime;
@@ -40,7 +49,7 @@ export function MarketRegimePanel({
       className={`${glassPanel} p-5`}
     >
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        Fáza A · Koľko nasadiť
+        FÁZA A • KOĽKO NASADIŤ
       </p>
       <h3 className="mt-1 text-sm font-bold uppercase tracking-wide text-white">
         TRHOVÝ REŽIM: {regime.englishKind} • {regime.description}
@@ -76,7 +85,7 @@ export function MarketRegimePanel({
               style={{ width: `${regime.finalScore}%` }}
             />
           </div>
-          <p className="mt-1 text-[10px] text-zinc-500">Nasadenie · makro trend</p>
+          <p className="mt-1 text-[10px] text-zinc-500">5 faktorov → alokácia %</p>
         </div>
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
@@ -125,16 +134,54 @@ export function MarketRegimePanel({
           className="mt-2 w-full accent-emerald-400"
           aria-label="Percento týždennej sumy na nasadenie"
         />
-        <div className="mt-2 h-2 overflow-hidden rounded-full bg-zinc-800/90">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 to-lime-300 shadow-[0_0_12px_rgba(52,211,153,0.35)]"
-            style={{ width: `${regime.allocationPercent}%` }}
-          />
-        </div>
-        <p className="mt-2 text-[11px] leading-relaxed text-zinc-500">
-          Deployed Capital = základ × alokácia%. Zvyšok ide do Hotovosť rezervy
-          (nenasadené tento týždeň). Koše Core / Sat / High-Beta sa rátajú až z
-          nasadeného kapitálu vo Fáze B.
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+          5 faktorov · Valuácia / Trend / Sentiment / Momentum / Riziko
+        </p>
+        {regime.factors.map((factor: FactorBreakdown) => {
+          const Icon = factorIcons[factor.id];
+          return (
+            <div
+              key={factor.id}
+              className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2"
+            >
+              <Icon className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-white">
+                    {factor.label}
+                    {factor.source === "mock" && (
+                      <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">
+                        mock
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px] font-bold text-zinc-300">
+                    {factor.score}
+                    <span className="ml-1 font-medium text-zinc-600">
+                      w {(factor.weight * 100).toFixed(0)}%
+                    </span>
+                  </p>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-emerald-400/80"
+                    style={{ width: `${factor.score}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
+                  {factor.formula}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+        <p className="text-[11px] leading-relaxed text-zinc-500">
+          Final Score z týchto 5 faktorov určuje, koľko z týždenného rozpočtu sa
+          nasadí. Zvyšok ide do Hotovosť rezervy. Koše Core / Sat / High-Beta ráta
+          až Fáza B z nasadeného kapitálu.
         </p>
       </div>
     </motion.section>

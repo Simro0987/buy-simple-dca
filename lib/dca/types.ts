@@ -22,6 +22,12 @@ export type RegimeFactorId =
   | "sentiment"
   | "momentum"
   | "risk";
+export type ConfluenceIndicatorId =
+  | "wma"
+  | "fearGreed"
+  | "liquidity"
+  | "volatility"
+  | "cbbi";
 export type FactorSource = "live" | "mock";
 export type WaterfallMode = "none" | "partial" | "full";
 export type LimitLeg = "lmt1" | "lmt2";
@@ -169,6 +175,17 @@ export interface RegimeBlendShare {
   percent: number;
 }
 
+export interface ConfluenceIndicator {
+  id: ConfluenceIndicatorId;
+  label: string;
+  score: number;
+  weight: number;
+  contribution: number;
+  formula: string;
+  note: string;
+  source: FactorSource;
+}
+
 export interface BasketMix {
   corePercent: number;
   satellitePercent: number;
@@ -203,6 +220,7 @@ export interface DeploymentDecision {
   confidenceMultiplier: number;
   blend: RegimeBlendShare[];
   notes: string[];
+  factors: FactorBreakdown[];
 }
 
 export interface MarketRegime {
@@ -216,8 +234,10 @@ export interface MarketRegime {
   allocationPercent: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
-  /** Phase B — How to Split. 5-factor CONFLUENCE 0–100. */
+  /** Phase B — How to Split. CONFLUENCE from 200WMA / F&G / liquidity / ATR / CBBI. */
   confluenceScore: number;
+  confluenceIndicators: ConfluenceIndicator[];
+  /** Phase A — 5 factors that drive Final Score / Allocation %. */
   factors: FactorBreakdown[];
   blend: RegimeBlendShare[];
   deploymentBlend: RegimeBlendShare[];

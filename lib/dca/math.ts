@@ -31,3 +31,15 @@ export function softmax(values: number[]): number[] {
   if (sum <= 0) return values.map(() => 1 / values.length);
   return exps.map((value) => value / sum);
 }
+
+export function mapRange(
+  value: number,
+  fromLow: number,
+  fromHigh: number,
+  toLow: number,
+  toHigh: number,
+): number {
+  if (!Number.isFinite(value)) return (toLow + toHigh) / 2;
+  const t = (value - fromLow) / (fromHigh - fromLow);
+  return lerp(toLow, toHigh, t);
+}

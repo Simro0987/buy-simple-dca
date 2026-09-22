@@ -1,6 +1,6 @@
 import {
   applyEqualWaterfall,
-  buildConfluenceRegime,
+  buildConfluenceBrain,
   EMPTY_REGIME_METRICS,
 } from "@/lib/dca/confluence";
 import {
@@ -246,7 +246,7 @@ export function buildWeeklyDcaPlan(options: {
   const minLmt2Usd = options.minLmt2Usd ?? DEFAULT_LMT2_MIN_USD;
   const btc = snapshots.BTC;
   const metrics = options.regimeMetrics ?? EMPTY_REGIME_METRICS;
-  const brain = buildConfluenceRegime(btc, metrics, moneyMode);
+  const brain = buildConfluenceBrain(btc, metrics);
   const deployment = calculateDeploymentScore(btc, metrics, moneyMode);
   const override = options.allocationOverride;
   const engineAllocationPercent = deployment.allocationPercent;
@@ -278,7 +278,6 @@ export function buildWeeklyDcaPlan(options: {
   }
 
   const regime = {
-    ...brain,
     kind: deployment.kind,
     englishKind: deployment.englishKind,
     label: deployment.label,
@@ -287,10 +286,14 @@ export function buildWeeklyDcaPlan(options: {
     allocationPercent,
     confidence: deployment.confidence,
     confidenceMultiplier: deployment.confidenceMultiplier,
-    confluenceScore: brain.confluenceScore,
+    confluenceScore: brain.score,
+    confluenceIndicators: brain.indicators,
+    factors: deployment.factors,
+    blend: deployment.blend,
     deploymentBlend: deployment.blend,
     deploymentNotes: deployment.notes,
     basket: mix,
+    safeHaven: brain.safeHaven,
   };
 
   const highBetaUniverse = DCA_TOKENS.filter((token) => token.category === "HIGH_BETA");
@@ -448,8 +451,8 @@ export function buildWeeklyDcaPlan(options: {
     .filter((symbol) => satelliteVerdicts.get(symbol)?.approved);
 
   const narrative = [
-    `Fáza A · Koľko: Final Score ${deployment.score}/100 → Alokácia ${allocationPercent.toFixed(0)}% z ${baseAmount.toFixed(0)}$ = nasadené ${deployedCapital.toFixed(2)}$ · Hotovosť ${undeployedToReserve.toFixed(2)}$.`,
-    `Fáza B · Ako rozdeliť: CONFLUENCE ${regime.confluenceScore}/100 z nasadeného kapitálu → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (plynulá krivka, Core ≥ 50% nasadeného, High-Beta strop 25%).`,
+    `Fáza A · Koľko: 5 faktorov (Valuácia/Trend/Sentiment/Momentum/Riziko) → Final Score ${deployment.score}/100 → Alokácia ${allocationPercent.toFixed(0)}% z ${baseAmount.toFixed(0)}$ = nasadené ${deployedCapital.toFixed(2)}$ · Hotovosť ${undeployedToReserve.toFixed(2)}$.`,
+    `Fáza B · Ako rozdeliť: CONFLUENCE ${brain.score}/100 (200 WMA · Fear & Greed · Likvidita · ATR · CBBI) z nasadeného kapitálu → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (Core ≥ 50% nasadeného).`,
     allocationMode === "BTC_ONLY"
       ? "Režim BTC ONLY posiela celý nasadený kapitál do Bitcoinu."
       : "Satelity (ETH, SOL, LINK, AAVE, UNI) idú cez Smart DCA protokol; LINK má výnimku z brzdy eufórie.",

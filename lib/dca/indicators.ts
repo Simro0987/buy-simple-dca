@@ -59,6 +59,19 @@ export function computeTokenIndicators(
   };
 }
 
+export function computeWma(values: number[], period: number): number {
+  if (values.length < period) return 0;
+  const slice = values.slice(-period);
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 0; index < slice.length; index += 1) {
+    const weight = index + 1;
+    numerator += slice[index] * weight;
+    denominator += weight;
+  }
+  return denominator > 0 ? numerator / denominator : 0;
+}
+
 export function computeSma(values: number[], period: number): number {
   if (values.length < period) return 0;
   return lastNumber(SMA.calculate({ period, values }), 0);

@@ -3,12 +3,11 @@
 import { motion } from "framer-motion";
 import { AlertTriangle, ShoppingCart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
-import { AllocationRulesCard } from "@/components/dca/AllocationRulesCard";
 import { ConfirmPurchaseSheet } from "@/components/dca/ConfirmPurchaseSheet";
 import { DcaActivityCard } from "@/components/dca/DcaActivityCard";
 import { DcaPlanHeader } from "@/components/dca/DcaPlanHeader";
 import { MarketRegimePanel } from "@/components/dca/MarketRegimePanel";
-import { PortfolioSplitSection } from "@/components/dca/PortfolioSplitSection";
+import { PhaseSplitCard } from "@/components/dca/PhaseSplitCard";
 import { RitualSheet } from "@/components/dca/RitualSheet";
 import { TokenAllocationBoard } from "@/components/dca/TokenAllocationBoard";
 import { TokenExecutionCard } from "@/components/dca/TokenExecutionCard";
@@ -55,7 +54,6 @@ export function DcaEngine({
   const allocationMode = useDcaStore((state) => state.allocationMode);
   const allocationOverride = useDcaStore((state) => state.allocationOverride);
   const ritualOpen = useDcaStore((state) => state.ritualOpen);
-  const whyOpen = useDcaStore((state) => state.whyOpen);
   const setBaseAmount = useDcaStore((state) => state.setBaseAmount);
   const setLmt2MinUsd = useDcaStore((state) => state.setLmt2MinUsd);
   const toggleMoneyMode = useDcaStore((state) => state.toggleMoneyMode);
@@ -63,7 +61,6 @@ export function DcaEngine({
   const setAllocationOverride = useDcaStore((state) => state.setAllocationOverride);
   const autoFill = useDcaStore((state) => state.autoFill);
   const setRitualOpen = useDcaStore((state) => state.setRitualOpen);
-  const setWhyOpen = useDcaStore((state) => state.setWhyOpen);
   const setPipeline = useCapitalStore((state) => state.setPipeline);
 
   const nowMs = useExecutionClock();
@@ -242,17 +239,12 @@ export function DcaEngine({
         onResetAllocation={() => setAllocationOverride(null)}
         loading={(loading && !pricesReady) || regimeLoading}
       />
-      <AllocationRulesCard
-        plan={weeklyPlan}
-        cashReserveUsd={portfolioHoldings.cashUsd}
-        executionImpactUsd={executionImpactUsd}
-        whyOpen={whyOpen}
-        onToggleWhy={() => setWhyOpen(!whyOpen)}
-      />
-      <PortfolioSplitSection
+      <PhaseSplitCard
         plan={weeklyPlan}
         allocationMode={allocationMode}
         onAllocationMode={setAllocationMode}
+        cashReserveUsd={portfolioHoldings.cashUsd}
+        executionImpactUsd={executionImpactUsd}
       />
       <TokenAllocationBoard plan={weeklyPlan} />
 
