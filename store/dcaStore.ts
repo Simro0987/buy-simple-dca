@@ -4,6 +4,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { AllocationMode, DcaSymbol } from "@/lib/dca/types";
 import { DEFAULT_WEEKLY_INVESTMENT } from "@/lib/dcaEngineConfig";
+import { DEFAULT_LMT2_MIN_USD } from "@/lib/dca/executionMath";
 
 type Side = "market" | "limit";
 
@@ -11,6 +12,7 @@ interface DcaPersistedState {
   weeklyAmount: number;
   moneyMode: boolean;
   allocationMode: AllocationMode;
+  lmt2MinUsd: number;
 }
 
 interface DcaStore extends DcaPersistedState {
@@ -18,6 +20,7 @@ interface DcaStore extends DcaPersistedState {
   whyOpen: boolean;
   activations: Partial<Record<DcaSymbol, { market: boolean; limit: boolean }>>;
   setWeeklyAmount: (value: number) => void;
+  setLmt2MinUsd: (value: number) => void;
   setMoneyMode: (value: boolean) => void;
   toggleMoneyMode: () => void;
   setAllocationMode: (mode: AllocationMode) => void;
@@ -31,6 +34,7 @@ export const useDcaStore = create<DcaStore>()(
   persist(
     (set) => ({
       weeklyAmount: DEFAULT_WEEKLY_INVESTMENT,
+      lmt2MinUsd: DEFAULT_LMT2_MIN_USD,
       moneyMode: true,
       allocationMode: "ALL",
       ritualOpen: false,
@@ -38,6 +42,10 @@ export const useDcaStore = create<DcaStore>()(
       activations: {},
       setWeeklyAmount: (value) =>
         set({ weeklyAmount: Math.max(0, Number.isFinite(value) ? value : 0) }),
+      setLmt2MinUsd: (value) =>
+        set({
+          lmt2MinUsd: Math.max(0, Number.isFinite(value) ? Math.round(value * 100) / 100 : DEFAULT_LMT2_MIN_USD),
+        }),
       setMoneyMode: (value) => set({ moneyMode: value }),
       toggleMoneyMode: () => set((state) => ({ moneyMode: !state.moneyMode })),
       setAllocationMode: (allocationMode) => set({ allocationMode }),
@@ -64,6 +72,7 @@ export const useDcaStore = create<DcaStore>()(
         weeklyAmount: state.weeklyAmount,
         moneyMode: state.moneyMode,
         allocationMode: state.allocationMode,
+        lmt2MinUsd: state.lmt2MinUsd,
       }),
     },
   ),

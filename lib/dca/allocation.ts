@@ -5,7 +5,9 @@ import {
 } from "@/lib/dca/confluence";
 import {
   applyBrakeBoost,
+  computeLimitLadder,
   computeUniversalExecution,
+  DEFAULT_LMT2_MIN_USD,
   statusFromRsi,
 } from "@/lib/dca/executionMath";
 import { evaluateHighBetaToken } from "@/lib/dca/highBetaProtocol";
@@ -98,6 +100,7 @@ function buildPlan(
   satellite: SatelliteEvaluation | null,
   satelliteRedirectedUsd: number,
   waterfallDestination: string,
+  minLmt2Usd: number,
 ): TokenExecutionPlan {
   const meta = TOKEN_BY_SYMBOL[snapshot.symbol];
   const ind = snapshot.indicators;
@@ -127,8 +130,33 @@ function buildPlan(
     ? applyBrakeBoost(originalMarketUsd, price, ind?.ema50 ?? 0)
     : applyBrakeBoost(0, 0, 0);
   const marketUsd = brakeBoost.finalMktAmount;
-  const executionUsd = roundUsd(marketUsd + limitUsd);
-  const limitPrice = execution?.limitPrice ?? 0;
+  const ladder = execution
+    ? computeLimitLadder({
+        lmtAmount: limitUsd,
+        rsi,
+        category: meta.category,
+        livePrice: price,
+        ema50: ind?.ema50 ?? 0,
+        sma200: ind?.sma200 ?? 0,
+        atr: ind?.atr ?? 0,
+        dailyCandles: snapshot.dailyCandles,
+        minLmt2Usd,
+      })
+    : computeLimitLadder({
+        lmtAmount: 0,
+        rsi,
+        category: meta.category,
+        livePrice: 0,
+        ema50: 0,
+        sma200: 0,
+        atr: 0,
+        dailyCandles: [],
+        minLmt2Usd,
+      });
+  const limit1Usd = ladder.lmt1.usd;
+  const limit2Usd = ladder.lmt2.usd;
+  const executionUsd = roundUsd(marketUsd + limit1Usd + limit2Usd);
+  const limitPrice = ladder.lmt2Skipped ? ladder.lmt1.price : ladder.lmt1.price;
   const qty = price > 0 ? executionUsd / price : 0;
   const atrPct = price > 0 && ind ? (ind.atr / price) * 100 : 0;
   void moneyMode;
@@ -142,7 +170,14 @@ function buildPlan(
     totalUsd,
     marketUsd,
     originalMarketUsd: brakeBoost.originalMktAmount,
-    limitUsd,
+    limitUsd: roundUsd(limit1Usd + limit2Usd),
+    limit1Usd,
+    limit2Usd,
+    limit2Skipped: ladder.lmt2Skipped,
+    limit2SkipReason: ladder.skipReason,
+    lmt2Share: ladder.lmt2Share,
+    limit1AtrMult: ladder.lmt1.atrMult,
+    limit2AtrMult: ladder.lmt2.atrMult,
     executionUsd,
     emaDistancePercent: brakeBoost.emaDistancePercent,
     brakeBoostMode: brakeBoost.mode,
@@ -153,13 +188,21 @@ function buildPlan(
     marketShare,
     limitShare,
     limitPrice,
-    discountPct: execution?.discountPct ?? 0,
-    limitFallbackActive: execution?.fallbackActive ?? false,
-    limitTargetLabel: execution?.targetLabel ?? "",
-    limitBaseTarget: execution?.baseTarget ?? 0,
+    limit1Price: ladder.lmt1.price,
+    limit2Price: ladder.lmt2.price,
+    discountPct: ladder.lmt1.discountPct,
+    limitFallbackActive: ladder.lmt1.fallbackActive,
+    limit1FallbackActive: ladder.lmt1.fallbackActive,
+    limit2FallbackActive: ladder.lmt2.fallbackActive,
+    limitTargetLabel: ladder.lmt1.label,
+    limit1TargetLabel: ladder.lmt1.label,
+    limit2TargetLabel: ladder.lmt2.label,
+    limitBaseTarget: ladder.lmt1.baseTarget,
     qty,
     marketQty: price > 0 ? marketUsd / price : 0,
-    limitQty: limitPrice > 0 ? limitUsd / limitPrice : 0,
+    limitQty: limitPrice > 0 ? (limit1Usd + limit2Usd) / limitPrice : 0,
+    limit1Qty: ladder.lmt1.price > 0 ? limit1Usd / ladder.lmt1.price : 0,
+    limit2Qty: ladder.lmt2.price > 0 ? limit2Usd / ladder.lmt2.price : 0,
     score: tokenScore(snapshot),
     status: statusFromRsi(rsi),
     rsi,
@@ -192,8 +235,10 @@ export function buildWeeklyDcaPlan(options: {
   allocationMode: AllocationMode;
   snapshots: Partial<Record<DcaSymbol, TokenMarketSnapshot>>;
   regimeMetrics?: RegimeMetrics;
+  minLmt2Usd?: number;
 }): WeeklyDcaPlan {
   const { weeklyAmount, moneyMode, allocationMode, snapshots } = options;
+  const minLmt2Usd = options.minLmt2Usd ?? DEFAULT_LMT2_MIN_USD;
   const btc = snapshots.BTC;
   const regime = buildConfluenceRegime(
     btc,
@@ -326,6 +371,7 @@ export function buildWeeklyDcaPlan(options: {
       satelliteVerdicts.get(meta.symbol) ?? null,
       meta.category === "SATELLITE" ? (redirectedBySymbol.get(meta.symbol) ?? 0) : 0,
       waterfallBySymbol.get(meta.symbol) ?? "",
+      minLmt2Usd,
     );
   }).filter(
     (plan) =>
@@ -352,17 +398,17 @@ export function buildWeeklyDcaPlan(options: {
   const altPercent = 100 - corePercent;
 
   const allocationLabel =
-    regime.kind === "FEAR"
+    regime.kind === "PANIC" || regime.kind === "BEAR"
       ? "CONSERVATIVE"
-      : regime.kind === "NEUTRAL"
-        ? "BALANCED"
-        : "AGGRESSIVE";
+      : regime.kind === "EUPHORIA"
+        ? "AGGRESSIVE"
+        : "BALANCED";
   const allocationSubtitle =
     allocationLabel === "BALANCED"
-      ? "Vyvážená alokácia · CONFLUENCE"
+      ? `Vyvážená alokácia · ${regime.label}`
       : allocationLabel === "CONSERVATIVE"
-        ? "Konzervatívna alokácia · strach"
-        : "Agresívnejšia alokácia · eufória";
+        ? `Konzervatívna alokácia · ${regime.label}`
+        : `Agresívnejšia alokácia · ${regime.label}`;
 
   const approvedBeta = highBetaUniverse
     .map((token) => token.symbol)
@@ -391,7 +437,10 @@ export function buildWeeklyDcaPlan(options: {
           ? `High-Beta protokol schválil ${approvedBeta.join(", ")}.`
           : "High-beta vrstva čaká na live dáta protokolu.",
     "Waterfall C: REDUCE (Phase 7) a expirované 7-dňové LMT (Phase 8) idú len do Hotovosť rezervy — nikdy waterfall do tokenov ani BTC.",
-    "Schválené tokeny idú cez univerzálny engine: MKT% = clamp(10–90, 90 − ((RSI−30)×2)), limit podľa kategórie, ochrana Live − 1.5× ATR, platnosť 7 dní.",
+    `Váhy faktorov sa plynulo miešajú cez režimy (${regime.blend
+      .map((row) => `${row.label} ${row.percent.toFixed(0)}%`)
+      .join(" · ") || regime.label}).`,
+    "Schválené tokeny idú cez univerzálny engine: MKT% = clamp(10–90, 90 − ((RSI−30)×2)), potom LMT rebrík LMT1/LMT2, ochrana pod live, platnosť 7 dní.",
     "Brzda & Boost mení len MKT podľa vzdialenosti od 50D EMA. Ušetrený MKT ide do Hotovosť rezervy, extra MKT sa z rezervy berie — nikdy do BTC. LMT ostáva z Phase 6.",
   ];
 

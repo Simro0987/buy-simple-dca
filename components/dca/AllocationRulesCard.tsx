@@ -121,11 +121,35 @@ export function AllocationRulesCard({
         />
       </button>
       {whyOpen && (
-        <ul className="mt-2 space-y-1.5 px-1 text-[11px] leading-relaxed text-zinc-400">
-          {plan.narrative.map((line) => (
-            <li key={line}>• {line}</li>
-          ))}
-        </ul>
+        <div className="mt-2 space-y-3 px-1">
+          <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
+            Dopad faktorov na CONFLUENCE {plan.regime.finalScore}/100
+          </p>
+          <ul className="space-y-1.5 text-[11px] leading-relaxed text-zinc-400">
+            {plan.regime.factors.map((factor) => (
+              <li key={factor.id}>
+                <span className="font-semibold text-zinc-200">{factor.label}</span>
+                {" · "}
+                {factor.formula}
+                <span className="block text-[10px] text-zinc-500">{factor.note}</span>
+              </li>
+            ))}
+          </ul>
+          {plan.regime.blend.length > 0 && (
+            <p className="text-[11px] leading-relaxed text-zinc-500">
+              Miešanie režimov:{" "}
+              {plan.regime.blend
+                .map((row) => `${row.label} ${row.percent.toFixed(0)}%`)
+                .join(" · ")}
+              . Váhy nie sú skokové.
+            </p>
+          )}
+          <ul className="space-y-1.5 text-[11px] leading-relaxed text-zinc-400">
+            {plan.narrative.map((line) => (
+              <li key={line}>• {line}</li>
+            ))}
+          </ul>
+        </div>
       )}
     </motion.section>
   );

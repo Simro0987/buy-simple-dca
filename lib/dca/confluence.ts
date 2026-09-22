@@ -1,24 +1,49 @@
 import { ATR } from "technicalindicators";
 import { computeSma } from "@/lib/dca/indicators";
-import { clamp, lerp, roundUsd, smoothstep } from "@/lib/dca/math";
+import { clamp, lerp, roundUsd, smoothstep, softmax } from "@/lib/dca/math";
 import type {
   BasketMix,
   DcaSymbol,
   FactorBreakdown,
   MarketRegime,
+  RegimeBlendShare,
+  RegimeFactorId,
   RegimeKind,
   RegimeMetrics,
   TokenMarketSnapshot,
   WaterfallMode,
 } from "@/lib/dca/types";
 
+/** SIDEWAYS baseline (~user spec). Other regimes interpolate from these tables. */
 export const FACTOR_WEIGHTS = {
-  wma200: 0.35,
-  liquidity: 0.25,
-  cbbc: 0.2,
-  volatility: 0.1,
-  fearGreed: 0.1,
+  valuation: 0.3,
+  trend: 0.2,
+  sentiment: 0.2,
+  momentum: 0.15,
+  risk: 0.15,
 } as const;
+
+const REGIME_WEIGHTS: Record<
+  RegimeKind,
+  Record<RegimeFactorId, number>
+> = {
+  PANIC: { valuation: 0.22, trend: 0.12, sentiment: 0.28, momentum: 0.13, risk: 0.25 },
+  BEAR: { valuation: 0.38, trend: 0.22, sentiment: 0.14, momentum: 0.1, risk: 0.16 },
+  SIDEWAYS: { ...FACTOR_WEIGHTS },
+  BULL: { valuation: 0.24, trend: 0.28, sentiment: 0.16, momentum: 0.2, risk: 0.12 },
+  EUPHORIA: { valuation: 0.34, trend: 0.14, sentiment: 0.26, momentum: 0.1, risk: 0.16 },
+};
+
+const REGIME_COPY: Record<RegimeKind, { label: string; description: string }> = {
+  PANIC: { label: "PANIKA", description: "Extrémny strach a volatilita" },
+  BEAR: { label: "MEDVEĎ", description: "Trh pod kľúčovými priemermi" },
+  SIDEWAYS: { label: "STRANA", description: "Vyvážený režim" },
+  BULL: { label: "BÝK", description: "Trend potvrdený" },
+  EUPHORIA: { label: "EUFÓRIA", description: "Rizikový apetít na maxime" },
+};
+
+const REGIME_ORDER: RegimeKind[] = ["PANIC", "BEAR", "SIDEWAYS", "BULL", "EUPHORIA"];
+const SOFTMAX_TEMPERATURE = 16;
 
 export const SAFE_HAVEN_THRESHOLD = 85;
 
@@ -172,17 +197,100 @@ export function allocateBaskets(confluence: number): BasketMix {
   return { corePercent, satellitePercent, highBetaPercent };
 }
 
-function kindFromScore(score: number): { kind: RegimeKind; label: string; description: string } {
-  if (score > 85) {
-    return { kind: "EXTREME_EUPHORIA", label: "EUFÓRIA", description: "Extrémna eufória" };
+function trendScore(btc: TokenMarketSnapshot | undefined): { score: number; note: string; source: FactorBreakdown["source"] } {
+  const price = btc?.price ?? 0;
+  const ema50 = btc?.indicators?.ema50 ?? 0;
+  const ema200 = btc?.indicators?.ema200 ?? 0;
+  if (!(price > 0) || !(ema50 > 0) || !(ema200 > 0)) {
+    return { score: 50, note: "50D / 200D EMA n/a", source: "mock" };
   }
-  if (score >= 65) {
-    return { kind: "EUPHORIA", label: "EUFÓRIA", description: "Rizikový apetít rastie" };
+  const d50 = ((price - ema50) / ema50) * 100;
+  const d200 = ((price - ema200) / ema200) * 100;
+  const s50 = clamp(mapRange(d50, -18, 22, 8, 94), 0, 100);
+  const s200 = clamp(mapRange(d200, -24, 40, 8, 94), 0, 100);
+  const score = Math.round(s50 * 0.55 + s200 * 0.45);
+  const sign50 = d50 >= 0 ? "+" : "";
+  const sign200 = d200 >= 0 ? "+" : "";
+  return {
+    score,
+    note: `BTC ${sign50}${d50.toFixed(1)}% vs 50D EMA · ${sign200}${d200.toFixed(1)}% vs 200D EMA`,
+    source: "live",
+  };
+}
+
+function momentumScore(
+  btc: TokenMarketSnapshot | undefined,
+  vol: number,
+): { score: number; note: string; source: FactorBreakdown["source"] } {
+  const rsi = btc?.indicators?.rsi;
+  const price = btc?.price ?? 0;
+  const closes = btc?.dailyCandles ?? [];
+  const rsiScore = rsi != null && Number.isFinite(rsi) ? clamp(rsi, 0, 100) : Number.NaN;
+  let rocScore = Number.NaN;
+  if (price > 0 && closes.length > 20) {
+    const base = closes[closes.length - 21]?.close ?? 0;
+    if (base > 0) {
+      const roc = ((price - base) / base) * 100;
+      rocScore = clamp(mapRange(roc, -22, 38, 10, 92), 0, 100);
+    }
   }
-  if (score < 30) {
-    return { kind: "FEAR", label: "STRACH", description: "Extrémny strach" };
+  const parts: number[] = [];
+  if (Number.isFinite(rsiScore)) parts.push(rsiScore);
+  if (Number.isFinite(rocScore)) parts.push(rocScore);
+  if (Number.isFinite(vol)) parts.push(vol);
+  if (parts.length === 0) {
+    return { score: 50, note: "RSI / momentum n/a", source: "mock" };
   }
-  return { kind: "NEUTRAL", label: "NEUTRÁL", description: "Vyvážený režim" };
+  const score = Math.round(
+    Number.isFinite(rsiScore) && Number.isFinite(rocScore)
+      ? rsiScore * 0.55 + rocScore * 0.3 + (Number.isFinite(vol) ? vol * 0.15 : 0)
+      : parts.reduce((sum, value) => sum + value, 0) / parts.length,
+  );
+  const rsiNote = Number.isFinite(rsiScore) ? `RSI ${rsiScore.toFixed(0)}` : "RSI n/a";
+  return {
+    score: clamp(score, 0, 100),
+    note: `${rsiNote} · 20d momentum`,
+    source: Number.isFinite(rsiScore) ? "live" : "mock",
+  };
+}
+
+function blendSource(
+  ...parts: Array<{ source: FactorBreakdown["source"] }>
+): FactorBreakdown["source"] {
+  return parts.every((part) => part.source === "live") ? "live" : parts.some((part) => part.source === "live") ? "live" : "mock";
+}
+
+function regimeAffinities(scores: Record<RegimeFactorId, number>): Record<RegimeKind, number> {
+  const { valuation, trend, sentiment, momentum, risk } = scores;
+  return {
+    PANIC: (100 - sentiment) * 0.4 + risk * 0.35 + (100 - trend) * 0.25,
+    BEAR: (100 - valuation) * 0.3 + (100 - trend) * 0.4 + (100 - momentum) * 0.3,
+    SIDEWAYS: Math.max(
+      0,
+      100 - Math.abs(valuation - 50) * 0.35 - Math.abs(trend - 50) * 0.35 - Math.abs(sentiment - 50) * 0.3,
+    ),
+    BULL: trend * 0.4 + valuation * 0.3 + momentum * 0.3,
+    EUPHORIA: sentiment * 0.35 + valuation * 0.35 + momentum * 0.3,
+  };
+}
+
+function interpolateWeights(blend: Record<RegimeKind, number>): Record<RegimeFactorId, number> {
+  const ids: RegimeFactorId[] = ["valuation", "trend", "sentiment", "momentum", "risk"];
+  const raw: Record<RegimeFactorId, number> = {
+    valuation: 0,
+    trend: 0,
+    sentiment: 0,
+    momentum: 0,
+    risk: 0,
+  };
+  for (const kind of REGIME_ORDER) {
+    const share = blend[kind] ?? 0;
+    for (const id of ids) raw[id] += share * REGIME_WEIGHTS[kind][id];
+  }
+  const sum = ids.reduce((acc, id) => acc + raw[id], 0);
+  if (sum <= 0) return { ...FACTOR_WEIGHTS };
+  for (const id of ids) raw[id] = raw[id] / sum;
+  return raw;
 }
 
 export function buildConfluenceRegime(
@@ -200,19 +308,93 @@ export function buildConfluenceRegime(
     wma.score,
     fng.score,
   );
+  const trend = trendScore(btc);
+  const momentum = momentumScore(btc, vol.score);
+  const valuationScore = Math.round(clamp(wma.score * 0.6 + cbbc.score * 0.4, 0, 100));
+  const riskScore = Math.round(clamp(liq.score * 0.6 + vol.score * 0.4, 0, 100));
 
-  const factors: FactorBreakdown[] = [
-    { id: "wma200", label: "200WMA", score: wma.score, weight: FACTOR_WEIGHTS.wma200, note: wma.note, source: wma.source },
-    { id: "liquidity", label: "Likvidita", score: liq.score, weight: FACTOR_WEIGHTS.liquidity, note: liq.note, source: liq.source },
-    { id: "cbbc", label: "CBBC", score: cbbc.score, weight: FACTOR_WEIGHTS.cbbc, note: cbbc.note, source: cbbc.source },
-    { id: "volatility", label: "Volatilita", score: vol.score, weight: FACTOR_WEIGHTS.volatility, note: vol.note, source: vol.source },
-    { id: "fearGreed", label: "Fear & Greed", score: fng.score, weight: FACTOR_WEIGHTS.fearGreed, note: fng.note, source: fng.source },
+  const rawScores: Record<RegimeFactorId, number> = {
+    valuation: valuationScore,
+    trend: trend.score,
+    sentiment: fng.score,
+    momentum: momentum.score,
+    risk: riskScore,
+  };
+
+  const affinities = regimeAffinities(rawScores);
+  const mix = softmax(REGIME_ORDER.map((kind) => affinities[kind] / SOFTMAX_TEMPERATURE));
+  const blendMap = Object.fromEntries(
+    REGIME_ORDER.map((kind, index) => [kind, mix[index] ?? 0]),
+  ) as Record<RegimeKind, number>;
+  const weights = interpolateWeights(blendMap);
+  const blend: RegimeBlendShare[] = REGIME_ORDER.map((kind, index) => ({
+    kind,
+    label: REGIME_COPY[kind].label,
+    percent: Math.round((mix[index] ?? 0) * 1000) / 10,
+  })).filter((row) => row.percent >= 1);
+
+  const factorMeta: Array<{
+    id: RegimeFactorId;
+    label: string;
+    score: number;
+    note: string;
+    source: FactorBreakdown["source"];
+  }> = [
+    {
+      id: "valuation",
+      label: "Valuácia",
+      score: valuationScore,
+      note: `${wma.note} · ${cbbc.note}`,
+      source: blendSource(wma, cbbc),
+    },
+    {
+      id: "trend",
+      label: "Trend",
+      score: trend.score,
+      note: trend.note,
+      source: trend.source,
+    },
+    {
+      id: "sentiment",
+      label: "Sentiment",
+      score: fng.score,
+      note: fng.note,
+      source: fng.source,
+    },
+    {
+      id: "momentum",
+      label: "Momentum",
+      score: momentum.score,
+      note: momentum.note,
+      source: momentum.source,
+    },
+    {
+      id: "risk",
+      label: "Riziko / likvidita",
+      score: riskScore,
+      note: `${liq.note} · ${vol.note}`,
+      source: blendSource(liq, vol),
+    },
   ];
+
+  const factors: FactorBreakdown[] = factorMeta.map((factor) => {
+    const weight = weights[factor.id];
+    const contribution = Math.round(factor.score * weight * 10) / 10;
+    return {
+      ...factor,
+      weight,
+      contribution,
+      formula: `${factor.score} × ${(weight * 100).toFixed(1)}% = ${contribution.toFixed(1)} bodov`,
+    };
+  });
 
   const weighted = factors.reduce((sum, factor) => sum + factor.score * factor.weight, 0);
   const tilt = moneyMode ? 3 : 0;
   const finalScore = Math.round(clamp(weighted + tilt, 0, 100));
-  const { kind, label, description } = kindFromScore(finalScore);
+  const primary = REGIME_ORDER.reduce((best, kind) =>
+    (blendMap[kind] ?? 0) > (blendMap[best] ?? 0) ? kind : best,
+  );
+  const { label, description } = REGIME_COPY[primary];
   const basket = allocateBaskets(finalScore);
   const spread = factors.map((factor) => factor.score);
   const mean = spread.reduce((sum, value) => sum + value, 0) / spread.length;
@@ -223,7 +405,7 @@ export function buildConfluenceRegime(
     stdev < 12 ? "Vysoká" : stdev < 22 ? "Stredná" : "Nízka";
 
   return {
-    kind,
+    kind: primary,
     label,
     description,
     finalScore,
@@ -231,6 +413,7 @@ export function buildConfluenceRegime(
     confidence,
     confidenceMultiplier: 1,
     factors,
+    blend,
     basket,
     safeHaven: finalScore > SAFE_HAVEN_THRESHOLD,
   };

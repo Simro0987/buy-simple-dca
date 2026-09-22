@@ -5,8 +5,8 @@ import {
   Activity,
   Droplets,
   Gauge,
-  Landmark,
   TrendingUp,
+  Wallet,
 } from "lucide-react";
 import type { FactorBreakdown, MarketRegime, RegimeFactorId } from "@/lib/dca/types";
 import { SAFE_HAVEN_COPY } from "@/lib/dca/confluence";
@@ -14,11 +14,11 @@ import { glassInset, glassPanel } from "@/lib/dca/glass";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 
 const factorIcons: Record<RegimeFactorId, typeof Gauge> = {
-  wma200: TrendingUp,
-  liquidity: Droplets,
-  cbbc: Landmark,
-  volatility: Activity,
-  fearGreed: Gauge,
+  valuation: Wallet,
+  trend: TrendingUp,
+  sentiment: Gauge,
+  momentum: Activity,
+  risk: Droplets,
 };
 
 interface MarketRegimePanelProps {
@@ -39,11 +39,16 @@ export function MarketRegimePanel({
       className={`${glassPanel} p-5`}
     >
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        Trhová analýza · 5 faktorov
+        Makro mozog · dynamické váhy
       </p>
       <h3 className="mt-1 text-sm font-bold uppercase tracking-wide text-white">
         {regime.label} · {regime.description}
       </h3>
+      {regime.blend.length > 0 && (
+        <p className="mt-1 text-[10px] leading-relaxed text-zinc-500">
+          {regime.blend.map((row) => `${row.label} ${row.percent.toFixed(0)}%`).join(" · ")}
+        </p>
+      )}
 
       <div className="mt-4 grid grid-cols-2 gap-3">
         <div className={`${glassInset} p-3`}>
@@ -142,15 +147,18 @@ export function MarketRegimePanel({
                     style={{ width: `${factor.score}%` }}
                   />
                 </div>
-                <p className="mt-1 text-[10px] text-zinc-500">{factor.note}</p>
+                <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
+                  {factor.formula}
+                </p>
+                <p className="mt-0.5 text-[10px] text-zinc-500">{factor.note}</p>
               </div>
             </div>
           );
         })}
       </div>
       <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-        CONFLUENCE plynulo mapuje týždenný rozpočet na Core / Satelity / High-Beta.
-        High-Beta je strop 25%. REDUCE a expirované LMT idú len do Hotovosť rezervy.
+        Váhy sa interpolujú medzi PANIKA / MEDVEĎ / STRANA / BÝK / EUFÓRIA (žiadne schody).
+        CONFLUENCE plynulo mapuje koše. High-Beta strop 25%. REDUCE a LMT refund → Hotovosť.
       </p>
     </motion.section>
   );

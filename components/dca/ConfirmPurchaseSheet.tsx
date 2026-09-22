@@ -95,7 +95,10 @@ export function ConfirmPurchaseSheet({
                     <div>
                       <p className="text-sm font-semibold text-white">{plan.symbol}</p>
                       <p className="text-[10px] text-zinc-500">
-                        MKT {formatUsd(plan.marketUsd)} · LMT {formatUsd(plan.limitUsd)}
+                        MKT {formatUsd(plan.marketUsd)} · LMT1 {formatUsd(plan.limit1Usd)}
+                        {plan.limit2Skipped
+                          ? " · LMT2 skip"
+                          : ` · LMT2 ${formatUsd(plan.limit2Usd)}`}
                       </p>
                     </div>
                     <div className="text-right">

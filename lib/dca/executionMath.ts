@@ -2,9 +2,13 @@ import type {
   BrakeBoostMode,
   DcaCategory,
   ExecutionStatus,
+  LimitLeg,
   OhlcvCandle,
 } from "@/lib/dca/types";
-import { roundUsd } from "@/lib/dca/math";
+import { clamp, lerp, roundUsd, smoothstep } from "@/lib/dca/math";
+
+/** Skip LMT2 when its slice would be below this default. User can raise it. */
+export const DEFAULT_LMT2_MIN_USD = 20;
 
 /** Limit orders expire after one weekly cycle. */
 export const LIMIT_VALIDITY_DAYS = 7;
@@ -205,4 +209,155 @@ export function applyBrakeBoost(
   }
 
   return idleBrakeBoost(original);
+}
+
+export interface LimitLadderLeg {
+  usd: number;
+  price: number;
+  atrMult: number;
+  label: string;
+  fallbackActive: boolean;
+  baseTarget: number;
+  discountPct: number;
+}
+
+export interface LimitLadder {
+  lmt2Share: number;
+  lmt2Skipped: boolean;
+  skipReason: string;
+  atrPct: number;
+  lmt1: LimitLadderLeg;
+  lmt2: LimitLadderLeg;
+}
+
+function emptyLeg(): LimitLadderLeg {
+  return {
+    usd: 0,
+    price: 0,
+    atrMult: 0,
+    label: "",
+    fallbackActive: false,
+    baseTarget: 0,
+    discountPct: 0,
+  };
+}
+
+/** ATR% → smooth LMT1 / LMT2 distance multipliers. Low vol tightens; high vol widens. */
+export function atrMultipliers(atrPct: number): { k1: number; k2: number } {
+  const t = smoothstep(1, 7, Number.isFinite(atrPct) ? atrPct : 3);
+  return {
+    k1: lerp(0.85, 1.9, t),
+    k2: lerp(2.1, 4, t),
+  };
+}
+
+/** Share of LMT capital sent to the deep wick (LMT2). Continuous in RSI + ATR%. */
+export function lmt2ShareFromIndicators(rsi: number, atrPct: number): number {
+  const rsiTerm = smoothstep(32, 78, rsi);
+  const volTerm = smoothstep(1.3, 6.2, Number.isFinite(atrPct) ? atrPct : 3);
+  return clamp(0.1, 0.7, 0.16 + rsiTerm * 0.32 + volTerm * 0.26);
+}
+
+function discountPct(livePrice: number, limitPrice: number): number {
+  if (!(livePrice > 0) || !(limitPrice > 0)) return 0;
+  return ((livePrice - limitPrice) / livePrice) * 100;
+}
+
+function makeLeg(
+  usd: number,
+  livePrice: number,
+  atr: number,
+  atrMult: number,
+  baseTarget: number,
+  label: string,
+): LimitLadderLeg {
+  const protectedLimit = protectLimitPrice(baseTarget, livePrice, atr);
+  return {
+    usd: roundUsd(usd),
+    price: protectedLimit.limitPrice,
+    atrMult,
+    label,
+    fallbackActive: protectedLimit.fallbackActive,
+    baseTarget,
+    discountPct: discountPct(livePrice, protectedLimit.limitPrice),
+  };
+}
+
+export function computeLimitLadder(options: {
+  lmtAmount: number;
+  rsi: number;
+  category: DcaCategory;
+  livePrice: number;
+  ema50: number;
+  sma200: number;
+  atr: number;
+  dailyCandles: OhlcvCandle[];
+  minLmt2Usd: number;
+}): LimitLadder {
+  const live = options.livePrice;
+  const atr = options.atr;
+  const atrPct = live > 0 && atr > 0 ? (atr / live) * 100 : Number.NaN;
+  const { k1, k2 } = atrMultipliers(atrPct);
+  const share = lmt2ShareFromIndicators(options.rsi, atrPct);
+  const total = Math.max(0, roundUsd(options.lmtAmount));
+  const minUsd = Math.max(0, options.minLmt2Usd);
+  const atr1 = live > 0 ? live - k1 * Math.max(atr, live * 0.008) : 0;
+  const atr2 = live > 0 ? live - k2 * Math.max(atr, live * 0.008) : 0;
+
+  let lmt1Base = atr1;
+  let lmt1Label = `LMT1 · Live − ${k1.toFixed(2)}× ATR`;
+  let lmt2Base = atr2;
+  let lmt2Label = `LMT2 · Live − ${k2.toFixed(2)}× ATR`;
+
+  if (options.category === "CORE") {
+    const ema = options.ema50 > 0 && options.ema50 < live ? options.ema50 : atr1;
+    lmt1Base = Math.max(atr1, ema);
+    lmt1Label = `LMT1 · 50D EMA / ${k1.toFixed(2)}× ATR`;
+    const sma = options.sma200 > 0 && options.sma200 < live ? options.sma200 : atr2;
+    lmt2Base = Math.min(atr2, sma);
+    lmt2Label = `LMT2 · 200D SMA / ${k2.toFixed(2)}× ATR`;
+  } else if (options.category === "HIGH_BETA") {
+    const weekLow = lowestLowLastDays(options.dailyCandles, 7);
+    lmt1Base = weekLow > 0 ? Math.max(atr1, weekLow) : atr1;
+    lmt1Label = `LMT1 · 7d low / ${k1.toFixed(2)}× ATR`;
+    lmt2Base = weekLow > 0 ? Math.min(atr2, weekLow) : atr2;
+    lmt2Label = `LMT2 · 7d wick / ${k2.toFixed(2)}× ATR`;
+  }
+
+  if (lmt2Base >= lmt1Base && lmt1Base > 0) {
+    lmt2Base = lmt1Base * 0.985;
+  }
+
+  let lmt2Usd = roundUsd(total * share);
+  let skipped = false;
+  let skipReason = "";
+  if (total <= 0) {
+    lmt2Usd = 0;
+  } else if (lmt2Usd < minUsd) {
+    skipped = true;
+    skipReason = `LMT2 ${lmt2Usd.toFixed(0)}$ pod minimom ${minUsd.toFixed(0)}$ · 100% ide do LMT1`;
+    lmt2Usd = 0;
+  }
+  const lmt1Usd = roundUsd(total - lmt2Usd);
+  const lmt1 = makeLeg(lmt1Usd, live, atr, k1, lmt1Base, lmt1Label);
+  const lmt2 = skipped
+    ? { ...emptyLeg(), atrMult: k2, label: skipReason }
+    : makeLeg(lmt2Usd, live, atr, k2, lmt2Base, lmt2Label);
+
+  return {
+    lmt2Share: skipped ? 0 : share,
+    lmt2Skipped: skipped,
+    skipReason,
+    atrPct: Number.isFinite(atrPct) ? atrPct : 0,
+    lmt1,
+    lmt2,
+  };
+}
+
+export function limitUsdForLeg(ladder: LimitLadder, leg: LimitLeg): number {
+  return leg === "lmt2" ? ladder.lmt2.usd : ladder.lmt1.usd;
+}
+
+export function limitPriceForLeg(ladder: LimitLadder, leg: LimitLeg): number {
+  return leg === "lmt2" ? ladder.lmt2.price : ladder.lmt1.price;
 }

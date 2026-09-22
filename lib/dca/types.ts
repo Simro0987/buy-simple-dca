@@ -14,16 +14,17 @@ export type TokenSubTag = "YIELD" | "DEFI";
 export type ExecutionStatus = "REDUCE" | "NORMAL" | "DEEP_BOOST";
 export type BrakeBoostMode = "REDUCE" | "BOOST" | "DEEP_BOOST" | "NORMAL";
 export type AllocationMode = "ALL" | "BTC_ONLY";
-export type RegimeKind = "FEAR" | "NEUTRAL" | "EUPHORIA" | "EXTREME_EUPHORIA";
+export type RegimeKind = "PANIC" | "BEAR" | "SIDEWAYS" | "BULL" | "EUPHORIA";
 export type ConfidenceLevel = "Nízka" | "Stredná" | "Vysoká";
 export type RegimeFactorId =
-  | "wma200"
-  | "liquidity"
-  | "cbbc"
-  | "volatility"
-  | "fearGreed";
+  | "valuation"
+  | "trend"
+  | "sentiment"
+  | "momentum"
+  | "risk";
 export type FactorSource = "live" | "mock";
 export type WaterfallMode = "none" | "partial" | "full";
+export type LimitLeg = "lmt1" | "lmt2";
 
 export interface DcaTokenMeta {
   symbol: DcaSymbol;
@@ -156,8 +157,16 @@ export interface FactorBreakdown {
   label: string;
   score: number;
   weight: number;
+  contribution: number;
+  formula: string;
   note: string;
   source: FactorSource;
+}
+
+export interface RegimeBlendShare {
+  kind: RegimeKind;
+  label: string;
+  percent: number;
 }
 
 export interface BasketMix {
@@ -185,6 +194,7 @@ export interface MarketRegime {
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   factors: FactorBreakdown[];
+  blend: RegimeBlendShare[];
   basket: BasketMix;
   safeHaven: boolean;
 }
@@ -199,6 +209,13 @@ export interface TokenExecutionPlan {
   marketUsd: number;
   originalMarketUsd: number;
   limitUsd: number;
+  limit1Usd: number;
+  limit2Usd: number;
+  limit2Skipped: boolean;
+  limit2SkipReason: string;
+  lmt2Share: number;
+  limit1AtrMult: number;
+  limit2AtrMult: number;
   executionUsd: number;
   emaDistancePercent: number;
   brakeBoostMode: BrakeBoostMode;
@@ -209,13 +226,21 @@ export interface TokenExecutionPlan {
   marketShare: number;
   limitShare: number;
   limitPrice: number;
+  limit1Price: number;
+  limit2Price: number;
   discountPct: number;
   limitFallbackActive: boolean;
+  limit1FallbackActive: boolean;
+  limit2FallbackActive: boolean;
   limitTargetLabel: string;
+  limit1TargetLabel: string;
+  limit2TargetLabel: string;
   limitBaseTarget: number;
   qty: number;
   marketQty: number;
   limitQty: number;
+  limit1Qty: number;
+  limit2Qty: number;
   score: number;
   status: ExecutionStatus;
   rsi: number;

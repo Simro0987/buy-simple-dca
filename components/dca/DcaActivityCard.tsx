@@ -92,7 +92,7 @@ export function DcaActivityCard({
               <div className="min-w-0">
                 <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-100">
                   <Timer className="h-3.5 w-3.5 animate-pulse" aria-hidden="true" />
-                  {order.symbol} · Čakajúca
+                  {order.symbol} · {order.leg === "lmt2" ? "LMT2" : "LMT1"} · Čakajúca
                 </p>
                 <p className="text-[11px] text-amber-100/80">
                   {formatCountdown(order.expiresAt, nowMs)}

@@ -1,12 +1,16 @@
 import { LIMIT_VALIDITY_DAYS } from "@/lib/dca/executionMath";
 import { roundUsd } from "@/lib/dca/math";
-import type { DcaSymbol } from "@/lib/dca/types";
+import type { DcaSymbol, LimitLeg } from "@/lib/dca/types";
 
 export const EXECUTION_STORAGE_KEY = "edge-trader-execution-ledger";
 
 export type PortfolioAssetStatus = "Zrealizované";
 export type PendingOrderStatus = "Čakajúca";
 export type ExecutionSide = "market" | "limit";
+
+export function normalizeLimitLeg(leg?: string | null): LimitLeg {
+  return leg === "lmt2" ? "lmt2" : "lmt1";
+}
 
 export interface PortfolioAssetRecord {
   id: string;
@@ -18,6 +22,7 @@ export interface PortfolioAssetRecord {
   tokenVolume: number;
   createdAt: string;
   filledAt: string;
+  limitLeg?: LimitLeg;
 }
 
 export interface PendingOrder {
@@ -29,6 +34,7 @@ export interface PendingOrder {
   tokenVolume: number;
   activatedAt: string;
   expiresAt: string;
+  leg?: LimitLeg;
 }
 
 export interface ExecutionLedger {

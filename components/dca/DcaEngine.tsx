@@ -25,7 +25,7 @@ import {
   type PortfolioAssetRecord,
 } from "@/lib/dca/executionLedger";
 import { glassPanel } from "@/lib/dca/glass";
-import type { DcaSymbol, TokenExecutionPlan } from "@/lib/dca/types";
+import type { DcaSymbol, LimitLeg, TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
 import { portfolioHoldings } from "@/lib/data";
 import type { Transaction } from "@/lib/portfolioStorage";
@@ -48,11 +48,13 @@ export function DcaEngine({
 }: DcaEngineProps) {
   const hydrated = useDcaHydrated();
   const weeklyAmount = useDcaStore((state) => state.weeklyAmount);
+  const lmt2MinUsd = useDcaStore((state) => state.lmt2MinUsd);
   const moneyMode = useDcaStore((state) => state.moneyMode);
   const allocationMode = useDcaStore((state) => state.allocationMode);
   const ritualOpen = useDcaStore((state) => state.ritualOpen);
   const whyOpen = useDcaStore((state) => state.whyOpen);
   const setWeeklyAmount = useDcaStore((state) => state.setWeeklyAmount);
+  const setLmt2MinUsd = useDcaStore((state) => state.setLmt2MinUsd);
   const toggleMoneyMode = useDcaStore((state) => state.toggleMoneyMode);
   const setAllocationMode = useDcaStore((state) => state.setAllocationMode);
   const autoFill = useDcaStore((state) => state.autoFill);
@@ -86,8 +88,9 @@ export function DcaEngine({
         allocationMode,
         snapshots,
         regimeMetrics,
+        minLmt2Usd: lmt2MinUsd,
       }),
-    [weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics],
+    [weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics, lmt2MinUsd],
   );
 
   const planBySymbol = useMemo(() => {
@@ -146,15 +149,18 @@ export function DcaEngine({
     setToast({ message: "Market zrealizovaný", variant: "success" });
   }
 
-  function handleActivateLimit(symbol: DcaSymbol) {
+  function handleActivateLimit(symbol: DcaSymbol, leg: LimitLeg = "lmt1") {
     const plan = planBySymbol.get(symbol);
     if (!plan) return;
-    const order = activateLimit(plan);
+    const order = activateLimit(plan, leg);
     if (!order) {
       setToast({ message: "Limit sa nepodarilo aktivovať", variant: "error" });
       return;
     }
-    setToast({ message: "Limit aktivovaný · PRICE LOCK", variant: "success" });
+    setToast({
+      message: `${leg === "lmt2" ? "LMT2" : "LMT1"} aktivovaný · PRICE LOCK`,
+      variant: "success",
+    });
   }
 
   function handleFillPending(id: string) {
@@ -200,7 +206,12 @@ export function DcaEngine({
         </div>
       )}
 
-      <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyAmount} />
+      <WeeklyInvestmentCard
+        value={weeklyAmount}
+        onChange={setWeeklyAmount}
+        lmt2MinUsd={lmt2MinUsd}
+        onLmt2MinUsd={setLmt2MinUsd}
+      />
       <MarketRegimePanel
         regime={weeklyPlan.regime}
         loading={(loading && !pricesReady) || regimeLoading}
@@ -225,7 +236,7 @@ export function DcaEngine({
             Týždenná exekúcia
           </p>
           <h3 className="mt-1 text-sm font-bold text-white">
-            Token karty · interaktívny MKT / LMT
+            Token karty · MKT / LMT1 / LMT2
           </h3>
         </div>
         {loading && !pricesReady ? (
@@ -248,9 +259,11 @@ export function DcaEngine({
                 key={plan.symbol}
                 plan={plan}
                 loading={loading}
-                pendingLimit={pendingFor(plan.symbol) ?? null}
+                pendingLimit={pendingFor(plan.symbol, "lmt1") ?? null}
+                pendingLimit2={pendingFor(plan.symbol, "lmt2") ?? null}
                 marketFill={marketFillThisWeek(plan.symbol) ?? null}
-                limitFill={limitFillThisWeek(plan.symbol) ?? null}
+                limitFill={limitFillThisWeek(plan.symbol, "lmt1") ?? null}
+                limitFill2={limitFillThisWeek(plan.symbol, "lmt2") ?? null}
                 nowMs={nowMs}
                 onCopied={handleCopied}
                 onActivateMarket={handleActivateMarket}
