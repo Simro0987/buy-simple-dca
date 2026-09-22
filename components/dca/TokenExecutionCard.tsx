@@ -18,8 +18,19 @@ import type {
   SatelliteEvaluation,
   TokenExecutionPlan,
 } from "@/lib/dca/types";
+import { CopyGlyph } from "@/components/dca/CopyGlyph";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { interactiveButton } from "@/lib/motion";
+import {
+  copyPrice,
+  copyQty,
+  copyUsd,
+  formatCountdown,
+  formatLockedDistance,
+  formatSpotDistance,
+  type PendingOrder,
+  type PortfolioAssetRecord,
+} from "@/lib/dca/executionLedger";
 
 const categoryCopy = {
   CORE: "CORE",
@@ -56,10 +67,15 @@ const brakeBoostMatrixClass: Record<BrakeBoostMode, string> = {
 interface TokenExecutionCardProps {
   plan: TokenExecutionPlan;
   loading?: boolean;
-  marketActive?: boolean;
-  limitActive?: boolean;
+  pendingLimit?: PendingOrder | null;
+  marketFill?: PortfolioAssetRecord | null;
+  limitFill?: PortfolioAssetRecord | null;
+  nowMs?: number;
+  onCopied?: (message: string) => void;
   onActivateMarket: (symbol: DcaSymbol) => void;
   onActivateLimit: (symbol: DcaSymbol) => void;
+  onFillPending: (id: string) => void;
+  onCancelPending: (id: string) => void;
 }
 
 function CheckRow({ item }: { item: HighBetaCheckItem }) {
@@ -196,10 +212,15 @@ function RsiGauge({ rsi }: { rsi: number }) {
 export function TokenExecutionCard({
   plan,
   loading = false,
-  marketActive = false,
-  limitActive = false,
+  pendingLimit = null,
+  marketFill = null,
+  limitFill = null,
+  nowMs = Date.now(),
+  onCopied,
   onActivateMarket,
   onActivateLimit,
+  onFillPending,
+  onCancelPending,
 }: TokenExecutionCardProps) {
   const highBeta = plan.highBeta;
   const satellite = plan.satellite;
@@ -207,6 +228,17 @@ export function TokenExecutionCard({
   const highBetaApproved = Boolean(highBeta && highBeta.approved);
   const satellitePaused = Boolean(satellite && !satellite.approved);
   const locked = highBetaRejected || satellitePaused;
+  const liveMarketQty = plan.price > 0 ? plan.marketUsd / plan.price : 0;
+  const liveLimitQty = plan.limitPrice > 0 ? plan.limitUsd / plan.limitPrice : 0;
+  const mktUsd = marketFill?.spentUsd ?? plan.marketUsd;
+  const mktQty = marketFill?.tokenVolume ?? liveMarketQty;
+  const lmtUsd = pendingLimit?.spentUsd ?? limitFill?.spentUsd ?? plan.limitUsd;
+  const lmtQty = pendingLimit?.tokenVolume ?? limitFill?.tokenVolume ?? liveLimitQty;
+  const lmtPrice =
+    pendingLimit?.lockedLimitPrice ?? limitFill?.priceUsd ?? plan.limitPrice;
+  const showMarketPane = !locked || Boolean(marketFill);
+  const showLimitPane = !locked || Boolean(pendingLimit) || Boolean(limitFill);
+  const showExecution = showMarketPane || showLimitPane;
 
   return (
     <motion.article
@@ -362,32 +394,47 @@ export function TokenExecutionCard({
         )}
       </div>
 
-      {!locked && (
+      {showExecution && (
         <>
-          <RsiGauge rsi={plan.rsi} />
+          {!locked && (
+            <>
+              <RsiGauge rsi={plan.rsi} />
 
-          <div className="mt-3 mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
-            <span className="text-emerald-300">
-              MKT {formatPercent(plan.marketShare, 0)}
-            </span>
-            <span className="text-zinc-500">RSI 14 · plynulý split 10–90</span>
-            <span className="text-amber-300">
-              LMT {formatPercent(plan.limitShare, 0)}
-            </span>
-          </div>
-          <div className="mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full bg-emerald-400 transition-[width] duration-500"
-              style={{ width: `${plan.marketShare}%` }}
-            />
-            <div
-              className="h-full bg-amber-400 transition-[width] duration-500"
-              style={{ width: `${plan.limitShare}%` }}
-            />
-          </div>
+              <div className="mt-3 mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
+                <span className="text-emerald-300">
+                  MKT {formatPercent(plan.marketShare, 0)}
+                </span>
+                <span className="text-zinc-500">RSI 14 · plynulý split 10–90</span>
+                <span className="text-amber-300">
+                  LMT {formatPercent(plan.limitShare, 0)}
+                </span>
+              </div>
+              <div className="mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-full bg-emerald-400 transition-[width] duration-500"
+                  style={{ width: `${plan.marketShare}%` }}
+                />
+                <div
+                  className="h-full bg-amber-400 transition-[width] duration-500"
+                  style={{ width: `${plan.limitShare}%` }}
+                />
+              </div>
+            </>
+          )}
 
-          <div className="grid grid-cols-2 gap-2">
-            <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/8 p-3">
+          <div
+            className={`grid gap-2 ${locked ? "mt-3" : ""} ${
+              showMarketPane && showLimitPane ? "grid-cols-2" : "grid-cols-1"
+            }`}
+          >
+            {showMarketPane && (
+            <div
+              className={`rounded-2xl border p-3 ${
+                marketFill
+                  ? "border-emerald-400/50 bg-emerald-400/12 shadow-[0_0_22px_rgba(52,211,153,0.28)]"
+                  : "border-emerald-400/20 bg-emerald-400/8"
+              }`}
+            >
               <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
                 MKT · {formatPercent(plan.marketShare, 0)}
               </p>
@@ -398,10 +445,22 @@ export function TokenExecutionCard({
                   {plan.brakeBoostBadge}
                 </span>
               )}
-              <p className="mt-1 text-sm font-bold tabular-nums text-white transition-all duration-500">
-                {formatUsd(plan.marketUsd)}
-              </p>
-              {plan.brakeBoostMode !== "NORMAL" && (
+              {marketFill && (
+                <span className="mt-1 ml-1 inline-flex rounded-full border border-emerald-400/40 bg-emerald-400/20 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-emerald-200">
+                  Zrealizované
+                </span>
+              )}
+              <div className="mt-1 flex items-center justify-between gap-2">
+                <p className="text-sm font-bold tabular-nums text-white transition-all duration-500">
+                  {formatUsd(mktUsd)}
+                </p>
+                <CopyGlyph
+                  label="Kopírovať Kapitál (USD)"
+                  value={copyUsd(mktUsd)}
+                  onCopied={onCopied}
+                />
+              </div>
+              {plan.brakeBoostMode !== "NORMAL" && !marketFill && (
                 <p className="text-[9px] text-zinc-500">
                   Pôvodne {formatUsd(plan.originalMarketUsd)}
                   {plan.brakeBoostReserveDelta > 0
@@ -411,72 +470,168 @@ export function TokenExecutionCard({
                       : ""}
                 </p>
               )}
-              <p className="text-[10px] text-zinc-400">
-                {formatEstimatedQty(plan.marketQty, plan.symbol)}
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <p className="text-[10px] text-zinc-400">
+                  ≈ {formatEstimatedQty(mktQty, plan.symbol)}
+                </p>
+                <CopyGlyph
+                  label="Kopírovať Počet tokenov"
+                  value={copyQty(mktQty, plan.symbol)}
+                  onCopied={onCopied}
+                />
+              </div>
+              <p className="mt-1 text-[10px] tabular-nums text-zinc-500">
+                Live {plan.price ? formatUnitPrice(plan.price) : "—"}
               </p>
-              <motion.button
-                type="button"
-                onClick={() => onActivateMarket(plan.symbol)}
-                {...interactiveButton}
-                className={`mt-2 w-full rounded-xl px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide ${
-                  marketActive
-                    ? "bg-emerald-400 text-zinc-950"
-                    : "border border-emerald-400/30 bg-emerald-400/10 text-emerald-300"
-                }`}
-              >
-                {marketActive ? "Market aktívny" : "Aktivovať Market"}
-              </motion.button>
+              {marketFill ? (
+                <p className="mt-2 text-[10px] leading-relaxed text-emerald-200/90">
+                  {formatUsd(marketFill.spentUsd)} @ {formatUnitPrice(marketFill.priceUsd)}
+                </p>
+              ) : (
+                <motion.button
+                  type="button"
+                  onClick={() => onActivateMarket(plan.symbol)}
+                  disabled={plan.marketUsd <= 0 || plan.price <= 0}
+                  {...interactiveButton}
+                  className="mt-2 w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Aktivovať Market
+                </motion.button>
+              )}
             </div>
-            <div className="rounded-2xl border border-amber-400/20 bg-amber-400/8 p-3">
+            )}
+            {showLimitPane && (
+            <div
+              className={`rounded-2xl border p-3 ${
+                pendingLimit
+                  ? "border-amber-400/70 bg-amber-400/12 shadow-[0_0_28px_rgba(251,191,36,0.55)]"
+                  : limitFill
+                    ? "border-emerald-400/50 bg-emerald-400/12 shadow-[0_0_22px_rgba(52,211,153,0.28)]"
+                    : "border-amber-400/20 bg-amber-400/8"
+              }`}
+            >
               <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
                 LMT · {formatPercent(plan.limitShare, 0)}
               </p>
-              <span className="mt-1 inline-flex rounded-full border border-amber-400/30 bg-amber-400/15 px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide text-amber-100">
-                Platnosť príkazu: {LIMIT_VALIDITY_DAYS} dní
-              </span>
-              <p className="mt-2 text-sm font-bold text-white">
-                {formatUsd(plan.limitUsd)}
-              </p>
-              <p className="text-[10px] text-zinc-400">
-                {formatEstimatedQty(plan.limitQty, plan.symbol)}
-              </p>
-              <p className="mt-1.5 text-[11px] font-semibold text-amber-100">
-                Limit {plan.limitPrice ? formatUnitPrice(plan.limitPrice) : "—"}
-              </p>
-              {plan.limitFallbackActive ? (
-                <div className="mt-1 rounded-xl border border-amber-400/40 bg-amber-500/15 px-2 py-1.5">
-                  <p className="text-[8px] font-bold uppercase tracking-wide text-amber-200">
-                    Fallback aktívny
-                  </p>
-                  <p className="text-[10px] text-amber-100">
-                    {formatUnitPrice(plan.limitPrice)} · Live − 1.5× ATR
-                  </p>
-                  {plan.limitBaseTarget > 0 && (
-                    <p className="text-[9px] text-amber-200/80">
-                      Základný cieľ {formatUnitPrice(plan.limitBaseTarget)} ≥ live{" "}
-                      {formatUnitPrice(plan.price)}
-                    </p>
-                  )}
-                </div>
-              ) : (
-                <p className="text-[10px] text-zinc-500">{plan.limitTargetLabel}</p>
-              )}
-              <p className="mt-1 text-[9px] leading-relaxed text-zinc-600">
-                {LIMIT_ROLLOVER_NOTE}
-              </p>
-              <motion.button
-                type="button"
-                onClick={() => onActivateLimit(plan.symbol)}
-                {...interactiveButton}
-                className={`mt-2 w-full rounded-xl px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide ${
-                  limitActive
-                    ? "bg-amber-400 text-zinc-950"
-                    : "border border-amber-400/30 bg-amber-400/10 text-amber-200"
+              <span
+                className={`mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
+                  pendingLimit
+                    ? "animate-pulse border-amber-300/70 bg-amber-400/25 text-amber-100"
+                    : limitFill
+                      ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
+                      : "border-amber-400/30 bg-amber-400/15 text-amber-100"
                 }`}
               >
-                {limitActive ? "Limit aktívny" : "Aktivovať Limit"}
-              </motion.button>
+                {pendingLimit
+                  ? "Čakajúca · PRICE LOCK"
+                  : limitFill
+                    ? "Zrealizované"
+                    : `Platnosť príkazu: ${LIMIT_VALIDITY_DAYS} dní`}
+              </span>
+              <div className="mt-2 flex items-center justify-between gap-2">
+                <p className="text-sm font-bold text-white">{formatUsd(lmtUsd)}</p>
+                <CopyGlyph
+                  label="Kopírovať Kapitál (USD)"
+                  value={copyUsd(lmtUsd)}
+                  onCopied={onCopied}
+                />
+              </div>
+              <div className="mt-0.5 flex items-center justify-between gap-2">
+                <p className="text-[10px] text-zinc-400">
+                  ≈ {formatEstimatedQty(lmtQty, plan.symbol)}
+                </p>
+                <CopyGlyph
+                  label="Kopírovať Počet tokenov"
+                  value={copyQty(lmtQty, plan.symbol)}
+                  onCopied={onCopied}
+                />
+              </div>
+              <div className="mt-1.5 flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold text-amber-100">
+                  Limit {formatUnitPrice(lmtPrice || 0)}
+                </p>
+                <CopyGlyph
+                  label="Kopírovať LMT Cenu"
+                  value={copyPrice(lmtPrice)}
+                  onCopied={onCopied}
+                />
+              </div>
+              {pendingLimit ? (
+                <div className="mt-1.5 space-y-1.5 rounded-xl border border-amber-400/40 bg-amber-500/15 px-2 py-1.5 shadow-[0_0_18px_rgba(251,191,36,0.35)]">
+                  <p className="text-[8px] font-bold uppercase tracking-wide text-amber-100">
+                    Active Limit Tracker
+                  </p>
+                  <p className="text-[10px] text-amber-50">
+                    Lock {formatUnitPrice(pendingLimit.lockedLimitPrice)}
+                  </p>
+                  <p className="text-[10px] tabular-nums text-amber-100">
+                    {formatLockedDistance(pendingLimit.lockedLimitPrice, plan.price)}
+                  </p>
+                  <p className="text-[10px] font-semibold text-amber-50">
+                    {formatCountdown(pendingLimit.expiresAt, nowMs)}
+                  </p>
+                  <div className="grid grid-cols-2 gap-1 pt-1">
+                    <motion.button
+                      type="button"
+                      onClick={() => onFillPending(pendingLimit.id)}
+                      {...interactiveButton}
+                      className="rounded-lg bg-emerald-400 px-1.5 py-1 text-[8px] font-bold uppercase tracking-wide text-zinc-950"
+                    >
+                      Zrealizovalo sa
+                    </motion.button>
+                    <motion.button
+                      type="button"
+                      onClick={() => onCancelPending(pendingLimit.id)}
+                      {...interactiveButton}
+                      className="rounded-lg border border-white/15 bg-white/5 px-1.5 py-1 text-[8px] font-bold uppercase tracking-wide text-zinc-200"
+                    >
+                      Zrušiť
+                    </motion.button>
+                  </div>
+                </div>
+              ) : limitFill ? (
+                <p className="mt-2 text-[10px] leading-relaxed text-emerald-200/90">
+                  {formatUsd(limitFill.spentUsd)} @ {formatUnitPrice(limitFill.priceUsd)}
+                </p>
+              ) : (
+                <>
+                  <p className="text-[10px] tabular-nums text-zinc-400">
+                    {formatSpotDistance(plan.limitPrice, plan.price)}
+                  </p>
+                  {plan.limitFallbackActive ? (
+                    <div className="mt-1 rounded-xl border border-amber-400/40 bg-amber-500/15 px-2 py-1.5">
+                      <p className="text-[8px] font-bold uppercase tracking-wide text-amber-200">
+                        Fallback aktívny
+                      </p>
+                      <p className="text-[10px] text-amber-100">
+                        {formatUnitPrice(plan.limitPrice)} · Live − 1.5× ATR
+                      </p>
+                      {plan.limitBaseTarget > 0 && (
+                        <p className="text-[9px] text-amber-200/80">
+                          Základný cieľ {formatUnitPrice(plan.limitBaseTarget)} ≥ live{" "}
+                          {formatUnitPrice(plan.price)}
+                        </p>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-[10px] text-zinc-500">{plan.limitTargetLabel}</p>
+                  )}
+                  <p className="mt-1 text-[9px] leading-relaxed text-zinc-600">
+                    {LIMIT_ROLLOVER_NOTE}
+                  </p>
+                  <motion.button
+                    type="button"
+                    onClick={() => onActivateLimit(plan.symbol)}
+                    disabled={plan.limitUsd <= 0 || plan.limitPrice <= 0}
+                    {...interactiveButton}
+                    className="mt-2 w-full rounded-xl border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Aktivovať Limit
+                  </motion.button>
+                </>
+              )}
             </div>
+            )}
           </div>
         </>
       )}

@@ -17,6 +17,7 @@ import { Toast, type ToastVariant } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
+import type { PortfolioAssetRecord } from "@/lib/dca/executionLedger";
 import type { TokenExecutionPlan } from "@/lib/dca/types";
 import { pageTransition } from "@/lib/motion";
 
@@ -40,6 +41,7 @@ export function Dashboard() {
     updateHoldings,
     importPortfolio,
     recordDcaPurchase,
+    recordExecutionFill,
     portfolioData,
   } = usePortfolio();
 
@@ -74,6 +76,11 @@ export function Dashboard() {
       return recorded;
     },
     [recordDcaPurchase],
+  );
+
+  const handleExecutionFill = useCallback(
+    (record: PortfolioAssetRecord) => recordExecutionFill(record),
+    [recordExecutionFill],
   );
 
   return (
@@ -135,6 +142,7 @@ export function Dashboard() {
               <DcaEngine
                 transactions={transactions}
                 onRecordPurchase={handleRecordPurchase}
+                onExecutionFill={handleExecutionFill}
               />
             </motion.div>
           )}

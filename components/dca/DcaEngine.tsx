@@ -14,15 +14,22 @@ import { TokenAllocationBoard } from "@/components/dca/TokenAllocationBoard";
 import { TokenExecutionCard } from "@/components/dca/TokenExecutionCard";
 import { WeeklyInvestmentCard } from "@/components/dca/WeeklyInvestmentCard";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
+import { Toast, type ToastVariant } from "@/components/Toast";
 import { useDcaHydrated } from "@/hooks/useDcaHydrated";
 import { useDcaMarketData } from "@/hooks/useDcaMarketData";
+import { useExecutionClock } from "@/hooks/useExecutionClock";
 import { buildWeeklyDcaPlan } from "@/lib/dca/allocation";
+import {
+  ledgerReserveImpact,
+  type PortfolioAssetRecord,
+} from "@/lib/dca/executionLedger";
 import { glassPanel } from "@/lib/dca/glass";
-import type { TokenExecutionPlan } from "@/lib/dca/types";
+import type { DcaSymbol, TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
 import { portfolioHoldings } from "@/lib/data";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { useDcaStore } from "@/store/dcaStore";
+import { useExecutionStore } from "@/store/executionStore";
 
 interface DcaEngineProps {
   transactions?: Transaction[];
@@ -30,11 +37,13 @@ interface DcaEngineProps {
     plans: TokenExecutionPlan[],
     prices: Record<string, number>,
   ) => boolean;
+  onExecutionFill?: (record: PortfolioAssetRecord) => boolean;
 }
 
 export function DcaEngine({
   transactions = [],
   onRecordPurchase,
+  onExecutionFill,
 }: DcaEngineProps) {
   const hydrated = useDcaHydrated();
   const weeklyAmount = useDcaStore((state) => state.weeklyAmount);
@@ -42,17 +51,30 @@ export function DcaEngine({
   const allocationMode = useDcaStore((state) => state.allocationMode);
   const ritualOpen = useDcaStore((state) => state.ritualOpen);
   const whyOpen = useDcaStore((state) => state.whyOpen);
-  const activations = useDcaStore((state) => state.activations);
   const setWeeklyAmount = useDcaStore((state) => state.setWeeklyAmount);
   const toggleMoneyMode = useDcaStore((state) => state.toggleMoneyMode);
   const setAllocationMode = useDcaStore((state) => state.setAllocationMode);
   const autoFill = useDcaStore((state) => state.autoFill);
   const setRitualOpen = useDcaStore((state) => state.setRitualOpen);
   const setWhyOpen = useDcaStore((state) => state.setWhyOpen);
-  const toggleActivation = useDcaStore((state) => state.toggleActivation);
+
+  const nowMs = useExecutionClock();
+  const pendingOrders = useExecutionStore((state) => state.pending_orders);
+  const portfolioAssets = useExecutionStore((state) => state.portfolio_assets);
+  const activateMarket = useExecutionStore((state) => state.activateMarket);
+  const activateLimit = useExecutionStore((state) => state.activateLimit);
+  const fillPending = useExecutionStore((state) => state.fillPending);
+  const cancelPending = useExecutionStore((state) => state.cancelPending);
+  const pendingFor = useExecutionStore((state) => state.pendingFor);
+  const marketFillThisWeek = useExecutionStore((state) => state.marketFillThisWeek);
+  const limitFillThisWeek = useExecutionStore((state) => state.limitFillThisWeek);
 
   const { snapshots, loading, error, pricesReady } = useDcaMarketData();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [toast, setToast] = useState<{
+    message: string;
+    variant: ToastVariant;
+  } | null>(null);
 
   const weeklyPlan = useMemo(
     () =>
@@ -64,6 +86,17 @@ export function DcaEngine({
       }),
     [weeklyAmount, moneyMode, allocationMode, snapshots],
   );
+
+  const planBySymbol = useMemo(() => {
+    const map = new Map<DcaSymbol, TokenExecutionPlan>();
+    for (const plan of weeklyPlan.plans) map.set(plan.symbol, plan);
+    return map;
+  }, [weeklyPlan.plans]);
+
+  const executionImpactUsd = ledgerReserveImpact({
+    portfolio_assets: portfolioAssets,
+    pending_orders: pendingOrders,
+  });
 
   const payablePlans = weeklyPlan.plans.filter(
     (plan) =>
@@ -93,6 +126,49 @@ export function DcaEngine({
         : payablePlans.length === 0
           ? "Zadaj týždennú sumu, aby sa dalo uložiť."
           : "Záznam uloží nákup do portfólia. Príkazy na burze zadávaš ručne.";
+
+  function handleCopied(message: string) {
+    setToast({ message, variant: message === "Skopírované!" ? "success" : "error" });
+  }
+
+  function handleActivateMarket(symbol: DcaSymbol) {
+    const plan = planBySymbol.get(symbol);
+    if (!plan) return;
+    const record = activateMarket(plan, plan.price);
+    if (!record) {
+      setToast({ message: "Market sa nepodarilo aktivovať", variant: "error" });
+      return;
+    }
+    onExecutionFill?.(record);
+    setToast({ message: "Market zrealizovaný", variant: "success" });
+  }
+
+  function handleActivateLimit(symbol: DcaSymbol) {
+    const plan = planBySymbol.get(symbol);
+    if (!plan) return;
+    const order = activateLimit(plan);
+    if (!order) {
+      setToast({ message: "Limit sa nepodarilo aktivovať", variant: "error" });
+      return;
+    }
+    setToast({ message: "Limit aktivovaný · PRICE LOCK", variant: "success" });
+  }
+
+  function handleFillPending(id: string) {
+    const record = fillPending(id);
+    if (!record) return;
+    onExecutionFill?.(record);
+    setToast({ message: "Limit zrealizovaný", variant: "success" });
+  }
+
+  function handleCancelPending(id: string) {
+    const order = cancelPending(id);
+    if (!order) return;
+    setToast({
+      message: "Limit zrušený · kapitál vrátený do rezervy",
+      variant: "success",
+    });
+  }
 
   return (
     <div className="space-y-5">
@@ -126,6 +202,7 @@ export function DcaEngine({
       <AllocationRulesCard
         plan={weeklyPlan}
         cashReserveUsd={portfolioHoldings.cashUsd}
+        executionImpactUsd={executionImpactUsd}
         whyOpen={whyOpen}
         onToggleWhy={() => setWhyOpen(!whyOpen)}
       />
@@ -142,7 +219,7 @@ export function DcaEngine({
             Týždenná exekúcia
           </p>
           <h3 className="mt-1 text-sm font-bold text-white">
-            Token karty · plynulý MKT / LMT split
+            Token karty · interaktívny MKT / LMT
           </h3>
         </div>
         {loading && !pricesReady ? (
@@ -165,10 +242,15 @@ export function DcaEngine({
                 key={plan.symbol}
                 plan={plan}
                 loading={loading}
-                marketActive={activations[plan.symbol]?.market}
-                limitActive={activations[plan.symbol]?.limit}
-                onActivateMarket={(symbol) => toggleActivation(symbol, "market")}
-                onActivateLimit={(symbol) => toggleActivation(symbol, "limit")}
+                pendingLimit={pendingFor(plan.symbol) ?? null}
+                marketFill={marketFillThisWeek(plan.symbol) ?? null}
+                limitFill={limitFillThisWeek(plan.symbol) ?? null}
+                nowMs={nowMs}
+                onCopied={handleCopied}
+                onActivateMarket={handleActivateMarket}
+                onActivateLimit={handleActivateLimit}
+                onFillPending={handleFillPending}
+                onCancelPending={handleCancelPending}
               />
             ))
         )}
@@ -192,12 +274,17 @@ export function DcaEngine({
         </motion.button>
       </div>
 
-      <DcaActivityCard transactions={transactions} />
+      <DcaActivityCard
+        transactions={transactions}
+        pendingOrders={pendingOrders}
+        nowMs={nowMs}
+      />
 
       <RitualSheet
         open={ritualOpen}
         plans={weeklyPlan.plans}
-        activations={activations}
+        pendingOrders={pendingOrders}
+        portfolioAssets={portfolioAssets}
         onClose={() => setRitualOpen(false)}
       />
       <ConfirmPurchaseSheet
@@ -209,6 +296,12 @@ export function DcaEngine({
           const recorded = onRecordPurchase(payablePlans, livePrices);
           if (recorded) setConfirmOpen(false);
         }}
+      />
+      <Toast
+        message={toast?.message ?? ""}
+        visible={Boolean(toast)}
+        variant={toast?.variant}
+        onClose={() => setToast(null)}
       />
     </div>
   );

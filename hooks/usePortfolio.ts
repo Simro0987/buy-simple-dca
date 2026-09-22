@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useCryptoPrices } from "@/hooks/useCryptoPrices";
 import type { PortfolioAsset } from "@/lib/data";
 import type { CryptoSymbol } from "@/lib/cryptoApi";
+import type { PortfolioAssetRecord } from "@/lib/dca/executionLedger";
 import type { TokenExecutionPlan } from "@/lib/dca/types";
 import { isCoreHoldingSymbol } from "@/lib/dca/universe";
 import { calculatePortfolioPnL } from "@/lib/pnlAnalytics";
@@ -114,6 +115,36 @@ export function usePortfolio() {
     [holdings, persistPortfolio, transactions],
   );
 
+  const recordExecutionFill = useCallback(
+    (record: PortfolioAssetRecord) => {
+      if (!(record.spentUsd > 0) || !(record.tokenVolume > 0)) return false;
+
+      const nextHoldings: HoldingsMap = { ...holdings };
+      if (isCoreHoldingSymbol(record.symbol)) {
+        nextHoldings[record.symbol] += record.tokenVolume;
+      }
+
+      persistPortfolio({
+        holdings: nextHoldings,
+        transactions: [
+          {
+            id: createTransactionId(),
+            date: record.filledAt,
+            symbol: record.symbol,
+            amount: record.tokenVolume,
+            priceUsd: record.priceUsd,
+            spentUsd: record.spentUsd,
+            type: "DCA",
+          },
+          ...transactions,
+        ],
+      });
+
+      return true;
+    },
+    [holdings, persistPortfolio, transactions],
+  );
+
   const pnl = useMemo(
     () => calculatePortfolioPnL(transactions, holdings, prices, CORE_SYMBOLS),
     [transactions, holdings, prices],
@@ -164,6 +195,7 @@ export function usePortfolio() {
     updateHoldings,
     importPortfolio,
     recordDcaPurchase,
+    recordExecutionFill,
     portfolioData: { holdings, transactions } satisfies PortfolioData,
   };
 }

@@ -1,13 +1,16 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { CalendarCheck, History } from "lucide-react";
+import { CalendarCheck, History, Timer } from "lucide-react";
 import { formatUsd } from "@/lib/data";
+import { formatCountdown, type PendingOrder } from "@/lib/dca/executionLedger";
 import { isInCurrentDcaWeek } from "@/lib/dcaEngineConfig";
 import type { Transaction } from "@/lib/portfolioStorage";
 
 interface DcaActivityCardProps {
   transactions: Transaction[];
+  pendingOrders?: PendingOrder[];
+  nowMs?: number;
 }
 
 function formatTransactionDate(date: string) {
@@ -18,7 +21,11 @@ function formatTransactionDate(date: string) {
   }).format(new Date(date));
 }
 
-export function DcaActivityCard({ transactions }: DcaActivityCardProps) {
+export function DcaActivityCard({
+  transactions,
+  pendingOrders = [],
+  nowMs = Date.now(),
+}: DcaActivityCardProps) {
   const lastPurchase = transactions[0];
   const recordedThisWeek = lastPurchase
     ? isInCurrentDcaWeek(lastPurchase.date)
@@ -74,6 +81,30 @@ export function DcaActivityCard({ transactions }: DcaActivityCardProps) {
           </p>
         </div>
       </div>
+
+      {pendingOrders.length > 0 && (
+        <ul className="mb-4 space-y-2">
+          {pendingOrders.map((order) => (
+            <li
+              key={order.id}
+              className="flex items-center justify-between gap-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 px-3 py-2.5 shadow-[0_0_18px_rgba(251,191,36,0.18)]"
+            >
+              <div className="min-w-0">
+                <p className="inline-flex items-center gap-1.5 text-sm font-semibold text-amber-100">
+                  <Timer className="h-3.5 w-3.5 animate-pulse" aria-hidden="true" />
+                  {order.symbol} · Čakajúca
+                </p>
+                <p className="text-[11px] text-amber-100/80">
+                  {formatCountdown(order.expiresAt, nowMs)}
+                </p>
+              </div>
+              <p className="text-sm font-bold text-amber-200">
+                {formatUsd(order.spentUsd)}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
 
       {transactions.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-white/10 px-4 py-6 text-center">

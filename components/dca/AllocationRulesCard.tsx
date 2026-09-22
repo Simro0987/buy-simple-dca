@@ -21,6 +21,7 @@ function BitcoinMark() {
 interface AllocationRulesCardProps {
   plan: WeeklyDcaPlan;
   cashReserveUsd: number;
+  executionImpactUsd?: number;
   whyOpen: boolean;
   onToggleWhy: () => void;
 }
@@ -28,10 +29,12 @@ interface AllocationRulesCardProps {
 export function AllocationRulesCard({
   plan,
   cashReserveUsd,
+  executionImpactUsd = 0,
   whyOpen,
   onToggleWhy,
 }: AllocationRulesCardProps) {
   const btcFill = Math.max(plan.corePercent, 50);
+  const displayedReserve = plan.reserveUsd + cashReserveUsd + executionImpactUsd;
 
   return (
     <motion.section
@@ -69,7 +72,7 @@ export function AllocationRulesCard({
             Hotovosť rezerva
           </p>
           <p className="mt-1 text-sm font-bold tabular-nums text-white transition-all duration-500">
-            {formatUsd(plan.reserveUsd + cashReserveUsd)}
+            {formatUsd(displayedReserve, displayedReserve < 0 ? { showSign: true } : undefined)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">
             Týždeň {formatUsd(plan.reserveUsd - plan.brakeBoostReserveDelta)} · cash{" "}
@@ -84,6 +87,11 @@ export function AllocationRulesCard({
               Brzda & boost{" "}
               {formatUsd(plan.brakeBoostReserveDelta, { showSign: true })}
               {plan.brakeBoostReserveDelta > 0 ? " z MKT" : " do MKT"}
+            </p>
+          )}
+          {executionImpactUsd !== 0 && (
+            <p className="mt-0.5 text-[10px] font-semibold text-cyan-300">
+              Exekúcia {formatUsd(executionImpactUsd, { showSign: true })}
             </p>
           )}
         </div>

@@ -3,6 +3,11 @@
 import { AnimatePresence, motion } from "framer-motion";
 import { X } from "lucide-react";
 import { useEffect } from "react";
+import { isInCurrentDcaWeek } from "@/lib/dcaEngineConfig";
+import {
+  type PendingOrder,
+  type PortfolioAssetRecord,
+} from "@/lib/dca/executionLedger";
 import { glassPanel } from "@/lib/dca/glass";
 import type { TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
@@ -10,14 +15,41 @@ import { formatUsd } from "@/lib/data";
 interface RitualSheetProps {
   open: boolean;
   plans: TokenExecutionPlan[];
-  activations: Partial<Record<string, { market: boolean; limit: boolean }>>;
+  pendingOrders: PendingOrder[];
+  portfolioAssets: PortfolioAssetRecord[];
   onClose: () => void;
+}
+
+function marketLabel(symbol: string, assets: PortfolioAssetRecord[]) {
+  const filled = assets.some(
+    (row) =>
+      row.symbol === symbol &&
+      row.side === "market" &&
+      isInCurrentDcaWeek(row.filledAt),
+  );
+  return filled ? "hotovo" : "čaká";
+}
+
+function limitLabel(
+  symbol: string,
+  pending: PendingOrder[],
+  assets: PortfolioAssetRecord[],
+) {
+  if (pending.some((order) => order.symbol === symbol)) return "čakajúca";
+  const filled = assets.some(
+    (row) =>
+      row.symbol === symbol &&
+      row.side === "limit" &&
+      isInCurrentDcaWeek(row.filledAt),
+  );
+  return filled ? "hotovo" : "čaká";
 }
 
 export function RitualSheet({
   open,
   plans,
-  activations,
+  pendingOrders,
+  portfolioAssets,
   onClose,
 }: RitualSheetProps) {
   useEffect(() => {
@@ -80,24 +112,21 @@ export function RitualSheet({
               ulož záznam do portfólia. Aplikácia príkazy na burze neodosiela.
             </p>
             <ul className="space-y-2">
-              {activePlans.map((plan) => {
-                const state = activations[plan.symbol];
-                return (
-                  <li
-                    key={plan.symbol}
-                    className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-sm font-semibold text-white">{plan.symbol}</p>
-                      <p className="text-xs text-zinc-400">{formatUsd(plan.totalUsd)}</p>
-                    </div>
-                    <p className="mt-1 text-[11px] text-zinc-500">
-                      Market {state?.market ? "hotovo" : "čaká"} · Limit{" "}
-                      {state?.limit ? "hotovo" : "čaká"}
-                    </p>
-                  </li>
-                );
-              })}
+              {activePlans.map((plan) => (
+                <li
+                  key={plan.symbol}
+                  className="rounded-2xl border border-white/10 bg-white/5 px-3 py-2.5"
+                >
+                  <div className="flex items-center justify-between">
+                    <p className="text-sm font-semibold text-white">{plan.symbol}</p>
+                    <p className="text-xs text-zinc-400">{formatUsd(plan.totalUsd)}</p>
+                  </div>
+                  <p className="mt-1 text-[11px] text-zinc-500">
+                    Market {marketLabel(plan.symbol, portfolioAssets)} · Limit{" "}
+                    {limitLabel(plan.symbol, pendingOrders, portfolioAssets)}
+                  </p>
+                </li>
+              ))}
             </ul>
           </motion.div>
         </div>
