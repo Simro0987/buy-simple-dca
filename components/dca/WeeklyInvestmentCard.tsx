@@ -5,7 +5,6 @@ import { Minus, Plus, Zap } from "lucide-react";
 import { useEffect, useId, useState } from "react";
 import { QUICK_AMOUNTS } from "@/lib/dcaEngineConfig";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
-import { formatUsd } from "@/lib/data";
 import { interactiveButton } from "@/lib/motion";
 
 interface WeeklyInvestmentCardProps {
@@ -149,7 +148,7 @@ export function WeeklyInvestmentCard({
                     : `${glassInset} text-zinc-400`
                 }`}
               >
-                {formatUsd(amount)}
+                {`$${amount.toLocaleString("en-US")}`}
               </motion.button>
             );
           })}
