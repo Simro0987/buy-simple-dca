@@ -93,7 +93,7 @@ export function PortfolioSplitSection({
               <p className="mt-1 text-lg font-bold text-white">
                 {plan.targetCorePercent.toFixed(0)}%
               </p>
-              <p className="text-xs text-zinc-400">{formatUsd(plan.coreUsd)}</p>
+              <p className="text-xs text-zinc-400">{formatUsd(plan.finalBudgets.coreUsd)}</p>
             </div>
             <div className={`${glassInset} p-3`}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300">
@@ -102,7 +102,7 @@ export function PortfolioSplitSection({
               <p className="mt-1 text-lg font-bold text-white">
                 {plan.targetSatellitePercent.toFixed(0)}%
               </p>
-              <p className="text-xs text-zinc-400">{formatUsd(plan.satelliteBasketUsd)}</p>
+              <p className="text-xs text-zinc-400">{formatUsd(plan.finalBudgets.satelliteUsd)}</p>
             </div>
             <div className={`${glassInset} p-3`}>
               <p className="text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
@@ -111,7 +111,7 @@ export function PortfolioSplitSection({
               <p className="mt-1 text-lg font-bold text-white">
                 {plan.targetHighBetaPercent.toFixed(0)}%
               </p>
-              <p className="text-xs text-zinc-400">{formatUsd(plan.highBetaBasketUsd)}</p>
+              <p className="text-xs text-zinc-400">{formatUsd(plan.finalBudgets.highBetaUsd)}</p>
             </div>
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
