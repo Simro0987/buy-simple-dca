@@ -68,12 +68,24 @@ export function AllocationRulesCard({
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Hotovosť rezerva
           </p>
-          <p className="mt-1 text-sm font-bold text-white">
+          <p className="mt-1 text-sm font-bold tabular-nums text-white transition-all duration-500">
             {formatUsd(plan.reserveUsd + cashReserveUsd)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">
-            Týždeň {formatUsd(plan.reserveUsd)} · cash {formatUsd(cashReserveUsd)}
+            Týždeň {formatUsd(plan.reserveUsd - plan.brakeBoostReserveDelta)} · cash{" "}
+            {formatUsd(cashReserveUsd)}
           </p>
+          {plan.brakeBoostReserveDelta !== 0 && (
+            <p
+              className={`mt-0.5 text-[10px] font-semibold ${
+                plan.brakeBoostReserveDelta > 0 ? "text-amber-300" : "text-lime-300"
+              }`}
+            >
+              Brzda & boost{" "}
+              {formatUsd(plan.brakeBoostReserveDelta, { showSign: true })}
+              {plan.brakeBoostReserveDelta > 0 ? " z MKT" : " do MKT"}
+            </p>
+          )}
         </div>
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">

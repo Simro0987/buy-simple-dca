@@ -100,7 +100,7 @@ export function ConfirmPurchaseSheet({
                     </div>
                     <div className="text-right">
                       <p className="text-sm font-bold text-white">
-                        {formatUsd(plan.totalUsd)}
+                        {formatUsd(plan.executionUsd || plan.marketUsd + plan.limitUsd)}
                       </p>
                       <p className="text-[10px] text-zinc-500">
                         {formatEstimatedQty(plan.qty, plan.symbol)}

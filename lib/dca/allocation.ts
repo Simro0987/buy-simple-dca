@@ -1,4 +1,8 @@
-import { computeUniversalExecution, statusFromRsi } from "@/lib/dca/executionMath";
+import {
+  applyBrakeBoost,
+  computeUniversalExecution,
+  statusFromRsi,
+} from "@/lib/dca/executionMath";
 import { evaluateHighBetaToken } from "@/lib/dca/highBetaProtocol";
 import { clamp, roundUsd, softmax } from "@/lib/dca/math";
 import { buildMarketRegime } from "@/lib/dca/regime";
@@ -111,10 +115,15 @@ function buildPlan(
         });
   const marketShare = execution?.mktPercent ?? 0;
   const limitShare = execution ? execution.lmtPercent : 0;
-  const marketUsd = execution?.mktAmount ?? 0;
+  const originalMarketUsd = execution?.mktAmount ?? 0;
   const limitUsd = execution?.lmtAmount ?? 0;
+  const brakeBoost = execution
+    ? applyBrakeBoost(originalMarketUsd, price, ind?.ema50 ?? 0)
+    : applyBrakeBoost(0, 0, 0);
+  const marketUsd = brakeBoost.finalMktAmount;
+  const executionUsd = roundUsd(marketUsd + limitUsd);
   const limitPrice = execution?.limitPrice ?? 0;
-  const qty = price > 0 ? totalUsd / price : 0;
+  const qty = price > 0 ? executionUsd / price : 0;
   const atrPct = price > 0 && ind ? (ind.atr / price) * 100 : 0;
   void moneyMode;
 
@@ -126,7 +135,15 @@ function buildPlan(
     weightPercent: weeklyAmount > 0 ? (totalUsd / weeklyAmount) * 100 : 0,
     totalUsd,
     marketUsd,
+    originalMarketUsd: brakeBoost.originalMktAmount,
     limitUsd,
+    executionUsd,
+    emaDistancePercent: brakeBoost.emaDistancePercent,
+    brakeBoostMode: brakeBoost.mode,
+    brakeBoostFactor: brakeBoost.factor,
+    brakeBoostReserveDelta: brakeBoost.reserveDelta,
+    brakeBoostBadge: brakeBoost.badge,
+    brakeBoostMatrix: brakeBoost.matrixLabel,
     marketShare,
     limitShare,
     limitPrice,
@@ -184,16 +201,17 @@ export function buildWeeklyDcaPlan(options: {
   const btc = snapshots.BTC;
   const regime = buildMarketRegime(btc, moneyMode);
   const safeWeekly = Math.max(0, weeklyAmount);
-  const deployedUsd = roundUsd(safeWeekly * (regime.allocationPercent / 100));
-  const reserveUsd = roundUsd(Math.max(0, safeWeekly - deployedUsd));
+  const baseDeployedUsd = roundUsd(safeWeekly * (regime.allocationPercent / 100));
+  const baseReserveUsd = roundUsd(Math.max(0, safeWeekly - baseDeployedUsd));
+  let deployedUsd = baseDeployedUsd;
 
   const targetCorePct =
     allocationMode === "BTC_ONLY" ? 1 : moneyMode ? 0.52 : 0.55;
-  let coreUsd = deployedUsd * targetCorePct;
-  coreUsd = Math.max(deployedUsd * 0.5, coreUsd);
-  if (allocationMode === "BTC_ONLY") coreUsd = deployedUsd;
-  coreUsd = roundUsd(Math.min(deployedUsd, coreUsd));
-  let altUsd = roundUsd(Math.max(0, deployedUsd - coreUsd));
+  let coreUsd = baseDeployedUsd * targetCorePct;
+  coreUsd = Math.max(baseDeployedUsd * 0.5, coreUsd);
+  if (allocationMode === "BTC_ONLY") coreUsd = baseDeployedUsd;
+  coreUsd = roundUsd(Math.min(baseDeployedUsd, coreUsd));
+  let altUsd = roundUsd(Math.max(0, baseDeployedUsd - coreUsd));
 
   const highBetaUniverse = DCA_TOKENS.filter((token) => token.category === "HIGH_BETA");
   const satelliteUniverse = DCA_TOKENS.filter((token) => token.category === "SATELLITE");
@@ -261,7 +279,7 @@ export function buildWeeklyDcaPlan(options: {
     }
   }
   satelliteRedirectedUsd = roundUsd(satelliteRedirectedUsd);
-  coreUsd = roundUsd(Math.min(deployedUsd, coreUsd + satelliteRedirectedUsd));
+  coreUsd = roundUsd(Math.min(baseDeployedUsd, coreUsd + satelliteRedirectedUsd));
   bySymbol.set("BTC", coreUsd);
 
   let highBetaRedirectedUsd = 0;
@@ -285,9 +303,9 @@ export function buildWeeklyDcaPlan(options: {
     }
   }
   highBetaRedirectedUsd = roundUsd(highBetaRedirectedUsd);
-  coreUsd = roundUsd(Math.min(deployedUsd, coreUsd + highBetaRedirectedUsd));
+  coreUsd = roundUsd(Math.min(baseDeployedUsd, coreUsd + highBetaRedirectedUsd));
   bySymbol.set("BTC", coreUsd);
-  altUsd = roundUsd(Math.max(0, deployedUsd - coreUsd));
+  altUsd = roundUsd(Math.max(0, baseDeployedUsd - coreUsd));
 
   const plans = DCA_TOKENS.map((meta) => {
     const snapshot = snapshots[meta.symbol] ?? emptySnapshot(meta.symbol);
@@ -313,9 +331,16 @@ export function buildWeeklyDcaPlan(options: {
 
   const btcPlan = plans.find((plan) => plan.symbol === "BTC");
   const btcFloorSatisfied =
-    deployedUsd <= 0 || ((btcPlan?.totalUsd ?? 0) / Math.max(deployedUsd, 1)) >= 0.5;
+    baseDeployedUsd <= 0 ||
+    ((btcPlan?.totalUsd ?? 0) / Math.max(baseDeployedUsd, 1)) >= 0.5;
 
-  const corePercent = deployedUsd > 0 ? (coreUsd / deployedUsd) * 100 : 0;
+  const brakeBoostReserveDelta = roundUsd(
+    plans.reduce((sum, plan) => sum + plan.brakeBoostReserveDelta, 0),
+  );
+  const reserveUsd = roundUsd(baseReserveUsd + brakeBoostReserveDelta);
+  deployedUsd = roundUsd(baseDeployedUsd - brakeBoostReserveDelta);
+
+  const corePercent = baseDeployedUsd > 0 ? (coreUsd / baseDeployedUsd) * 100 : 0;
   const altPercent = 100 - corePercent;
 
   const allocationLabel =
@@ -350,6 +375,7 @@ export function buildWeeklyDcaPlan(options: {
         ? `High-Beta protokol schválil ${approvedBeta.join(", ")}.`
         : "High-beta vrstva čaká na live dáta protokolu.",
     "Schválené tokeny idú cez univerzálny engine: MKT% = clamp(10–90, 90 − ((RSI−30)×2)), limit podľa kategórie, ochrana Live − 1.5× ATR, platnosť 7 dní.",
+    "Brzda & Boost mení len MKT podľa vzdialenosti od 50D EMA. Ušetrený MKT ide do Hotovosť rezervy, extra MKT sa z rezervy berie — nikdy do BTC. LMT ostáva z Phase 6.",
     "Váhy sa menia dynamicky podľa Value, Trend, Sentiment, Momentum a Risk.",
   ];
 
@@ -357,6 +383,7 @@ export function buildWeeklyDcaPlan(options: {
     regime,
     deployedUsd,
     reserveUsd,
+    brakeBoostReserveDelta,
     weeklyAmount: safeWeekly,
     coreUsd,
     altUsd,

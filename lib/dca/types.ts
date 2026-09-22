@@ -12,6 +12,7 @@ export type DcaSymbol =
 export type DcaCategory = "CORE" | "SATELLITE" | "HIGH_BETA";
 export type TokenSubTag = "YIELD" | "DEFI";
 export type ExecutionStatus = "REDUCE" | "NORMAL" | "DEEP_BOOST";
+export type BrakeBoostMode = "REDUCE" | "BOOST" | "DEEP_BOOST" | "NORMAL";
 export type AllocationMode = "ALL" | "BTC_ONLY";
 export type RegimeKind = "BULL" | "BEAR" | "SIDEWAYS";
 export type ConfidenceLevel = "Nízka" | "Stredná" | "Vysoká";
@@ -169,7 +170,15 @@ export interface TokenExecutionPlan {
   weightPercent: number;
   totalUsd: number;
   marketUsd: number;
+  originalMarketUsd: number;
   limitUsd: number;
+  executionUsd: number;
+  emaDistancePercent: number;
+  brakeBoostMode: BrakeBoostMode;
+  brakeBoostFactor: number;
+  brakeBoostReserveDelta: number;
+  brakeBoostBadge: string;
+  brakeBoostMatrix: string;
   marketShare: number;
   limitShare: number;
   limitPrice: number;
@@ -208,6 +217,7 @@ export interface WeeklyDcaPlan {
   regime: MarketRegime;
   deployedUsd: number;
   reserveUsd: number;
+  brakeBoostReserveDelta: number;
   weeklyAmount: number;
   coreUsd: number;
   altUsd: number;

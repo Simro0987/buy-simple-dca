@@ -10,6 +10,7 @@ import {
 import { formatApy, formatEstimatedQty, formatPercent } from "@/lib/dca/format";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
 import type {
+  BrakeBoostMode,
   DcaSymbol,
   ExecutionStatus,
   HighBetaCheckItem,
@@ -36,6 +37,20 @@ const statusClass: Record<ExecutionStatus, string> = {
   REDUCE: "border-pink-400/40 bg-pink-500/15 text-pink-300",
   NORMAL: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
   DEEP_BOOST: "border-cyan-400/40 bg-cyan-400/10 text-cyan-300",
+};
+
+const brakeBoostBadgeClass: Record<BrakeBoostMode, string> = {
+  REDUCE: "border-amber-400/40 bg-amber-400/15 text-amber-200",
+  BOOST: "border-lime-400/40 bg-lime-400/15 text-lime-300",
+  DEEP_BOOST: "border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-200 shadow-[0_0_12px_rgba(232,121,249,0.35)]",
+  NORMAL: "border-white/10 bg-white/5 text-zinc-400",
+};
+
+const brakeBoostMatrixClass: Record<BrakeBoostMode, string> = {
+  REDUCE: "text-amber-300",
+  BOOST: "text-lime-300",
+  DEEP_BOOST: "text-fuchsia-300",
+  NORMAL: "text-zinc-300",
 };
 
 interface TokenExecutionCardProps {
@@ -330,6 +345,21 @@ export function TokenExecutionCard({
             {plan.r1 ? formatUnitPrice(plan.r1) : "—"}
           </p>
         </div>
+        {!locked && (
+          <div className={`${glassInset} col-span-2 p-2.5`}>
+            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
+              Brzda & Boost
+            </p>
+            <p
+              className={`mt-1 text-[11px] font-semibold uppercase tracking-wide ${brakeBoostMatrixClass[plan.brakeBoostMode]}`}
+            >
+              {plan.brakeBoostMatrix}
+            </p>
+            <p className="text-[10px] text-zinc-500">
+              50D EMA {formatPercent(plan.emaDistancePercent)}
+            </p>
+          </div>
+        )}
       </div>
 
       {!locked && (
@@ -361,9 +391,26 @@ export function TokenExecutionCard({
               <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
                 MKT · {formatPercent(plan.marketShare, 0)}
               </p>
-              <p className="mt-1 text-sm font-bold text-white">
+              {plan.brakeBoostBadge && (
+                <span
+                  className={`mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${brakeBoostBadgeClass[plan.brakeBoostMode]}`}
+                >
+                  {plan.brakeBoostBadge}
+                </span>
+              )}
+              <p className="mt-1 text-sm font-bold tabular-nums text-white transition-all duration-500">
                 {formatUsd(plan.marketUsd)}
               </p>
+              {plan.brakeBoostMode !== "NORMAL" && (
+                <p className="text-[9px] text-zinc-500">
+                  Pôvodne {formatUsd(plan.originalMarketUsd)}
+                  {plan.brakeBoostReserveDelta > 0
+                    ? ` · +${formatUsd(plan.brakeBoostReserveDelta)} → rezerva`
+                    : plan.brakeBoostReserveDelta < 0
+                      ? ` · ${formatUsd(plan.brakeBoostReserveDelta, { showSign: true })} ← rezerva`
+                      : ""}
+                </p>
+              )}
               <p className="text-[10px] text-zinc-400">
                 {formatEstimatedQty(plan.marketQty, plan.symbol)}
               </p>

@@ -1,4 +1,9 @@
-import type { DcaCategory, ExecutionStatus, OhlcvCandle } from "@/lib/dca/types";
+import type {
+  BrakeBoostMode,
+  DcaCategory,
+  ExecutionStatus,
+  OhlcvCandle,
+} from "@/lib/dca/types";
 import { roundUsd } from "@/lib/dca/math";
 
 /** Limit orders expire after one weekly cycle. */
@@ -119,4 +124,85 @@ export function statusFromRsi(rsi: number): ExecutionStatus {
   if (rsi > 70) return "REDUCE";
   if (rsi < 30) return "DEEP_BOOST";
   return "NORMAL";
+}
+
+/** Live distance from 50D EMA, in percent. */
+export function emaDistancePercent(livePrice: number, ema50: number): number {
+  if (livePrice <= 0 || ema50 <= 0) return 0;
+  return ((livePrice - ema50) / ema50) * 100;
+}
+
+export interface BrakeBoostResult {
+  mode: BrakeBoostMode;
+  emaDistancePercent: number;
+  factor: number;
+  originalMktAmount: number;
+  finalMktAmount: number;
+  reserveDelta: number;
+  badge: string;
+  matrixLabel: string;
+}
+
+const idleBrakeBoost = (originalMktAmount: number): BrakeBoostResult => ({
+  mode: "NORMAL",
+  emaDistancePercent: 0,
+  factor: 0,
+  originalMktAmount,
+  finalMktAmount: originalMktAmount,
+  reserveDelta: 0,
+  badge: "",
+  matrixLabel: "BRZDA & BOOST: NORMÁLNE",
+});
+
+/**
+ * Phase 7: adjust only the Phase 6 MKT amount from 50D EMA distance.
+ * LMT is never touched. Saved MKT goes to Hotovosť rezerva; extra MKT
+ * is deducted from that reserve — never redirected to BTC.
+ */
+export function applyBrakeBoost(
+  originalMktAmount: number,
+  livePrice: number,
+  ema50: number,
+): BrakeBoostResult {
+  const original = roundUsd(Math.max(0, originalMktAmount));
+  if (original <= 0 || livePrice <= 0 || ema50 <= 0) {
+    return idleBrakeBoost(original);
+  }
+
+  const distance = emaDistancePercent(livePrice, ema50);
+  if (distance > 0) {
+    const reductionFactor = Math.min(100, distance * 2);
+    const finalMktAmount = roundUsd(original * (1 - reductionFactor / 100));
+    const remainingPct = 100 - reductionFactor;
+    return {
+      mode: "REDUCE",
+      emaDistancePercent: distance,
+      factor: reductionFactor,
+      originalMktAmount: original,
+      finalMktAmount,
+      reserveDelta: roundUsd(original - finalMktAmount),
+      badge: `REDUCE (-${reductionFactor.toFixed(0)}%)`,
+      matrixLabel: `BRZDA & BOOST: REDUCE MKT × ${remainingPct.toFixed(0)}%`,
+    };
+  }
+
+  if (distance < 0) {
+    const boostFactor = Math.abs(distance) * 2;
+    const multiplier = Math.min(2.0, 1 + boostFactor / 100);
+    const finalMktAmount = roundUsd(original * multiplier);
+    const mode: BrakeBoostMode = multiplier >= 1.5 ? "DEEP_BOOST" : "BOOST";
+    const label = mode === "DEEP_BOOST" ? "DEEP BOOST" : "BOOST";
+    return {
+      mode,
+      emaDistancePercent: distance,
+      factor: multiplier,
+      originalMktAmount: original,
+      finalMktAmount,
+      reserveDelta: roundUsd(original - finalMktAmount),
+      badge: `${label} (MKT × ${(multiplier * 100).toFixed(0)}%)`,
+      matrixLabel: `BRZDA & BOOST: ${label} MKT × ${(multiplier * 100).toFixed(0)}%`,
+    };
+  }
+
+  return idleBrakeBoost(original);
 }

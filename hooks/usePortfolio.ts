@@ -84,7 +84,8 @@ export function usePortfolio() {
         const unitPrice = priceMap[plan.symbol] ?? 0;
         if (unitPrice <= 0) continue;
 
-        const amount = plan.totalUsd / unitPrice;
+        const spentUsd = plan.executionUsd > 0 ? plan.executionUsd : plan.totalUsd;
+        const amount = spentUsd / unitPrice;
         if (isCoreHoldingSymbol(plan.symbol)) {
           nextHoldings[plan.symbol] += amount;
         }
@@ -95,7 +96,7 @@ export function usePortfolio() {
           symbol: plan.symbol,
           amount,
           priceUsd: unitPrice,
-          spentUsd: plan.totalUsd,
+          spentUsd,
           type: "DCA",
         });
       }
