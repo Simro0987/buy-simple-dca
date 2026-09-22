@@ -18,6 +18,7 @@ import { Toast, type ToastVariant } from "@/components/Toast";
 import { useDcaHydrated } from "@/hooks/useDcaHydrated";
 import { useDcaMarketData } from "@/hooks/useDcaMarketData";
 import { useExecutionClock } from "@/hooks/useExecutionClock";
+import { useRegimeMetrics } from "@/hooks/useRegimeMetrics";
 import { buildWeeklyDcaPlan } from "@/lib/dca/allocation";
 import {
   ledgerReserveImpact,
@@ -70,6 +71,7 @@ export function DcaEngine({
   const limitFillThisWeek = useExecutionStore((state) => state.limitFillThisWeek);
 
   const { snapshots, loading, error, pricesReady } = useDcaMarketData();
+  const { metrics: regimeMetrics, loading: regimeLoading } = useRegimeMetrics();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
@@ -83,8 +85,9 @@ export function DcaEngine({
         moneyMode,
         allocationMode,
         snapshots,
+        regimeMetrics,
       }),
-    [weeklyAmount, moneyMode, allocationMode, snapshots],
+    [weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics],
   );
 
   const planBySymbol = useMemo(() => {
@@ -198,7 +201,10 @@ export function DcaEngine({
       )}
 
       <WeeklyInvestmentCard value={weeklyAmount} onChange={setWeeklyAmount} />
-      <MarketRegimePanel regime={weeklyPlan.regime} loading={loading && !pricesReady} />
+      <MarketRegimePanel
+        regime={weeklyPlan.regime}
+        loading={(loading && !pricesReady) || regimeLoading}
+      />
       <AllocationRulesCard
         plan={weeklyPlan}
         cashReserveUsd={portfolioHoldings.cashUsd}

@@ -103,7 +103,7 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
               }
               detail={
                 item.satellite && !item.satellite.approved
-                  ? `0$ · ${formatUsd(item.satelliteRedirectedUsd)} → BTC`
+                  ? `0$ · ${formatUsd(item.satelliteRedirectedUsd)} → ${item.waterfallDestination || "BTC"}`
                   : `${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`
               }
             />
@@ -129,7 +129,7 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
               }
               detail={
                 item.highBeta && !item.highBeta.approved
-                  ? `0$ · ${formatUsd(item.highBetaRedirectedUsd)} → BTC`
+                  ? `0$ · ${formatUsd(item.highBetaRedirectedUsd)} → ${item.waterfallDestination || "BTC"}`
                   : `${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`
               }
             />
@@ -140,14 +140,16 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
       {plan.satellitePausedSymbols.length > 0 && (
         <div className="rounded-2xl border border-cyan-500/30 bg-gradient-to-br from-cyan-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-cyan-100">
           Smart DCA pozastavil {plan.satellitePausedSymbols.join(", ")}.{" "}
-          {formatUsd(plan.satelliteRedirectedUsd)} presmerovaných do Core (BTC).
+          {plan.satelliteWaterfallNote ||
+            `${formatUsd(plan.satelliteRedirectedUsd)} presmerovaných waterfallom.`}
         </div>
       )}
 
       {plan.highBetaRejectedSymbols.length > 0 && (
         <div className="rounded-2xl border border-rose-500/30 bg-gradient-to-br from-rose-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-amber-100">
           High-Beta protokol zamietol {plan.highBetaRejectedSymbols.join(", ")}.{" "}
-          {formatUsd(plan.highBetaRedirectedUsd)} presmerovaných do Core (BTC).
+          {plan.highBetaWaterfallNote ||
+            `${formatUsd(plan.highBetaRedirectedUsd)} presmerovaných waterfallom.`}
         </div>
       )}
 

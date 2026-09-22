@@ -1,11 +1,15 @@
 import {
+  applyEqualWaterfall,
+  buildConfluenceRegime,
+  EMPTY_REGIME_METRICS,
+} from "@/lib/dca/confluence";
+import {
   applyBrakeBoost,
   computeUniversalExecution,
   statusFromRsi,
 } from "@/lib/dca/executionMath";
 import { evaluateHighBetaToken } from "@/lib/dca/highBetaProtocol";
-import { clamp, roundUsd, softmax } from "@/lib/dca/math";
-import { buildMarketRegime } from "@/lib/dca/regime";
+import { clamp, roundUsd } from "@/lib/dca/math";
 import { evaluateSatelliteToken } from "@/lib/dca/satelliteProtocol";
 import type {
   AllocationMode,
@@ -13,6 +17,7 @@ import type {
   HighBetaBtcData,
   HighBetaEvaluation,
   HighBetaTokenData,
+  RegimeMetrics,
   SatelliteEvaluation,
   SatelliteTokenData,
   TokenExecutionPlan,
@@ -92,6 +97,7 @@ function buildPlan(
   highBetaRedirectedUsd: number,
   satellite: SatelliteEvaluation | null,
   satelliteRedirectedUsd: number,
+  waterfallDestination: string,
 ): TokenExecutionPlan {
   const meta = TOKEN_BY_SYMBOL[snapshot.symbol];
   const ind = snapshot.indicators;
@@ -176,19 +182,8 @@ function buildPlan(
     highBetaRedirectedUsd,
     satellite,
     satelliteRedirectedUsd,
+    waterfallDestination,
   };
-}
-
-function distribute(
-  snapshots: TokenMarketSnapshot[],
-  budget: number,
-): { symbol: DcaSymbol; usd: number }[] {
-  if (snapshots.length === 0 || budget <= 0) return [];
-  const weights = softmax(snapshots.map((snapshot) => tokenScore(snapshot) / 12));
-  return snapshots.map((snapshot, index) => ({
-    symbol: snapshot.symbol,
-    usd: budget * weights[index],
-  }));
 }
 
 export function buildWeeklyDcaPlan(options: {
@@ -196,45 +191,35 @@ export function buildWeeklyDcaPlan(options: {
   moneyMode: boolean;
   allocationMode: AllocationMode;
   snapshots: Partial<Record<DcaSymbol, TokenMarketSnapshot>>;
+  regimeMetrics?: RegimeMetrics;
 }): WeeklyDcaPlan {
   const { weeklyAmount, moneyMode, allocationMode, snapshots } = options;
   const btc = snapshots.BTC;
-  const regime = buildMarketRegime(btc, moneyMode);
+  const regime = buildConfluenceRegime(
+    btc,
+    options.regimeMetrics ?? EMPTY_REGIME_METRICS,
+    moneyMode,
+  );
   const safeWeekly = Math.max(0, weeklyAmount);
-  const baseDeployedUsd = roundUsd(safeWeekly * (regime.allocationPercent / 100));
-  const baseReserveUsd = roundUsd(Math.max(0, safeWeekly - baseDeployedUsd));
+  const baseDeployedUsd = roundUsd(safeWeekly);
+  const baseReserveUsd = 0;
   let deployedUsd = baseDeployedUsd;
 
-  const targetCorePct =
-    allocationMode === "BTC_ONLY" ? 1 : moneyMode ? 0.52 : 0.55;
-  let coreUsd = baseDeployedUsd * targetCorePct;
-  coreUsd = Math.max(baseDeployedUsd * 0.5, coreUsd);
-  if (allocationMode === "BTC_ONLY") coreUsd = baseDeployedUsd;
-  coreUsd = roundUsd(Math.min(baseDeployedUsd, coreUsd));
-  let altUsd = roundUsd(Math.max(0, baseDeployedUsd - coreUsd));
+  const mix =
+    allocationMode === "BTC_ONLY"
+      ? { corePercent: 100, satellitePercent: 0, highBetaPercent: 0 }
+      : regime.basket;
+  let coreUsd = roundUsd(baseDeployedUsd * (mix.corePercent / 100));
+  let satBudget = roundUsd(baseDeployedUsd * (mix.satellitePercent / 100));
+  let betaBudget = roundUsd(baseDeployedUsd - coreUsd - satBudget);
+  if (allocationMode === "BTC_ONLY") {
+    coreUsd = baseDeployedUsd;
+    satBudget = 0;
+    betaBudget = 0;
+  }
 
   const highBetaUniverse = DCA_TOKENS.filter((token) => token.category === "HIGH_BETA");
   const satelliteUniverse = DCA_TOKENS.filter((token) => token.category === "SATELLITE");
-
-  const satCandidates = satelliteUniverse
-    .map((token) => snapshots[token.symbol])
-    .filter((snapshot): snapshot is TokenMarketSnapshot => {
-      return Boolean(snapshot && snapshot.price > 0);
-    });
-  const betaCandidates = highBetaUniverse
-    .map((token) => snapshots[token.symbol])
-    .filter((snapshot): snapshot is TokenMarketSnapshot => {
-      return Boolean(snapshot && snapshot.price > 0);
-    });
-
-  const betaBudget = allocationMode === "BTC_ONLY" ? 0 : altUsd * (moneyMode ? 0.28 : 0.18);
-  const satBudget = Math.max(0, altUsd - betaBudget);
-
-  const satDist = distribute(satCandidates, satBudget);
-  const betaDist = distribute(betaCandidates, betaBudget);
-  const unusedBeta = betaBudget - betaDist.reduce((sum, row) => sum + row.usd, 0);
-  const unusedSat = satBudget - satDist.reduce((sum, row) => sum + row.usd, 0);
-  coreUsd = roundUsd(coreUsd + Math.max(0, unusedBeta) + Math.max(0, unusedSat));
 
   const btcMacro = toHighBetaBtcData(btc);
   const highBetaVerdicts = new Map<DcaSymbol, HighBetaEvaluation>();
@@ -254,58 +239,78 @@ export function buildWeeklyDcaPlan(options: {
     );
   }
 
+  const satWaterfall = applyEqualWaterfall(
+    satBudget,
+    satelliteUniverse.map((token) => ({
+      symbol: token.symbol,
+      approved: Boolean(satelliteVerdicts.get(token.symbol)?.approved),
+      priced: (snapshots[token.symbol]?.price ?? 0) > 0,
+    })),
+    "satelitný",
+  );
+  const betaWaterfall = applyEqualWaterfall(
+    betaBudget,
+    highBetaUniverse.map((token) => ({
+      symbol: token.symbol,
+      approved: Boolean(highBetaVerdicts.get(token.symbol)?.approved),
+      priced: (snapshots[token.symbol]?.price ?? 0) > 0,
+    })),
+    "high-beta",
+  );
+
+  if (satWaterfall.mode === "full") coreUsd = roundUsd(coreUsd + satBudget);
+  if (betaWaterfall.mode === "full") coreUsd = roundUsd(coreUsd + betaBudget);
+
   const bySymbol = new Map<DcaSymbol, number>();
   bySymbol.set("BTC", coreUsd);
-
-  const redirectedBySymbol = new Map<DcaSymbol, number>();
-  let satelliteRedirectedUsd = 0;
-  const satellitePausedSymbols: DcaSymbol[] = [];
-  for (const row of satDist) {
-    const verdict = satelliteVerdicts.get(row.symbol);
-    if (verdict && !verdict.approved) {
-      const amount = roundUsd(row.usd);
-      satelliteRedirectedUsd += amount;
-      redirectedBySymbol.set(row.symbol, amount);
-      bySymbol.set(row.symbol, 0);
-      satellitePausedSymbols.push(row.symbol);
-      continue;
-    }
-    bySymbol.set(row.symbol, (bySymbol.get(row.symbol) ?? 0) + row.usd);
-  }
   for (const token of satelliteUniverse) {
-    const verdict = satelliteVerdicts.get(token.symbol);
-    if (verdict && !verdict.approved && !satellitePausedSymbols.includes(token.symbol)) {
-      satellitePausedSymbols.push(token.symbol);
-    }
-  }
-  satelliteRedirectedUsd = roundUsd(satelliteRedirectedUsd);
-  coreUsd = roundUsd(Math.min(baseDeployedUsd, coreUsd + satelliteRedirectedUsd));
-  bySymbol.set("BTC", coreUsd);
-
-  let highBetaRedirectedUsd = 0;
-  const highBetaRejectedSymbols: DcaSymbol[] = [];
-  for (const row of betaDist) {
-    const verdict = highBetaVerdicts.get(row.symbol);
-    if (verdict && !verdict.approved) {
-      const amount = roundUsd(row.usd);
-      highBetaRedirectedUsd += amount;
-      redirectedBySymbol.set(row.symbol, amount);
-      bySymbol.set(row.symbol, 0);
-      highBetaRejectedSymbols.push(row.symbol);
-      continue;
-    }
-    bySymbol.set(row.symbol, (bySymbol.get(row.symbol) ?? 0) + row.usd);
+    bySymbol.set(token.symbol, satWaterfall.amounts.get(token.symbol) ?? 0);
   }
   for (const token of highBetaUniverse) {
-    const verdict = highBetaVerdicts.get(token.symbol);
-    if (verdict && !verdict.approved && !highBetaRejectedSymbols.includes(token.symbol)) {
-      highBetaRejectedSymbols.push(token.symbol);
+    bySymbol.set(token.symbol, betaWaterfall.amounts.get(token.symbol) ?? 0);
+  }
+
+  const originalSatShare = satelliteUniverse.filter((token) => (snapshots[token.symbol]?.price ?? 0) > 0).length;
+  const originalBetaShare = highBetaUniverse.filter((token) => (snapshots[token.symbol]?.price ?? 0) > 0).length;
+  const satUnit = originalSatShare > 0 ? roundUsd(satBudget / originalSatShare) : 0;
+  const betaUnit = originalBetaShare > 0 ? roundUsd(betaBudget / originalBetaShare) : 0;
+
+  const redirectedBySymbol = new Map<DcaSymbol, number>();
+  const waterfallBySymbol = new Map<DcaSymbol, string>();
+  const satellitePausedSymbols: DcaSymbol[] = [];
+  for (const token of satelliteUniverse) {
+    const verdict = satelliteVerdicts.get(token.symbol);
+    if (verdict && !verdict.approved) {
+      satellitePausedSymbols.push(token.symbol);
+      redirectedBySymbol.set(token.symbol, satWaterfall.mode === "none" ? 0 : satUnit);
+      waterfallBySymbol.set(
+        token.symbol,
+        satWaterfall.mode === "full"
+          ? "Core (BTC)"
+          : satWaterfall.toSymbols.join(", ") || "Core (BTC)",
+      );
     }
   }
-  highBetaRedirectedUsd = roundUsd(highBetaRedirectedUsd);
-  coreUsd = roundUsd(Math.min(baseDeployedUsd, coreUsd + highBetaRedirectedUsd));
-  bySymbol.set("BTC", coreUsd);
-  altUsd = roundUsd(Math.max(0, baseDeployedUsd - coreUsd));
+  const highBetaRejectedSymbols: DcaSymbol[] = [];
+  for (const token of highBetaUniverse) {
+    const verdict = highBetaVerdicts.get(token.symbol);
+    if (verdict && !verdict.approved) {
+      highBetaRejectedSymbols.push(token.symbol);
+      redirectedBySymbol.set(token.symbol, betaWaterfall.mode === "none" ? 0 : betaUnit);
+      waterfallBySymbol.set(
+        token.symbol,
+        betaWaterfall.mode === "full"
+          ? "Core (BTC)"
+          : betaWaterfall.toSymbols.join(", ") || "Core (BTC)",
+      );
+    }
+  }
+
+  const satelliteRedirectedUsd = satWaterfall.redirectedUsd;
+  const highBetaRedirectedUsd = betaWaterfall.redirectedUsd;
+  let altUsd = roundUsd(
+    Math.max(0, baseDeployedUsd - (bySymbol.get("BTC") ?? 0)),
+  );
 
   const plans = DCA_TOKENS.map((meta) => {
     const snapshot = snapshots[meta.symbol] ?? emptySnapshot(meta.symbol);
@@ -320,6 +325,7 @@ export function buildWeeklyDcaPlan(options: {
       meta.category === "HIGH_BETA" ? (redirectedBySymbol.get(meta.symbol) ?? 0) : 0,
       satelliteVerdicts.get(meta.symbol) ?? null,
       meta.category === "SATELLITE" ? (redirectedBySymbol.get(meta.symbol) ?? 0) : 0,
+      waterfallBySymbol.get(meta.symbol) ?? "",
     );
   }).filter(
     (plan) =>
@@ -340,17 +346,23 @@ export function buildWeeklyDcaPlan(options: {
   const reserveUsd = roundUsd(baseReserveUsd + brakeBoostReserveDelta);
   deployedUsd = roundUsd(baseDeployedUsd - brakeBoostReserveDelta);
 
+  coreUsd = bySymbol.get("BTC") ?? coreUsd;
+  altUsd = roundUsd(Math.max(0, baseDeployedUsd - coreUsd));
   const corePercent = baseDeployedUsd > 0 ? (coreUsd / baseDeployedUsd) * 100 : 0;
   const altPercent = 100 - corePercent;
 
   const allocationLabel =
-    corePercent >= 62 ? "CONSERVATIVE" : corePercent <= 52 ? "AGGRESSIVE" : "BALANCED";
+    regime.kind === "FEAR"
+      ? "CONSERVATIVE"
+      : regime.kind === "NEUTRAL"
+        ? "BALANCED"
+        : "AGGRESSIVE";
   const allocationSubtitle =
     allocationLabel === "BALANCED"
-      ? "Vyvážená alokácia"
+      ? "Vyvážená alokácia · CONFLUENCE"
       : allocationLabel === "CONSERVATIVE"
-        ? "Konzervatívna alokácia"
-        : "Agresívnejšia alokácia";
+        ? "Konzervatívna alokácia · strach"
+        : "Agresívnejšia alokácia · eufória";
 
   const approvedBeta = highBetaUniverse
     .map((token) => token.symbol)
@@ -360,23 +372,27 @@ export function buildWeeklyDcaPlan(options: {
     .filter((symbol) => satelliteVerdicts.get(symbol)?.approved);
 
   const narrative = [
-    `BTC Core drží ${corePercent.toFixed(0)}% nasadeného kapitálu (floor 50%).`,
+    `CONFLUENCE ${regime.finalScore}/100 → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (plynulá krivka, High-Beta strop 25%).`,
     allocationMode === "BTC_ONLY"
       ? "Režim BTC ONLY posiela celý nákup do Bitcoinu."
       : "Satelity (ETH, SOL, LINK, AAVE, UNI) idú cez Smart DCA protokol; LINK má výnimku z brzdy eufórie.",
-    satellitePausedSymbols.length > 0
-      ? `Smart DCA pozastavil ${satellitePausedSymbols.join(", ")}: ${satelliteRedirectedUsd.toFixed(0)}$ presmerovaných do Core (BTC).`
-      : approvedSats.length > 0
-        ? `Smart DCA schválil ${approvedSats.join(", ")}.`
-        : "Satelitná vrstva čaká na live dáta protokolu.",
-    highBetaRejectedSymbols.length > 0
-      ? `High-Beta protokol zamietol ${highBetaRejectedSymbols.join(", ")}: ${highBetaRedirectedUsd.toFixed(0)}$ presmerovaných do Core (BTC).`
-      : approvedBeta.length > 0
-        ? `High-Beta protokol schválil ${approvedBeta.join(", ")}.`
-        : "High-beta vrstva čaká na live dáta protokolu.",
+    satWaterfall.mode === "partial"
+      ? `Waterfall A: ${satWaterfall.note}`
+      : satWaterfall.mode === "full"
+        ? `Waterfall B: ${satWaterfall.note}`
+        : approvedSats.length > 0
+          ? `Smart DCA schválil ${approvedSats.join(", ")}.`
+          : "Satelitná vrstva čaká na live dáta protokolu.",
+    betaWaterfall.mode === "partial"
+      ? `Waterfall A: ${betaWaterfall.note}`
+      : betaWaterfall.mode === "full"
+        ? `Waterfall B: ${betaWaterfall.note}`
+        : approvedBeta.length > 0
+          ? `High-Beta protokol schválil ${approvedBeta.join(", ")}.`
+          : "High-beta vrstva čaká na live dáta protokolu.",
+    "Waterfall C: REDUCE (Phase 7) a expirované 7-dňové LMT (Phase 8) idú len do Hotovosť rezervy — nikdy waterfall do tokenov ani BTC.",
     "Schválené tokeny idú cez univerzálny engine: MKT% = clamp(10–90, 90 − ((RSI−30)×2)), limit podľa kategórie, ochrana Live − 1.5× ATR, platnosť 7 dní.",
     "Brzda & Boost mení len MKT podľa vzdialenosti od 50D EMA. Ušetrený MKT ide do Hotovosť rezervy, extra MKT sa z rezervy berie — nikdy do BTC. LMT ostáva z Phase 6.",
-    "Váhy sa menia dynamicky podľa Value, Trend, Sentiment, Momentum a Risk.",
   ];
 
   return {
@@ -395,6 +411,15 @@ export function buildWeeklyDcaPlan(options: {
     highBetaRedirectedUsd,
     satellitePausedSymbols,
     satelliteRedirectedUsd,
+    targetCorePercent: mix.corePercent,
+    targetSatellitePercent: mix.satellitePercent,
+    targetHighBetaPercent: mix.highBetaPercent,
+    satelliteBasketUsd: satBudget,
+    highBetaBasketUsd: betaBudget,
+    satelliteWaterfallMode: satWaterfall.mode,
+    highBetaWaterfallMode: betaWaterfall.mode,
+    satelliteWaterfallNote: satWaterfall.note,
+    highBetaWaterfallNote: betaWaterfall.note,
     plans,
     narrative,
     allocationLabel,

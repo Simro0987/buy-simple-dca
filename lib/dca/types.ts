@@ -14,8 +14,16 @@ export type TokenSubTag = "YIELD" | "DEFI";
 export type ExecutionStatus = "REDUCE" | "NORMAL" | "DEEP_BOOST";
 export type BrakeBoostMode = "REDUCE" | "BOOST" | "DEEP_BOOST" | "NORMAL";
 export type AllocationMode = "ALL" | "BTC_ONLY";
-export type RegimeKind = "BULL" | "BEAR" | "SIDEWAYS";
+export type RegimeKind = "FEAR" | "NEUTRAL" | "EUPHORIA" | "EXTREME_EUPHORIA";
 export type ConfidenceLevel = "Nízka" | "Stredná" | "Vysoká";
+export type RegimeFactorId =
+  | "wma200"
+  | "liquidity"
+  | "cbbc"
+  | "volatility"
+  | "fearGreed";
+export type FactorSource = "live" | "mock";
+export type WaterfallMode = "none" | "partial" | "full";
 
 export interface DcaTokenMeta {
   symbol: DcaSymbol;
@@ -144,11 +152,28 @@ export interface SatelliteEvaluation {
 }
 
 export interface FactorBreakdown {
-  id: "value" | "trend" | "sentiment" | "momentum" | "risk";
+  id: RegimeFactorId;
   label: string;
   score: number;
   weight: number;
   note: string;
+  source: FactorSource;
+}
+
+export interface BasketMix {
+  corePercent: number;
+  satellitePercent: number;
+  highBetaPercent: number;
+}
+
+export interface RegimeMetrics {
+  fearGreed: number | null;
+  fearGreedLabel: string | null;
+  stablecoinMcapUsd: number | null;
+  stablecoinChange30d: number | null;
+  cbbi: number | null;
+  cbbiMock: boolean;
+  fetchedAt: string | null;
 }
 
 export interface MarketRegime {
@@ -160,6 +185,8 @@ export interface MarketRegime {
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
   factors: FactorBreakdown[];
+  basket: BasketMix;
+  safeHaven: boolean;
 }
 
 export interface TokenExecutionPlan {
@@ -211,6 +238,7 @@ export interface TokenExecutionPlan {
   highBetaRedirectedUsd: number;
   satellite: SatelliteEvaluation | null;
   satelliteRedirectedUsd: number;
+  waterfallDestination: string;
 }
 
 export interface WeeklyDcaPlan {
@@ -229,6 +257,15 @@ export interface WeeklyDcaPlan {
   highBetaRedirectedUsd: number;
   satellitePausedSymbols: DcaSymbol[];
   satelliteRedirectedUsd: number;
+  targetCorePercent: number;
+  targetSatellitePercent: number;
+  targetHighBetaPercent: number;
+  satelliteBasketUsd: number;
+  highBetaBasketUsd: number;
+  satelliteWaterfallMode: WaterfallMode;
+  highBetaWaterfallMode: WaterfallMode;
+  satelliteWaterfallNote: string;
+  highBetaWaterfallNote: string;
   plans: TokenExecutionPlan[];
   narrative: string[];
   allocationLabel: string;

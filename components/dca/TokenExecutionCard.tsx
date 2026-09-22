@@ -324,7 +324,7 @@ export function TokenExecutionCard({
           </p>
           <p className="text-[11px] font-medium leading-relaxed text-amber-100/90">
             Dôvod: {highBeta.reason}. {formatUsd(plan.highBetaRedirectedUsd)}{" "}
-            dynamicky presmerovaných do Core (BTC).
+            presmerovaných do {plan.waterfallDestination || "Core (BTC)"}.
           </p>
         </div>
       )}
@@ -335,7 +335,7 @@ export function TokenExecutionCard({
           </p>
           <p className="text-[11px] font-medium leading-relaxed text-cyan-100/90">
             Dôvod: {satellite.reason} {formatUsd(plan.satelliteRedirectedUsd)}{" "}
-            presmerovaných do Core (BTC).
+            presmerovaných do {plan.waterfallDestination || "Core (BTC)"}.
           </p>
         </div>
       )}

@@ -17,9 +17,6 @@ export function PortfolioSplitSection({
   allocationMode,
   onAllocationMode,
 }: PortfolioSplitSectionProps) {
-  const corePct = Math.max(0, Math.min(100, plan.corePercent));
-  const altPct = Math.max(0, 100 - corePct);
-
   return (
     <motion.section
       initial={{ opacity: 0, y: 12 }}
@@ -33,7 +30,9 @@ export function PortfolioSplitSection({
               {plan.allocationLabel} · {plan.allocationSubtitle}
             </p>
             <p className="mt-1 text-sm font-semibold text-white">
-              Core (BTC) {corePct.toFixed(0)}% · Altcoins {altPct.toFixed(0)}%
+              Core {plan.targetCorePercent.toFixed(0)}% · Sat{" "}
+              {plan.targetSatellitePercent.toFixed(0)}% · High-Beta{" "}
+              {plan.targetHighBetaPercent.toFixed(0)}%
             </p>
           </div>
         </div>
@@ -74,33 +73,50 @@ export function PortfolioSplitSection({
         <div className="mt-4">
           <div className="flex h-4 overflow-hidden rounded-full">
             <div
-              className="h-full bg-gradient-to-r from-sky-500 via-blue-500 to-cyan-400"
-              style={{ width: `${corePct}%` }}
+              className="h-full bg-gradient-to-r from-amber-400 to-orange-500"
+              style={{ width: `${plan.targetCorePercent}%` }}
             />
             <div
-              className="h-full bg-gradient-to-r from-violet-500 via-purple-500 to-fuchsia-400"
-              style={{ width: `${altPct}%` }}
+              className="h-full bg-gradient-to-r from-violet-400 to-purple-600"
+              style={{ width: `${plan.targetSatellitePercent}%` }}
+            />
+            <div
+              className="h-full bg-gradient-to-r from-fuchsia-400 to-pink-500"
+              style={{ width: `${plan.targetHighBetaPercent}%` }}
             />
           </div>
-          <div className="mt-3 grid grid-cols-2 gap-3">
+          <div className="mt-3 grid grid-cols-3 gap-2">
             <div className={`${glassInset} p-3`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-sky-300">
-                Core · BTC
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+                Core
               </p>
-              <p className="mt-1 text-lg font-bold text-white">{corePct.toFixed(0)}%</p>
+              <p className="mt-1 text-lg font-bold text-white">
+                {plan.targetCorePercent.toFixed(0)}%
+              </p>
               <p className="text-xs text-zinc-400">{formatUsd(plan.coreUsd)}</p>
             </div>
             <div className={`${glassInset} p-3`}>
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-purple-300">
-                Altcoins
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300">
+                Satelity
               </p>
-              <p className="mt-1 text-lg font-bold text-white">{altPct.toFixed(0)}%</p>
-              <p className="text-xs text-zinc-400">{formatUsd(plan.altUsd)}</p>
+              <p className="mt-1 text-lg font-bold text-white">
+                {plan.targetSatellitePercent.toFixed(0)}%
+              </p>
+              <p className="text-xs text-zinc-400">{formatUsd(plan.satelliteBasketUsd)}</p>
+            </div>
+            <div className={`${glassInset} p-3`}>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
+                High-Beta
+              </p>
+              <p className="mt-1 text-lg font-bold text-white">
+                {plan.targetHighBetaPercent.toFixed(0)}%
+              </p>
+              <p className="text-xs text-zinc-400">{formatUsd(plan.highBetaBasketUsd)}</p>
             </div>
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-            Plynulý prechod medzi core a altami podľa skóre. BTC floor 50% ostáva
-            vždy v platnosti.
+            Plynulá krivka CONFLUENCE (nie schody). Waterfall drží budget v koši, kým
+            ostane aspoň jeden schválený token; inak ide celý kôš do BTC.
           </p>
         </div>
       </div>

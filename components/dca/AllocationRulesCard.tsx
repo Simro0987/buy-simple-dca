@@ -33,7 +33,7 @@ export function AllocationRulesCard({
   whyOpen,
   onToggleWhy,
 }: AllocationRulesCardProps) {
-  const btcFill = Math.max(plan.corePercent, 50);
+  const btcFill = Math.max(0, Math.min(100, plan.corePercent));
   const displayedReserve = plan.reserveUsd + cashReserveUsd + executionImpactUsd;
 
   return (
@@ -61,8 +61,9 @@ export function AllocationRulesCard({
           />
         </div>
         <p className="text-[11px] leading-relaxed text-zinc-500">
-          BTC musí tvoriť najmenej 50% nákupného kapitálu. Zvyšok je dynamický podľa
-          satelitov, high-beta vrstvy a STOP režimu.
+          BTC Core podľa CONFLUENCE ({plan.targetCorePercent.toFixed(0)}% cieľ). Waterfall
+          necháva satelitný a high-beta budget v koši, kým je aspoň jeden schválený
+          token. REDUCE a expirované LMT idú len do Hotovosť rezervy.
         </p>
       </div>
 
