@@ -115,8 +115,10 @@ export function PortfolioSplitSection({
             </div>
           </div>
           <p className="mt-3 text-[11px] leading-relaxed text-zinc-500">
-            Plynulá krivka CONFLUENCE (nie schody). Waterfall drží budget v koši, kým
-            ostane aspoň jeden schválený token; inak ide celý kôš do BTC.
+            Plynulá krivka CONFLUENCE {plan.confluence}/100 z nasadeného kapitálu
+            ({formatUsd(plan.deployedCapital)}), nie z celej týždennej sumy. Core vždy ≥
+            50% nasadeného. Waterfall drží budget v koši, kým ostane aspoň jeden
+            schválený token; inak ide celý kôš do BTC.
           </p>
         </div>
       </div>

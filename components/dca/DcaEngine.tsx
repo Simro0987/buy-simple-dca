@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { AlertTriangle, ShoppingCart } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AllocationRulesCard } from "@/components/dca/AllocationRulesCard";
 import { ConfirmPurchaseSheet } from "@/components/dca/ConfirmPurchaseSheet";
 import { DcaActivityCard } from "@/components/dca/DcaActivityCard";
@@ -29,6 +29,7 @@ import type { DcaSymbol, LimitLeg, TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
 import { portfolioHoldings } from "@/lib/data";
 import type { Transaction } from "@/lib/portfolioStorage";
+import { useCapitalStore } from "@/store/capitalStore";
 import { useDcaStore } from "@/store/dcaStore";
 import { useExecutionStore } from "@/store/executionStore";
 
@@ -47,19 +48,23 @@ export function DcaEngine({
   onExecutionFill,
 }: DcaEngineProps) {
   const hydrated = useDcaHydrated();
+  const baseAmount = useDcaStore((state) => state.baseAmount);
   const weeklyAmount = useDcaStore((state) => state.weeklyAmount);
   const lmt2MinUsd = useDcaStore((state) => state.lmt2MinUsd);
   const moneyMode = useDcaStore((state) => state.moneyMode);
   const allocationMode = useDcaStore((state) => state.allocationMode);
+  const allocationOverride = useDcaStore((state) => state.allocationOverride);
   const ritualOpen = useDcaStore((state) => state.ritualOpen);
   const whyOpen = useDcaStore((state) => state.whyOpen);
-  const setWeeklyAmount = useDcaStore((state) => state.setWeeklyAmount);
+  const setBaseAmount = useDcaStore((state) => state.setBaseAmount);
   const setLmt2MinUsd = useDcaStore((state) => state.setLmt2MinUsd);
   const toggleMoneyMode = useDcaStore((state) => state.toggleMoneyMode);
   const setAllocationMode = useDcaStore((state) => state.setAllocationMode);
+  const setAllocationOverride = useDcaStore((state) => state.setAllocationOverride);
   const autoFill = useDcaStore((state) => state.autoFill);
   const setRitualOpen = useDcaStore((state) => state.setRitualOpen);
   const setWhyOpen = useDcaStore((state) => state.setWhyOpen);
+  const setPipeline = useCapitalStore((state) => state.setPipeline);
 
   const nowMs = useExecutionClock();
   const pendingOrders = useExecutionStore((state) => state.pending_orders);
@@ -83,15 +88,29 @@ export function DcaEngine({
   const weeklyPlan = useMemo(
     () =>
       buildWeeklyDcaPlan({
-        weeklyAmount,
+        weeklyAmount: baseAmount || weeklyAmount,
         moneyMode,
         allocationMode,
         snapshots,
         regimeMetrics,
         minLmt2Usd: lmt2MinUsd,
+        allocationOverride,
       }),
-    [weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics, lmt2MinUsd],
+    [baseAmount, weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics, lmt2MinUsd, allocationOverride],
   );
+
+  useEffect(() => {
+    setPipeline({
+      baseAmount: weeklyPlan.baseAmount,
+      deploymentScore: weeklyPlan.deploymentScore,
+      allocationPercent: weeklyPlan.allocationPercent,
+      deployedCapital: weeklyPlan.deployedCapital,
+      undeployedToReserve: weeklyPlan.undeployedToReserve,
+      confluence: weeklyPlan.confluence,
+      basketSplits: weeklyPlan.basketSplits,
+      finalBudgets: weeklyPlan.finalBudgets,
+    });
+  }, [setPipeline, weeklyPlan]);
 
   const planBySymbol = useMemo(() => {
     const map = new Map<DcaSymbol, TokenExecutionPlan>();
@@ -205,8 +224,8 @@ export function DcaEngine({
       )}
 
       <WeeklyInvestmentCard
-        value={weeklyAmount}
-        onChange={setWeeklyAmount}
+        value={baseAmount || weeklyAmount}
+        onChange={setBaseAmount}
         moneyMode={moneyMode}
         onToggleMoneyMode={toggleMoneyMode}
         lmt2MinUsd={lmt2MinUsd}
@@ -214,6 +233,13 @@ export function DcaEngine({
       />
       <MarketRegimePanel
         regime={weeklyPlan.regime}
+        baseAmount={weeklyPlan.baseAmount}
+        deployedCapital={weeklyPlan.deployedCapital}
+        undeployedToReserve={weeklyPlan.undeployedToReserve}
+        engineAllocationPercent={weeklyPlan.engineAllocationPercent}
+        allocationOverride={allocationOverride}
+        onAllocationChange={setAllocationOverride}
+        onResetAllocation={() => setAllocationOverride(null)}
         loading={(loading && !pricesReady) || regimeLoading}
       />
       <AllocationRulesCard

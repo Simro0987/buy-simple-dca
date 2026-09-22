@@ -3,6 +3,7 @@
 import { ChevronDown, Activity, Droplets, Gauge, TrendingUp, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatUsd } from "@/lib/data";
+import { SAFE_HAVEN_COPY } from "@/lib/dca/confluence";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
 import type { FactorBreakdown, RegimeFactorId, WeeklyDcaPlan } from "@/lib/dca/types";
 
@@ -41,7 +42,7 @@ export function AllocationRulesCard({
   whyOpen,
   onToggleWhy,
 }: AllocationRulesCardProps) {
-  const btcFill = Math.max(0, Math.min(100, plan.corePercent));
+  const btcFill = Math.max(0, Math.min(100, plan.targetCorePercent));
   const displayedReserve = plan.reserveUsd + cashReserveUsd + executionImpactUsd;
 
   return (
@@ -51,8 +52,11 @@ export function AllocationRulesCard({
       className={`${glassPanel} p-5`}
     >
       <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        Základné alokačné pravidlo
+        Fáza B · Ako rozdeliť nasadený kapitál
       </p>
+      <h3 className="mt-1 text-sm font-bold uppercase tracking-wide text-white">
+        Základné alokačné pravidlo
+      </h3>
 
       <div className="mt-3 space-y-2">
         <div className="flex items-center justify-between text-xs text-zinc-300">
@@ -69,9 +73,43 @@ export function AllocationRulesCard({
           />
         </div>
         <p className="text-[11px] leading-relaxed text-zinc-400">
-          Bitcoin musí ≥50% kapitálu; zvyšok dynamicky podľa trhu/stratégie.
+          Bitcoin musí ≥50% nasadeného kapitálu; zvyšok dynamicky podľa trhu/stratégie.
         </p>
       </div>
+
+      <div className="mt-4">
+        <p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+          Core vs Altcoiny · z nasadeného {formatUsd(plan.deployedCapital)}
+        </p>
+        <div className="flex h-3 overflow-hidden rounded-full bg-zinc-800/90">
+          <div
+            className="h-full bg-gradient-to-r from-amber-400 to-orange-500"
+            style={{ width: `${plan.targetCorePercent}%` }}
+          />
+          <div
+            className="h-full bg-gradient-to-r from-violet-400 via-purple-500 to-fuchsia-500"
+            style={{ width: `${100 - plan.targetCorePercent}%` }}
+          />
+        </div>
+        <div className="mt-2 flex justify-between text-[11px] font-semibold">
+          <span className="text-amber-300">
+            Core {plan.targetCorePercent.toFixed(0)}% · {formatUsd(plan.finalBudgets.coreUsd)}
+          </span>
+          <span className="text-violet-300">
+            Alt {(100 - plan.targetCorePercent).toFixed(0)}% ·{" "}
+            {formatUsd(plan.finalBudgets.satelliteUsd + plan.finalBudgets.highBetaUsd)}
+          </span>
+        </div>
+      </div>
+
+      {plan.regime.safeHaven && (
+        <div
+          role="status"
+          className="mt-4 rounded-2xl border border-amber-400/50 bg-amber-400/12 px-3 py-2.5 text-[11px] leading-relaxed font-medium text-amber-100 shadow-[0_0_22px_rgba(251,191,36,0.28)]"
+        >
+          {SAFE_HAVEN_COPY}
+        </div>
+      )}
 
       <div className="mt-4 space-y-2">
         <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">
@@ -116,8 +154,9 @@ export function AllocationRulesCard({
           );
         })}
         <p className="text-[11px] leading-relaxed text-zinc-500">
-          Váhy sa menia dynamicky podľa trhového režimu (BULL / BEAR / SIDEWAYS / PANIC /
-          EUPHORIA). Waterfall drží satelitný a high-beta budget v koši. REDUCE a
+          Váhy sa menia dynamicky podľa 5-faktorového mozgu (BULL / BEAR / SIDEWAYS / PANIC /
+          EUPHORIA). Koše sú % z nasadeného kapitálu, nie z celej týždennej sumy.
+          Waterfall drží satelitný a high-beta budget v koši. REDUCE a
           expirované LMT idú len do Hotovosť rezervy.
         </p>
       </div>
@@ -131,7 +170,7 @@ export function AllocationRulesCard({
             {formatUsd(displayedReserve, displayedReserve < 0 ? { showSign: true } : undefined)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">
-            Týždeň {formatUsd(plan.reserveUsd - plan.brakeBoostReserveDelta)} · cash{" "}
+            Nenasadené {formatUsd(plan.undeployedToReserve)} · cash{" "}
             {formatUsd(cashReserveUsd)}
           </p>
           {plan.brakeBoostReserveDelta !== 0 && (
@@ -159,7 +198,7 @@ export function AllocationRulesCard({
             {formatUsd(plan.weeklyAmount)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">
-            Nasadené {formatUsd(plan.deployedUsd)}
+            Nasadené {formatUsd(plan.deployedCapital)} · {plan.allocationPercent.toFixed(0)}%
           </p>
         </div>
       </div>
@@ -178,7 +217,7 @@ export function AllocationRulesCard({
       {whyOpen && (
         <div className="mt-2 space-y-3 px-1">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-400">
-            Dopad faktorov na CONFLUENCE {plan.regime.finalScore}/100
+            Dopad faktorov na CONFLUENCE {plan.confluence}/100
           </p>
           <ul className="space-y-1.5 text-[11px] leading-relaxed text-zinc-400">
             {plan.regime.factors.map((factor) => (

@@ -185,17 +185,43 @@ export interface RegimeMetrics {
   fetchedAt: string | null;
 }
 
+export interface FinalBudgets {
+  coreUsd: number;
+  satelliteUsd: number;
+  highBetaUsd: number;
+}
+
+export interface DeploymentDecision {
+  kind: RegimeKind;
+  englishKind: string;
+  label: string;
+  description: string;
+  score: number;
+  allocationPercent: number;
+  heat: number;
+  confidence: ConfidenceLevel;
+  confidenceMultiplier: number;
+  blend: RegimeBlendShare[];
+  notes: string[];
+}
+
 export interface MarketRegime {
   kind: RegimeKind;
   englishKind: string;
   label: string;
   description: string;
+  /** Phase A — How Much. Shown as Final Score on TRHOVÝ REŽIM. */
   finalScore: number;
+  /** Phase A — % of base amount to deploy this week. */
   allocationPercent: number;
   confidence: ConfidenceLevel;
   confidenceMultiplier: number;
+  /** Phase B — How to Split. 5-factor CONFLUENCE 0–100. */
+  confluenceScore: number;
   factors: FactorBreakdown[];
   blend: RegimeBlendShare[];
+  deploymentBlend: RegimeBlendShare[];
+  deploymentNotes: string[];
   basket: BasketMix;
   safeHaven: boolean;
 }
@@ -269,6 +295,20 @@ export interface TokenExecutionPlan {
 
 export interface WeeklyDcaPlan {
   regime: MarketRegime;
+  /** User base investment (Phase A input). */
+  baseAmount: number;
+  deploymentScore: number;
+  allocationPercent: number;
+  /** Engine (non-override) allocation % from Phase A. */
+  engineAllocationPercent: number;
+  /** Phase A output: base × allocation%. Input to Phase B. */
+  deployedCapital: number;
+  /** Remainder of base not deployed this week → Hotovosť. */
+  undeployedToReserve: number;
+  confluence: number;
+  basketSplits: BasketMix;
+  finalBudgets: FinalBudgets;
+  /** Post brake/boost execution total (from deployed capital). */
   deployedUsd: number;
   reserveUsd: number;
   brakeBoostReserveDelta: number;

@@ -481,7 +481,7 @@ export function TokenExecutionCard({
         </div>
         <div className="text-right">
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-            Týždenný podiel
+            Podiel nasadeného
           </p>
           <p className="text-lg font-bold text-emerald-300">
             {formatPercent(plan.weightPercent, 0)}

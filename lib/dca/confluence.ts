@@ -34,7 +34,7 @@ const REGIME_WEIGHTS: Record<
   EUPHORIA: { valuation: 0.34, trend: 0.14, sentiment: 0.26, momentum: 0.1, risk: 0.16 },
 };
 
-const REGIME_COPY: Record<
+export const REGIME_COPY: Record<
   RegimeKind,
   { english: string; label: string; description: string }
 > = {
@@ -45,7 +45,7 @@ const REGIME_COPY: Record<
   EUPHORIA: { english: "EUPHORIA", label: "EUFÓRIA", description: "Rizikový apetít na maxime" },
 };
 
-const REGIME_ORDER: RegimeKind[] = ["PANIC", "BEAR", "SIDEWAYS", "BULL", "EUPHORIA"];
+export const REGIME_ORDER: RegimeKind[] = ["PANIC", "BEAR", "SIDEWAYS", "BULL", "EUPHORIA"];
 const SOFTMAX_TEMPERATURE = 16;
 
 export const SAFE_HAVEN_THRESHOLD = 85;
@@ -430,8 +430,11 @@ export function buildConfluenceRegime(
     allocationPercent: 100,
     confidence,
     confidenceMultiplier,
+    confluenceScore: finalScore,
     factors,
     blend,
+    deploymentBlend: blend,
+    deploymentNotes: [],
     basket,
     safeHaven: finalScore > SAFE_HAVEN_THRESHOLD,
   };

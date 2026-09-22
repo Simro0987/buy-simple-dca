@@ -4,6 +4,10 @@ import {
   EMPTY_REGIME_METRICS,
 } from "@/lib/dca/confluence";
 import {
+  applyDeploymentCapital,
+  calculateDeploymentScore,
+} from "@/lib/dca/deployment";
+import {
   applyBrakeBoost,
   computeLimitLadder,
   computeUniversalExecution,
@@ -92,7 +96,7 @@ function toSatelliteTokenData(snapshot: TokenMarketSnapshot): SatelliteTokenData
 function buildPlan(
   snapshot: TokenMarketSnapshot,
   usd: number,
-  weeklyAmount: number,
+  deployedCapital: number,
   moneyMode: boolean,
   stopped: boolean,
   highBeta: HighBetaEvaluation | null,
@@ -166,7 +170,7 @@ function buildPlan(
     name: meta.name,
     category: meta.category,
     subTags: meta.subTags,
-    weightPercent: weeklyAmount > 0 ? (totalUsd / weeklyAmount) * 100 : 0,
+    weightPercent: deployedCapital > 0 ? (totalUsd / deployedCapital) * 100 : 0,
     totalUsd,
     marketUsd,
     originalMarketUsd: brakeBoost.originalMktAmount,
@@ -236,24 +240,34 @@ export function buildWeeklyDcaPlan(options: {
   snapshots: Partial<Record<DcaSymbol, TokenMarketSnapshot>>;
   regimeMetrics?: RegimeMetrics;
   minLmt2Usd?: number;
+  allocationOverride?: number | null;
 }): WeeklyDcaPlan {
   const { weeklyAmount, moneyMode, allocationMode, snapshots } = options;
   const minLmt2Usd = options.minLmt2Usd ?? DEFAULT_LMT2_MIN_USD;
   const btc = snapshots.BTC;
-  const regime = buildConfluenceRegime(
-    btc,
-    options.regimeMetrics ?? EMPTY_REGIME_METRICS,
-    moneyMode,
+  const metrics = options.regimeMetrics ?? EMPTY_REGIME_METRICS;
+  const brain = buildConfluenceRegime(btc, metrics, moneyMode);
+  const deployment = calculateDeploymentScore(btc, metrics, moneyMode);
+  const override = options.allocationOverride;
+  const engineAllocationPercent = deployment.allocationPercent;
+  const allocationPercent =
+    override != null && Number.isFinite(override)
+      ? clamp(override, 0, 100)
+      : engineAllocationPercent;
+
+  const baseAmount = Math.max(0, weeklyAmount);
+  const { deployedCapital, undeployedToReserve } = applyDeploymentCapital(
+    baseAmount,
+    allocationPercent,
   );
-  const safeWeekly = Math.max(0, weeklyAmount);
-  const baseDeployedUsd = roundUsd(safeWeekly);
-  const baseReserveUsd = 0;
+  const baseDeployedUsd = deployedCapital;
+  const baseReserveUsd = undeployedToReserve;
   let deployedUsd = baseDeployedUsd;
 
   const mix =
     allocationMode === "BTC_ONLY"
       ? { corePercent: 100, satellitePercent: 0, highBetaPercent: 0 }
-      : regime.basket;
+      : brain.basket;
   let coreUsd = roundUsd(baseDeployedUsd * (mix.corePercent / 100));
   let satBudget = roundUsd(baseDeployedUsd * (mix.satellitePercent / 100));
   let betaBudget = roundUsd(baseDeployedUsd - coreUsd - satBudget);
@@ -262,6 +276,22 @@ export function buildWeeklyDcaPlan(options: {
     satBudget = 0;
     betaBudget = 0;
   }
+
+  const regime = {
+    ...brain,
+    kind: deployment.kind,
+    englishKind: deployment.englishKind,
+    label: deployment.label,
+    description: deployment.description,
+    finalScore: deployment.score,
+    allocationPercent,
+    confidence: deployment.confidence,
+    confidenceMultiplier: deployment.confidenceMultiplier,
+    confluenceScore: brain.confluenceScore,
+    deploymentBlend: deployment.blend,
+    deploymentNotes: deployment.notes,
+    basket: mix,
+  };
 
   const highBetaUniverse = DCA_TOKENS.filter((token) => token.category === "HIGH_BETA");
   const satelliteUniverse = DCA_TOKENS.filter((token) => token.category === "SATELLITE");
@@ -363,7 +393,7 @@ export function buildWeeklyDcaPlan(options: {
     return buildPlan(
       snapshot,
       usd,
-      safeWeekly,
+      baseDeployedUsd,
       moneyMode,
       false,
       highBetaVerdicts.get(meta.symbol) ?? null,
@@ -418,9 +448,10 @@ export function buildWeeklyDcaPlan(options: {
     .filter((symbol) => satelliteVerdicts.get(symbol)?.approved);
 
   const narrative = [
-    `CONFLUENCE ${regime.finalScore}/100 → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (plynulá krivka, Core ≥ 50%, High-Beta strop 25%).`,
+    `Fáza A · Koľko: Final Score ${deployment.score}/100 → Alokácia ${allocationPercent.toFixed(0)}% z ${baseAmount.toFixed(0)}$ = nasadené ${deployedCapital.toFixed(2)}$ · Hotovosť ${undeployedToReserve.toFixed(2)}$.`,
+    `Fáza B · Ako rozdeliť: CONFLUENCE ${regime.confluenceScore}/100 z nasadeného kapitálu → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (plynulá krivka, Core ≥ 50% nasadeného, High-Beta strop 25%).`,
     allocationMode === "BTC_ONLY"
-      ? "Režim BTC ONLY posiela celý nákup do Bitcoinu."
+      ? "Režim BTC ONLY posiela celý nasadený kapitál do Bitcoinu."
       : "Satelity (ETH, SOL, LINK, AAVE, UNI) idú cez Smart DCA protokol; LINK má výnimku z brzdy eufórie.",
     satWaterfall.mode === "partial"
       ? `Waterfall A: ${satWaterfall.note}`
@@ -446,10 +477,23 @@ export function buildWeeklyDcaPlan(options: {
 
   return {
     regime,
+    baseAmount,
+    deploymentScore: deployment.score,
+    allocationPercent,
+    engineAllocationPercent,
+    deployedCapital,
+    undeployedToReserve,
+    confluence: regime.confluenceScore,
+    basketSplits: mix,
+    finalBudgets: {
+      coreUsd: roundUsd(baseDeployedUsd * (mix.corePercent / 100)),
+      satelliteUsd: satBudget,
+      highBetaUsd: betaBudget,
+    },
     deployedUsd,
     reserveUsd,
     brakeBoostReserveDelta,
-    weeklyAmount: safeWeekly,
+    weeklyAmount: baseAmount,
     coreUsd,
     altUsd,
     corePercent,
