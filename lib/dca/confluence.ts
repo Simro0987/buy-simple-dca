@@ -34,12 +34,15 @@ const REGIME_WEIGHTS: Record<
   EUPHORIA: { valuation: 0.34, trend: 0.14, sentiment: 0.26, momentum: 0.1, risk: 0.16 },
 };
 
-const REGIME_COPY: Record<RegimeKind, { label: string; description: string }> = {
-  PANIC: { label: "PANIKA", description: "Extrémny strach a volatilita" },
-  BEAR: { label: "MEDVEĎ", description: "Trh pod kľúčovými priemermi" },
-  SIDEWAYS: { label: "STRANA", description: "Vyvážený režim" },
-  BULL: { label: "BÝK", description: "Trend potvrdený" },
-  EUPHORIA: { label: "EUFÓRIA", description: "Rizikový apetít na maxime" },
+const REGIME_COPY: Record<
+  RegimeKind,
+  { english: string; label: string; description: string }
+> = {
+  PANIC: { english: "PANIC", label: "PANIKA", description: "Extrémny strach a volatilita" },
+  BEAR: { english: "BEAR", label: "MEDVEĎ", description: "Medvedí trend" },
+  SIDEWAYS: { english: "SIDEWAYS", label: "STRANA", description: "Bočný pohyb" },
+  BULL: { english: "BULL", label: "BÝK", description: "Býčí trend" },
+  EUPHORIA: { english: "EUPHORIA", label: "EUFÓRIA", description: "Rizikový apetít na maxime" },
 };
 
 const REGIME_ORDER: RegimeKind[] = ["PANIC", "BEAR", "SIDEWAYS", "BULL", "EUPHORIA"];
@@ -190,6 +193,18 @@ export function allocateBaskets(confluence: number): BasketMix {
     const extra = highBeta - 25;
     highBeta = 25;
     satellite += extra;
+  }
+  if (core < 50) {
+    const missing = 50 - core;
+    const rest = satellite + highBeta;
+    if (rest > 0) {
+      satellite -= missing * (satellite / rest);
+      highBeta -= missing * (highBeta / rest);
+    } else {
+      satellite = 0;
+      highBeta = 0;
+    }
+    core = 50;
   }
   const corePercent = Math.round(core * 10) / 10;
   const satellitePercent = Math.round(satellite * 10) / 10;
@@ -394,7 +409,7 @@ export function buildConfluenceRegime(
   const primary = REGIME_ORDER.reduce((best, kind) =>
     (blendMap[kind] ?? 0) > (blendMap[best] ?? 0) ? kind : best,
   );
-  const { label, description } = REGIME_COPY[primary];
+  const { label, description, english } = REGIME_COPY[primary];
   const basket = allocateBaskets(finalScore);
   const spread = factors.map((factor) => factor.score);
   const mean = spread.reduce((sum, value) => sum + value, 0) / spread.length;
@@ -403,15 +418,18 @@ export function buildConfluenceRegime(
   );
   const confidence =
     stdev < 12 ? "Vysoká" : stdev < 22 ? "Stredná" : "Nízka";
+  const confidenceMultiplier =
+    Math.round(lerp(1, 0.72, smoothstep(8, 30, stdev)) * 100) / 100;
 
   return {
     kind: primary,
+    englishKind: english,
     label,
     description,
     finalScore,
     allocationPercent: 100,
     confidence,
-    confidenceMultiplier: 1,
+    confidenceMultiplier,
     factors,
     blend,
     basket,

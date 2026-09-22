@@ -38,7 +38,7 @@ export const useDcaStore = create<DcaStore>()(
       moneyMode: true,
       allocationMode: "ALL",
       ritualOpen: false,
-      whyOpen: false,
+      whyOpen: true,
       activations: {},
       setWeeklyAmount: (value) =>
         set({ weeklyAmount: Math.max(0, Number.isFinite(value) ? value : 0) }),

@@ -1,10 +1,18 @@
 "use client";
 
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Activity, Droplets, Gauge, TrendingUp, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
 import { formatUsd } from "@/lib/data";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
-import type { WeeklyDcaPlan } from "@/lib/dca/types";
+import type { FactorBreakdown, RegimeFactorId, WeeklyDcaPlan } from "@/lib/dca/types";
+
+const factorIcons: Record<RegimeFactorId, typeof Gauge> = {
+  valuation: Wallet,
+  trend: TrendingUp,
+  sentiment: Gauge,
+  momentum: Activity,
+  risk: Droplets,
+};
 
 function BitcoinMark() {
   return (
@@ -52,7 +60,7 @@ export function AllocationRulesCard({
             <BitcoinMark />
             BTC Podiel
           </span>
-          <span className="font-bold text-emerald-300">{btcFill.toFixed(0)}%</span>
+          <span className="font-bold text-emerald-300">{btcFill.toFixed(0)}%+</span>
         </div>
         <div className="h-3 overflow-hidden rounded-full bg-zinc-800/90">
           <div
@@ -60,10 +68,57 @@ export function AllocationRulesCard({
             style={{ width: `${Math.min(100, btcFill)}%` }}
           />
         </div>
+        <p className="text-[11px] leading-relaxed text-zinc-400">
+          Bitcoin musí ≥50% kapitálu; zvyšok dynamicky podľa trhu/stratégie.
+        </p>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+          5 faktorov · Valuácia / Trend / Sentiment / Momentum / Riziko
+        </p>
+        {plan.regime.factors.map((factor: FactorBreakdown) => {
+          const Icon = factorIcons[factor.id];
+          return (
+            <div
+              key={factor.id}
+              className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2"
+            >
+              <Icon className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold text-white">
+                    {factor.label}
+                    {factor.source === "mock" && (
+                      <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">
+                        mock
+                      </span>
+                    )}
+                  </p>
+                  <p className="text-[11px] font-bold text-zinc-300">
+                    {factor.score}
+                    <span className="ml-1 font-medium text-zinc-600">
+                      w {(factor.weight * 100).toFixed(0)}%
+                    </span>
+                  </p>
+                </div>
+                <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-full rounded-full bg-emerald-400/80"
+                    style={{ width: `${factor.score}%` }}
+                  />
+                </div>
+                <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
+                  {factor.formula}
+                </p>
+              </div>
+            </div>
+          );
+        })}
         <p className="text-[11px] leading-relaxed text-zinc-500">
-          BTC Core podľa CONFLUENCE ({plan.targetCorePercent.toFixed(0)}% cieľ). Waterfall
-          necháva satelitný a high-beta budget v koši, kým je aspoň jeden schválený
-          token. REDUCE a expirované LMT idú len do Hotovosť rezervy.
+          Váhy sa menia dynamicky podľa trhového režimu (BULL / BEAR / SIDEWAYS / PANIC /
+          EUPHORIA). Waterfall drží satelitný a high-beta budget v koši. REDUCE a
+          expirované LMT idú len do Hotovosť rezervy.
         </p>
       </div>
 

@@ -182,8 +182,6 @@ export function DcaEngine({
   return (
     <div className="space-y-5">
       <DcaPlanHeader
-        moneyMode={moneyMode}
-        onToggleMoneyMode={toggleMoneyMode}
         onRitual={() => setRitualOpen(true)}
         onAutoFill={autoFill}
       />
@@ -209,6 +207,8 @@ export function DcaEngine({
       <WeeklyInvestmentCard
         value={weeklyAmount}
         onChange={setWeeklyAmount}
+        moneyMode={moneyMode}
+        onToggleMoneyMode={toggleMoneyMode}
         lmt2MinUsd={lmt2MinUsd}
         onLmt2MinUsd={setLmt2MinUsd}
       />

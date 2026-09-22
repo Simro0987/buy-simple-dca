@@ -187,6 +187,7 @@ export interface RegimeMetrics {
 
 export interface MarketRegime {
   kind: RegimeKind;
+  englishKind: string;
   label: string;
   description: string;
   finalScore: number;

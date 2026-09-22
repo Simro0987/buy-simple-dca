@@ -418,7 +418,7 @@ export function buildWeeklyDcaPlan(options: {
     .filter((symbol) => satelliteVerdicts.get(symbol)?.approved);
 
   const narrative = [
-    `CONFLUENCE ${regime.finalScore}/100 → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (plynulá krivka, High-Beta strop 25%).`,
+    `CONFLUENCE ${regime.finalScore}/100 → Core ${mix.corePercent.toFixed(0)}% · Satelity ${mix.satellitePercent.toFixed(0)}% · High-Beta ${mix.highBetaPercent.toFixed(0)}% (plynulá krivka, Core ≥ 50%, High-Beta strop 25%).`,
     allocationMode === "BTC_ONLY"
       ? "Režim BTC ONLY posiela celý nákup do Bitcoinu."
       : "Satelity (ETH, SOL, LINK, AAVE, UNI) idú cez Smart DCA protokol; LINK má výnimku z brzdy eufórie.",
