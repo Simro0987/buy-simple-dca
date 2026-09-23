@@ -69,10 +69,8 @@ interface TokenExecutionCardProps {
   plan: TokenExecutionPlan;
   loading?: boolean;
   pendingLimit?: PendingOrder | null;
-  pendingLimit2?: PendingOrder | null;
   marketFill?: PortfolioAssetRecord | null;
   limitFill?: PortfolioAssetRecord | null;
-  limitFill2?: PortfolioAssetRecord | null;
   nowMs?: number;
   onCopied?: (message: string) => void;
   onActivateMarket: (symbol: DcaSymbol) => void;
@@ -249,7 +247,7 @@ function LimitTrack({
         }`}
       >
         {pending
-          ? "Čakajúca · PRICE LOCK"
+          ? "Čaká na burze (7d)"
           : fill
             ? "Zrealizované"
             : `Platnosť príkazu: ${LIMIT_VALIDITY_DAYS} dní`}
@@ -346,7 +344,7 @@ function LimitTrack({
             {...interactiveButton}
             className="mt-2 w-full rounded-xl border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            Aktivovať {title}
+            Aktivovať LMT
           </motion.button>
         </>
       )}
@@ -381,10 +379,8 @@ export function TokenExecutionCard({
   plan,
   loading = false,
   pendingLimit = null,
-  pendingLimit2 = null,
   marketFill = null,
   limitFill = null,
-  limitFill2 = null,
   nowMs = Date.now(),
   onCopied,
   onActivateMarket,
@@ -397,44 +393,39 @@ export function TokenExecutionCard({
   const highBetaRejected = Boolean(highBeta && !highBeta.approved);
   const highBetaApproved = Boolean(highBeta && highBeta.approved);
   const satellitePaused = Boolean(satellite && !satellite.approved);
-  const locked = highBetaRejected || satellitePaused;
+  const locked = !plan.gate.passed;
   const liveMarketQty = plan.price > 0 ? plan.marketUsd / plan.price : 0;
-  const showDualLimits = !plan.limit2Skipped && plan.limit2Usd > 0;
   const mktUsd = marketFill?.spentUsd ?? plan.marketUsd;
   const mktQty = marketFill?.tokenVolume ?? liveMarketQty;
-  const lmt1Usd =
+  const lmtUsd =
     pendingLimit?.spentUsd ?? limitFill?.spentUsd ?? (plan.limit1Usd || plan.limitUsd);
-  const lmt1Qty =
+  const lmtQty =
     pendingLimit?.tokenVolume ??
     limitFill?.tokenVolume ??
-    (plan.limit1Price > 0 ? plan.limit1Usd / plan.limit1Price : plan.limit1Qty);
-  const lmt1Price =
+    (plan.limitPrice > 0 ? plan.limitUsd / plan.limitPrice : plan.limitQty);
+  const lmtPrice =
     pendingLimit?.lockedLimitPrice ??
     limitFill?.priceUsd ??
     (plan.limit1Price || plan.limitPrice);
-  const lmt2Usd = pendingLimit2?.spentUsd ?? limitFill2?.spentUsd ?? plan.limit2Usd;
-  const lmt2Qty =
-    pendingLimit2?.tokenVolume ??
-    limitFill2?.tokenVolume ??
-    (plan.limit2Price > 0 ? plan.limit2Usd / plan.limit2Price : plan.limit2Qty);
-  const lmt2Price =
-    pendingLimit2?.lockedLimitPrice ?? limitFill2?.priceUsd ?? plan.limit2Price;
   const showMarketPane = !locked || Boolean(marketFill);
-  const showLimitPane =
-    !locked ||
-    Boolean(pendingLimit) ||
-    Boolean(limitFill) ||
-    Boolean(pendingLimit2) ||
-    Boolean(limitFill2);
+  const showLimitPane = !locked || Boolean(pendingLimit) || Boolean(limitFill);
   const showExecution = showMarketPane || showLimitPane;
-  const lmt1Share = plan.limitShare * (showDualLimits ? 1 - plan.lmt2Share : 1);
-  const lmt2SharePct = plan.limitShare * (showDualLimits ? plan.lmt2Share : 0);
 
   return (
     <motion.article
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${glassPanel} p-4 ${highBetaRejected ? "border-amber-500/30" : satellitePaused ? "border-cyan-500/30" : ""}`}
+      className={`${glassPanel} p-4 ${
+        plan.smartTrim
+          ? "border-amber-400/60 shadow-[0_0_28px_rgba(251,191,36,0.28)]"
+          : plan.fallingKnife
+            ? "border-rose-500/50"
+            : highBetaRejected
+              ? "border-amber-500/30"
+              : satellitePaused
+                ? "border-cyan-500/30"
+                : ""
+      }`}
     >
       <div className={`mb-3 flex items-start justify-between gap-3 ${locked ? "opacity-55 grayscale" : ""}`}>
         <div className="flex min-w-0 items-center gap-3">
@@ -470,10 +461,24 @@ export function TokenExecutionCard({
                   {statusCopy[plan.status]}
                 </span>
               )}
-              {locked && (
-                <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/40 bg-gradient-to-r from-amber-500/20 to-rose-500/20 px-2 py-0.5 text-[9px] font-bold uppercase text-amber-200">
-                  <Lock className="h-3 w-3" />
-                  Zamknuté
+              <span
+                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${
+                  plan.gate.passed
+                    ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-200"
+                    : "border-rose-400/40 bg-rose-500/15 text-rose-200 line-through decoration-rose-300/70"
+                }`}
+              >
+                {!plan.gate.passed && <Lock className="h-3 w-3" />}
+                {plan.gate.badge}
+              </span>
+              {plan.absorbedUsd > 0 && (
+                <span className="rounded-full border border-emerald-400/40 bg-emerald-400/15 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-200">
+                  +{plan.absorbedUsd.toFixed(0)} $ presmerované
+                </span>
+              )}
+              {plan.gate.passed && plan.basketWeightPercent > 0 && plan.category !== "CORE" && (
+                <span className="rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[9px] font-bold uppercase text-violet-200">
+                  RSI váha {plan.basketWeightPercent.toFixed(1)}%
                 </span>
               )}
             </div>
@@ -497,6 +502,17 @@ export function TokenExecutionCard({
         </div>
       </div>
 
+      {plan.smartTrim && (
+        <div className="mb-3 space-y-1 rounded-2xl border border-amber-400/50 bg-gradient-to-br from-amber-500/20 to-rose-500/10 px-3 py-2 shadow-[0_0_22px_rgba(251,191,36,0.25)]">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-amber-100">
+            {plan.smartTrim.headline}
+          </p>
+          <p className="text-[11px] font-medium leading-relaxed text-amber-50/90">
+            {plan.smartTrim.detail}
+          </p>
+          <p className="text-[10px] text-amber-200/70">Len návrh — žiadny automatický predaj.</p>
+        </div>
+      )}
       {highBetaApproved && highBeta && (
         <div className="mb-3 space-y-1 rounded-2xl border border-emerald-400/40 bg-emerald-400/10 px-3 py-2 shadow-[0_0_18px_rgba(52,211,153,0.25)]">
           <p className="text-[12px] font-bold uppercase tracking-wide text-emerald-300">
@@ -594,7 +610,7 @@ export function TokenExecutionCard({
                 <span className="text-emerald-300">
                   MKT {formatPercent(plan.marketShare, 0)}
                 </span>
-                <span className="text-zinc-500">RSI · LMT rebrík</span>
+                <span className="text-zinc-500">RSI · MKT / LMT</span>
                 <span className="text-amber-300">
                   LMT {formatPercent(plan.limitShare, 0)}
                 </span>
@@ -606,20 +622,9 @@ export function TokenExecutionCard({
                 />
                 <div
                   className="h-full bg-amber-400 transition-[width] duration-500"
-                  style={{ width: `${lmt1Share}%` }}
+                  style={{ width: `${plan.limitShare}%` }}
                 />
-                {showDualLimits && (
-                  <div
-                    className="h-full bg-orange-500 transition-[width] duration-500"
-                    style={{ width: `${lmt2SharePct}%` }}
-                  />
-                )}
               </div>
-              {plan.limit2Skipped && plan.limit2SkipReason && (
-                <p className="mb-2 text-[10px] leading-relaxed text-amber-200/80">
-                  {plan.limit2SkipReason}
-                </p>
-              )}
             </>
           )}
 
@@ -661,9 +666,9 @@ export function TokenExecutionCard({
                 <p className="text-[9px] text-zinc-500">
                   Pôvodne {formatUsd(plan.originalMarketUsd)}
                   {plan.brakeBoostReserveDelta > 0
-                    ? ` · +${formatUsd(plan.brakeBoostReserveDelta)} → rezerva`
+                    ? ` · +${formatUsd(plan.brakeBoostReserveDelta)} → Dostupný Kapitál`
                     : plan.brakeBoostReserveDelta < 0
-                      ? ` · ${formatUsd(plan.brakeBoostReserveDelta, { showSign: true })} ← rezerva`
+                      ? ` · ${formatUsd(plan.brakeBoostReserveDelta, { showSign: true })} ← Dostupný Kapitál`
                       : ""}
                 </p>
               )}
@@ -681,9 +686,13 @@ export function TokenExecutionCard({
                 Live {plan.price ? formatUnitPrice(plan.price) : "—"}
               </p>
               {marketFill ? (
-                <p className="mt-2 text-[10px] leading-relaxed text-emerald-200/90">
-                  {formatUsd(marketFill.spentUsd)} @ {formatUnitPrice(marketFill.priceUsd)}
-                </p>
+                <motion.button
+                  type="button"
+                  disabled
+                  className="mt-2 w-full rounded-xl border border-emerald-400/50 bg-emerald-400/20 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200"
+                >
+                  Zrealizované
+                </motion.button>
               ) : (
                 <motion.button
                   type="button"
@@ -698,48 +707,25 @@ export function TokenExecutionCard({
             </div>
             )}
             {showLimitPane && (
-              <div className={`grid gap-2 ${showDualLimits ? "grid-cols-2" : "grid-cols-1"}`}>
-                <LimitTrack
-                  title="LMT1"
-                  shareLabel={formatPercent(lmt1Share, 0)}
-                  usd={lmt1Usd}
-                  qty={lmt1Qty}
-                  price={lmt1Price}
-                  livePrice={plan.price}
-                  symbol={plan.symbol}
-                  targetLabel={plan.limit1TargetLabel || plan.limitTargetLabel}
-                  fallbackActive={plan.limit1FallbackActive}
-                  atrMult={plan.limit1AtrMult}
-                  pending={pendingLimit}
-                  fill={limitFill}
-                  nowMs={nowMs}
-                  onCopied={onCopied}
-                  onActivate={() => onActivateLimit(plan.symbol, "lmt1")}
-                  onFillPending={onFillPending}
-                  onCancelPending={onCancelPending}
-                />
-                {showDualLimits && (
-                  <LimitTrack
-                    title="LMT2"
-                    shareLabel={formatPercent(lmt2SharePct, 0)}
-                    usd={lmt2Usd}
-                    qty={lmt2Qty}
-                    price={lmt2Price}
-                    livePrice={plan.price}
-                    symbol={plan.symbol}
-                    targetLabel={plan.limit2TargetLabel}
-                    fallbackActive={plan.limit2FallbackActive}
-                    atrMult={plan.limit2AtrMult}
-                    pending={pendingLimit2}
-                    fill={limitFill2}
-                    nowMs={nowMs}
-                    onCopied={onCopied}
-                    onActivate={() => onActivateLimit(plan.symbol, "lmt2")}
-                    onFillPending={onFillPending}
-                    onCancelPending={onCancelPending}
-                  />
-                )}
-              </div>
+              <LimitTrack
+                title="LMT"
+                shareLabel={formatPercent(plan.limitShare, 0)}
+                usd={lmtUsd}
+                qty={lmtQty}
+                price={lmtPrice}
+                livePrice={plan.price}
+                symbol={plan.symbol}
+                targetLabel={plan.limit1TargetLabel || plan.limitTargetLabel}
+                fallbackActive={plan.limit1FallbackActive}
+                atrMult={plan.limit1AtrMult}
+                pending={pendingLimit}
+                fill={limitFill}
+                nowMs={nowMs}
+                onCopied={onCopied}
+                onActivate={() => onActivateLimit(plan.symbol, "lmt1")}
+                onFillPending={onFillPending}
+                onCancelPending={onCancelPending}
+              />
             )}
           </div>
         </>

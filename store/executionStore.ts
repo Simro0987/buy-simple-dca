@@ -19,6 +19,11 @@ import { isInCurrentDcaWeek } from "@/lib/dcaEngineConfig";
 
 interface ExecutionStore extends ExecutionLedger {
   activateMarket: (plan: TokenExecutionPlan, livePrice: number) => PortfolioAssetRecord | null;
+  spendAvailableCapital: (
+    symbol: DcaSymbol,
+    usd: number,
+    livePrice: number,
+  ) => PortfolioAssetRecord | null;
   activateLimit: (plan: TokenExecutionPlan, leg?: LimitLeg) => PendingOrder | null;
   fillPending: (id: string) => PortfolioAssetRecord | null;
   cancelPending: (id: string) => PendingOrder | null;
@@ -75,13 +80,33 @@ export const useExecutionStore = create<ExecutionStore>()(
         }));
         return record;
       },
+      spendAvailableCapital: (symbol, usd, livePrice) => {
+        const spentUsd = roundUsd(usd);
+        if (spentUsd <= 0 || !(livePrice > 0)) return null;
+        const now = new Date().toISOString();
+        const record: PortfolioAssetRecord = {
+          id: createLedgerId("flash"),
+          symbol,
+          status: "Zrealizované",
+          side: "market",
+          spentUsd,
+          priceUsd: livePrice,
+          tokenVolume: spentUsd / livePrice,
+          createdAt: now,
+          filledAt: now,
+        };
+        set((state) => ({
+          portfolio_assets: [record, ...state.portfolio_assets],
+        }));
+        return record;
+      },
       activateLimit: (plan, rawLeg) => {
         const leg: LimitLeg = rawLeg === "lmt2" ? "lmt2" : "lmt1";
         if (leg === "lmt2" && plan.limit2Skipped) return null;
-        const spentUsd = roundUsd(leg === "lmt2" ? plan.limit2Usd : plan.limit1Usd || plan.limitUsd);
-        const lockedLimitPrice = leg === "lmt2" ? plan.limit2Price : plan.limit1Price || plan.limitPrice;
+        const spentUsd = roundUsd(plan.limit1Usd || plan.limitUsd);
+        const lockedLimitPrice = plan.limit1Price || plan.limitPrice;
         if (spentUsd <= 0 || !(lockedLimitPrice > 0)) return null;
-        if (get().pendingFor(plan.symbol, leg) || get().limitFillThisWeek(plan.symbol, leg)) {
+        if (get().pendingFor(plan.symbol) || get().limitFillThisWeek(plan.symbol)) {
           return null;
         }
         const now = new Date();

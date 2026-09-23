@@ -160,8 +160,8 @@ const idleBrakeBoost = (originalMktAmount: number): BrakeBoostResult => ({
 
 /**
  * Phase 7: adjust only the Phase 6 MKT amount from 50D EMA distance.
- * LMT is never touched. Saved MKT goes to Hotovosť rezerva; extra MKT
- * is deducted from that reserve — never redirected to BTC.
+ * LMT is never touched. Saved MKT goes to Dostupný Kapitál; extra MKT
+ * is deducted from that pool — never redirected to BTC.
  */
 export function applyBrakeBoost(
   originalMktAmount: number,

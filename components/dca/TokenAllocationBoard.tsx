@@ -10,6 +10,21 @@ function sumScore(plans: TokenExecutionPlan[]): number {
   return plans.reduce((sum, plan) => sum + plan.score, 0);
 }
 
+function GateBadge({ plan }: { plan: TokenExecutionPlan }) {
+  const fail = !plan.gate.passed;
+  return (
+    <span
+      className={`inline-flex rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide ${
+        fail
+          ? "border-rose-400/40 bg-rose-500/15 text-rose-200 line-through decoration-rose-300/80"
+          : "border-emerald-400/40 bg-emerald-400/12 text-emerald-200"
+      }`}
+    >
+      {plan.gate.badge}
+    </span>
+  );
+}
+
 function Row({
   plan,
   barClass,
@@ -19,18 +34,26 @@ function Row({
   barClass: string;
   detail: string;
 }) {
-  const rejected = Boolean(plan.highBeta && !plan.highBeta.approved);
-  const paused = Boolean(plan.satellite && !plan.satellite.approved);
-  const locked = rejected || paused;
+  const locked = !plan.gate.passed;
   return (
-    <div className={`space-y-1.5 ${locked ? "opacity-50 grayscale" : ""}`}>
+    <div className={`space-y-1.5 ${locked ? "opacity-70" : ""}`}>
       <div className="flex items-center justify-between gap-2">
-        <p className="text-sm font-semibold text-white">
+        <p className={`text-sm font-semibold ${locked ? "text-zinc-400 line-through" : "text-white"}`}>
           {plan.symbol}
-          {rejected ? " · zamietnuté" : paused ? " · pozastavené" : ""}
         </p>
         <p className="text-xs font-medium text-zinc-300">{detail}</p>
       </div>
+      <GateBadge plan={plan} />
+      {plan.absorbedUsd > 0 && (
+        <p className="text-[11px] font-semibold text-emerald-300">
+          +{plan.absorbedUsd.toFixed(0)} $ presmerované
+        </p>
+      )}
+      {plan.gate.passed && plan.basketWeightPercent > 0 && plan.category !== "CORE" && (
+        <p className="text-[10px] text-zinc-500">
+          Inverse RSI {plan.basketWeightPercent.toFixed(1)}% koša
+        </p>
+      )}
       <div className="h-2 overflow-hidden rounded-full bg-zinc-800/80">
         <div
           className={`h-full rounded-full ${barClass}`}
@@ -97,14 +120,14 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
               key={item.symbol}
               plan={item}
               barClass={
-                item.satellite && !item.satellite.approved
+                !item.gate.passed
                   ? "bg-zinc-600"
                   : "bg-gradient-to-r from-violet-400 to-purple-600"
               }
               detail={
-                item.satellite && !item.satellite.approved
-                  ? `0$ · ${formatUsd(item.satelliteRedirectedUsd)} → ${item.waterfallDestination || "BTC"}`
-                  : `${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`
+                !item.gate.passed
+                  ? `0$ · ${formatUsd(item.satelliteRedirectedUsd)} → ${item.waterfallDestination || "Dostupný Kapitál"}`
+                  : `${formatUsd(item.totalUsd)} · ${formatPercent(item.basketWeightPercent, 1)} koša`
               }
             />
           ))
@@ -123,14 +146,14 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
               key={item.symbol}
               plan={item}
               barClass={
-                item.highBeta && !item.highBeta.approved
+                !item.gate.passed
                   ? "bg-zinc-600"
                   : "bg-gradient-to-r from-fuchsia-400 to-pink-500"
               }
               detail={
-                item.highBeta && !item.highBeta.approved
-                  ? `0$ · ${formatUsd(item.highBetaRedirectedUsd)} → ${item.waterfallDestination || "BTC"}`
-                  : `${formatUsd(item.totalUsd)} (S${item.score.toFixed(0)} · ${formatPercent(item.weightPercent, 1)})`
+                !item.gate.passed
+                  ? `0$ · ${formatUsd(item.highBetaRedirectedUsd)} → ${item.waterfallDestination || "Dostupný Kapitál"}`
+                  : `${formatUsd(item.totalUsd)} · ${formatPercent(item.basketWeightPercent, 1)} koša`
               }
             />
           ))
@@ -155,8 +178,8 @@ export function TokenAllocationBoard({ plan }: TokenAllocationBoardProps) {
 
       {plan.stoppedSymbols.length > 0 && (
         <div className="rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/15 to-stone-900/40 p-3 text-[11px] leading-relaxed text-amber-100">
-          STOP režim pri {plan.stoppedSymbols.join(", ")} presúva kapitál do BTC
-          Core a aktívnych satelitov. Pravidlo Core ≥ 50% je{" "}
+          Padajúca dýka pri {plan.stoppedSymbols.join(", ")} presúva kapitál do
+          zdravších tokenov v koši, inak do Dostupný Kapitál. Core ≥ 50% je{" "}
           {plan.btcFloorSatisfied ? "splnené" : "nesplnené"}.
         </div>
       )}

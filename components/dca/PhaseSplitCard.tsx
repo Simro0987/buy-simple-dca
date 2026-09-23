@@ -35,7 +35,8 @@ export function PhaseSplitCard({
   executionImpactUsd = 0,
 }: PhaseSplitCardProps) {
   const btcFill = Math.max(0, Math.min(100, plan.targetCorePercent));
-  const displayedReserve = plan.reserveUsd + cashReserveUsd + executionImpactUsd;
+  const displayedReserve =
+    (plan.availableCapital ?? plan.reserveUsd) + cashReserveUsd + executionImpactUsd;
   const mix = plan.basketSplits;
 
   return (
@@ -192,13 +193,13 @@ export function PhaseSplitCard({
       <div className="mt-4 grid grid-cols-2 gap-2">
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-            Hotovosť rezerva
+            Dostupný Kapitál
           </p>
           <p className="mt-1 text-sm font-bold tabular-nums text-white">
             {formatUsd(displayedReserve, displayedReserve < 0 ? { showSign: true } : undefined)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">
-            Nenasadené {formatUsd(plan.undeployedToReserve)}
+            Z týždňa nenasadené {formatUsd(plan.undeployedToReserve)}
           </p>
           {plan.brakeBoostReserveDelta !== 0 && (
             <p
@@ -206,7 +207,7 @@ export function PhaseSplitCard({
                 plan.brakeBoostReserveDelta > 0 ? "text-amber-300" : "text-lime-300"
               }`}
             >
-              Brzda & boost {formatUsd(plan.brakeBoostReserveDelta, { showSign: true })}
+              Brzda & boost {formatUsd(plan.brakeBoostReserveDelta, { showSign: true })} → pool
             </p>
           )}
           {executionImpactUsd !== 0 && (

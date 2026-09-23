@@ -12,8 +12,6 @@ interface WeeklyInvestmentCardProps {
   onChange: (value: number) => void;
   moneyMode: boolean;
   onToggleMoneyMode: () => void;
-  lmt2MinUsd: number;
-  onLmt2MinUsd: (value: number) => void;
 }
 
 const STEP_AMOUNT = 50;
@@ -23,18 +21,15 @@ export function WeeklyInvestmentCard({
   onChange,
   moneyMode,
   onToggleMoneyMode,
-  lmt2MinUsd,
-  onLmt2MinUsd,
 }: WeeklyInvestmentCardProps) {
   const inputId = useId();
-  const minId = useId();
   const [draft, setDraft] = useState(value > 0 ? String(value) : "");
 
   useEffect(() => {
     setDraft(value > 0 ? String(value) : "");
   }, [value]);
 
-  const commitDraft = (raw: string) => {
+  const commit = (raw: string) => {
     const normalized = raw.replace(",", ".").trim();
     if (normalized === "") {
       onChange(0);
@@ -109,10 +104,15 @@ export function WeeklyInvestmentCard({
               inputMode="decimal"
               autoComplete="off"
               value={draft}
-              onChange={(event) =>
-                setDraft(event.target.value.replace(/[^\d.,]/g, ""))
-              }
-              onBlur={() => commitDraft(draft)}
+              onChange={(event) => {
+                const next = event.target.value.replace(/[^\d.,]/g, "");
+                setDraft(next);
+                const parsed = Number(next.replace(",", "."));
+                if (next !== "" && Number.isFinite(parsed) && parsed >= 0) {
+                  onChange(Math.round(parsed * 100) / 100);
+                }
+              }}
+              onBlur={() => commit(draft)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") event.currentTarget.blur();
               }}
@@ -152,28 +152,6 @@ export function WeeklyInvestmentCard({
               </motion.button>
             );
           })}
-        </div>
-
-        <div>
-          <label htmlFor={minId} className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500">
-            Min. LMT2 (USD)
-          </label>
-          <input
-            id={minId}
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            value={String(lmt2MinUsd)}
-            onChange={(event) => {
-              const parsed = Number(event.target.value.replace(",", ".").replace(/[^\d.]/g, ""));
-              if (Number.isFinite(parsed)) onLmt2MinUsd(Math.max(0, parsed));
-              else if (event.target.value.trim() === "") onLmt2MinUsd(0);
-            }}
-            className="mt-1 w-full rounded-2xl border border-white/10 bg-black/40 px-3 py-2 text-sm font-semibold text-white outline-none focus:border-amber-400/40"
-          />
-          <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">
-            Ak by LMT2 klesol pod túto sumu, rebrík ho preskočí a 100 % LMT ide do LMT1.
-          </p>
         </div>
       </div>
     </motion.section>

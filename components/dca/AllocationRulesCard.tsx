@@ -157,14 +157,14 @@ export function AllocationRulesCard({
           Váhy sa menia dynamicky podľa 5-faktorového mozgu (BULL / BEAR / SIDEWAYS / PANIC /
           EUPHORIA). Koše sú % z nasadeného kapitálu, nie z celej týždennej sumy.
           Waterfall drží satelitný a high-beta budget v koši. REDUCE a
-          expirované LMT idú len do Hotovosť rezervy.
+          expirované LMT idú len do Dostupný Kapitál.
         </p>
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
-            Hotovosť rezerva
+            Dostupný Kapitál
           </p>
           <p className="mt-1 text-sm font-bold tabular-nums text-white transition-all duration-500">
             {formatUsd(displayedReserve, displayedReserve < 0 ? { showSign: true } : undefined)}

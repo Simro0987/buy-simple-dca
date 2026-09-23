@@ -9,6 +9,7 @@ export interface CapitalPipelineState {
   allocationPercent: number;
   deployedCapital: number;
   undeployedToReserve: number;
+  availableCapital: number;
   confluence: number;
   basketSplits: BasketMix;
   finalBudgets: FinalBudgets;
@@ -33,6 +34,7 @@ export const useCapitalStore = create<CapitalPipelineState>((set) => ({
   allocationPercent: 0,
   deployedCapital: 0,
   undeployedToReserve: 0,
+  availableCapital: 0,
   confluence: 0,
   basketSplits: EMPTY_BASKET,
   finalBudgets: EMPTY_BUDGETS,

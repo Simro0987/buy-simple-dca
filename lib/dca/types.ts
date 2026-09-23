@@ -31,6 +31,37 @@ export type ConfluenceIndicatorId =
 export type FactorSource = "live" | "mock";
 export type WaterfallMode = "none" | "partial" | "full";
 export type LimitLeg = "lmt1" | "lmt2";
+export type TokenGateKind = "pass" | "fail" | "knife";
+export type Phase12Sim = "off" | "flash" | "trim" | "knife";
+
+export interface TokenGate {
+  passed: boolean;
+  kind: TokenGateKind;
+  badge: string;
+}
+
+export interface SmartTrimAdvice {
+  active: boolean;
+  trimPercent: number;
+  qty: number;
+  usd: number;
+  headline: string;
+  detail: string;
+}
+
+export interface FlashCrashTarget {
+  symbol: DcaSymbol;
+  usd: number;
+  price: number;
+  qty: number;
+}
+
+export interface FlashCrashPlan {
+  active: boolean;
+  spendUsd: number;
+  poolShare: number;
+  targets: FlashCrashTarget[];
+}
 
 export interface DcaTokenMeta {
   symbol: DcaSymbol;
@@ -311,6 +342,11 @@ export interface TokenExecutionPlan {
   satellite: SatelliteEvaluation | null;
   satelliteRedirectedUsd: number;
   waterfallDestination: string;
+  absorbedUsd: number;
+  basketWeightPercent: number;
+  gate: TokenGate;
+  fallingKnife: boolean;
+  smartTrim: SmartTrimAdvice | null;
 }
 
 export interface WeeklyDcaPlan {
@@ -323,14 +359,18 @@ export interface WeeklyDcaPlan {
   engineAllocationPercent: number;
   /** Phase A output: base × allocation%. Input to Phase B. */
   deployedCapital: number;
-  /** Remainder of base not deployed this week → Hotovosť. */
+  /** Remainder of weekly budget not deployed this week. */
   undeployedToReserve: number;
+  /** Unified spendable pool (Dostupný Kapitál) before cash/ledger overlays. */
+  availableCapital: number;
+  leftoverWaterfallUsd: number;
   confluence: number;
   basketSplits: BasketMix;
   finalBudgets: FinalBudgets;
   /** Post brake/boost execution total (from deployed capital). */
   deployedUsd: number;
   reserveUsd: number;
+  flashCrash: FlashCrashPlan;
   brakeBoostReserveDelta: number;
   weeklyAmount: number;
   coreUsd: number;

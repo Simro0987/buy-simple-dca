@@ -141,6 +141,7 @@ export function Dashboard() {
             <motion.div key="dca" {...pageTransition}>
               <DcaEngine
                 transactions={transactions}
+                holdings={holdings}
                 onRecordPurchase={handleRecordPurchase}
                 onExecutionFill={handleExecutionFill}
               />

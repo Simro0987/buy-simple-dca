@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { ConfirmPurchaseSheet } from "@/components/dca/ConfirmPurchaseSheet";
 import { DcaActivityCard } from "@/components/dca/DcaActivityCard";
 import { DcaPlanHeader } from "@/components/dca/DcaPlanHeader";
+import { FlashCrashBanner } from "@/components/dca/FlashCrashBanner";
 import { MarketRegimePanel } from "@/components/dca/MarketRegimePanel";
 import { PhaseSplitCard } from "@/components/dca/PhaseSplitCard";
 import { RitualSheet } from "@/components/dca/RitualSheet";
@@ -19,10 +20,13 @@ import { useDcaMarketData } from "@/hooks/useDcaMarketData";
 import { useExecutionClock } from "@/hooks/useExecutionClock";
 import { useRegimeMetrics } from "@/hooks/useRegimeMetrics";
 import { buildWeeklyDcaPlan } from "@/lib/dca/allocation";
+import { computeAvailableCapital } from "@/lib/dca/capitalPool";
 import {
   ledgerReserveImpact,
   type PortfolioAssetRecord,
 } from "@/lib/dca/executionLedger";
+import { nextKnifeLatches } from "@/lib/dca/fallingKnife";
+import { buildFlashCrashPlan } from "@/lib/dca/flashCrash";
 import { glassPanel } from "@/lib/dca/glass";
 import type { DcaSymbol, LimitLeg, TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
@@ -31,9 +35,12 @@ import type { Transaction } from "@/lib/portfolioStorage";
 import { useCapitalStore } from "@/store/capitalStore";
 import { useDcaStore } from "@/store/dcaStore";
 import { useExecutionStore } from "@/store/executionStore";
+import { useKnifeStore } from "@/store/knifeStore";
+import { useLiveClockStore } from "@/store/liveClockStore";
 
 interface DcaEngineProps {
   transactions?: Transaction[];
+  holdings?: Partial<Record<string, number>>;
   onRecordPurchase: (
     plans: TokenExecutionPlan[],
     prices: Record<string, number>,
@@ -43,30 +50,36 @@ interface DcaEngineProps {
 
 export function DcaEngine({
   transactions = [],
+  holdings = {},
   onRecordPurchase,
   onExecutionFill,
 }: DcaEngineProps) {
   const hydrated = useDcaHydrated();
   const baseAmount = useDcaStore((state) => state.baseAmount);
   const weeklyAmount = useDcaStore((state) => state.weeklyAmount);
-  const lmt2MinUsd = useDcaStore((state) => state.lmt2MinUsd);
   const moneyMode = useDcaStore((state) => state.moneyMode);
   const allocationMode = useDcaStore((state) => state.allocationMode);
   const allocationOverride = useDcaStore((state) => state.allocationOverride);
   const ritualOpen = useDcaStore((state) => state.ritualOpen);
+  const sim = useDcaStore((state) => state.sim);
   const setBaseAmount = useDcaStore((state) => state.setBaseAmount);
-  const setLmt2MinUsd = useDcaStore((state) => state.setLmt2MinUsd);
   const toggleMoneyMode = useDcaStore((state) => state.toggleMoneyMode);
   const setAllocationMode = useDcaStore((state) => state.setAllocationMode);
   const setAllocationOverride = useDcaStore((state) => state.setAllocationOverride);
   const autoFill = useDcaStore((state) => state.autoFill);
   const setRitualOpen = useDcaStore((state) => state.setRitualOpen);
+  const setSim = useDcaStore((state) => state.setSim);
   const setPipeline = useCapitalStore((state) => state.setPipeline);
+  const knifeLatched = useKnifeStore((state) => state.latched);
+  const setKnifeLatched = useKnifeStore((state) => state.setLatched);
+  const touchClock = useLiveClockStore((state) => state.touch);
+  const setConnected = useLiveClockStore((state) => state.setConnected);
 
   const nowMs = useExecutionClock();
   const pendingOrders = useExecutionStore((state) => state.pending_orders);
   const portfolioAssets = useExecutionStore((state) => state.portfolio_assets);
   const activateMarket = useExecutionStore((state) => state.activateMarket);
+  const spendAvailableCapital = useExecutionStore((state) => state.spendAvailableCapital);
   const activateLimit = useExecutionStore((state) => state.activateLimit);
   const fillPending = useExecutionStore((state) => state.fillPending);
   const cancelPending = useExecutionStore((state) => state.cancelPending);
@@ -74,9 +87,11 @@ export function DcaEngine({
   const marketFillThisWeek = useExecutionStore((state) => state.marketFillThisWeek);
   const limitFillThisWeek = useExecutionStore((state) => state.limitFillThisWeek);
 
-  const { snapshots, loading, error, pricesReady } = useDcaMarketData();
+  const { snapshots, loading, error, pricesReady, live } = useDcaMarketData();
   const { metrics: regimeMetrics, loading: regimeLoading } = useRegimeMetrics();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const [flashActivated, setFlashActivated] = useState(false);
+  const [flashLock, setFlashLock] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     variant: ToastVariant;
@@ -90,11 +105,44 @@ export function DcaEngine({
         allocationMode,
         snapshots,
         regimeMetrics,
-        minLmt2Usd: lmt2MinUsd,
         allocationOverride,
+        knifeLatched,
+        sim,
+        holdings,
       }),
-    [baseAmount, weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics, lmt2MinUsd, allocationOverride],
+    [baseAmount, weeklyAmount, moneyMode, allocationMode, snapshots, regimeMetrics, allocationOverride, knifeLatched, sim, holdings],
   );
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = new URLSearchParams(window.location.search).get("sim");
+    if (raw === "flash" || raw === "trim" || raw === "knife" || raw === "off") {
+      setSim(raw);
+    }
+  }, [setSim]);
+
+  useEffect(() => {
+    setConnected(live && pricesReady);
+    if (pricesReady) touchClock(live && pricesReady);
+  }, [live, pricesReady, setConnected, touchClock]);
+
+  useEffect(() => {
+    touchClock();
+  }, [baseAmount, weeklyAmount, touchClock]);
+
+  useEffect(() => {
+    const next = nextKnifeLatches(
+      knifeLatched,
+      weeklyPlan.plans.map((plan) => ({
+        symbol: plan.symbol,
+        shouldLatch: plan.fallingKnife,
+        shouldClear: !plan.fallingKnife && Boolean(knifeLatched[plan.symbol]),
+      })),
+    );
+    if (JSON.stringify(next) !== JSON.stringify(knifeLatched)) {
+      setKnifeLatched(next);
+    }
+  }, [weeklyPlan.plans, knifeLatched, setKnifeLatched]);
 
   useEffect(() => {
     setPipeline({
@@ -103,6 +151,7 @@ export function DcaEngine({
       allocationPercent: weeklyPlan.allocationPercent,
       deployedCapital: weeklyPlan.deployedCapital,
       undeployedToReserve: weeklyPlan.undeployedToReserve,
+      availableCapital: weeklyPlan.availableCapital,
       confluence: weeklyPlan.confluence,
       basketSplits: weeklyPlan.basketSplits,
       finalBudgets: weeklyPlan.finalBudgets,
@@ -118,6 +167,18 @@ export function DcaEngine({
   const executionImpactUsd = ledgerReserveImpact({
     portfolio_assets: portfolioAssets,
     pending_orders: pendingOrders,
+  });
+  const availableCapital = computeAvailableCapital({
+    undeployedUsd: weeklyPlan.undeployedToReserve,
+    leftoverWaterfallUsd: weeklyPlan.leftoverWaterfallUsd,
+    brakeBoostReserveDelta: weeklyPlan.brakeBoostReserveDelta,
+    cashUsd: portfolioHoldings.cashUsd,
+    executionImpactUsd,
+  });
+  const flashCrash = buildFlashCrashPlan({
+    active: weeklyPlan.flashCrash.active,
+    availableCapital,
+    plans: weeklyPlan.plans,
   });
 
   const payablePlans = weeklyPlan.plans.filter(
@@ -174,7 +235,7 @@ export function DcaEngine({
       return;
     }
     setToast({
-      message: `${leg === "lmt2" ? "LMT2" : "LMT1"} aktivovaný · PRICE LOCK`,
+      message: "LMT aktivovaný · Čaká na burze (7d)",
       variant: "success",
     });
   }
@@ -190,17 +251,56 @@ export function DcaEngine({
     const order = cancelPending(id);
     if (!order) return;
     setToast({
-      message: "Limit zrušený · kapitál vrátený do rezervy",
+      message: "Limit zrušený · kapitál vrátený do Dostupný Kapitál",
       variant: "success",
     });
   }
 
   return (
-    <div className="space-y-5">
+    <div
+      className={`space-y-5 ${
+        flashCrash.active
+          ? "rounded-[2rem] border border-rose-400/40 p-1 shadow-[0_0_40px_rgba(244,63,94,0.22)]"
+          : ""
+      }`}
+    >
       <DcaPlanHeader
-        onRitual={() => setRitualOpen(true)}
-        onAutoFill={autoFill}
+        onRitual={() => {
+          touchClock();
+          setRitualOpen(true);
+        }}
+        onAutoFill={() => {
+          touchClock();
+          autoFill();
+        }}
+        sim={sim}
+        onSim={setSim}
       />
+      {flashCrash.active && (
+        <FlashCrashBanner
+          plan={flashCrash}
+          activated={flashActivated}
+          activating={flashLock}
+          onActivate={() => {
+            if (flashLock || flashActivated) return;
+            setFlashLock(true);
+            let filled = 0;
+            for (const target of flashCrash.targets) {
+              const record = spendAvailableCapital(target.symbol, target.usd, target.price);
+              if (record) {
+                onExecutionFill?.(record);
+                filled += 1;
+              }
+            }
+            setFlashActivated(filled > 0);
+            setFlashLock(false);
+            setToast({
+              message: filled > 0 ? "Flash Crash nákup zrealizovaný" : "Flash Crash sa nepodarilo aktivovať",
+              variant: filled > 0 ? "success" : "error",
+            });
+          }}
+        />
+      )}
 
       {error && !pricesReady && (
         <div
@@ -225,8 +325,6 @@ export function DcaEngine({
         onChange={setBaseAmount}
         moneyMode={moneyMode}
         onToggleMoneyMode={toggleMoneyMode}
-        lmt2MinUsd={lmt2MinUsd}
-        onLmt2MinUsd={setLmt2MinUsd}
       />
       <MarketRegimePanel
         regime={weeklyPlan.regime}
@@ -254,7 +352,7 @@ export function DcaEngine({
             Týždenná exekúcia
           </p>
           <h3 className="mt-1 text-sm font-bold text-white">
-            Token karty · MKT / LMT1 / LMT2
+            Token karty · MKT / LMT
           </h3>
         </div>
         {loading && !pricesReady ? (
@@ -277,11 +375,9 @@ export function DcaEngine({
                 key={plan.symbol}
                 plan={plan}
                 loading={loading}
-                pendingLimit={pendingFor(plan.symbol, "lmt1") ?? null}
-                pendingLimit2={pendingFor(plan.symbol, "lmt2") ?? null}
+                pendingLimit={pendingFor(plan.symbol) ?? null}
                 marketFill={marketFillThisWeek(plan.symbol) ?? null}
-                limitFill={limitFillThisWeek(plan.symbol, "lmt1") ?? null}
-                limitFill2={limitFillThisWeek(plan.symbol, "lmt2") ?? null}
+                limitFill={limitFillThisWeek(plan.symbol) ?? null}
                 nowMs={nowMs}
                 onCopied={handleCopied}
                 onActivateMarket={handleActivateMarket}

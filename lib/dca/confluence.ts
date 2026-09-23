@@ -289,81 +289,119 @@ export interface WaterfallMember {
   symbol: DcaSymbol;
   approved: boolean;
   priced: boolean;
+  rsi: number;
 }
 
 export interface BasketWaterfallResult {
   mode: WaterfallMode;
   amounts: Map<DcaSymbol, number>;
+  weights: Map<DcaSymbol, number>;
+  absorbed: Map<DcaSymbol, number>;
   redirectedUsd: number;
+  leftoverUsd: number;
   fromSymbols: DcaSymbol[];
   toSymbols: DcaSymbol[];
   note: string;
 }
 
-export function applyEqualWaterfall(
+function emptyWaterfall(members: WaterfallMember[]): BasketWaterfallResult {
+  const amounts = new Map<DcaSymbol, number>();
+  const weights = new Map<DcaSymbol, number>();
+  const absorbed = new Map<DcaSymbol, number>();
+  for (const member of members) {
+    amounts.set(member.symbol, 0);
+    weights.set(member.symbol, 0);
+    absorbed.set(member.symbol, 0);
+  }
+  return {
+    mode: "none",
+    amounts,
+    weights,
+    absorbed,
+    redirectedUsd: 0,
+    leftoverUsd: 0,
+    fromSymbols: [],
+    toSymbols: [],
+    note: "",
+  };
+}
+
+/** Inverse-RSI share of a PASS basket. Weight = 100 − RSI. */
+export function inverseRsiWeight(rsi: number): number {
+  return Math.max(1, 100 - (Number.isFinite(rsi) ? rsi : 50));
+}
+
+export function applyInverseRsiWaterfall(
   budget: number,
   members: WaterfallMember[],
   basketLabel: string,
 ): BasketWaterfallResult {
-  const amounts = new Map<DcaSymbol, number>();
-  for (const member of members) amounts.set(member.symbol, 0);
+  const result = emptyWaterfall(members);
   const safeBudget = Math.max(0, roundUsd(budget));
   const priced = members.filter((member) => member.priced);
   const approved = priced.filter((member) => member.approved);
   const failed = priced.filter((member) => !member.approved);
 
-  if (safeBudget <= 0 || priced.length === 0) {
-    return {
-      mode: "none",
-      amounts,
-      redirectedUsd: 0,
-      fromSymbols: [],
-      toSymbols: [],
-      note: "",
-    };
-  }
+  if (safeBudget <= 0 || priced.length === 0) return result;
 
   if (approved.length === 0) {
     return {
+      ...result,
       mode: "full",
-      amounts,
       redirectedUsd: safeBudget,
+      leftoverUsd: safeBudget,
       fromSymbols: failed.map((member) => member.symbol),
-      toSymbols: [],
-      note: `Celý ${basketLabel} kôš ${safeBudget.toFixed(0)}$ → Core (BTC).`,
+      note: `Celý ${basketLabel} kôš ${safeBudget.toFixed(0)}$ → Dostupný Kapitál.`,
     };
   }
 
-  const share = roundUsd(safeBudget / approved.length);
+  const weightSum = approved.reduce((sum, member) => sum + inverseRsiWeight(member.rsi), 0);
+  let allocated = 0;
   approved.forEach((member, index) => {
-    const value = index === approved.length - 1
-      ? roundUsd(safeBudget - share * (approved.length - 1))
-      : share;
-    amounts.set(member.symbol, value);
+    const weight = inverseRsiWeight(member.rsi);
+    const percent = (weight / weightSum) * 100;
+    result.weights.set(member.symbol, percent);
+    const value =
+      index === approved.length - 1
+        ? roundUsd(safeBudget - allocated)
+        : roundUsd(safeBudget * (weight / weightSum));
+    allocated = roundUsd(allocated + value);
+    result.amounts.set(member.symbol, value);
   });
 
   if (failed.length === 0) {
     return {
+      ...result,
       mode: "none",
-      amounts,
-      redirectedUsd: 0,
-      fromSymbols: [],
       toSymbols: approved.map((member) => member.symbol),
-      note: "",
     };
   }
 
-  const originalShare = roundUsd(safeBudget / priced.length);
-  const redirectedUsd = roundUsd(originalShare * failed.length);
+  const originalUnit = priced.length > 0 ? safeBudget / priced.length : 0;
+  for (const member of approved) {
+    const amount = result.amounts.get(member.symbol) ?? 0;
+    result.absorbed.set(member.symbol, roundUsd(Math.max(0, amount - originalUnit)));
+  }
+
   const names = approved.map((member) => member.symbol).join(", ");
   return {
+    ...result,
     mode: "partial",
-    amounts,
-    redirectedUsd,
+    redirectedUsd: roundUsd((safeBudget / priced.length) * failed.length),
+    leftoverUsd: 0,
     fromSymbols: failed.map((member) => member.symbol),
     toSymbols: approved.map((member) => member.symbol),
-    note: `${failed.map((member) => member.symbol).join(", ")} → ${names} (rovnaký kôš, po rovnomerných dieloch).`,
+    note: `${failed.map((member) => member.symbol).join(", ")} → ${names} (inverse RSI).`,
   };
+}
+
+/** @deprecated Prefer applyInverseRsiWaterfall. */
+export function applyEqualWaterfall(
+  budget: number,
+  members: WaterfallMember[],
+  basketLabel: string,
+): BasketWaterfallResult {
+  return applyInverseRsiWaterfall(budget, members, basketLabel);
 }
 
 export const EMPTY_REGIME_METRICS: RegimeMetrics = {

@@ -99,7 +99,7 @@ export function MarketRegimePanel({
             Nasadené {formatUsd(deployedCapital)}
           </p>
           <p className="text-xs font-semibold text-amber-200/90">
-            Hotovosť {formatUsd(undeployedToReserve)}
+            Dostupný {formatUsd(undeployedToReserve)}
           </p>
         </div>
       </div>
@@ -180,7 +180,7 @@ export function MarketRegimePanel({
         })}
         <p className="text-[11px] leading-relaxed text-zinc-500">
           Final Score z týchto 5 faktorov určuje, koľko z týždenného rozpočtu sa
-          nasadí. Zvyšok ide do Hotovosť rezervy. Koše Core / Sat / High-Beta ráta
+          nasadí. Zvyšok ide do Dostupný Kapitál. Koše Core / Sat / High-Beta ráta
           až Fáza B z nasadeného kapitálu.
         </p>
       </div>
