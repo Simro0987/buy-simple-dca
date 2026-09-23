@@ -22,3 +22,34 @@ export const approvedBadge =
 
 export const compactChip =
   "rounded-sm border border-white/8 bg-white/[0.04] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-400";
+
+/** Visual-only CONFLUENCE glow. Does not change the score. */
+export function confluenceTone(score: number): {
+  hex: string;
+  glow: string;
+  track: string;
+  label: string;
+} {
+  if (score < 30) {
+    return {
+      hex: "#FF2A6D",
+      glow: "rgba(255, 42, 109, 0.5)",
+      track: "rgba(255, 42, 109, 0.18)",
+      label: "Nízka",
+    };
+  }
+  if (score > 70) {
+    return {
+      hex: "#00FFA3",
+      glow: "rgba(0, 255, 163, 0.5)",
+      track: "rgba(0, 255, 163, 0.18)",
+      label: "Vysoká",
+    };
+  }
+  return {
+    hex: "#F5D76E",
+    glow: "rgba(245, 215, 110, 0.45)",
+    track: "rgba(245, 215, 110, 0.16)",
+    label: "Stredná",
+  };
+}

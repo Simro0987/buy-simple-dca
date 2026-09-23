@@ -1,11 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { ConfluenceScoreBadge } from "@/components/dca/ConfluenceScoreBadge";
 import { LaserBar } from "@/components/dca/LaserBar";
-import { LiveMetricSkeleton, LiveMetricUnavailable } from "@/components/dca/LiveState";
+import { LiveMetricUnavailable } from "@/components/dca/LiveState";
 import { formatUsd } from "@/lib/data";
 import { SAFE_HAVEN_COPY } from "@/lib/dca/confluence";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
+import { confluenceTone } from "@/lib/dca/terminal";
 import type { AllocationMode, WeeklyDcaPlan } from "@/lib/dca/types";
 import { interactiveButton } from "@/lib/motion";
 
@@ -44,6 +46,7 @@ export function PhaseSplitCard({
   const displayedReserve =
     (plan.availableCapital ?? plan.reserveUsd) + cashReserveUsd + executionImpactUsd;
   const mix = plan.basketSplits;
+  const tone = confluenceTone(plan.confluence);
 
   return (
     <motion.section
@@ -51,24 +54,25 @@ export function PhaseSplitCard({
       animate={{ opacity: 1, y: 0 }}
       className={`${glassPanel} p-5`}
     >
-      <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-        FÁZA B • AKO ROZDELIŤ NASADENÝ KAPITÁL
-      </p>
-      <h3 className="mt-1 text-sm font-bold uppercase tracking-wide text-white">
-        {plan.allocationLabel} •{" "}
-        {(plan.allocationSubtitle.split(" · ")[0] ?? plan.allocationSubtitle).toUpperCase()}
-      </h3>
-      <p className="mt-1 font-mono text-[11px] text-zinc-500">
-        {dataReady ? (
-          <>
-            CONFLUENCE {plan.confluence}/100 · z nasadeného {formatUsd(plan.deployedCapital)}
-          </>
-        ) : loading ? (
-          <LiveMetricSkeleton className="h-4 w-48" />
-        ) : (
-          <LiveMetricUnavailable label="CONFLUENCE" />
-        )}
-      </p>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+            FÁZA B • AKO ROZDELIŤ NASADENÝ KAPITÁL
+          </p>
+          <h3 className="mt-1 text-sm font-bold uppercase tracking-wide text-white">
+            {plan.allocationLabel} •{" "}
+            {(plan.allocationSubtitle.split(" · ")[0] ?? plan.allocationSubtitle).toUpperCase()}
+          </h3>
+          <p className="mt-1 font-mono text-[11px] text-zinc-600">
+            z nasadeného {formatUsd(plan.deployedCapital)}
+          </p>
+        </div>
+        <ConfluenceScoreBadge
+          score={plan.confluence}
+          ready={dataReady}
+          loading={loading}
+        />
+      </div>
 
       <div className="mt-3 flex gap-2" role="tablist" aria-label="Režim alokácie">
         {(
@@ -113,7 +117,17 @@ export function PhaseSplitCard({
         </p>
       </div>
 
-      <div className="mt-4">
+      <div
+        className="mt-4 rounded-2xl border border-white/5 bg-black/20 p-3"
+        style={
+          dataReady
+            ? { boxShadow: `inset 0 0 22px ${tone.glow}`, borderColor: `${tone.hex}33` }
+            : undefined
+        }
+      >
+        <p className="mb-2 text-[9px] font-bold uppercase tracking-[0.16em] text-zinc-500">
+          Koše podľa CONFLUENCE
+        </p>
         <LaserBar
           segments={[
             { width: mix.corePercent, tone: "orange" },
