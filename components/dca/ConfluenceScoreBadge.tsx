@@ -14,8 +14,8 @@ export function ConfluenceScoreBadge({
   ready,
   loading = false,
 }: ConfluenceScoreBadgeProps) {
-  const size = 88;
-  const stroke = 7;
+  const size = 104;
+  const stroke = 8;
   const radius = (size - stroke) / 2;
   const circ = 2 * Math.PI * radius;
   const fill = Math.max(0, Math.min(100, score));
@@ -23,15 +23,15 @@ export function ConfluenceScoreBadge({
 
   if (loading && !ready) {
     return (
-      <div className="flex h-[88px] w-[88px] items-center justify-center">
-        <LiveMetricSkeleton className="h-[88px] w-[88px] rounded-full" />
+      <div className="flex h-[104px] w-[104px] items-center justify-center">
+        <LiveMetricSkeleton className="h-[104px] w-[104px] rounded-full" />
       </div>
     );
   }
 
   if (!ready) {
     return (
-      <div className="flex h-[88px] w-[88px] flex-col items-center justify-center rounded-full border border-[#FF2A6D]/40 bg-black/40">
+      <div className="flex h-[104px] w-[104px] flex-col items-center justify-center rounded-full border border-[#FF2A6D]/40 bg-black/40">
         <LiveMetricUnavailable label="CONFLUENCE" />
       </div>
     );
@@ -78,7 +78,7 @@ export function ConfluenceScoreBadge({
         <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-zinc-400">
           Confluence
         </p>
-        <p className="font-mono text-2xl font-black leading-none" style={{ color: tone.hex }}>
+        <p className="font-mono text-[28px] font-black leading-none" style={{ color: tone.hex }}>
           {score}
         </p>
         <p className="font-mono text-[9px] font-semibold text-zinc-500">/100</p>
