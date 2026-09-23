@@ -73,6 +73,9 @@ export function useDcaMarketData() {
           fetch("/api/dca/tickers", { cache: "no-store" }),
           fetch("/api/dca/yields", { cache: "no-store" }),
         ]);
+        if (!klinesRes.ok || !tickersRes.ok) {
+          throw new Error("Binance REST neodpovedal");
+        }
 
         const klinesJson = (await klinesRes.json()) as {
           klines?: Partial<Record<DcaSymbol, OhlcvCandle[]>>;
@@ -86,11 +89,18 @@ export function useDcaMarketData() {
         };
 
         if (cancelled) return;
-        setKlines(klinesJson.klines ?? {});
+        const nextKlines = klinesJson.klines ?? {};
+        const nextTickers = tickersJson.tickers ?? {};
+        setKlines(nextKlines);
         setWeeklyKlines(klinesJson.weeklyKlines ?? {});
-        setTickers(tickersJson.tickers ?? {});
+        setTickers(nextTickers);
         setYields(yieldsJson.yields ?? {});
-        setError(null);
+        const btcPrice = nextTickers.BTC?.price ?? nextKlines.BTC?.[nextKlines.BTC.length - 1]?.close ?? 0;
+        setError(
+          btcPrice > 0
+            ? null
+            : "Binance nevrátil live cenu BTC. Čísla sa nezobrazia, kým API neodpovie.",
+        );
       } catch (err) {
         if (!cancelled) {
           setError(err instanceof Error ? err.message : "Dáta sa nepodarilo načítať");
@@ -215,6 +225,7 @@ export function useDcaMarketData() {
   const pricesReady = Boolean(
     snapshots.BTC && snapshots.BTC.price > 0 && snapshots.ETH && snapshots.ETH.price > 0,
   );
+  const indicatorsReady = Boolean(snapshots.BTC?.indicators);
 
   return {
     snapshots,
@@ -222,5 +233,6 @@ export function useDcaMarketData() {
     error,
     live,
     pricesReady,
+    indicatorsReady,
   };
 }

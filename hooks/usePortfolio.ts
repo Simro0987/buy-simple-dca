@@ -18,7 +18,6 @@ import {
   type PortfolioData,
   type Transaction,
 } from "@/lib/portfolioStorage";
-import { portfolioHoldings } from "@/lib/data";
 
 export interface LiveAsset extends PortfolioAsset {
   usdValue: number;
@@ -175,7 +174,7 @@ export function usePortfolio() {
     [assets],
   );
 
-  const totalBalance = cryptoTotal + portfolioHoldings.cashUsd;
+  const totalBalance = cryptoTotal;
 
   return {
     assets,

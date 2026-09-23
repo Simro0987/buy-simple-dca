@@ -25,8 +25,10 @@ import type {
   LimitLeg,
   SatelliteEvaluation,
   TokenExecutionPlan,
+  TokenIndicators,
 } from "@/lib/dca/types";
 import { CopyGlyph } from "@/components/dca/CopyGlyph";
+import { LiveMetricUnavailable } from "@/components/dca/LiveState";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { interactiveButton } from "@/lib/motion";
 import {
@@ -62,6 +64,7 @@ const brakeBoostBadgeClass: Record<BrakeBoostMode, string> = {
 interface TokenExecutionCardProps {
   plan: TokenExecutionPlan;
   loading?: boolean;
+  indicators?: TokenIndicators | null;
   pendingLimit?: PendingOrder | null;
   marketFill?: PortfolioAssetRecord | null;
   limitFill?: PortfolioAssetRecord | null;
@@ -345,7 +348,17 @@ function LimitTrack({
   );
 }
 
-function RsiGauge({ rsi }: { rsi: number }) {
+function RsiGauge({ rsi, live }: { rsi: number; live: boolean }) {
+  if (!live) {
+    return (
+      <div>
+        <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-zinc-500">
+          <span>RSI 14D</span>
+          <LiveMetricUnavailable label="RSI" />
+        </div>
+      </div>
+    );
+  }
   const left = Math.min(98, Math.max(2, rsi));
   return (
     <div>
@@ -371,6 +384,7 @@ function RsiGauge({ rsi }: { rsi: number }) {
 export function TokenExecutionCard({
   plan,
   loading = false,
+  indicators = null,
   pendingLimit = null,
   marketFill = null,
   limitFill = null,
@@ -469,8 +483,10 @@ export function TokenExecutionCard({
           <p className="font-mono text-[10px] text-zinc-500">
             {loading ? (
               <PriceSkeleton className="ml-auto h-3 w-16" />
-            ) : (
+            ) : plan.price > 0 ? (
               <>Live {formatUnitPrice(plan.price)}</>
+            ) : (
+              <LiveMetricUnavailable label="Cena" />
             )}
           </p>
         </div>
@@ -525,13 +541,21 @@ export function TokenExecutionCard({
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
             Trend
           </p>
-          <p className="mt-1 text-[11px] text-zinc-300">
-            50D EMA {plan.ema50 ? formatUnitPrice(plan.ema50) : "—"}
-          </p>
-          <p className="text-[11px] text-zinc-400">
-            200D SMA {plan.sma200 ? formatUnitPrice(plan.sma200) : "—"} ·{" "}
-            {formatPercent(plan.sma200DevPct)}
-          </p>
+          {indicators ? (
+            <>
+              <p className="mt-1 font-mono text-[11px] text-zinc-300">
+                50D EMA {plan.ema50 ? formatUnitPrice(plan.ema50) : "—"}
+              </p>
+              <p className="font-mono text-[11px] text-zinc-400">
+                200D SMA {plan.sma200 ? formatUnitPrice(plan.sma200) : "—"} ·{" "}
+                {formatPercent(plan.sma200DevPct)}
+              </p>
+            </>
+          ) : (
+            <p className="mt-1">
+              <LiveMetricUnavailable label="EMA / SMA" />
+            </p>
+          )}
         </div>
         <div className={`${glassInset} p-2.5`}>
           <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
@@ -550,7 +574,12 @@ export function TokenExecutionCard({
             Volatilita
           </p>
           <p className="mt-1 text-[11px] text-zinc-300">
-            ATR pás 2.5× {plan.atrBand ? formatUnitPrice(plan.atrBand) : "—"}
+            ATR pás 2.5×{" "}
+            {indicators && plan.atrBand ? (
+              <span className="font-mono">{formatUnitPrice(plan.atrBand)}</span>
+            ) : (
+              <LiveMetricUnavailable label="ATR" />
+            )}
           </p>
           <p className="text-[11px] text-zinc-400">
             S1 {plan.s1 ? formatUnitPrice(plan.s1) : "—"} · R1{" "}
@@ -578,7 +607,7 @@ export function TokenExecutionCard({
         <>
           {!locked && (
             <>
-              <RsiGauge rsi={plan.rsi} />
+              <RsiGauge rsi={plan.rsi} live={Boolean(indicators)} />
 
               <div className="mt-3 mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
                 <span className="font-mono text-[#00FFA3]">

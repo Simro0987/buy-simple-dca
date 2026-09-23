@@ -2,6 +2,7 @@
 
 import { motion } from "framer-motion";
 import { LaserBar } from "@/components/dca/LaserBar";
+import { LiveMetricSkeleton, LiveMetricUnavailable } from "@/components/dca/LiveState";
 import { formatUsd } from "@/lib/data";
 import { SAFE_HAVEN_COPY } from "@/lib/dca/confluence";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
@@ -26,6 +27,8 @@ interface PhaseSplitCardProps {
   onAllocationMode: (mode: AllocationMode) => void;
   cashReserveUsd: number;
   executionImpactUsd?: number;
+  loading?: boolean;
+  dataReady?: boolean;
 }
 
 export function PhaseSplitCard({
@@ -34,6 +37,8 @@ export function PhaseSplitCard({
   onAllocationMode,
   cashReserveUsd,
   executionImpactUsd = 0,
+  loading = false,
+  dataReady = false,
 }: PhaseSplitCardProps) {
   const btcFill = Math.max(0, Math.min(100, plan.targetCorePercent));
   const displayedReserve =
@@ -54,7 +59,15 @@ export function PhaseSplitCard({
         {(plan.allocationSubtitle.split(" · ")[0] ?? plan.allocationSubtitle).toUpperCase()}
       </h3>
       <p className="mt-1 font-mono text-[11px] text-zinc-500">
-        CONFLUENCE {plan.confluence}/100 · z nasadeného {formatUsd(plan.deployedCapital)}
+        {dataReady ? (
+          <>
+            CONFLUENCE {plan.confluence}/100 · z nasadeného {formatUsd(plan.deployedCapital)}
+          </>
+        ) : loading ? (
+          <LiveMetricSkeleton className="h-4 w-48" />
+        ) : (
+          <LiveMetricUnavailable label="CONFLUENCE" />
+        )}
       </p>
 
       <div className="mt-3 flex gap-2" role="tablist" aria-label="Režim alokácie">
@@ -168,12 +181,13 @@ export function PhaseSplitCard({
           <p key={row.id} className="text-[11px] leading-relaxed text-zinc-400">
             <span className="font-semibold text-zinc-200">{row.label}</span>
             {" · "}
-            {row.formula}
-            {row.source === "mock" ? (
-              <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">
-                mock
+            {row.source === "live" ? (
+              <span className={row.id === "fearGreed" ? "font-mono text-cyan-100" : undefined}>
+                {row.formula}
               </span>
-            ) : null}
+            ) : (
+              <LiveMetricUnavailable label={row.label} />
+            )}
             <span className="block text-[10px] text-zinc-600">{row.note}</span>
           </p>
         ))}

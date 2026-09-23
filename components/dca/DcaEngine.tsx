@@ -1,12 +1,13 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlertTriangle, ShoppingCart } from "lucide-react";
+import { ShoppingCart } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { ConfirmPurchaseSheet } from "@/components/dca/ConfirmPurchaseSheet";
 import { DcaActivityCard } from "@/components/dca/DcaActivityCard";
 import { DcaPlanHeader } from "@/components/dca/DcaPlanHeader";
 import { FlashCrashBanner } from "@/components/dca/FlashCrashBanner";
+import { LiveDataAlert } from "@/components/dca/LiveState";
 import { MarketRegimePanel } from "@/components/dca/MarketRegimePanel";
 import { PhaseSplitCard } from "@/components/dca/PhaseSplitCard";
 import { RitualSheet } from "@/components/dca/RitualSheet";
@@ -30,7 +31,6 @@ import { buildFlashCrashPlan } from "@/lib/dca/flashCrash";
 import { glassPanel } from "@/lib/dca/glass";
 import type { DcaSymbol, LimitLeg, TokenExecutionPlan } from "@/lib/dca/types";
 import { formatUsd } from "@/lib/data";
-import { portfolioHoldings } from "@/lib/data";
 import type { Transaction } from "@/lib/portfolioStorage";
 import { useCapitalStore } from "@/store/capitalStore";
 import { useDcaStore } from "@/store/dcaStore";
@@ -87,8 +87,14 @@ export function DcaEngine({
   const marketFillThisWeek = useExecutionStore((state) => state.marketFillThisWeek);
   const limitFillThisWeek = useExecutionStore((state) => state.limitFillThisWeek);
 
-  const { snapshots, loading, error, pricesReady, live } = useDcaMarketData();
-  const { metrics: regimeMetrics, loading: regimeLoading } = useRegimeMetrics();
+  const { snapshots, loading, error, pricesReady, live, indicatorsReady } =
+    useDcaMarketData();
+  const {
+    metrics: regimeMetrics,
+    loading: regimeLoading,
+    error: regimeError,
+    stale: regimeStale,
+  } = useRegimeMetrics();
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [flashActivated, setFlashActivated] = useState(false);
   const [flashLock, setFlashLock] = useState(false);
@@ -172,7 +178,7 @@ export function DcaEngine({
     undeployedUsd: weeklyPlan.undeployedToReserve,
     leftoverWaterfallUsd: weeklyPlan.leftoverWaterfallUsd,
     brakeBoostReserveDelta: weeklyPlan.brakeBoostReserveDelta,
-    cashUsd: portfolioHoldings.cashUsd,
+    cashUsd: 0,
     executionImpactUsd,
   });
   const flashCrash = buildFlashCrashPlan({
@@ -303,21 +309,16 @@ export function DcaEngine({
       )}
 
       {error && !pricesReady && (
-        <div
-          role="alert"
-          className="flex items-start gap-3 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3"
-        >
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-400" />
-          <div>
-            <p className="text-sm font-semibold text-amber-200">
-              Trhové dáta nie sú dostupné
-            </p>
-            <p className="mt-0.5 text-xs text-amber-200/70">
-              Skúsim znova cez Binance REST. WebSocket tickery sa pripoja, keď to
-              sieť dovolí.
-            </p>
-          </div>
-        </div>
+        <LiveDataAlert
+          title="Trhové dáta nie sú dostupné"
+          detail={`${error} Žiadne fiktívne ceny sa nezobrazia. Skúsim znova cez Binance REST.`}
+        />
+      )}
+      {regimeError && (
+        <LiveDataAlert
+          title={regimeStale ? "Regime API je nestabilné" : "Fear & Greed / likvidita chýba"}
+          detail={regimeError}
+        />
       )}
 
       <WeeklyInvestmentCard
@@ -336,13 +337,19 @@ export function DcaEngine({
         onAllocationChange={setAllocationOverride}
         onResetAllocation={() => setAllocationOverride(null)}
         loading={(loading && !pricesReady) || regimeLoading}
+        dataReady={pricesReady && indicatorsReady}
+        fearGreed={regimeMetrics.fearGreed}
+        fearGreedLabel={regimeMetrics.fearGreedLabel}
+        fearGreedAt={regimeMetrics.fetchedAt}
       />
       <PhaseSplitCard
         plan={weeklyPlan}
         allocationMode={allocationMode}
         onAllocationMode={setAllocationMode}
-        cashReserveUsd={portfolioHoldings.cashUsd}
+        cashReserveUsd={0}
         executionImpactUsd={executionImpactUsd}
+        loading={regimeLoading && regimeMetrics.fearGreed == null}
+        dataReady={pricesReady}
       />
       <TokenAllocationBoard plan={weeklyPlan} />
 
@@ -375,6 +382,7 @@ export function DcaEngine({
                 key={plan.symbol}
                 plan={plan}
                 loading={loading}
+                indicators={snapshots[plan.symbol]?.indicators ?? null}
                 pendingLimit={pendingFor(plan.symbol) ?? null}
                 marketFill={marketFillThisWeek(plan.symbol) ?? null}
                 limitFill={limitFillThisWeek(plan.symbol) ?? null}

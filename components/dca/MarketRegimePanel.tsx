@@ -4,9 +4,9 @@ import { Activity, Droplets, Gauge, TrendingUp, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
 import type { FactorBreakdown, MarketRegime, RegimeFactorId } from "@/lib/dca/types";
 import { LaserBar } from "@/components/dca/LaserBar";
+import { LiveMetricSkeleton, LiveMetricUnavailable } from "@/components/dca/LiveState";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
 import { formatUsd } from "@/lib/data";
-import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
 import { interactiveButton } from "@/lib/motion";
 
 const factorIcons: Record<RegimeFactorId, typeof Gauge> = {
@@ -27,6 +27,10 @@ interface MarketRegimePanelProps {
   onAllocationChange: (value: number) => void;
   onResetAllocation: () => void;
   loading?: boolean;
+  dataReady?: boolean;
+  fearGreed?: number | null;
+  fearGreedLabel?: string | null;
+  fearGreedAt?: string | null;
 }
 
 export function MarketRegimePanel({
@@ -39,9 +43,15 @@ export function MarketRegimePanel({
   onAllocationChange,
   onResetAllocation,
   loading = false,
+  dataReady = false,
+  fearGreed = null,
+  fearGreedLabel = null,
+  fearGreedAt = null,
 }: MarketRegimePanelProps) {
   const overridden = allocationOverride != null;
   const blend = regime.deploymentBlend.length > 0 ? regime.deploymentBlend : regime.blend;
+  const liveFactors = regime.factors.filter((factor) => factor.source === "live");
+  const showScores = dataReady && liveFactors.length > 0;
 
   return (
     <motion.section
@@ -61,10 +71,28 @@ export function MarketRegimePanel({
         </p>
       )}
 
-      <div className="mt-3">
+      <div className="mt-3 flex flex-wrap items-center gap-2">
         <span className="inline-flex rounded-full border border-amber-400/70 bg-gradient-to-r from-amber-500/20 to-yellow-700/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-amber-200 shadow-[0_0_16px_rgba(251,191,36,0.28)]">
           Istota: {regime.confidence} • ×{regime.confidenceMultiplier.toFixed(2)}
         </span>
+        {loading && fearGreed == null ? (
+          <LiveMetricSkeleton className="h-6 w-40" />
+        ) : fearGreed != null ? (
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00FFA3]/30 bg-[#00FFA3]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#00FFA3]">
+            F&G live {fearGreed.toFixed(0)}/100
+            {fearGreedLabel ? ` · ${fearGreedLabel}` : ""}
+            {fearGreedAt ? (
+              <span className="font-mono font-medium normal-case tracking-normal text-[#00FFA3]/70">
+                {new Date(fearGreedAt).toLocaleTimeString("sk-SK", {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          <LiveMetricUnavailable label="Fear & Greed" />
+        )}
       </div>
 
       <div className="mt-4 grid grid-cols-2 gap-3">
@@ -73,32 +101,49 @@ export function MarketRegimePanel({
             Final Score
           </p>
           {loading ? (
-            <PriceSkeleton className="mt-1 h-7 w-16" />
-          ) : (
+            <LiveMetricSkeleton className="mt-1 h-7 w-16" />
+          ) : showScores ? (
             <p className="mt-1 font-mono text-2xl font-black text-white">
               {regime.finalScore}
               <span className="text-sm font-medium text-zinc-500">/100</span>
             </p>
+          ) : (
+            <p className="mt-2">
+              <LiveMetricUnavailable label="Final Score" />
+            </p>
           )}
-          <div className="mt-2">
-            <LaserBar segments={[{ width: regime.finalScore, tone: "approved" }]} />
-          </div>
-          <p className="mt-1 text-[10px] text-zinc-500">5 faktorov → alokácia %</p>
+          {showScores && (
+            <div className="mt-2">
+              <LaserBar segments={[{ width: regime.finalScore, tone: "approved" }]} />
+            </div>
+          )}
+          <p className="mt-1 text-[10px] text-zinc-500">
+            5 faktorov (Binance klines) → alokácia %. F&G z alternative.me je
+            CONFLUENCE vo Fáze B.
+          </p>
         </div>
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Alokácia
           </p>
-          <p className="mt-1 font-mono text-2xl font-black text-[#00FFA3]">
-            {regime.allocationPercent.toFixed(0)}
-            <span className="text-sm font-medium text-zinc-500">%</span>
-          </p>
-          <p className="mt-1 font-mono text-xs font-bold text-white">
-            Nasadené {formatUsd(deployedCapital)}
-          </p>
-          <p className="font-mono text-xs font-semibold text-amber-200/90">
-            Dostupný {formatUsd(undeployedToReserve)}
-          </p>
+          {loading || !showScores ? (
+            <div className="mt-2 space-y-2">
+              {loading ? <LiveMetricSkeleton className="h-7 w-16" /> : <LiveMetricUnavailable label="Alokácia" />}
+            </div>
+          ) : (
+            <>
+              <p className="mt-1 font-mono text-2xl font-black text-[#00FFA3]">
+                {regime.allocationPercent.toFixed(0)}
+                <span className="text-sm font-medium text-zinc-500">%</span>
+              </p>
+              <p className="mt-1 font-mono text-xs font-bold text-white">
+                Nasadené {formatUsd(deployedCapital)}
+              </p>
+              <p className="font-mono text-xs font-semibold text-amber-200/90">
+                Dostupný {formatUsd(undeployedToReserve)}
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -150,25 +195,32 @@ export function MarketRegimePanel({
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-white">
                     {factor.label}
-                    {factor.source === "mock" && (
-                      <span className="ml-1 text-[9px] font-bold uppercase tracking-wide text-amber-300">
-                        mock
+                  </p>
+                  {factor.source === "live" && showScores ? (
+                    <p className="font-mono text-[11px] font-bold text-zinc-300">
+                      {factor.score}
+                      <span className="ml-1 font-medium text-zinc-600">
+                        w {(factor.weight * 100).toFixed(0)}%
                       </span>
-                    )}
-                  </p>
-                  <p className="font-mono text-[11px] font-bold text-zinc-300">
-                    {factor.score}
-                    <span className="ml-1 font-medium text-zinc-600">
-                      w {(factor.weight * 100).toFixed(0)}%
-                    </span>
-                  </p>
+                    </p>
+                  ) : (
+                    <LiveMetricUnavailable label={factor.label} />
+                  )}
                 </div>
-                <div className="mt-1">
-                  <LaserBar segments={[{ width: factor.score, tone: "approved" }]} />
-                </div>
-                <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
-                  {factor.formula}
-                </p>
+                {factor.source === "live" && showScores ? (
+                  <>
+                    <div className="mt-1">
+                      <LaserBar segments={[{ width: factor.score, tone: "approved" }]} />
+                    </div>
+                    <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
+                      {factor.formula}
+                    </p>
+                  </>
+                ) : (
+                  <p className="mt-1 text-[10px] leading-relaxed text-zinc-600">
+                    {factor.note}
+                  </p>
+                )}
               </div>
             </div>
           );

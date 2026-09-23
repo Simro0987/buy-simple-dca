@@ -20,6 +20,8 @@ export function useRegimeMetrics() {
   );
   const setMetrics = useRegimeStore((state) => state.setMetrics);
   const [loading, setLoading] = useState(!metrics.fetchedAt);
+  const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -27,6 +29,9 @@ export function useRegimeMetrics() {
     async function load() {
       try {
         const response = await fetch("/api/dca/regime", { cache: "no-store" });
+        if (!response.ok) {
+          throw new Error(`Regime API HTTP ${response.status}`);
+        }
         const json = (await response.json()) as RegimeMetrics;
         if (cancelled) return;
         setMetrics({
@@ -34,8 +39,21 @@ export function useRegimeMetrics() {
           ...json,
           fetchedAt: json.fetchedAt ?? new Date().toISOString(),
         });
+        setStale(false);
+        setError(
+          json.fearGreed == null
+            ? "Fear & Greed API nevrátila hodnotu."
+            : null,
+        );
       } catch {
-        // keep persisted snapshot
+        if (cancelled) return;
+        const current = useRegimeStore.getState();
+        setStale(Boolean(current.fetchedAt));
+        setError(
+          current.fearGreed == null
+            ? "Fear & Greed / DefiLlama sa nepodarilo načítať."
+            : "Regime API nedostupné · posledné live dáta.",
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -49,5 +67,5 @@ export function useRegimeMetrics() {
     };
   }, [setMetrics]);
 
-  return { metrics, loading };
+  return { metrics, loading, error, stale };
 }
