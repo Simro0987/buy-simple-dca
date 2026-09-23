@@ -13,18 +13,22 @@ import { LiveIndicator } from "@/components/LiveIndicator";
 import { NewsFeed } from "@/components/NewsFeed";
 import { PortfolioChart } from "@/components/PortfolioChart";
 import { SettingsButton, SettingsModal } from "@/components/SettingsModal";
-import { Toast } from "@/components/Toast";
+import { Toast, type ToastVariant } from "@/components/Toast";
 import { TransactionHistory } from "@/components/TransactionHistory";
 import { YieldTokensList } from "@/components/YieldTokensList";
 import { usePortfolio } from "@/hooks/usePortfolio";
-import type { TokenExecutionPlan } from "@/lib/dcaEngineConfig";
+import type { PortfolioAssetRecord } from "@/lib/dca/executionLedger";
+import type { TokenExecutionPlan } from "@/lib/dca/types";
 import { pageTransition } from "@/lib/motion";
 
 export function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>("portfolio");
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toast, setToast] = useState<{
+    message: string;
+    variant: ToastVariant;
+  } | null>(null);
   const {
     assets,
     holdings,
@@ -34,10 +38,10 @@ export function Dashboard() {
     profitLoss,
     loading,
     isLive,
-    prices,
     updateHoldings,
     importPortfolio,
     recordDcaPurchase,
+    recordExecutionFill,
     portfolioData,
   } = usePortfolio();
 
@@ -47,20 +51,40 @@ export function Dashboard() {
   const showNews = activeTab === "news";
 
   const handleRecordPurchase = useCallback(
-    (plans: TokenExecutionPlan[]) => {
-      if (!prices) return false;
+    (plans: TokenExecutionPlan[], livePrices: Record<string, number>) => {
+      const payable = plans.filter((plan) => plan.totalUsd > 0);
+      if (
+        payable.length === 0 ||
+        payable.some((plan) => (livePrices[plan.symbol] ?? 0) <= 0)
+      ) {
+        setToast({
+          message: "Ceny nie sú dostupné. Skús to znova.",
+          variant: "error",
+        });
+        return false;
+      }
 
-      const recorded = recordDcaPurchase(plans, prices);
+      const recorded = recordDcaPurchase(plans, livePrices);
       if (recorded) {
-        setToastMessage("Záznam uložený");
+        setToast({ message: "Záznam uložený", variant: "success" });
+      } else {
+        setToast({
+          message: "Nákup sa nepodarilo uložiť",
+          variant: "error",
+        });
       }
       return recorded;
     },
-    [prices, recordDcaPurchase],
+    [recordDcaPurchase],
+  );
+
+  const handleExecutionFill = useCallback(
+    (record: PortfolioAssetRecord) => recordExecutionFill(record),
+    [recordExecutionFill],
   );
 
   return (
-    <div className="relative min-h-dvh bg-[#050505]">
+    <div className="relative min-h-dvh bg-[#090B11]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-32 top-0 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
         <div className="absolute -right-32 top-1/3 h-72 w-72 rounded-full bg-purple-500/5 blur-3xl" />
@@ -116,9 +140,10 @@ export function Dashboard() {
           {showDca && (
             <motion.div key="dca" {...pageTransition}>
               <DcaEngine
-                prices={prices}
-                loading={loading}
+                transactions={transactions}
+                holdings={holdings}
                 onRecordPurchase={handleRecordPurchase}
+                onExecutionFill={handleExecutionFill}
               />
             </motion.div>
           )}
@@ -148,9 +173,10 @@ export function Dashboard() {
       />
 
       <Toast
-        message={toastMessage ?? ""}
-        visible={Boolean(toastMessage)}
-        onClose={() => setToastMessage(null)}
+        message={toast?.message ?? ""}
+        visible={Boolean(toast)}
+        variant={toast?.variant}
+        onClose={() => setToast(null)}
       />
     </div>
   );

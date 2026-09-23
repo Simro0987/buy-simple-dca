@@ -12,9 +12,9 @@ interface BottomNavProps {
 }
 
 const tabs: { id: Tab; label: string; icon: typeof Home }[] = [
-  { id: "home", label: "Home", icon: Home },
-  { id: "news", label: "News", icon: Newspaper },
-  { id: "portfolio", label: "Portfolio", icon: PieChart },
+  { id: "home", label: "Domov", icon: Home },
+  { id: "news", label: "Noviny", icon: Newspaper },
+  { id: "portfolio", label: "Portfólio", icon: PieChart },
   { id: "dca", label: "DCA", icon: Repeat },
 ];
 

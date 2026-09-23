@@ -1,5 +1,6 @@
 import type { CryptoSymbol } from "@/lib/cryptoApi";
 import type { AssetAccent } from "@/lib/data";
+import { isDcaSymbol } from "@/lib/dca/universe";
 
 export const HOLDINGS_STORAGE_KEY = "edge-trader-holdings";
 export const PORTFOLIO_STORAGE_KEY = "edge-trader-portfolio";
@@ -9,7 +10,7 @@ export type HoldingsMap = Record<CryptoSymbol, number>;
 export interface Transaction {
   id: string;
   date: string;
-  symbol: CryptoSymbol;
+  symbol: string;
   amount: number;
   priceUsd: number;
   spentUsd: number;
@@ -63,7 +64,8 @@ function normalizeTransactions(value: unknown): Transaction[] {
       return (
         typeof tx.id === "string" &&
         typeof tx.date === "string" &&
-        (tx.symbol === "BTC" || tx.symbol === "ETH" || tx.symbol === "SOL") &&
+        typeof tx.symbol === "string" &&
+        isDcaSymbol(tx.symbol) &&
         typeof tx.amount === "number" &&
         typeof tx.priceUsd === "number" &&
         typeof tx.spentUsd === "number" &&
