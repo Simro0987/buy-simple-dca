@@ -1,7 +1,8 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { ChevronDown, Lock } from "lucide-react";
+import { ChevronDown, Lock, OctagonMinus } from "lucide-react";
+import { LaserBar } from "@/components/dca/LaserBar";
 import { formatUnitPrice, formatUsd } from "@/lib/data";
 import {
   LIMIT_ROLLOVER_NOTE,
@@ -9,6 +10,12 @@ import {
 } from "@/lib/dca/executionMath";
 import { formatApy, formatEstimatedQty, formatPercent } from "@/lib/dca/format";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
+import {
+  approvedBadge,
+  compactChip,
+  stoppedBadge,
+  tokenUnderglow,
+} from "@/lib/dca/terminal";
 import type {
   BrakeBoostMode,
   DcaSymbol,
@@ -45,24 +52,11 @@ const statusCopy: Record<ExecutionStatus, string> = {
   DEEP_BOOST: "DEEP BOOST",
 };
 
-const statusClass: Record<ExecutionStatus, string> = {
-  REDUCE: "border-pink-400/40 bg-pink-500/15 text-pink-300",
-  NORMAL: "border-emerald-400/30 bg-emerald-400/10 text-emerald-300",
-  DEEP_BOOST: "border-cyan-400/40 bg-cyan-400/10 text-cyan-300",
-};
-
 const brakeBoostBadgeClass: Record<BrakeBoostMode, string> = {
   REDUCE: "border-amber-400/40 bg-amber-400/15 text-amber-200",
   BOOST: "border-lime-400/40 bg-lime-400/15 text-lime-300",
   DEEP_BOOST: "border-fuchsia-400/50 bg-fuchsia-500/20 text-fuchsia-200 shadow-[0_0_12px_rgba(232,121,249,0.35)]",
   NORMAL: "border-white/10 bg-white/5 text-zinc-400",
-};
-
-const brakeBoostMatrixClass: Record<BrakeBoostMode, string> = {
-  REDUCE: "text-amber-300",
-  BOOST: "text-lime-300",
-  DEEP_BOOST: "text-fuchsia-300",
-  NORMAL: "text-zinc-300",
 };
 
 interface TokenExecutionCardProps {
@@ -235,25 +229,21 @@ function LimitTrack({
       }`}
     >
       <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
-        {title} · {shareLabel}
+        {title} · <span className="font-mono">{shareLabel}</span>
       </p>
-      <span
-        className={`mt-1 inline-flex rounded-full border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
-          pending
-            ? "animate-pulse border-amber-300/70 bg-amber-400/25 text-amber-100"
-            : fill
-              ? "border-emerald-400/40 bg-emerald-400/20 text-emerald-200"
-              : "border-amber-400/30 bg-amber-400/15 text-amber-100"
-        }`}
-      >
-        {pending
-          ? "Čaká na burze (7d)"
-          : fill
-            ? "Zrealizované"
-            : `Platnosť príkazu: ${LIMIT_VALIDITY_DAYS} dní`}
-      </span>
+      {(pending || fill) && (
+        <span
+          className={`action-lock mt-1 inline-flex rounded-sm border px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-wide ${
+            pending
+              ? "border-[#00FFA3]/70 bg-[#00FFA3]/15 text-[#00FFA3]"
+              : "border-[#00FFA3]/50 bg-[#00FFA3]/18 text-[#00FFA3]"
+          }`}
+        >
+          {pending ? "Čaká na burze (7d)" : "Zrealizované"}
+        </span>
+      )}
       <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="text-sm font-bold text-white">{formatUsd(usd)}</p>
+        <p className="font-mono text-sm font-bold text-white">{formatUsd(usd)}</p>
         <CopyGlyph
           label="Kopírovať Kapitál (USD)"
           value={copyUsd(usd)}
@@ -334,18 +324,21 @@ function LimitTrack({
           ) : (
             <p className="text-[10px] text-zinc-500">{targetLabel}</p>
           )}
-          <p className="mt-1 text-[9px] leading-relaxed text-zinc-600">
-            {LIMIT_ROLLOVER_NOTE}
-          </p>
           <motion.button
             type="button"
             onClick={onActivate}
             disabled={usd <= 0 || price <= 0}
             {...interactiveButton}
-            className="mt-2 w-full rounded-xl border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
+            className="mt-2 w-full rounded-sm border border-amber-400/30 bg-amber-400/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-amber-200 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Aktivovať LMT
           </motion.button>
+          <p className="mt-1 text-[8px] uppercase tracking-[0.16em] text-zinc-600">
+            Platnosť príkazu: {LIMIT_VALIDITY_DAYS} dní
+          </p>
+          <p className="mt-0.5 text-[8px] leading-relaxed text-zinc-700">
+            {LIMIT_ROLLOVER_NOTE}
+          </p>
         </>
       )}
     </div>
@@ -358,9 +351,9 @@ function RsiGauge({ rsi }: { rsi: number }) {
     <div>
       <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-zinc-500">
         <span>RSI 14D</span>
-        <span className="font-bold text-white">{rsi.toFixed(1)}</span>
+        <span className="font-mono font-bold text-white">{rsi.toFixed(1)}</span>
       </div>
-      <div className="relative h-2.5 overflow-hidden rounded-full bg-gradient-to-r from-cyan-400 via-emerald-400 to-pink-500">
+      <div className="relative h-2.5 overflow-hidden bg-gradient-to-r from-cyan-400 via-emerald-400 to-pink-500">
         <span
           className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-zinc-950 shadow-[0_0_10px_rgba(255,255,255,0.5)]"
           style={{ left: `${left}%` }}
@@ -415,84 +408,65 @@ export function TokenExecutionCard({
     <motion.article
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`${glassPanel} p-4 ${
+      className={`${glassPanel} p-4 ${tokenUnderglow[plan.symbol] ?? ""} ${
+        plan.gate.passed
+          ? "shadow-[inset_0_0_28px_rgba(0,255,163,0.07)]"
+          : "border-[#FF2A6D]/80"
+      } ${
         plan.smartTrim
           ? "border-amber-400/60 shadow-[0_0_28px_rgba(251,191,36,0.28)]"
           : plan.fallingKnife
-            ? "border-rose-500/50"
-            : highBetaRejected
-              ? "border-amber-500/30"
-              : satellitePaused
-                ? "border-cyan-500/30"
-                : ""
+            ? "border-[#FF2A6D]"
+            : ""
       }`}
     >
-      <div className={`mb-3 flex items-start justify-between gap-3 ${locked ? "opacity-55 grayscale" : ""}`}>
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-white/20 to-white/5 text-xs font-bold text-white ring-1 ring-white/20">
+          <div className="flex h-10 w-10 items-center justify-center rounded-sm bg-gradient-to-br from-white/20 to-white/5 font-mono text-xs font-bold text-white ring-1 ring-white/15">
             {plan.symbol.slice(0, 1)}
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
-              <p className="text-base font-bold text-white">{plan.symbol}</p>
-              <span className="rounded-full border border-white/10 bg-white/5 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-zinc-300">
-                {categoryCopy[plan.category]}
-              </span>
-              {plan.subTags.map((tag) => (
-                <span
-                  key={tag}
-                  className="rounded-full border border-cyan-400/20 bg-cyan-400/10 px-2 py-0.5 text-[9px] font-bold uppercase tracking-wide text-cyan-300"
-                >
-                  {tag}
-                </span>
-              ))}
-            </div>
-            <p className="mt-0.5 text-xs text-zinc-500">{plan.name}</p>
-            <div className="mt-1 flex flex-wrap gap-1">
-              {plan.bullMarket && (
-                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-300">
-                  Býčí trh · cena &gt; SMA 200
-                </span>
-              )}
-              {!locked && (
-                <span
-                  className={`rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${statusClass[plan.status]}`}
-                >
-                  {statusCopy[plan.status]}
-                </span>
-              )}
+              <p className="text-base font-bold tracking-tight text-white">{plan.symbol}</p>
               <span
-                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold uppercase ${
-                  plan.gate.passed
-                    ? "border-emerald-400/40 bg-emerald-400/12 text-emerald-200"
-                    : "border-rose-400/40 bg-rose-500/15 text-rose-200 line-through decoration-rose-300/70"
-                }`}
+                className={plan.gate.passed ? approvedBadge : stoppedBadge}
               >
                 {!plan.gate.passed && <Lock className="h-3 w-3" />}
                 {plan.gate.badge}
               </span>
-              {plan.absorbedUsd > 0 && (
-                <span className="rounded-full border border-emerald-400/40 bg-emerald-400/15 px-2 py-0.5 text-[9px] font-bold uppercase text-emerald-200">
-                  +{plan.absorbedUsd.toFixed(0)} $ presmerované
+            </div>
+            <p className="mt-0.5 text-xs text-zinc-500">{plan.name}</p>
+            <div className="mt-1.5 flex flex-wrap items-center gap-1">
+              <span className={compactChip}>{categoryCopy[plan.category]}</span>
+              {plan.subTags.map((tag) => (
+                <span key={tag} className={compactChip}>
+                  {tag}
                 </span>
-              )}
+              ))}
+              {plan.bullMarket && <span className={compactChip}>Býčí</span>}
+              {!locked && <span className={compactChip}>{statusCopy[plan.status]}</span>}
               {plan.gate.passed && plan.basketWeightPercent > 0 && plan.category !== "CORE" && (
-                <span className="rounded-full border border-violet-400/30 bg-violet-400/10 px-2 py-0.5 text-[9px] font-bold uppercase text-violet-200">
-                  RSI váha {plan.basketWeightPercent.toFixed(1)}%
+                <span className={`${compactChip} font-mono text-violet-200`}>
+                  {plan.basketWeightPercent.toFixed(1)}%
                 </span>
               )}
             </div>
           </div>
         </div>
-        <div className="text-right">
+        <div className="shrink-0 text-right">
+          {plan.absorbedUsd > 0 && (
+            <p className="mb-1 font-mono text-[10px] font-black uppercase tracking-wide text-[#00FFA3] drop-shadow-[0_0_8px_rgba(0,255,163,0.55)]">
+              +{plan.absorbedUsd.toFixed(0)} $ PRESMEROVANÉ
+            </p>
+          )}
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Podiel nasadeného
           </p>
-          <p className="text-lg font-bold text-emerald-300">
+          <p className="font-mono text-lg font-bold text-[#00FFA3]">
             {formatPercent(plan.weightPercent, 0)}
           </p>
-          <p className="text-xs text-white">{formatUsd(plan.totalUsd)}</p>
-          <p className="text-[10px] text-zinc-500">
+          <p className="font-mono text-xs text-white">{formatUsd(plan.totalUsd)}</p>
+          <p className="font-mono text-[10px] text-zinc-500">
             {loading ? (
               <PriceSkeleton className="ml-auto h-3 w-16" />
             ) : (
@@ -524,8 +498,8 @@ export function TokenExecutionCard({
         </div>
       )}
       {highBetaRejected && highBeta && (
-        <div className="mb-3 space-y-1 rounded-2xl border border-amber-500/40 bg-gradient-to-br from-amber-500/15 to-rose-500/10 px-3 py-2">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-amber-200">
+        <div className="mb-3 space-y-1 border border-[#FF2A6D] bg-[rgba(255,42,109,0.12)] px-3 py-2">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-[#FF2A6D]">
             ⚠️ NÁKUP ZAMIETNUTÝ (Skóre {highBeta.score}/3)
           </p>
           <p className="text-[11px] font-medium leading-relaxed text-amber-100/90">
@@ -535,8 +509,8 @@ export function TokenExecutionCard({
         </div>
       )}
       {satellitePaused && satellite && (
-        <div className="mb-3 space-y-1 rounded-2xl border border-cyan-400/40 bg-gradient-to-br from-cyan-500/15 to-slate-900/40 px-3 py-2">
-          <p className="text-[12px] font-bold uppercase tracking-wide text-cyan-200">
+        <div className="mb-3 space-y-1 border border-[#FF2A6D] bg-[rgba(255,42,109,0.12)] px-3 py-2">
+          <p className="text-[12px] font-bold uppercase tracking-wide text-[#FF2A6D]">
             ⏸️ DCA POZASTAVENÉ
           </p>
           <p className="text-[11px] font-medium leading-relaxed text-cyan-100/90">
@@ -583,19 +557,19 @@ export function TokenExecutionCard({
             {plan.r1 ? formatUnitPrice(plan.r1) : "—"}
           </p>
         </div>
-        {!locked && (
-          <div className={`${glassInset} col-span-2 p-2.5`}>
-            <p className="text-[10px] font-bold uppercase tracking-wider text-zinc-500">
-              Brzda & Boost
-            </p>
-            <p
-              className={`mt-1 text-[11px] font-semibold uppercase tracking-wide ${brakeBoostMatrixClass[plan.brakeBoostMode]}`}
-            >
-              {plan.brakeBoostMatrix}
-            </p>
-            <p className="text-[10px] text-zinc-500">
-              50D EMA {formatPercent(plan.emaDistancePercent)}
-            </p>
+        {!locked && plan.brakeBoostMode !== "NORMAL" && (
+          <div className={`${glassInset} col-span-2 flex items-center gap-3 p-2.5`}>
+            <OctagonMinus className="h-5 w-5 shrink-0 text-amber-300" aria-hidden="true" />
+            <div>
+              <p className="text-[9px] font-semibold uppercase tracking-[0.18em] text-zinc-600">
+                Brzda & Boost
+              </p>
+              <p className="font-mono text-lg font-black tracking-tight text-amber-300">
+                {plan.brakeBoostMode === "REDUCE"
+                  ? `REDUCE MKT ${plan.brakeBoostFactor.toFixed(0)}%`
+                  : `${plan.brakeBoostMode === "DEEP_BOOST" ? "DEEP BOOST" : "BOOST"} MKT × ${(plan.brakeBoostFactor * 100).toFixed(0)}%`}
+              </p>
+            </div>
           </div>
         )}
       </div>
@@ -607,22 +581,20 @@ export function TokenExecutionCard({
               <RsiGauge rsi={plan.rsi} />
 
               <div className="mt-3 mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
-                <span className="text-emerald-300">
+                <span className="font-mono text-[#00FFA3]">
                   MKT {formatPercent(plan.marketShare, 0)}
                 </span>
-                <span className="text-zinc-500">RSI · MKT / LMT</span>
-                <span className="text-amber-300">
+                <span className="text-zinc-600">RSI · MKT / LMT</span>
+                <span className="font-mono text-amber-300">
                   LMT {formatPercent(plan.limitShare, 0)}
                 </span>
               </div>
-              <div className="mb-2 flex h-2.5 overflow-hidden rounded-full bg-zinc-800">
-                <div
-                  className="h-full bg-emerald-400 transition-[width] duration-500"
-                  style={{ width: `${plan.marketShare}%` }}
-                />
-                <div
-                  className="h-full bg-amber-400 transition-[width] duration-500"
-                  style={{ width: `${plan.limitShare}%` }}
+              <div className="mb-2">
+                <LaserBar
+                  segments={[
+                    { width: plan.marketShare, tone: "approved" },
+                    { width: plan.limitShare, tone: "amber" },
+                  ]}
                 />
               </div>
             </>
@@ -653,7 +625,7 @@ export function TokenExecutionCard({
                 </span>
               )}
               <div className="mt-1 flex items-center justify-between gap-2">
-                <p className="text-sm font-bold tabular-nums text-white transition-all duration-500">
+                <p className="font-mono text-sm font-bold text-white transition-all duration-500">
                   {formatUsd(mktUsd)}
                 </p>
                 <CopyGlyph
@@ -689,7 +661,7 @@ export function TokenExecutionCard({
                 <motion.button
                   type="button"
                   disabled
-                  className="mt-2 w-full rounded-xl border border-emerald-400/50 bg-emerald-400/20 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-200"
+                  className="action-lock mt-2 w-full rounded-sm border px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide"
                 >
                   Zrealizované
                 </motion.button>
@@ -699,7 +671,7 @@ export function TokenExecutionCard({
                   onClick={() => onActivateMarket(plan.symbol)}
                   disabled={plan.marketUsd <= 0 || plan.price <= 0}
                   {...interactiveButton}
-                  className="mt-2 w-full rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-emerald-300 disabled:cursor-not-allowed disabled:opacity-40"
+                  className="mt-2 w-full rounded-sm border border-[#00FFA3]/30 bg-[#00FFA3]/10 px-2 py-1.5 text-[10px] font-bold uppercase tracking-wide text-[#00FFA3] disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   Aktivovať Market
                 </motion.button>

@@ -117,7 +117,7 @@ export function WeeklyInvestmentCard({
                 if (event.key === "Enter") event.currentTarget.blur();
               }}
               placeholder="431"
-              className="w-full rounded-2xl border border-white/15 bg-gradient-to-br from-white/10 via-black/40 to-zinc-950/80 py-4 pl-10 pr-4 text-3xl font-bold tracking-tight text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.35)] outline-none backdrop-blur-md transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/25"
+              className="w-full rounded-2xl border border-white/15 bg-gradient-to-br from-white/10 via-black/40 to-zinc-950/80 py-4 pl-10 pr-4 font-mono text-3xl font-bold tracking-tight text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.12),0_8px_24px_rgba(0,0,0,0.35)] outline-none backdrop-blur-md transition focus:border-[#00FFA3]/40 focus:ring-2 focus:ring-[#00FFA3]/25"
             />
           </div>
 

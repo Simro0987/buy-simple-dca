@@ -1,6 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
+import { LaserBar } from "@/components/dca/LaserBar";
 import { formatUsd } from "@/lib/data";
 import { SAFE_HAVEN_COPY } from "@/lib/dca/confluence";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
@@ -52,7 +53,7 @@ export function PhaseSplitCard({
         {plan.allocationLabel} •{" "}
         {(plan.allocationSubtitle.split(" · ")[0] ?? plan.allocationSubtitle).toUpperCase()}
       </h3>
-      <p className="mt-1 text-[11px] text-zinc-500">
+      <p className="mt-1 font-mono text-[11px] text-zinc-500">
         CONFLUENCE {plan.confluence}/100 · z nasadeného {formatUsd(plan.deployedCapital)}
       </p>
 
@@ -90,14 +91,9 @@ export function PhaseSplitCard({
             <BitcoinMark />
             BTC Podiel
           </span>
-          <span className="font-bold text-emerald-300">{btcFill.toFixed(0)}%+</span>
+          <span className="font-mono font-bold text-[#00FFA3]">{btcFill.toFixed(0)}%+</span>
         </div>
-        <div className="h-3 overflow-hidden rounded-full bg-zinc-800/90">
-          <div
-            className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-lime-300 shadow-[0_0_16px_rgba(52,211,153,0.45)]"
-            style={{ width: `${Math.min(100, btcFill)}%` }}
-          />
-        </div>
+        <LaserBar segments={[{ width: Math.min(100, btcFill), tone: "approved" }]} />
         <p className="text-[11px] leading-relaxed text-zinc-400">
           Bitcoin musí ≥50% nasadeného kapitálu. Zvyšok ≤50% ide do satelitov a
           high-beta podľa CONFLUENCE.
@@ -105,21 +101,14 @@ export function PhaseSplitCard({
       </div>
 
       <div className="mt-4">
-        <div className="flex h-4 overflow-hidden rounded-full">
-          <div
-            className="h-full bg-gradient-to-r from-amber-400 to-orange-500"
-            style={{ width: `${mix.corePercent}%` }}
-          />
-          <div
-            className="h-full bg-gradient-to-r from-violet-400 to-purple-600"
-            style={{ width: `${mix.satellitePercent}%` }}
-          />
-          <div
-            className="h-full bg-gradient-to-r from-fuchsia-400 to-pink-500"
-            style={{ width: `${mix.highBetaPercent}%` }}
-          />
-        </div>
-        <div className="mt-2 flex flex-wrap justify-between gap-2 text-[11px] font-semibold">
+        <LaserBar
+          segments={[
+            { width: mix.corePercent, tone: "orange" },
+            { width: mix.satellitePercent, tone: "violet" },
+            { width: mix.highBetaPercent, tone: "fuchsia" },
+          ]}
+        />
+        <div className="mt-2 flex flex-wrap justify-between gap-2 font-mono text-[11px] font-semibold">
           <span className="text-amber-300">
             Core {mix.corePercent.toFixed(0)}% · {formatUsd(plan.finalBudgets.coreUsd)}
           </span>
@@ -137,28 +126,28 @@ export function PhaseSplitCard({
           <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">
             Core
           </p>
-          <p className="mt-1 text-lg font-bold text-white">
+          <p className="mt-1 font-mono text-lg font-bold text-white">
             {mix.corePercent.toFixed(0)}%
           </p>
-          <p className="text-xs text-zinc-400">{formatUsd(plan.finalBudgets.coreUsd)}</p>
+          <p className="font-mono text-xs text-zinc-400">{formatUsd(plan.finalBudgets.coreUsd)}</p>
         </div>
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300">
             Satelity
           </p>
-          <p className="mt-1 text-lg font-bold text-white">
+          <p className="mt-1 font-mono text-lg font-bold text-white">
             {mix.satellitePercent.toFixed(0)}%
           </p>
-          <p className="text-xs text-zinc-400">{formatUsd(plan.finalBudgets.satelliteUsd)}</p>
+          <p className="font-mono text-xs text-zinc-400">{formatUsd(plan.finalBudgets.satelliteUsd)}</p>
         </div>
         <div className={`${glassInset} p-3`}>
           <p className="text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
             High-Beta
           </p>
-          <p className="mt-1 text-lg font-bold text-white">
+          <p className="mt-1 font-mono text-lg font-bold text-white">
             {mix.highBetaPercent.toFixed(0)}%
           </p>
-          <p className="text-xs text-zinc-400">{formatUsd(plan.finalBudgets.highBetaUsd)}</p>
+          <p className="font-mono text-xs text-zinc-400">{formatUsd(plan.finalBudgets.highBetaUsd)}</p>
         </div>
       </div>
 
@@ -195,7 +184,7 @@ export function PhaseSplitCard({
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Dostupný Kapitál
           </p>
-          <p className="mt-1 text-sm font-bold tabular-nums text-white">
+          <p className="mt-1 font-mono text-sm font-bold text-white">
             {formatUsd(displayedReserve, displayedReserve < 0 ? { showSign: true } : undefined)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">
@@ -220,7 +209,7 @@ export function PhaseSplitCard({
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Nasadený kapitál
           </p>
-          <p className="mt-1 text-sm font-bold text-emerald-300">
+          <p className="mt-1 font-mono text-sm font-bold text-[#00FFA3]">
             {formatUsd(plan.deployedCapital)}
           </p>
           <p className="mt-0.5 text-[10px] text-zinc-600">

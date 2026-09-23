@@ -34,10 +34,11 @@ export const springTransition = {
 export const interactiveCard = {
   whileHover: {
     scale: 1.01,
-    boxShadow: "0 0 28px rgba(52, 211, 153, 0.1)",
-    borderColor: "rgba(255, 255, 255, 0.12)",
+    y: -2,
+    boxShadow: "0 0 28px rgba(0, 255, 163, 0.12)",
+    borderColor: "rgba(0, 255, 163, 0.28)",
   },
-  whileTap: { scale: 0.98 },
+  whileTap: { scale: 0.99 },
   transition: springTransition,
 };
 

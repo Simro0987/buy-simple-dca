@@ -24,7 +24,7 @@ export function FlashCrashBanner({
     <motion.section
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="rounded-3xl border border-rose-400/60 bg-gradient-to-br from-rose-600/25 via-zinc-950/70 to-amber-600/15 p-4 shadow-[0_0_36px_rgba(244,63,94,0.35)]"
+      className="border border-[#FF2A6D] bg-[rgba(255,42,109,0.1)] p-4 shadow-[0_0_36px_rgba(255,42,109,0.28)]"
     >
       <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-rose-200">
         Flash Crash Mode

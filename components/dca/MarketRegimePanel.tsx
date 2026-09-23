@@ -3,6 +3,7 @@
 import { Activity, Droplets, Gauge, TrendingUp, Wallet } from "lucide-react";
 import { motion } from "framer-motion";
 import type { FactorBreakdown, MarketRegime, RegimeFactorId } from "@/lib/dca/types";
+import { LaserBar } from "@/components/dca/LaserBar";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
 import { formatUsd } from "@/lib/data";
 import { PriceSkeleton } from "@/components/ui/PriceSkeleton";
@@ -74,16 +75,13 @@ export function MarketRegimePanel({
           {loading ? (
             <PriceSkeleton className="mt-1 h-7 w-16" />
           ) : (
-            <p className="mt-1 text-2xl font-black text-white">
+            <p className="mt-1 font-mono text-2xl font-black text-white">
               {regime.finalScore}
               <span className="text-sm font-medium text-zinc-500">/100</span>
             </p>
           )}
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-zinc-800">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-emerald-500 via-emerald-400 to-lime-300 shadow-[0_0_12px_rgba(52,211,153,0.45)]"
-              style={{ width: `${regime.finalScore}%` }}
-            />
+          <div className="mt-2">
+            <LaserBar segments={[{ width: regime.finalScore, tone: "approved" }]} />
           </div>
           <p className="mt-1 text-[10px] text-zinc-500">5 faktorov → alokácia %</p>
         </div>
@@ -91,14 +89,14 @@ export function MarketRegimePanel({
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Alokácia
           </p>
-          <p className="mt-1 text-2xl font-black text-emerald-300">
+          <p className="mt-1 font-mono text-2xl font-black text-[#00FFA3]">
             {regime.allocationPercent.toFixed(0)}
             <span className="text-sm font-medium text-zinc-500">%</span>
           </p>
-          <p className="mt-1 text-xs font-bold text-white">
+          <p className="mt-1 font-mono text-xs font-bold text-white">
             Nasadené {formatUsd(deployedCapital)}
           </p>
-          <p className="text-xs font-semibold text-amber-200/90">
+          <p className="font-mono text-xs font-semibold text-amber-200/90">
             Dostupný {formatUsd(undeployedToReserve)}
           </p>
         </div>
@@ -158,18 +156,15 @@ export function MarketRegimePanel({
                       </span>
                     )}
                   </p>
-                  <p className="text-[11px] font-bold text-zinc-300">
+                  <p className="font-mono text-[11px] font-bold text-zinc-300">
                     {factor.score}
                     <span className="ml-1 font-medium text-zinc-600">
                       w {(factor.weight * 100).toFixed(0)}%
                     </span>
                   </p>
                 </div>
-                <div className="mt-1 h-1 overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className="h-full rounded-full bg-emerald-400/80"
-                    style={{ width: `${factor.score}%` }}
-                  />
+                <div className="mt-1">
+                  <LaserBar segments={[{ width: factor.score, tone: "approved" }]} />
                 </div>
                 <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
                   {factor.formula}

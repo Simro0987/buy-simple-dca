@@ -41,17 +41,15 @@ export function DcaPlanHeader({
               : "border-amber-400/40 bg-amber-400/10 text-amber-200"
           }`}
         >
-          <span className="relative flex h-2 w-2">
-            {connected && (
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
-            )}
+          <span className="relative flex h-2.5 w-2.5 items-center justify-center">
+            {connected && <span className="live-sonar absolute inset-0 rounded-full" />}
             <span
               className={`relative inline-flex h-2 w-2 rounded-full ${
-                connected ? "bg-emerald-400" : "bg-amber-400"
+                connected ? "live-heartbeat bg-[#00FFA3]" : "bg-amber-400"
               }`}
             />
           </span>
-          <span>
+          <span className="font-mono normal-case tracking-normal">
             LIVE API: {connected ? "Pripojené" : "Odpojené"} | Posledná aktualizácia:{" "}
             {formatLiveClock(lastUpdatedAt)}
           </span>

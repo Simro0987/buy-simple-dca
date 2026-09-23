@@ -84,7 +84,7 @@ export function Dashboard() {
   );
 
   return (
-    <div className="relative min-h-dvh bg-[#050505]">
+    <div className="relative min-h-dvh bg-[#090B11]">
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -left-32 top-0 h-64 w-64 rounded-full bg-emerald-500/5 blur-3xl" />
         <div className="absolute -right-32 top-1/3 h-72 w-72 rounded-full bg-purple-500/5 blur-3xl" />
