@@ -78,7 +78,13 @@ export function ConfluenceScoreBadge({
         <p className="text-[8px] font-bold uppercase tracking-[0.16em] text-zinc-400">
           Confluence
         </p>
-        <p className="font-mono text-[28px] font-black leading-none" style={{ color: tone.hex }}>
+        <p
+          className="font-mono text-[28px] font-black leading-none"
+          style={{
+            color: tone.hex,
+            textShadow: `0 0 10px ${tone.glow}, 0 0 2px ${tone.hex}`,
+          }}
+        >
           {score}
         </p>
         <p className="font-mono text-[9px] font-semibold text-zinc-500">/100</p>

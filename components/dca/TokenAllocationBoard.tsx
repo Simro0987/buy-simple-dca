@@ -6,6 +6,7 @@ import { NarrativeText } from "@/components/dca/NarrativeText";
 import { formatUsd } from "@/lib/data";
 import { formatPercent } from "@/lib/dca/format";
 import { glassPanel } from "@/lib/dca/glass";
+import { getHeatmapColor, heatTextStyle } from "@/lib/dca/heatmap";
 import { approvedBadge, stoppedBadge } from "@/lib/dca/terminal";
 import type { TokenExecutionPlan, WeeklyDcaPlan } from "@/lib/dca/types";
 
@@ -55,11 +56,11 @@ function OrderRow({
             <p className="text-cyan-100">
               {formatUsd(plan.totalUsd)}
               {plan.basketWeightPercent > 0 && plan.category !== "CORE" ? (
-                <span className="ml-2 text-zinc-500">
+                <span className="ml-2" style={heatTextStyle(plan.basketWeightPercent)}>
                   {formatPercent(plan.basketWeightPercent, 1)}
                 </span>
               ) : (
-                <span className="ml-2 text-zinc-500">
+                <span className="ml-2" style={heatTextStyle(plan.weightPercent)}>
                   {formatPercent(plan.weightPercent, 0)}
                 </span>
               )}
@@ -74,6 +75,14 @@ function OrderRow({
         segments={[
           {
             width: Math.min(100, Math.max(plan.weightPercent, locked ? 0 : 4)),
+            color: locked
+              ? undefined
+              : getHeatmapColor(
+                  plan.basketWeightPercent > 0 && plan.category !== "CORE"
+                    ? plan.basketWeightPercent
+                    : plan.weightPercent,
+                  "standard",
+                ),
             tone: locked ? "stopped" : barTone,
           },
         ]}

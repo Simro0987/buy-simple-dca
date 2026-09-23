@@ -6,6 +6,7 @@ import type { FactorBreakdown, MarketRegime, RegimeFactorId } from "@/lib/dca/ty
 import { LaserBar } from "@/components/dca/LaserBar";
 import { LiveMetricSkeleton, LiveMetricUnavailable } from "@/components/dca/LiveState";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
+import { getHeatmapColor, heatTextStyle, hexToRgba } from "@/lib/dca/heatmap";
 import { formatUsd } from "@/lib/data";
 import { interactiveButton } from "@/lib/motion";
 
@@ -52,6 +53,9 @@ export function MarketRegimePanel({
   const blend = regime.deploymentBlend.length > 0 ? regime.deploymentBlend : regime.blend;
   const liveFactors = regime.factors.filter((factor) => factor.source === "live");
   const showScores = dataReady && liveFactors.length > 0;
+  const scoreHeat = getHeatmapColor(regime.finalScore, "standard");
+  const allocHeat = getHeatmapColor(regime.allocationPercent, "standard");
+  const fngHeat = fearGreed != null ? getHeatmapColor(fearGreed, "standard") : null;
 
   return (
     <motion.section
@@ -78,11 +82,19 @@ export function MarketRegimePanel({
         {loading && fearGreed == null ? (
           <LiveMetricSkeleton className="h-6 w-40" />
         ) : fearGreed != null ? (
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#00FFA3]/30 bg-[#00FFA3]/10 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[#00FFA3]">
+          <span
+            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide"
+            style={{
+              color: fngHeat ?? undefined,
+              borderColor: fngHeat ? hexToRgba(fngHeat, 0.4) : undefined,
+              background: fngHeat ? hexToRgba(fngHeat, 0.1) : undefined,
+              textShadow: fngHeat ? `0 0 8px ${hexToRgba(fngHeat, 0.65)}` : undefined,
+            }}
+          >
             F&G live {fearGreed.toFixed(0)}/100
             {fearGreedLabel ? ` · ${fearGreedLabel}` : ""}
             {fearGreedAt ? (
-              <span className="font-mono font-medium normal-case tracking-normal text-[#00FFA3]/70">
+              <span className="font-mono font-medium normal-case tracking-normal opacity-70">
                 {new Date(fearGreedAt).toLocaleTimeString("sk-SK", {
                   hour: "2-digit",
                   minute: "2-digit",
@@ -103,7 +115,7 @@ export function MarketRegimePanel({
           {loading ? (
             <LiveMetricSkeleton className="mt-1 h-7 w-16" />
           ) : showScores ? (
-            <p className="mt-1 font-mono text-2xl font-black text-white">
+            <p className="mt-1 font-mono text-2xl font-black" style={heatTextStyle(regime.finalScore)}>
               {regime.finalScore}
               <span className="text-sm font-medium text-zinc-500">/100</span>
             </p>
@@ -114,7 +126,7 @@ export function MarketRegimePanel({
           )}
           {showScores && (
             <div className="mt-2">
-              <LaserBar segments={[{ width: regime.finalScore, tone: "approved" }]} />
+              <LaserBar segments={[{ width: regime.finalScore, color: scoreHeat }]} />
             </div>
           )}
           <p className="mt-1 text-[10px] text-zinc-500">
@@ -132,7 +144,10 @@ export function MarketRegimePanel({
             </div>
           ) : (
             <>
-              <p className="mt-1 font-mono text-2xl font-black text-[#00FFA3]">
+              <p
+                className="mt-1 font-mono text-2xl font-black"
+                style={heatTextStyle(regime.allocationPercent)}
+              >
                 {regime.allocationPercent.toFixed(0)}
                 <span className="text-sm font-medium text-zinc-500">%</span>
               </p>
@@ -174,7 +189,8 @@ export function MarketRegimePanel({
           step={1}
           value={Math.round(regime.allocationPercent)}
           onChange={(event) => onAllocationChange(Number(event.target.value))}
-          className="mt-2 w-full accent-emerald-400"
+          className="mt-2 w-full"
+          style={{ accentColor: allocHeat }}
           aria-label="Percento týždennej sumy na nasadenie"
         />
       </div>
@@ -190,14 +206,21 @@ export function MarketRegimePanel({
               key={factor.id}
               className="flex items-center gap-3 rounded-2xl border border-white/5 bg-white/[0.03] px-3 py-2"
             >
-              <Icon className="h-4 w-4 shrink-0 text-emerald-300" aria-hidden="true" />
+              <Icon
+                className="h-4 w-4 shrink-0"
+                style={{ color: getHeatmapColor(factor.score, "standard") }}
+                aria-hidden="true"
+              />
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-xs font-semibold text-white">
                     {factor.label}
                   </p>
                   {factor.source === "live" && showScores ? (
-                    <p className="font-mono text-[11px] font-bold text-zinc-300">
+                    <p
+                      className="font-mono text-[11px] font-bold"
+                      style={heatTextStyle(factor.score)}
+                    >
                       {factor.score}
                       <span className="ml-1 font-medium text-zinc-600">
                         w {(factor.weight * 100).toFixed(0)}%
@@ -210,9 +233,19 @@ export function MarketRegimePanel({
                 {factor.source === "live" && showScores ? (
                   <>
                     <div className="mt-1">
-                      <LaserBar segments={[{ width: factor.score, tone: "approved" }]} />
+                      <LaserBar
+                        segments={[
+                          {
+                            width: factor.score,
+                            color: getHeatmapColor(factor.score, "standard"),
+                          },
+                        ]}
+                      />
                     </div>
-                    <p className="mt-1 text-[10px] font-medium text-cyan-200/80">
+                    <p
+                      className="mt-1 text-[10px] font-medium"
+                      style={heatTextStyle(factor.score)}
+                    >
                       {factor.formula}
                     </p>
                   </>

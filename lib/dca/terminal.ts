@@ -1,4 +1,6 @@
 /** Visual-only terminal tokens. No math or state. */
+import { getHeatmapColor, getHeatmapGlow, hexToRgba } from "@/lib/dca/heatmap";
+
 export const neonApproved = "#00FFA3";
 export const neonStopped = "#FF2A6D";
 
@@ -23,33 +25,20 @@ export const approvedBadge =
 export const compactChip =
   "rounded-sm border border-white/8 bg-white/[0.04] px-1.5 py-0.5 text-[8px] font-bold uppercase tracking-[0.14em] text-zinc-400";
 
-/** Visual-only CONFLUENCE glow. Does not change the score. */
+/** Visual-only CONFLUENCE glow from the Standard heatmap. */
 export function confluenceTone(score: number): {
   hex: string;
   glow: string;
   track: string;
   label: string;
 } {
-  if (score < 30) {
-    return {
-      hex: "#FF2A6D",
-      glow: "rgba(255, 42, 109, 0.5)",
-      track: "rgba(255, 42, 109, 0.18)",
-      label: "Nízka",
-    };
-  }
-  if (score > 70) {
-    return {
-      hex: "#00FFA3",
-      glow: "rgba(0, 255, 163, 0.5)",
-      track: "rgba(0, 255, 163, 0.18)",
-      label: "Vysoká",
-    };
-  }
+  const hex = getHeatmapColor(score, "standard");
+  const label =
+    score <= 25 ? "Krv" : score <= 45 ? "Medveď" : score <= 55 ? "Strana" : score <= 75 ? "Býk" : "Eufória";
   return {
-    hex: "#F5D76E",
-    glow: "rgba(245, 215, 110, 0.45)",
-    track: "rgba(245, 215, 110, 0.16)",
-    label: "Stredná",
+    hex,
+    glow: getHeatmapGlow(score, "standard"),
+    track: hexToRgba(hex, 0.18),
+    label,
   };
 }

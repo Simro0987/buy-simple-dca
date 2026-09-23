@@ -10,6 +10,7 @@ import {
 } from "@/lib/dca/executionMath";
 import { formatApy, formatEstimatedQty, formatPercent } from "@/lib/dca/format";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
+import { getHeatmapColor, heatTextStyle, hexToRgba, RSI_INVERSE_GRADIENT } from "@/lib/dca/heatmap";
 import {
   approvedBadge,
   compactChip,
@@ -187,6 +188,7 @@ function SatelliteAnalytics({ evaluation }: { evaluation: SatelliteEvaluation })
 function LimitTrack({
   title,
   shareLabel,
+  rsi,
   usd,
   qty,
   price,
@@ -205,6 +207,7 @@ function LimitTrack({
 }: {
   title: string;
   shareLabel: string;
+  rsi: number;
   usd: number;
   qty: number;
   price: number;
@@ -231,7 +234,10 @@ function LimitTrack({
             : "border-amber-400/20 bg-amber-400/8"
       }`}
     >
-      <p className="text-[10px] font-bold uppercase tracking-wider text-amber-300">
+      <p
+        className="text-[10px] font-bold uppercase tracking-wider"
+        style={heatTextStyle(rsi, "inverse")}
+      >
         {title} · <span className="font-mono">{shareLabel}</span>
       </p>
       {(pending || fill) && (
@@ -246,7 +252,9 @@ function LimitTrack({
         </span>
       )}
       <div className="mt-2 flex items-center justify-between gap-2">
-        <p className="font-mono text-sm font-bold text-white">{formatUsd(usd)}</p>
+        <p className="font-mono text-sm font-bold" style={heatTextStyle(rsi, "inverse")}>
+          {formatUsd(usd)}
+        </p>
         <CopyGlyph
           label="Kopírovať Kapitál (USD)"
           value={copyUsd(usd)}
@@ -360,16 +368,26 @@ function RsiGauge({ rsi, live }: { rsi: number; live: boolean }) {
     );
   }
   const left = Math.min(98, Math.max(2, rsi));
+  const rsiHeat = getHeatmapColor(rsi, "inverse");
   return (
     <div>
       <div className="mb-1 flex items-center justify-between text-[10px] uppercase tracking-wider text-zinc-500">
         <span>RSI 14D</span>
-        <span className="font-mono font-bold text-white">{rsi.toFixed(1)}</span>
+        <span className="font-mono font-bold" style={heatTextStyle(rsi, "inverse")}>
+          {rsi.toFixed(1)}
+        </span>
       </div>
-      <div className="relative h-2.5 overflow-hidden bg-gradient-to-r from-cyan-400 via-emerald-400 to-pink-500">
+      <div
+        className="relative h-2.5 overflow-hidden"
+        style={{ background: RSI_INVERSE_GRADIENT }}
+      >
         <span
-          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white bg-zinc-950 shadow-[0_0_10px_rgba(255,255,255,0.5)]"
-          style={{ left: `${left}%` }}
+          className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white"
+          style={{
+            left: `${left}%`,
+            background: rsiHeat,
+            boxShadow: `0 0 10px ${rsiHeat}`,
+          }}
         />
       </div>
       <div className="mt-1 flex justify-between text-[9px] uppercase tracking-wider text-zinc-600">
@@ -417,6 +435,8 @@ export function TokenExecutionCard({
   const showMarketPane = !locked || Boolean(marketFill);
   const showLimitPane = !locked || Boolean(pendingLimit) || Boolean(limitFill);
   const showExecution = showMarketPane || showLimitPane;
+  const rsiHeat = getHeatmapColor(plan.rsi, "inverse");
+  const rsiGlow = hexToRgba(rsiHeat, 0.28);
 
   return (
     <motion.article
@@ -476,7 +496,7 @@ export function TokenExecutionCard({
           <p className="text-[10px] uppercase tracking-wider text-zinc-500">
             Podiel nasadeného
           </p>
-          <p className="font-mono text-lg font-bold text-[#00FFA3]">
+          <p className="font-mono text-lg font-bold" style={heatTextStyle(plan.weightPercent)}>
             {formatPercent(plan.weightPercent, 0)}
           </p>
           <p className="font-mono text-xs text-white">{formatUsd(plan.totalUsd)}</p>
@@ -610,19 +630,19 @@ export function TokenExecutionCard({
               <RsiGauge rsi={plan.rsi} live={Boolean(indicators)} />
 
               <div className="mt-3 mb-1 flex items-center justify-between text-[9px] font-bold uppercase tracking-wider">
-                <span className="font-mono text-[#00FFA3]">
+                <span className="font-mono" style={heatTextStyle(plan.rsi, "inverse")}>
                   MKT {formatPercent(plan.marketShare, 0)}
                 </span>
                 <span className="text-zinc-600">RSI · MKT / LMT</span>
-                <span className="font-mono text-amber-300">
+                <span className="font-mono" style={heatTextStyle(plan.rsi, "inverse")}>
                   LMT {formatPercent(plan.limitShare, 0)}
                 </span>
               </div>
               <div className="mb-2">
                 <LaserBar
                   segments={[
-                    { width: plan.marketShare, tone: "approved" },
-                    { width: plan.limitShare, tone: "amber" },
+                    { width: plan.marketShare, color: rsiHeat },
+                    { width: plan.limitShare, color: rsiHeat },
                   ]}
                 />
               </div>
@@ -632,13 +652,17 @@ export function TokenExecutionCard({
           <div className={`space-y-2 ${locked ? "mt-3" : ""}`}>
             {showMarketPane && (
             <div
-              className={`rounded-2xl border p-3 ${
-                marketFill
-                  ? "border-emerald-400/50 bg-emerald-400/12 shadow-[0_0_22px_rgba(52,211,153,0.28)]"
-                  : "border-emerald-400/20 bg-emerald-400/8"
-              }`}
+              className="rounded-2xl border p-3"
+              style={{
+                borderColor: hexToRgba(rsiHeat, marketFill ? 0.55 : 0.28),
+                background: hexToRgba(rsiHeat, marketFill ? 0.16 : 0.08),
+                boxShadow: marketFill ? `0 0 22px ${rsiGlow}` : undefined,
+              }}
             >
-              <p className="text-[10px] font-bold uppercase tracking-wider text-emerald-300">
+              <p
+                className="text-[10px] font-bold uppercase tracking-wider"
+                style={heatTextStyle(plan.rsi, "inverse")}
+              >
                 MKT · {formatPercent(plan.marketShare, 0)}
               </p>
               {plan.brakeBoostBadge && (
@@ -654,7 +678,10 @@ export function TokenExecutionCard({
                 </span>
               )}
               <div className="mt-1 flex items-center justify-between gap-2">
-                <p className="font-mono text-sm font-bold text-white transition-all duration-500">
+                <p
+                  className="font-mono text-sm font-bold transition-all duration-500"
+                  style={heatTextStyle(plan.rsi, "inverse")}
+                >
                   {formatUsd(mktUsd)}
                 </p>
                 <CopyGlyph
@@ -711,6 +738,7 @@ export function TokenExecutionCard({
               <LimitTrack
                 title="LMT"
                 shareLabel={formatPercent(plan.limitShare, 0)}
+                rsi={plan.rsi}
                 usd={lmtUsd}
                 qty={lmtQty}
                 price={lmtPrice}

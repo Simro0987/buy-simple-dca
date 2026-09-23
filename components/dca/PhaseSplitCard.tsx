@@ -7,6 +7,7 @@ import { LiveMetricUnavailable } from "@/components/dca/LiveState";
 import { formatUsd } from "@/lib/data";
 import { SAFE_HAVEN_COPY } from "@/lib/dca/confluence";
 import { glassInset, glassPanel } from "@/lib/dca/glass";
+import { getHeatmapColor, heatTextStyle } from "@/lib/dca/heatmap";
 import { confluenceTone } from "@/lib/dca/terminal";
 import type { AllocationMode, WeeklyDcaPlan } from "@/lib/dca/types";
 import { interactiveButton } from "@/lib/motion";
@@ -108,9 +109,15 @@ export function PhaseSplitCard({
             <BitcoinMark />
             BTC Podiel
           </span>
-          <span className="font-mono font-bold text-[#00FFA3]">{btcFill.toFixed(0)}%+</span>
+          <span className="font-mono font-bold" style={heatTextStyle(btcFill)}>
+            {btcFill.toFixed(0)}%+
+          </span>
         </div>
-        <LaserBar segments={[{ width: Math.min(100, btcFill), tone: "approved" }]} />
+        <LaserBar
+          segments={[
+            { width: Math.min(100, btcFill), color: getHeatmapColor(btcFill, "standard") },
+          ]}
+        />
         <p className="text-[11px] leading-relaxed text-zinc-400">
           Bitcoin musí ≥50% nasadeného kapitálu. Zvyšok ≤50% ide do satelitov a
           high-beta podľa CONFLUENCE.
@@ -130,19 +137,19 @@ export function PhaseSplitCard({
         </p>
         <LaserBar
           segments={[
-            { width: mix.corePercent, tone: "orange" },
-            { width: mix.satellitePercent, tone: "violet" },
-            { width: mix.highBetaPercent, tone: "fuchsia" },
+            { width: mix.corePercent, color: getHeatmapColor(mix.corePercent, "standard") },
+            { width: mix.satellitePercent, color: getHeatmapColor(mix.satellitePercent, "standard") },
+            { width: mix.highBetaPercent, color: getHeatmapColor(mix.highBetaPercent, "standard") },
           ]}
         />
         <div className="mt-2 flex flex-wrap justify-between gap-2 font-mono text-[11px] font-semibold">
-          <span className="text-amber-300">
+          <span style={heatTextStyle(mix.corePercent)}>
             Core {mix.corePercent.toFixed(0)}% · {formatUsd(plan.finalBudgets.coreUsd)}
           </span>
-          <span className="text-violet-300">
+          <span style={heatTextStyle(mix.satellitePercent)}>
             Sat {mix.satellitePercent.toFixed(0)}% · {formatUsd(plan.finalBudgets.satelliteUsd)}
           </span>
-          <span className="text-fuchsia-300">
+          <span style={heatTextStyle(mix.highBetaPercent)}>
             HB {mix.highBetaPercent.toFixed(0)}% · {formatUsd(plan.finalBudgets.highBetaUsd)}
           </span>
         </div>
@@ -150,28 +157,28 @@ export function PhaseSplitCard({
 
       <div className="mt-3 grid grid-cols-3 gap-2">
         <div className={`${glassInset} p-3`}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-300">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             Core
           </p>
-          <p className="mt-1 font-mono text-lg font-bold text-white">
+          <p className="mt-1 font-mono text-lg font-bold" style={heatTextStyle(mix.corePercent)}>
             {mix.corePercent.toFixed(0)}%
           </p>
           <p className="font-mono text-xs text-zinc-400">{formatUsd(plan.finalBudgets.coreUsd)}</p>
         </div>
         <div className={`${glassInset} p-3`}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-violet-300">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             Satelity
           </p>
-          <p className="mt-1 font-mono text-lg font-bold text-white">
+          <p className="mt-1 font-mono text-lg font-bold" style={heatTextStyle(mix.satellitePercent)}>
             {mix.satellitePercent.toFixed(0)}%
           </p>
           <p className="font-mono text-xs text-zinc-400">{formatUsd(plan.finalBudgets.satelliteUsd)}</p>
         </div>
         <div className={`${glassInset} p-3`}>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-fuchsia-300">
+          <p className="text-[10px] font-semibold uppercase tracking-wider text-zinc-400">
             High-Beta
           </p>
-          <p className="mt-1 font-mono text-lg font-bold text-white">
+          <p className="mt-1 font-mono text-lg font-bold" style={heatTextStyle(mix.highBetaPercent)}>
             {mix.highBetaPercent.toFixed(0)}%
           </p>
           <p className="font-mono text-xs text-zinc-400">{formatUsd(plan.finalBudgets.highBetaUsd)}</p>
