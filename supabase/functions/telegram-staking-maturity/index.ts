@@ -21,6 +21,28 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders });
   }
 
+  // ── Auth guard ─────────────────────────────────────────
+  // Accept either the shared edge-function secret (used by pg_cron) or a valid
+  // Supabase user JWT. Blocks unauthenticated public callers.
+  {
+    const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
+    const providedSecret = req.headers.get('x-edge-secret') ?? '';
+    const secretOk = edgeSecret.length > 0 && providedSecret === edgeSecret;
+    if (!secretOk) {
+      const authHeader = req.headers.get('authorization') ?? '';
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const verify = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+        headers: { Authorization: authHeader, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' },
+      });
+      if (!verify.ok) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+  }
+
+
   try {
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) throw new Error('LOVABLE_API_KEY is not configured');

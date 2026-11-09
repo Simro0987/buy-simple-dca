@@ -47,10 +47,44 @@ async function fetchBtcAddress(address: string) {
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+
+  // ── Auth guard ─────────────────────────────────────────
+  // Accept either the shared edge-function secret (used by pg_cron) or a valid
+  // Supabase user JWT. Blocks unauthenticated public callers.
+  {
+    const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
+    const providedSecret = req.headers.get('x-edge-secret') ?? '';
+    const secretOk = edgeSecret.length > 0 && providedSecret === edgeSecret;
+    if (!secretOk) {
+      const authHeader = req.headers.get('authorization') ?? '';
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const verify = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+        headers: { Authorization: authHeader, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' },
+      });
+      if (!verify.ok) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+  }
+
   try {
     const { addresses } = await req.json();
     if (!Array.isArray(addresses)) {
       return new Response(JSON.stringify({ error: 'addresses must be an array' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    if (addresses.length > 20) {
+      return new Response(JSON.stringify({ error: 'Too many addresses (max 20)' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+    const ADDR_RE = /^(bc1|[13])[a-zA-HJ-NP-Z0-9]{25,62}$/;
+    const invalid = addresses.filter((a: unknown) => typeof a !== 'string' || !ADDR_RE.test(a));
+    if (invalid.length > 0) {
+      return new Response(JSON.stringify({ error: 'Invalid BTC address format', invalid }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }

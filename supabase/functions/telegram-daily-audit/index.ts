@@ -124,8 +124,8 @@ Deno.serve(async (req) => {
       btc: { ma200w: 48500, mayerMultiple: 1.15, ma200d: 0, price: 0, realizedPrice: 53600, miningCost: 50000 },
       eth: { ma200w: 2350 }, sol: { tvl: 11_500_000_000 }, unlocks: [], degraded: true,
     });
-    const fg = await safeJson<{ data: Array<{ value: string }> }>('https://api.alternative.me/fng/?limit=1', undefined, { data: [{ value: '50' }] });
-    const fgVal = parseInt(fg?.data?.[0]?.value ?? '50', 10);
+    const fg = await safeJson<{ fearGreed?: { value?: number } }>(`${base}/functions/v1/btc-indicators`, undefined, { fearGreed: { value: 50 } });
+    const fgVal = Math.round(Number(fg?.fearGreed?.value ?? 50));
     const cg = await safeJson<{ bitcoin?: { usd?: number } }>('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd', undefined, {});
     const btcPrice = cg?.bitcoin?.usd ?? md!.btc.price ?? 0;
 

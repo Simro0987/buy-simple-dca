@@ -1,0 +1,1 @@
+DELETE FROM public.tracked_tokens WHERE lower(symbol) = 'ena' OR lower(coingecko_id) = 'ethena';

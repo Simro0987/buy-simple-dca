@@ -5,6 +5,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const CG: Record<string, string> = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana' };
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
 
 function getMondayWeek(d = new Date()): number {
@@ -48,21 +49,44 @@ Deno.serve(async (req) => {
     const supabase = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const week = getMondayWeek();
 
+    // Multi-user: resolve owning user (single-user setup uses first app_settings row)
+    // Resolve the calling user from the JWT; fallback = single-user app_settings row.
+    let uid: string | undefined;
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const jwt = authHeader.replace(/^Bearer\s+/i, '');
+    if (jwt) {
+      const { data: u } = await supabase.auth.getUser(jwt);
+      uid = u?.user?.id;
+    }
+    if (!uid) {
+      const { data: settingsRow } = await supabase.from('app_settings').select('user_id').limit(1).maybeSingle();
+      uid = settingsRow?.user_id as string | undefined;
+    }
+    if (!uid) {
+      return new Response(JSON.stringify({ error: 'No user configured' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     if (kind === 'market') {
       const qty = amount_usd / target_price;
-      await supabase.from('dca_executions').insert({
+      const nowIso = new Date().toISOString();
+      const { data: ex, error: exErr } = await supabase.from('dca_executions').insert({
+        user_id: uid,
         week_number: week, coin: coin.toUpperCase(), kind, amount_usd,
         target_price, executed_price: target_price, quantity: qty,
-        status: 'EXECUTED', filled_at: new Date().toISOString(),
+        status: 'EXECUTED', filled_at: nowIso,
+      }).select('id').single();
+      if (exErr) throw exErr;
+      // History BUY record — the portfolio's single source of truth.
+      const { error: txErr } = await supabase.from('token_transactions').insert({
+        user_id: uid, coingecko_id: CG[coin], symbol: coin.toUpperCase(), side: 'buy',
+        quantity: qty, price_usd: target_price, executed_at: nowIso,
+        note: `DCA Market (${ex.id})`,
       });
-      // Update manual_holdings + initial_cost_basis (invested USD)
-      const { data: s } = await supabase.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle();
-      if (s) {
-        const mh = (s.manual_holdings ?? {}) as Record<string, number>;
-        const cb = (s.initial_cost_basis ?? {}) as Record<string, number>;
-        mh[coin] = Number(mh[coin] ?? 0) + qty;
-        cb[coin] = Number(cb[coin] ?? 0) + amount_usd;
-        await supabase.from('app_settings').update({ manual_holdings: mh, initial_cost_basis: cb }).eq('id', s.id);
+      if (txErr) {
+        await supabase.from('dca_executions').delete().eq('id', ex.id);
+        throw txErr;
       }
       await notifyTelegram(
         `✅ <b>MARKET vykonaný — ${coin.toUpperCase()}</b>\n` +
@@ -78,6 +102,7 @@ Deno.serve(async (req) => {
 
     // LIMIT — pending, fill checker will resolve
     await supabase.from('dca_executions').insert({
+      user_id: uid,
       week_number: week, coin: coin.toUpperCase(), kind, amount_usd,
       target_price, status: 'PENDING',
     });

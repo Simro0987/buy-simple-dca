@@ -60,6 +60,28 @@ function nudge(value: number, direction: number, maxStepPct: number, min?: numbe
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
 
+  // ── Auth guard ─────────────────────────────────────────
+  // Accept either the shared edge-function secret (used by pg_cron) or a valid
+  // Supabase user JWT. Blocks unauthenticated public callers.
+  {
+    const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
+    const providedSecret = req.headers.get('x-edge-secret') ?? '';
+    const secretOk = edgeSecret.length > 0 && providedSecret === edgeSecret;
+    if (!secretOk) {
+      const authHeader = req.headers.get('authorization') ?? '';
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const verify = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+        headers: { Authorization: authHeader, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' },
+      });
+      if (!verify.ok) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+  }
+
+
   try {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
@@ -209,6 +231,7 @@ Deno.serve(async (req) => {
 
     // 7) Insert outcome
     await supabase.from('learning_outcomes').insert({
+      user_id: (params as { user_id: string }).user_id,
       week_number: lastPurchase.week_number,
       params_snapshot: params,
       per_coin_results: perCoin,
