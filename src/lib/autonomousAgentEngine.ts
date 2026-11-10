@@ -30,6 +30,7 @@ import {
   type SafeGuardValidationResult,
 } from './safeWalletGuard';
 import { runZiskBotAutonomousTick } from './ziskBotEngine';
+import { processEttTradingViewSignalOnDex } from './ettSuperTrendAgent';
 
 export interface AgentManagedToken {
   symbol: string;
@@ -286,6 +287,39 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     },
     lastPeerInsightSk: 'Zisk Bot zdieľal so Swarm sieťou 12 naučených váh (`signal_weights.json`: funding 0.60, volatility 0.60, stableFlow 0.60) a delta-neutral funding výnos z INJ/TIA/ATOM.',
     createdAt: Date.now() - 86400000 * 13,
+  },
+  {
+    id: 'agent-ett-supertrend-dex',
+    name: 'ETT SuperTrend · Fibo Zones & EMA/MA Signal DEX Agent (Bez CEX)',
+    roleSk: '100% On-Chain DEX náhrada za Bitunix/CEX: vyhodnocuje ETT SuperTrend Strategy, Fibo Golden Pocket zóny (0.618) a EMA/MA Color Signal Change priamo z TradingView & Pyth orákul a exekuuje obchody výhradne na DEXoch (Hyperliquid, GMX v2, CowSwap, Jupiter) v Safe trezore → +BTC.',
+    roleEn: '100% On-Chain DEX replacement for Bitunix/CEX: evaluates ETT SuperTrend Strategy, Fibo Golden Pocket zones (0.618), and EMA/MA Color Signal Change and executes strictly on DEXs inside Safe vault -> +BTC.',
+    strategyType: 'MULTI_CHAIN_ALPHA_ROTATOR',
+    enabled: true,
+    canWithdrawExternally: false,
+    ultimateObjective: 'ACCUMULATE_MORE_BTC',
+    allowedChains: SAFE_SUPPORTED_CHAINS.map((c) => c.id),
+    managedTokens: [
+      { symbol: 'BTC', name: 'Bitcoin (SuperTrend Core)', chain: 'bitcoin', coingeckoId: 'bitcoin', allocationWeightPct: 40, currentPnlPct: 19.8, apyPct: 7.0, addedByAgentAt: Date.now() - 86400000 * 12, status: 'ACTIVE' },
+      { symbol: 'ETH', name: 'Ethereum (GMX v2 / CowSwap DEX)', chain: 'arbitrum', coingeckoId: 'ethereum', allocationWeightPct: 20, currentPnlPct: 14.5, apyPct: 4.4, addedByAgentAt: Date.now() - 86400000 * 12, status: 'ACTIVE' },
+      { symbol: 'SOL', name: 'Solana (Jupiter v6 DEX)', chain: 'solana', coingeckoId: 'solana', allocationWeightPct: 20, currentPnlPct: 26.2, apyPct: 8.0, addedByAgentAt: Date.now() - 86400000 * 12, status: 'HARVESTING_TO_BTC' },
+      { symbol: 'HYPE', name: 'Hyperliquid (On-Chain Perp/Spot DEX)', chain: 'hyperliquid', coingeckoId: 'hyperliquid', allocationWeightPct: 20, currentPnlPct: 33.4, apyPct: 11.2, addedByAgentAt: Date.now() - 86400000 * 12, status: 'HARVESTING_TO_BTC' },
+    ],
+    learningGeneration: 16,
+    swarmSynapsesCount: 82,
+    collectiveIqScore: 151.2,
+    connectedPeerIds: ['agent-satoshi-prime', 'agent-omni-hunter', 'agent-yield-harvester', 'agent-zisk-bot', 'aegis-website-guardian'],
+    winRatePct: 88.2,
+    accumulatedBtc: 0.0314,
+    totalTradesExecuted: 64,
+    learningWeights: {
+      rsiOversoldBuyWeight: 0.85,
+      altProfitToBtcHarvestRatio: 0.90,
+      defiYieldWeight: 0.74,
+      onChainMomentumWeight: 0.94,
+      riskAversionFactor: 0.92,
+    },
+    lastPeerInsightSk: 'Vysiela živé signály ETT SuperTrend (BULLISH_GREEN) + Fibo 0.618 Golden Pocket + EMA/MA Color Change celej Swarm sieti (100% DEX bez Bitunix/CEX).',
+    createdAt: Date.now() - 86400000 * 12,
   },
 ];
 
@@ -833,6 +867,19 @@ export function runContinuousAutonomousFleetTick(
   saveAutonomousAgents(nextAgents);
   // Also advance Zisk Bot's continuous delta-neutral funding & Solana lending engine in lockstep with the Swarm
   runZiskBotAutonomousTick(livePricesUsd.BTC ?? 75000);
+  // Also advance ETT SuperTrend + Fibo + EMA/MA Color Signal DEX Agent (100% On-Chain DEX, Zero CEX)
+  processEttTradingViewSignalOnDex(
+    {
+      strategy: 'ETT SuperTrend Strategy',
+      ticker: 'BTC/USD',
+      action: 'HARVEST_TO_BTC',
+      timeframe: '1h',
+      priceUsd: livePricesUsd.BTC ?? 75000,
+      amountUsd: 185,
+    },
+    safeAddress,
+    livePricesUsd.BTC ?? 75000,
+  );
   return {
     agents: nextAgents,
     logs: latestLogs,

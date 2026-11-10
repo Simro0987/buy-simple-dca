@@ -28,6 +28,7 @@ import { usePrices } from '@/hooks/usePrices';
 import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
 import { WebsiteGuardianPanel } from '@/components/WebsiteGuardianPanel';
 import { ZiskBotPanel } from '@/components/ZiskBotPanel';
+import { EttSuperTrendPanel } from '@/components/EttSuperTrendPanel';
 import {
   SAFE_SUPPORTED_CHAINS,
   formatShortAddress,
@@ -90,7 +91,7 @@ export function AgentPage({ lang }: Props) {
   const { safeSession } = useAuth();
   const { data: marketPrices } = usePrices();
 
-  const [subTab, setSubTab] = useState<'fleet' | 'zisk' | 'guardian' | 'decentralized' | 'chat'>('fleet');
+  const [subTab, setSubTab] = useState<'fleet' | 'ett' | 'zisk' | 'guardian' | 'decentralized' | 'chat'>('fleet');
   const [agents, setAgents] = useState<AutonomousAgentProfile[]>(loadAutonomousAgents);
   const [logs, setLogs] = useState<AgentExecutionLogEntry[]>(loadAgentExecutionLogs);
   const [synapses, setSynapses] = useState<SwarmSynapseEvent[]>(loadSwarmSynapses);
@@ -427,7 +428,7 @@ export function AgentPage({ lang }: Props) {
       </div>
 
       {/* Sub-navigation tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
+      <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
         <button
           type="button"
           onClick={() => setSubTab('fleet')}
@@ -437,7 +438,18 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? `Flotila Agentov (${agents.length})` : `Agent Fleet (${agents.length})`}
+          {sk ? `Flotila (${agents.length})` : `Fleet (${agents.length})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('ett')}
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all ${
+            subTab === 'ett'
+              ? 'bg-sky-400 text-black shadow font-bold'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {sk ? 'ETT SuperTrend (DEX)' : 'ETT SuperTrend (DEX)'}
         </button>
         <button
           type="button"
@@ -459,7 +471,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'Web Strážca & Dizajn' : 'Web Guardian & UI'}
+          {sk ? 'Web Strážca & UI' : 'Web Guardian & UI'}
         </button>
         <button
           type="button"
@@ -470,7 +482,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'Web3 / DePIN Cloud' : 'Web3 / DePIN Cloud'}
+          {sk ? 'Web3 / DePIN' : 'Web3 / DePIN'}
         </button>
         <button
           type="button"
@@ -481,9 +493,12 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'AI Risk Konzola' : 'AI Risk Console'}
+          {sk ? 'AI Konzola' : 'AI Console'}
         </button>
       </div>
+
+      {/* TAB: ETT SUPERTREND, FIBO ZONES & EMA/MA COLOR SIGNAL DEX AGENT (ZERO CEX / ZERO BITUNIX) */}
+      {subTab === 'ett' && <EttSuperTrendPanel lang={lang} />}
 
       {/* TAB: ZISK BOT (TREASURY, DELTA-NEUTRAL FUNDING CAPTURE & SOLANA LENDING) */}
       {subTab === 'zisk' && <ZiskBotPanel lang={lang} />}

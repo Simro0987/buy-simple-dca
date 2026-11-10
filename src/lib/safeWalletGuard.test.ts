@@ -36,6 +36,11 @@ import {
   importZiskLearnedSyncBundle,
   ziskWeightedMerge,
 } from './ziskBotEngine';
+import {
+  loadEttSuperTrendState,
+  processEttTradingViewSignalOnDex,
+  generateEttSuperTrendPineScript,
+} from './ettSuperTrendAgent';
 
 const SAFE_ADDR = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
 const EXTERNAL_ATTACKER = '0xDeadBeef00000000000000000000000000009999';
@@ -254,5 +259,31 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     const imported = importZiskLearnedSyncBundle(exported);
     expect(imported.mergedLearnedCount).toBeGreaterThanOrEqual(7);
     expect(imported.mergedSignalsCount).toBeGreaterThanOrEqual(10);
+
+    // Verify ETT SuperTrend + Fibo Zones + EMA/MA Color Signal DEX Agent (Zero CEX / Zero Bitunix)
+    const ett0 = loadEttSuperTrendState();
+    expect(ett0.cexEliminated).toBe(true);
+    expect(ett0.canWithdrawExternally).toBe(false);
+    expect(ett0.ultimateObjective).toBe('ACCUMULATE_MORE_BTC');
+
+    const { alertEntry, updatedState: ett1 } = processEttTradingViewSignalOnDex(
+      {
+        strategy: 'ETT SuperTrend Strategy',
+        ticker: 'BTC/USD',
+        action: 'BUY',
+        timeframe: '4h',
+        priceUsd: 75100,
+        amountUsd: 300,
+      },
+      SAFE_ADDR,
+      75000,
+    );
+    expect(alertEntry.guardVerdict.allowed).toBe(true);
+    expect(alertEntry.btcAccumulated).toBeGreaterThan(0);
+    expect(ett1.totalBtcStackedViaSuperTrend).toBeGreaterThan(ett0.totalBtcStackedViaSuperTrend);
+
+    const pine = generateEttSuperTrendPineScript();
+    expect(pine).toContain('ETT SuperTrend');
+    expect(pine).toContain('SAFE_GLOBAL_DEX_NO_CEX');
   });
 });
