@@ -12,6 +12,7 @@ import {
   DEFAULT_AUTONOMOUS_AGENTS,
   createNewAutonomousAgent,
   runAutonomousAgentCycle,
+  runContinuousAutonomousFleetTick,
   testForbiddenExternalWithdrawalBlock,
 } from './autonomousAgentEngine';
 import {
@@ -19,6 +20,15 @@ import {
   generateAkashDeploySdl,
   createDecentralizedSnapshotBundle,
 } from './decentralizedInfra';
+import {
+  encryptWithWebCryptoAes256,
+  decryptWithWebCryptoAes256,
+  runAutonomousWebsiteGuardianScanAndPatch,
+  evolveWebsiteUiDesign,
+  saveGeminiApiKey,
+  loadGeminiApiKey,
+  askWebsiteGuardianAi,
+} from './websiteGuardianAgent';
 
 const SAFE_ADDR = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
 const EXTERNAL_ATTACKER = '0xDeadBeef00000000000000000000000000009999';
@@ -178,5 +188,46 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     expect(snapshot.schemaVersion).toBe('edge-trader-sovereign-v1');
     expect(snapshot.arweaveTxTemplate.startsWith('ar://')).toBe(true);
     expect(snapshot.ipfsCidPreview.startsWith('bafybeig')).toBe(true);
+  });
+
+  it('runs Aegis Website Guardian AES-256-GCM encryption, auto-patching, UI evolution & blocks external withdrawals', async () => {
+    const secret = 'sensitive-portfolio-and-gemini-api-config';
+    const cipher = await encryptWithWebCryptoAes256(secret);
+    expect(cipher).toMatch(/^aes256/);
+    const plain = await decryptWithWebCryptoAes256(cipher);
+    expect(plain).toBe(secret);
+
+    saveGeminiApiKey('AIzaSyTestUserGeminiKey12345');
+    expect(loadGeminiApiKey()).toBe('AIzaSyTestUserGeminiKey12345');
+
+    const { state, patchLog, guardSelfTestVerdict } =
+      await runAutonomousWebsiteGuardianScanAndPatch();
+    expect(state.canWithdrawExternally).toBe(false);
+    expect(state.enforcesZeroExternalTransferOnAllAgents).toBe(true);
+    expect(state.securityScore).toBe(100);
+    expect(guardSelfTestVerdict.allowed).toBe(false);
+    expect(patchLog.walletTransferBlocked).toBe(true);
+
+    const evolved = evolveWebsiteUiDesign({
+      preset: 'bitcoin_gold',
+      addModule: {
+        titleSk: 'Anti-MEV Slippage Guard',
+        titleEn: 'Anti-MEV Slippage Guard',
+        metricLabel: 'Max Slippage',
+        metricValue: '0.25%',
+      },
+    });
+    expect(evolved.uiConfig.themePreset).toBe('bitcoin_gold');
+    expect(
+      evolved.uiConfig.activeCustomModules.some((m) => m.titleSk === 'Anti-MEV Slippage Guard'),
+    ).toBe(true);
+
+    const aiRes = await askWebsiteGuardianAi('Skontroluj bezpečnosť a prepni dizajn na zlato');
+    expect(aiRes.updatedState.canWithdrawExternally).toBe(false);
+    expect(aiRes.reply.length).toBeGreaterThan(20);
+
+    const tickRes = runContinuousAutonomousFleetTick(SAFE_ADDR, { BTC: 75000, ETH: 2200, SOL: 90 }, true);
+    expect(tickRes.btcGainedThisTick).toBeGreaterThan(0);
+    expect(tickRes.logs.length).toBeGreaterThanOrEqual(3);
   });
 });

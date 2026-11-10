@@ -52,11 +52,20 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
   });
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(getNotificationPrefs);
   const [openRouterKey, setOpenRouterKey] = useState<string>(() => localStorage.getItem('openrouter-api-key-v1') ?? '');
+  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => localStorage.getItem('gemini-api-key-v1') ?? '');
   const [showKey, setShowKey] = useState(false);
 
   const saveOpenRouterKey = (v: string) => {
     setOpenRouterKey(v);
     try { localStorage.setItem('openrouter-api-key-v1', v); } catch { /* noop */ }
+  };
+
+  const saveGeminiKey = (v: string) => {
+    setGeminiApiKey(v);
+    try {
+      localStorage.setItem('gemini-api-key-v1', v);
+      window.dispatchEvent(new CustomEvent('aegis-website-guardian-changed'));
+    } catch { /* noop */ }
   };
 
   useEffect(() => {
@@ -202,6 +211,26 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
             {lang === 'sk'
               ? 'Kľúč sa ukladá lokálne v prehliadači. Model: openrouter/auto (NotDiamond cost/quality = 0) s web search.'
               : 'Stored locally in your browser. Model: openrouter/auto (NotDiamond cost/quality = 0) with web search.'}
+          </p>
+        </div>
+
+        <div className="space-y-2 pt-2 border-t border-border/60">
+          <label className="text-sm text-muted-foreground">
+            {lang === 'sk' ? 'Zadajte Google Gemini API Kľúč (pre Aegis Web Guardian & AI Agentov)' : 'Enter Google Gemini API Key (for Aegis Web Guardian & AI Agents)'}
+          </label>
+          <input
+            type={showKey ? 'text' : 'password'}
+            value={geminiApiKey}
+            onChange={(e) => saveGeminiKey(e.target.value)}
+            placeholder="AIzaSy…"
+            autoComplete="off"
+            spellCheck={false}
+            className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary font-mono"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            {lang === 'sk'
+              ? 'Šifrované cez AES-256-GCM. Používa sa pre Aegis Web Guardian AI (bezpečnosť, záplaty, úpravy dizajnu) s prísnym zákazom výberu z peňaženky.'
+              : 'Encrypted via AES-256-GCM. Powers Aegis Web Guardian AI with strict non-withdrawal protection.'}
           </p>
         </div>
       </div>

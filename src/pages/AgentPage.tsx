@@ -26,6 +26,7 @@ import { Lang } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { usePrices } from '@/hooks/usePrices';
 import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
+import { WebsiteGuardianPanel } from '@/components/WebsiteGuardianPanel';
 import {
   SAFE_SUPPORTED_CHAINS,
   formatShortAddress,
@@ -37,8 +38,8 @@ import {
   saveAutonomousAgents,
   loadAgentExecutionLogs,
   appendAgentExecutionLog,
+  subscribeAutonomousAgents,
   createNewAutonomousAgent,
-  runAutonomousAgentCycle,
   testForbiddenExternalWithdrawalBlock,
   type AutonomousAgentProfile,
   type AgentExecutionLogEntry,
@@ -86,9 +87,22 @@ export function AgentPage({ lang }: Props) {
   const { safeSession } = useAuth();
   const { data: marketPrices } = usePrices();
 
-  const [subTab, setSubTab] = useState<'fleet' | 'decentralized' | 'chat'>('fleet');
+  const [subTab, setSubTab] = useState<'fleet' | 'guardian' | 'decentralized' | 'chat'>('fleet');
   const [agents, setAgents] = useState<AutonomousAgentProfile[]>(loadAutonomousAgents);
   const [logs, setLogs] = useState<AgentExecutionLogEntry[]>(loadAgentExecutionLogs);
+
+  useEffect(() => {
+    const openGuardian = () => setSubTab('guardian');
+    window.addEventListener('aegis-open-guardian-subtab', openGuardian);
+    const unsub = subscribeAutonomousAgents(() => {
+      setAgents(loadAutonomousAgents());
+      setLogs(loadAgentExecutionLogs());
+    });
+    return () => {
+      window.removeEventListener('aegis-open-guardian-subtab', openGuardian);
+      unsub();
+    };
+  }, []);
 
   // Create new custom agent modal/panel state
   const [creatingAgent, setCreatingAgent] = useState(false);
@@ -155,47 +169,6 @@ export function AgentPage({ lang }: Props) {
   );
 
   const activeSafeAddress = safeSession?.safeAddress ?? '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
-
-  const handleRunCycle = (agentId: string) => {
-    const target = agents.find((a) => a.id === agentId);
-    if (!target) return;
-
-    const { updatedAgent, logEntry } = runAutonomousAgentCycle(target, activeSafeAddress, livePricesMap);
-    const nextAgents = agents.map((a) => (a.id === agentId ? updatedAgent : a));
-    setAgents(nextAgents);
-    saveAutonomousAgents(nextAgents);
-    setLogs(appendAgentExecutionLog(logEntry));
-
-    toast.success(
-      sk
-        ? `${target.name}: Učiaci cyklus #${updatedAgent.learningGeneration} dokončený (+${logEntry.btcAcquired.toFixed(6)} BTC v Safe)`
-        : `${target.name}: Learning cycle #${updatedAgent.learningGeneration} complete (+${logEntry.btcAcquired.toFixed(6)} BTC in Safe)`,
-    );
-  };
-
-  const handleRunAllAgents = () => {
-    let nextAgents = [...agents];
-    let latestLogs = [...logs];
-    let totalNewBtc = 0;
-
-    for (const ag of nextAgents) {
-      if (!ag.enabled) continue;
-      const { updatedAgent, logEntry } = runAutonomousAgentCycle(ag, activeSafeAddress, livePricesMap);
-      totalNewBtc += logEntry.btcAcquired;
-      nextAgents = nextAgents.map((item) => (item.id === ag.id ? updatedAgent : item));
-      latestLogs = appendAgentExecutionLog(logEntry);
-    }
-
-    setAgents(nextAgents);
-    saveAutonomousAgents(nextAgents);
-    setLogs(latestLogs);
-
-    toast.success(
-      sk
-        ? `Všetci aktívni AI agenti prebehli učiaci a rebalansovací cyklus! Spolu pridané +${totalNewBtc.toFixed(6)} BTC do Safe peňaženky.`
-        : `All active AI agents completed their learning & rebalance cycle! Added +${totalNewBtc.toFixed(6)} BTC inside Safe wallet.`,
-    );
-  };
 
   const handleSimulateBlockedWithdrawal = (agent: AutonomousAgentProfile) => {
     const blockedEntry = testForbiddenExternalWithdrawalBlock(agent, activeSafeAddress);
@@ -393,14 +366,14 @@ export function AgentPage({ lang }: Props) {
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleRunAllAgents}
-          className="px-3 py-2 rounded-xl bg-[#14F195] text-black text-xs font-bold hover:bg-[#14F195]/90 transition-all flex items-center gap-1.5 shadow-sm"
-        >
-          <Play className="w-3.5 h-3.5 fill-current" />
-          {sk ? 'Spustiť učiaci cyklus všetkých agentov' : 'Run Learning Cycle (All Agents)'}
-        </button>
+        <div className="px-3 py-2 rounded-xl bg-[#14F195]/15 border border-[#14F195]/40 text-[#14F195] text-xs font-bold flex items-center gap-2 shadow-sm">
+          <span className="h-2 w-2 rounded-full bg-[#14F195] animate-ping" />
+          <span>
+            {sk
+              ? '24/7 AUTOPILOT AKTÍVNY · Agenti sa sami učia a obchodujú v peňaženke'
+              : '24/7 AUTOPILOT ACTIVE · Agents auto-learn & trade inside wallet'}
+          </span>
+        </div>
       </div>
 
       {/* Safe Global Connection + Guard Card (works for both Email and WalletConnect users) */}
@@ -449,7 +422,7 @@ export function AgentPage({ lang }: Props) {
       </div>
 
       {/* Sub-navigation tabs */}
-      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
         <button
           type="button"
           onClick={() => setSubTab('fleet')}
@@ -460,6 +433,17 @@ export function AgentPage({ lang }: Props) {
           }`}
         >
           {sk ? `Flotila Agentov (${agents.length})` : `Agent Fleet (${agents.length})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('guardian')}
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all ${
+            subTab === 'guardian'
+              ? 'bg-[#14F195] text-black shadow font-bold'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {sk ? 'Web Strážca & Dizajn' : 'Web Guardian & UI'}
         </button>
         <button
           type="button"
@@ -484,6 +468,9 @@ export function AgentPage({ lang }: Props) {
           {sk ? 'AI Risk Konzola' : 'AI Risk Console'}
         </button>
       </div>
+
+      {/* TAB: WEBSITE GUARDIAN, ENCRYPTION, AUTO-PATCHING & UI ARCHITECT */}
+      {subTab === 'guardian' && <WebsiteGuardianPanel lang={lang} />}
 
       {/* TAB 1: AUTONOMOUS AGENT FLEET */}
       {subTab === 'fleet' && (
@@ -705,16 +692,16 @@ export function AgentPage({ lang }: Props) {
                 </div>
               </div>
 
-              {/* Agent Action Buttons */}
-              <div className="flex flex-wrap gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => handleRunCycle(agent.id)}
-                  className="flex-1 py-2 px-3 rounded-xl bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors"
-                >
-                  <Play className="w-3.5 h-3.5" />
-                  {sk ? 'Vykonať In-Wallet Obchod & Učenie (+BTC)' : 'Execute In-Wallet Trade & Learn (+BTC)'}
-                </button>
+              {/* Autonomous Live Status + Security Block Verification */}
+              <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                <div className="flex-1 py-2 px-3 rounded-xl bg-[#14F195]/10 border border-[#14F195]/30 text-[#14F195] text-xs font-semibold flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-[#14F195] animate-pulse shrink-0" />
+                  <span>
+                    {sk
+                      ? `Automaticky sa učí (Gen #${agent.learningGeneration}) a obchoduje v Safe peňaženke → +BTC`
+                      : `Automatically learning (Gen #${agent.learningGeneration}) & trading inside Safe wallet → +BTC`}
+                  </span>
+                </div>
 
                 <button
                   type="button"

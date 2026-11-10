@@ -3,6 +3,7 @@ import { BottomNav, TabId } from '@/components/BottomNav';
 import { AppHeader } from '@/components/AppHeader';
 import { AppSidebar } from '@/components/AppSidebar';
 import { GasWatchdogBanner } from '@/components/GasWatchdogBanner';
+import { WebsiteGuardianBar } from '@/components/WebsiteGuardianBar';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useTheme } from '@/hooks/useTheme';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
@@ -89,6 +90,7 @@ const Index = () => {
 
       <div className="md:pl-[52px]">
         <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
+        <WebsiteGuardianBar />
         <div className="max-w-lg mx-auto px-4 pt-2">
           <GasWatchdogBanner />
         </div>

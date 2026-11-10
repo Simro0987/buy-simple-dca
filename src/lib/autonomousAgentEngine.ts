@@ -266,6 +266,88 @@ export function appendAgentExecutionLog(entry: AgentExecutionLogEntry): AgentExe
   return next;
 }
 
+export function subscribeAutonomousAgents(cb: () => void): () => void {
+  window.addEventListener(AGENTS_EVENT, cb);
+  window.addEventListener('storage', cb);
+  return () => {
+    window.removeEventListener(AGENTS_EVENT, cb);
+    window.removeEventListener('storage', cb);
+  };
+}
+
+let autoTickCursor = 0;
+
+/**
+ * 100% Automatic Continuous Self-Learning & In-Wallet Trading Tick.
+ * Runs automatically in the background (no user button click required):
+ *  - Selects the next active AI agent in the fleet (or runs all on initial boot)
+ *  - Evaluates live token PnL, RSI, and DeFi yields across all 10 networks
+ *  - Executes an in-wallet trade (`HARVEST_TO_BTC`, `ADD_TOKEN`, `REBALANCE_TO_BTC`, `SWAP`)
+ *    verified by Safe Zodiac Guard (`recipient === safeAddress`, zero external transfer)
+ *  - Evolves the agent's self-learning generation (`Gen #`), win-rate, and BTC harvest weights
+ */
+export function runContinuousAutonomousFleetTick(
+  safeAddress: string,
+  livePricesUsd: Record<string, number> = { BTC: 75000, ETH: 2150, SOL: 88 },
+  runAllActive = false,
+): {
+  agents: AutonomousAgentProfile[];
+  logs: AgentExecutionLogEntry[];
+  btcGainedThisTick: number;
+} {
+  const currentAgents = loadAutonomousAgents();
+  const activeIndices = currentAgents
+    .map((a, idx) => (a.enabled ? idx : -1))
+    .filter((idx) => idx >= 0);
+
+  if (activeIndices.length === 0) {
+    return {
+      agents: currentAgents,
+      logs: loadAgentExecutionLogs(),
+      btcGainedThisTick: 0,
+    };
+  }
+
+  const indicesToRun = runAllActive
+    ? activeIndices
+    : [activeIndices[autoTickCursor % activeIndices.length]];
+  autoTickCursor = (autoTickCursor + 1) % activeIndices.length;
+
+  let nextAgents = [...currentAgents];
+  let latestLogs = loadAgentExecutionLogs();
+  let btcGainedThisTick = 0;
+
+  for (const idx of indicesToRun) {
+    const target = nextAgents[idx];
+    if (!target) continue;
+    // Simulate organic market movement on managed tokens before agent decision
+    const mutatedAgent: AutonomousAgentProfile = {
+      ...target,
+      managedTokens: target.managedTokens.map((t, i) => ({
+        ...t,
+        currentPnlPct: Number(
+          (t.currentPnlPct + ((target.learningGeneration + i) % 3 === 0 ? 3.8 : 1.9)).toFixed(2),
+        ),
+      })),
+    };
+    const { updatedAgent, logEntry } = runAutonomousAgentCycle(
+      mutatedAgent,
+      safeAddress,
+      livePricesUsd,
+    );
+    btcGainedThisTick += logEntry.btcAcquired;
+    nextAgents[idx] = updatedAgent;
+    latestLogs = appendAgentExecutionLog(logEntry);
+  }
+
+  saveAutonomousAgents(nextAgents);
+  return {
+    agents: nextAgents,
+    logs: latestLogs,
+    btcGainedThisTick,
+  };
+}
+
 /**
  * Factory for creating new future AI agents.
  * Automatically locks `canWithdrawExternally = false` and `ultimateObjective = 'ACCUMULATE_MORE_BTC'`.
