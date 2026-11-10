@@ -1,46 +1,108 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import {
+  loadSafeSession,
+  saveSafeSession,
+  subscribeSafeSession,
+  type SafeSession,
+} from '@/lib/safeWalletGuard';
 
 interface AuthCtx {
   user: User | null;
   session: Session | null;
+  safeSession: SafeSession | null;
   loading: boolean;
+  signInWithSafe: (safeSession: SafeSession) => void;
   signOut: () => Promise<void>;
 }
 
-const Ctx = createContext<AuthCtx>({ user: null, session: null, loading: true, signOut: async () => {} });
+const Ctx = createContext<AuthCtx>({
+  user: null,
+  session: null,
+  safeSession: null,
+  loading: true,
+  signInWithSafe: () => {},
+  signOut: async () => {},
+});
+
+function buildSyntheticSessionFromSafe(safe: SafeSession): Session {
+  const uid = `safe-${safe.safeAddress.toLowerCase().slice(2, 38)}`;
+  const email = `${safe.safeAddress.slice(0, 6).toLowerCase()}…${safe.safeAddress.slice(-4).toLowerCase()}@safe.global`;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const user: User = {
+    id: uid,
+    app_metadata: {
+      provider: 'safe_walletconnect',
+      safe_address: safe.safeAddress,
+      primary_chain: safe.primaryChain,
+      zodiac_guard: true,
+    },
+    user_metadata: {
+      safe_address: safe.safeAddress,
+      primary_chain: safe.primaryChain,
+      connected_via: safe.connectedVia,
+      allow_external_withdrawals: false,
+      primary_objective: 'ACCUMULATE_BTC',
+    },
+    aud: 'authenticated',
+    created_at: new Date(safe.connectedAt).toISOString(),
+    email,
+  };
+
+  return {
+    access_token: `safe-wc-${safe.safeAddress}`,
+    refresh_token: `safe-refresh-${safe.safeAddress}`,
+    expires_in: 86400 * 30,
+    expires_at: nowSec + 86400 * 30,
+    token_type: 'bearer',
+    user,
+  };
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null);
+  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
+  const [safeSession, setSafeSession] = useState<SafeSession | null>(() => loadSafeSession());
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const unsubSafe = subscribeSafeSession(() => {
+      setSafeSession(loadSafeSession());
+    });
+    return unsubSafe;
+  }, []);
 
   useEffect(() => {
     let mounted = true;
 
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSession(s);
+      setSupabaseSession(s);
       setLoading(false);
     });
 
-    // Núdzová brzda: aj keď je backend nedostupný, nikdy nezostaneme
-    // navždy v loading stave (čierna obrazovka).
+    // Fail-safe so the app never hangs on a black screen even if Supabase is unreachable
     const failSafe = setTimeout(() => {
       if (mounted) setLoading(false);
-    }, 6000);
+    }, 4500);
 
     const validateStoredSession = async () => {
       try {
+        // If user already authenticated via Safe{Wallet} WalletConnect, unlock immediately
+        const existingSafe = loadSafeSession();
+        if (existingSafe && mounted) {
+          setSafeSession(existingSafe);
+          setLoading(false);
+        }
+
         const { data: sessionData } = await supabase.auth.getSession();
         if (!sessionData?.session) {
           if (mounted) {
-            setSession(null);
+            setSupabaseSession(null);
             setLoading(false);
           }
           return;
         }
 
-        // Sieťová chyba (pauznutý/nedostupný backend) NESMIE odhlásiť užívateľa.
         let userOk = true;
         let invalidToken = false;
         try {
@@ -54,21 +116,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             invalidToken = !userData?.user;
           }
         } catch {
-          // fetch failed → offline / paused backend, ponecháme uloženú session
           userOk = true;
         }
 
         if (invalidToken || !userOk) {
           try { await supabase.auth.signOut(); } catch { /* ignore */ }
           if (mounted) {
-            setSession(null);
+            setSupabaseSession(null);
             setLoading(false);
           }
           return;
         }
 
         if (mounted) {
-          setSession(sessionData.session);
+          setSupabaseSession(sessionData.session);
           setLoading(false);
         }
       } catch {
@@ -85,14 +146,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const effectiveSession = supabaseSession ?? (safeSession ? buildSyntheticSessionFromSafe(safeSession) : null);
+
   return (
     <Ctx.Provider
       value={{
-        user: session?.user ?? null,
-        session,
+        user: effectiveSession?.user ?? null,
+        session: effectiveSession,
+        safeSession,
         loading,
+        signInWithSafe: (nextSafe: SafeSession) => {
+          saveSafeSession(nextSafe);
+          setSafeSession(nextSafe);
+          setLoading(false);
+        },
         signOut: async () => {
-          await supabase.auth.signOut();
+          saveSafeSession(null);
+          setSafeSession(null);
+          try {
+            await supabase.auth.signOut();
+          } catch {
+            // ignore offline signOut errors
+          }
         },
       }}
     >

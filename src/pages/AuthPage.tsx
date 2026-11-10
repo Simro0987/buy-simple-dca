@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Lock, Mail, Loader2, CloudOff, RefreshCw } from 'lucide-react';
+import { Lock, Mail, Loader2, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
+import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
 
 const RETRY_DELAY_MS = 4_000;
 const MAX_ATTEMPTS = 6;
@@ -21,12 +22,12 @@ const isNetworkError = (message: string) => {
 
 export default function AuthPage() {
   const { session, loading } = useAuth();
+  const [authTab, setAuthTab] = useState<'email' | 'safe'>('email');
   const [mode, setMode] = useState<'signin' | 'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
-  // wake state: null = normal UI, 'waking' = retry loop running, 'failed' = gave up
   const [wakeState, setWakeState] = useState<null | 'waking' | 'failed'>(null);
   const [attempt, setAttempt] = useState(0);
   const cancelWake = useRef(false);
@@ -86,7 +87,6 @@ export default function AuthPage() {
     }
   }, [email, mode, password]);
 
-  // Retry loop: ping every 4s, up to 6 attempts; on success finish the login automatically.
   const startWakeLoop = useCallback(async () => {
     cancelWake.current = false;
     setWakeState('waking');
@@ -170,7 +170,7 @@ export default function AuthPage() {
                 <CloudOff className="w-6 h-6 text-muted-foreground" />
               </div>
               <p className="text-sm text-foreground font-medium">
-                Server sa nepodarilo prebudiť. Skúste to prosím o chvíľu.
+                Server sa nepodarilo prebudiť. Môžeš sa prihlásiť priamo cez Safe Global WalletConnect (funguje aj offline/decentralizovane).
               </p>
               <button
                 type="button"
@@ -185,10 +185,11 @@ export default function AuthPage() {
                 onClick={() => {
                   cancelWake.current = true;
                   setWakeState(null);
+                  setAuthTab('safe');
                 }}
-                className="mt-3 w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+                className="mt-3 w-full py-2 rounded-lg bg-[#12FF80]/15 text-[#12FF80] border border-[#12FF80]/40 text-xs font-semibold"
               >
-                Späť na prihlásenie
+                Prihlásiť cez Safe Global (WalletConnect)
               </button>
             </>
           )}
@@ -197,9 +198,8 @@ export default function AuthPage() {
     );
   }
 
-
   return (
-    <div className="min-h-screen bg-[#050505] flex items-center justify-center px-4 relative overflow-hidden">
+    <div className="min-h-screen bg-[#050505] flex items-center justify-center px-4 py-8 relative overflow-hidden">
       <div
         className="absolute -top-40 -left-40 w-[28rem] h-[28rem] rounded-full blur-3xl pointer-events-none"
         style={{ background: 'radial-gradient(circle, #9945FF 0%, transparent 65%)', opacity: 0.12 }}
@@ -209,86 +209,132 @@ export default function AuthPage() {
         style={{ background: 'radial-gradient(circle, #14F195 0%, transparent 65%)', opacity: 0.08 }}
       />
 
-      <div className="w-full max-w-sm relative">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 mb-4">
+      <div className="w-full max-w-md relative space-y-4">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-12 h-12 rounded-2xl bg-primary/10 border border-primary/20 mb-3">
             <Lock className="w-5 h-5 text-primary" />
           </div>
           <h1 className="text-2xl font-semibold text-foreground">
-            {mode === 'signin' ? 'Prihlásenie' : 'Vytvoriť účet'}
+            Edge Trader Terminal
           </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            {mode === 'signin' ? 'Prihlás sa do svojho DCA panela' : 'Zaregistruj sa a začni'}
+          <p className="text-xs text-muted-foreground mt-1">
+            Sovereign Crypto DCA · Safe&#123;Wallet&#125; AI Agenti · Akumulácia BTC
           </p>
-          <div className="mt-3 inline-flex items-center gap-2 text-[11px] text-muted-foreground" aria-live="polite">
+          <div className="mt-2.5 inline-flex items-center gap-2 text-[11px] text-muted-foreground" aria-live="polite">
             <span
               className={`h-1.5 w-1.5 rounded-full ${
                 backendStatus === 'online'
                   ? 'bg-emerald-500'
                   : backendStatus === 'offline'
-                    ? 'bg-destructive'
+                    ? 'bg-amber-400'
                     : 'bg-muted-foreground animate-pulse'
               }`}
             />
             {backendStatus === 'online'
-              ? 'Cloud je pripojený'
+              ? 'Cloud & On-Chain Oracles (Pyth / Chainlink) pripojené'
               : backendStatus === 'offline'
-                ? 'Cloud je nedostupný · skúšam znova'
-                : 'Kontrolujem Cloud…'}
+                ? 'Sovereign On-Chain režim aktívny (Safe Global / Pyth)'
+                : 'Kontrolujem pripojenie…'}
           </div>
         </div>
 
-        <form onSubmit={submit} className="bg-card/60 backdrop-blur border border-border rounded-2xl p-5 space-y-4">
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block">Email</label>
-            <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-secondary text-foreground text-sm border border-border focus:border-primary focus:outline-none"
-                placeholder="ty@email.sk"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-xs text-muted-foreground mb-1.5 block">Heslo</label>
-            <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-              <input
-                type="password"
-                autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
-                required
-                minLength={8}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-secondary text-foreground text-sm border border-border focus:border-primary focus:outline-none"
-                placeholder="Minimálne 8 znakov"
-              />
-            </div>
-          </div>
-
-          <button
-            type="submit"
-            disabled={busy}
-            className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
-          >
-            {busy && <Loader2 className="w-4 h-4 animate-spin" />}
-            {mode === 'signin' ? 'Prihlásiť sa' : 'Vytvoriť účet'}
-          </button>
-
+        {/* Auth Method Switcher: Email & Password vs Safe Global WalletConnect */}
+        <div className="grid grid-cols-2 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
           <button
             type="button"
-            onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
-            className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+            onClick={() => setAuthTab('email')}
+            className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              authTab === 'email'
+                ? 'bg-primary text-primary-foreground shadow'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
           >
-            {mode === 'signin' ? 'Ešte nemáš účet? Zaregistruj sa' : 'Už máš účet? Prihlás sa'}
+            <Mail className="w-3.5 h-3.5" />
+            E-mail &amp; Heslo
           </button>
-        </form>
+          <button
+            type="button"
+            onClick={() => setAuthTab('safe')}
+            className={`py-2 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-all ${
+              authTab === 'safe'
+                ? 'bg-[#12FF80] text-black shadow'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Safe Global (WC)
+          </button>
+        </div>
+
+        {authTab === 'email' ? (
+          <div className="space-y-4">
+            <form onSubmit={submit} className="bg-card/60 backdrop-blur border border-border rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-foreground">
+                  {mode === 'signin' ? 'Prihlásenie cez E-mail' : 'Vytvoriť nový účet'}
+                </h2>
+                <span className="text-[10px] text-muted-foreground">
+                  Safe Global môžeš pripojiť aj po prihlásení
+                </span>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Email</label>
+                <div className="relative">
+                  <Mail className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-secondary text-foreground text-sm border border-border focus:border-primary focus:outline-none"
+                    placeholder="ty@email.sk"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs text-muted-foreground mb-1.5 block">Heslo</label>
+                <div className="relative">
+                  <Lock className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                  <input
+                    type="password"
+                    autoComplete={mode === 'signin' ? 'current-password' : 'new-password'}
+                    required
+                    minLength={8}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg bg-secondary text-foreground text-sm border border-border focus:border-primary focus:outline-none"
+                    placeholder="Minimálne 8 znakov"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={busy}
+                className="w-full py-2.5 rounded-lg bg-primary text-primary-foreground font-medium text-sm hover:bg-primary/90 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {busy && <Loader2 className="w-4 h-4 animate-spin" />}
+                {mode === 'signin' ? 'Prihlásiť sa' : 'Vytvoriť účet'}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+                className="w-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                {mode === 'signin' ? 'Ešte nemáš účet? Zaregistruj sa' : 'Už máš účet? Prihlás sa'}
+              </button>
+            </form>
+
+            {/* Quick Safe Global WalletConnect card also visible directly below Email login */}
+            <SafeGlobalConnectCard lang="sk" compact />
+          </div>
+        ) : (
+          <SafeGlobalConnectCard lang="sk" />
+        )}
       </div>
     </div>
   );

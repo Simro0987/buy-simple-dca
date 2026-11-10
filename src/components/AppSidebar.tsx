@@ -1,4 +1,4 @@
-import { Home, Newspaper, PieChart, Calculator, Activity, Coins, Wallet, Settings, BarChart3, Shield, DollarSign } from 'lucide-react';
+import { Home, Newspaper, PieChart, Calculator, Activity, Coins, Wallet, Settings, BarChart3, Shield, DollarSign, Bot } from 'lucide-react';
 import { TabId } from '@/components/BottomNav';
 import { Lang } from '@/lib/i18n';
 
@@ -19,6 +19,7 @@ const ITEMS: SidebarItem[] = [
   { id: 'profit',    labelSk: 'Zisky',    icon: DollarSign },
   { id: 'staking',   labelSk: 'Staking',  icon: Coins      },
   { id: 'wallets',   labelSk: 'Wallety',  icon: Wallet     },
+  { id: 'agent',     labelSk: 'AI Agent', icon: Bot        },
   { id: 'settings',  labelSk: 'Nastav.',  icon: Settings   },
 ];
 
@@ -32,7 +33,7 @@ const NEON = '#14F195';
 
 export function AppSidebar({ active, onChange }: Props) {
   return (
-    <aside className="hidden md:flex flex-col fixed left-0 top-0 h-full z-40 py-3 gap-0.5 w-[52px] bg-[#050505] border-r border-white/[0.06]">
+    <aside className="hidden md:flex flex-col fixed left-0 top-0 h-full z-40 py-3 gap-0.5 w-[52px] bg-[#050505] border-r border-white/[0.06] overflow-y-auto scrollbar-hide">
       <div className="flex justify-center mb-3 px-1.5">
         <div
           className="w-8 h-8 rounded-xl flex items-center justify-center text-[10px] font-bold"

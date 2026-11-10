@@ -10,6 +10,7 @@ import { TrackedAddressInputs } from '@/components/wallet/TrackedAddressInputs';
 import { ProtocolBalanceFallback } from '@/components/wallet/ProtocolBalanceFallback';
 import { ExternalCapitalCard } from '@/components/wallet/ExternalCapitalCard';
 import { DefiSaverTracker } from '@/components/wallet/DefiSaverTracker';
+import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
 import { useRpcHealth, RpcHealthStatus } from '@/hooks/useRpcHealth';
 
 interface Props { lang: Lang; }
@@ -134,6 +135,8 @@ export function WalletsPage({ lang }: Props) {
           <span className="text-foreground/80 tabular-nums">{updatedLabel}</span>
         </span>
       </div>
+
+      <SafeGlobalConnectCard lang={lang} />
 
       <DefiSaverTracker lang={lang} />
 

@@ -9,6 +9,7 @@ import { TelegramPurgeCard } from '@/components/TelegramPurgeCard';
 import { InitialHoldingsCard } from '@/components/settings/InitialHoldingsCard';
 import { BackupRestoreCard } from '@/components/settings/BackupRestoreCard';
 import { CyborgTuningCard } from '@/components/settings/CyborgTuningCard';
+import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
 import { toast } from 'sonner';
 import type { Theme } from '@/hooks/useTheme';
 import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } from '@/lib/notificationPrefs';
@@ -162,6 +163,9 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
   return (
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">{t('settings', lang)}</h1>
+
+      {/* Safe Global WalletConnect — always accessible even when signed in via Email */}
+      <SafeGlobalConnectCard lang={lang} />
 
       {/* OpenRouter API key for AI Agent */}
       <div className="glass-card p-4 space-y-3">
