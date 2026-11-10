@@ -1,0 +1,34 @@
+version: "3.9"
+
+# ============================================================================
+# SafeBTC Agent · Docker / Podman Compose (Local PAPER & Shadow Environment)
+# ============================================================================
+# Default mode is strictly PAPER (`TREASURY_LIVE=0`).
+# Never mount seed phrases, keyrings, or private keys into any container!
+# ============================================================================
+
+services:
+  safebtc-web-terminal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: safebtc-web-terminal
+    ports:
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - TREASURY_LIVE=0
+      - TREASURY_INSTANCE_ID=safebtc-local-paper
+      - VITE_SYSTEM_EXECUTION_MODE=PAPER
+    volumes:
+      - safebtc_persistent_state:/data
+    tmpfs:
+      - /tmp:mode=1777
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+
+volumes:
+  safebtc_persistent_state:
+    driver: local

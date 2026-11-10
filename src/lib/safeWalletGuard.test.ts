@@ -41,6 +41,15 @@ import {
   processEttTradingViewSignalOnDex,
   generateEttSuperTrendPineScript,
 } from './ettSuperTrendAgent';
+import {
+  FOUR_SAFE_VAULTS,
+  INSTITUTIONAL_15_AGENTS,
+  TRADING_STYLES_LIBRARY,
+  UNIVERSAL_MARKETS_REGISTRY,
+  evaluateBtcEthPairCrossMarginRisk,
+  evaluateTradeThroughInstitutionalCommittee,
+  generateInvestorTreasuryReport,
+} from './institutionalOsEngine';
 
 const SAFE_ADDR = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
 const EXTERNAL_ATTACKER = '0xDeadBeef00000000000000000000000000009999';
@@ -285,5 +294,45 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     const pine = generateEttSuperTrendPineScript();
     expect(pine).toContain('ETT SuperTrend');
     expect(pine).toContain('SAFE_GLOBAL_DEX_NO_CEX');
+
+    // Verify 0.000000 BTC gained when no wallet is connected (honest wallet gating)
+    const noWalletTick = runContinuousAutonomousFleetTick('', { BTC: 75000, ETH: 2200, SOL: 90 }, true);
+    expect(noWalletTick.btcGainedThisTick).toBe(0);
+
+    // Verify Institutional DeFi OS (15 Agents, 4 Vaults, Veto Committee, Pair Trading, Reports)
+    expect(INSTITUTIONAL_15_AGENTS.length).toBe(15);
+    expect(FOUR_SAFE_VAULTS.length).toBe(4);
+    expect(FOUR_SAFE_VAULTS[0].agentAccess).toBe('ZERO_ACCESS_IMMUTABLE');
+    expect(TRADING_STYLES_LIBRARY.length).toBe(8);
+    expect(UNIVERSAL_MARKETS_REGISTRY.some((u) => u.stage === 'BLOCKED')).toBe(true);
+
+    const vetoedEv = evaluateTradeThroughInstitutionalCommittee({
+      executionMode: 'PAPER',
+      killSwitchActive: false,
+      dataQuality: 'STALE',
+      marketRegime: 'DATA_CONFLICT',
+      strategyId: 'style-long-term-core-dca',
+      modelVersionId: 'v2.4.0',
+      chain: 'arbitrum',
+      tokenIn: 'USDC',
+      tokenOut: 'BTC',
+      amountUsd: 100,
+      oraclePriceUsd: 75000,
+      dexQuotePriceUsd: 75020,
+      liquidityUsd: 10_000_000,
+      recipientAddress: SAFE_ADDR,
+      strategySafeAddress: SAFE_ADDR,
+    });
+    expect(vetoedEv.finalVerdict).toBe('VETOED_NO_TRADE');
+    expect(vetoedEv.committeeVotes.dataQualityAgent).toBe('VETO_NO_TRADE');
+
+    const pairRisk = evaluateBtcEthPairCrossMarginRisk(75000, 2150, 200);
+    expect(pairRisk.crossMarginEnabled).toBe(false);
+    expect(pairRisk.scenarios.length).toBe(4);
+
+    const report = generateInvestorTreasuryReport('QUARTERLY', false, 1023.24);
+    expect(report.completenessStatus).toBe('PARTIAL_MISSING_LIVE_WALLET');
+    expect(report.liveBtcBalance).toBe(0);
+    expect(report.merkleRootOnChainHash).toMatch(/^0x[a-f0-9]+$/);
   });
 });

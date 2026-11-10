@@ -39,16 +39,16 @@ export function WebsiteGuardianBar() {
     const current = loadWebsiteGuardianState();
     applyLiveWebsiteUiVariables(current.uiConfig);
 
-    // Immediately run initial automatic security patch AND initial autonomous agent fleet learning/trading cycle on boot
+    // Immediately run initial automatic security patch AND initial autonomous agent fleet learning
     void runAutonomousWebsiteGuardianScanAndPatch();
-    const safeAddr =
-      loadSafeSession()?.safeAddress ?? '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+    const safeAddr = loadSafeSession()?.safeAddress ?? '';
     runContinuousAutonomousFleetTick(safeAddr, { BTC: 75000, ETH: 2150, SOL: 88 }, true);
 
     const syncAll = () => {
       setGuardian(loadWebsiteGuardianState());
       const ags = loadAutonomousAgents();
-      setTotalBtcStacked(ags.reduce((s, a) => s + a.accumulatedBtc, 0));
+      const connected = Boolean(loadSafeSession()?.safeAddress);
+      setTotalBtcStacked(connected ? ags.reduce((s, a) => s + a.accumulatedBtc, 0) : 0);
       setTotalGens(ags.reduce((s, a) => s + a.learningGeneration, 0));
     };
 
@@ -63,8 +63,8 @@ export function WebsiteGuardianBar() {
   // Continuous 24/7 Self-Learning & In-Wallet Trading Loop (every 10 seconds automatically)
   useEffect(() => {
     const tradeLoop = window.setInterval(() => {
-      const safeAddr =
-        loadSafeSession()?.safeAddress ?? '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+      // Pass empty string when no Safe wallet is connected so agents only learn/evolve IQ and do NOT fake BTC gains
+      const safeAddr = loadSafeSession()?.safeAddress ?? '';
       runContinuousAutonomousFleetTick(safeAddr, { BTC: 75000, ETH: 2150, SOL: 88 }, false);
     }, 10_000);
 

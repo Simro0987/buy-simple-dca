@@ -29,6 +29,7 @@ import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard
 import { WebsiteGuardianPanel } from '@/components/WebsiteGuardianPanel';
 import { ZiskBotPanel } from '@/components/ZiskBotPanel';
 import { EttSuperTrendPanel } from '@/components/EttSuperTrendPanel';
+import { InstitutionalOsCenter } from '@/components/InstitutionalOsCenter';
 import {
   SAFE_SUPPORTED_CHAINS,
   formatShortAddress,
@@ -91,7 +92,7 @@ export function AgentPage({ lang }: Props) {
   const { safeSession } = useAuth();
   const { data: marketPrices } = usePrices();
 
-  const [subTab, setSubTab] = useState<'fleet' | 'ett' | 'zisk' | 'guardian' | 'decentralized' | 'chat'>('fleet');
+  const [subTab, setSubTab] = useState<'institutional_os' | 'fleet' | 'ett' | 'zisk' | 'guardian' | 'decentralized' | 'chat'>('institutional_os');
   const [agents, setAgents] = useState<AutonomousAgentProfile[]>(loadAutonomousAgents);
   const [logs, setLogs] = useState<AgentExecutionLogEntry[]>(loadAgentExecutionLogs);
   const [synapses, setSynapses] = useState<SwarmSynapseEvent[]>(loadSwarmSynapses);
@@ -164,17 +165,19 @@ export function AgentPage({ lang }: Props) {
     return map;
   }, [pythQuotes, marketPrices]);
 
+  const isSafeWalletConnected = Boolean(safeSession?.safeAddress);
+
   const totalAccumulatedBtc = useMemo(
-    () => agents.reduce((sum, a) => sum + a.accumulatedBtc, 0),
-    [agents],
+    () => (isSafeWalletConnected ? agents.reduce((sum, a) => sum + a.accumulatedBtc, 0) : 0),
+    [agents, isSafeWalletConnected],
   );
 
   const totalTrades = useMemo(
-    () => agents.reduce((sum, a) => sum + a.totalTradesExecuted, 0),
-    [agents],
+    () => (isSafeWalletConnected ? agents.reduce((sum, a) => sum + a.totalTradesExecuted, 0) : 0),
+    [agents, isSafeWalletConnected],
   );
 
-  const activeSafeAddress = safeSession?.safeAddress ?? '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+  const activeSafeAddress = safeSession?.safeAddress ?? '';
 
   const handleSimulateBlockedWithdrawal = (agent: AutonomousAgentProfile) => {
     const blockedEntry = testForbiddenExternalWithdrawalBlock(agent, activeSafeAddress);
@@ -393,10 +396,14 @@ export function AgentPage({ lang }: Props) {
             {sk ? 'Získané BTC agentmi' : 'BTC Gained by Agents'}
           </div>
           <p className="text-base font-black text-foreground font-mono mt-1">
-            +{totalAccumulatedBtc.toFixed(6)} BTC
+            {isSafeWalletConnected ? `+${totalAccumulatedBtc.toFixed(6)} BTC` : '0.000000 BTC'}
           </p>
           <p className="text-[10px] text-muted-foreground">
-            ≈ ${(totalAccumulatedBtc * (livePricesMap.BTC ?? 75000)).toFixed(2)} USD
+            {isSafeWalletConnected
+              ? `≈ $${(totalAccumulatedBtc * (livePricesMap.BTC ?? 75000)).toFixed(2)} USD`
+              : sk
+                ? 'Čaká na pripojenie Safe peňaženky'
+                : 'Waiting for Safe wallet connection'}
           </p>
         </div>
 
@@ -422,13 +429,30 @@ export function AgentPage({ lang }: Props) {
             {agents.filter((a) => a.enabled).length} / {agents.length}
           </p>
           <p className="text-[10px] text-muted-foreground">
-            {sk ? `${totalTrades} in-wallet operácií` : `${totalTrades} in-wallet ops`}
+            {isSafeWalletConnected
+              ? sk
+                ? `${totalTrades} in-wallet operácií`
+                : `${totalTrades} in-wallet ops`
+              : sk
+                ? 'Učenie aktívne · 0 obchodov (bez peňaženky)'
+                : 'Learning active · 0 trades (no wallet)'}
           </p>
         </div>
       </div>
 
       {/* Sub-navigation tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
+      <div className="grid grid-cols-2 sm:grid-cols-7 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
+        <button
+          type="button"
+          onClick={() => setSubTab('institutional_os')}
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all ${
+            subTab === 'institutional_os'
+              ? 'bg-[#14F195] text-black shadow font-bold'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {sk ? 'DeFi OS (15 Agentov)' : 'DeFi OS (15 Agents)'}
+        </button>
         <button
           type="button"
           onClick={() => setSubTab('fleet')}
@@ -438,7 +462,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? `Flotila (${agents.length})` : `Fleet (${agents.length})`}
+          {sk ? `Swarm (${agents.length})` : `Swarm (${agents.length})`}
         </button>
         <button
           type="button"
@@ -449,7 +473,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'ETT SuperTrend (DEX)' : 'ETT SuperTrend (DEX)'}
+          {sk ? 'ETT SuperTrend' : 'ETT SuperTrend'}
         </button>
         <button
           type="button"
@@ -460,7 +484,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'Zisk Bot (Funding)' : 'Zisk Bot (Funding)'}
+          {sk ? 'Zisk Bot' : 'Zisk Bot'}
         </button>
         <button
           type="button"
@@ -471,7 +495,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'Web Strážca & UI' : 'Web Guardian & UI'}
+          {sk ? 'Web Strážca' : 'Web Guardian'}
         </button>
         <button
           type="button"
@@ -496,6 +520,9 @@ export function AgentPage({ lang }: Props) {
           {sk ? 'AI Konzola' : 'AI Console'}
         </button>
       </div>
+
+      {/* TAB 0: INSTITUTIONAL DEFI OPERATING SYSTEM (15 AGENTS, VETO, VAULTS, STYLES, PAIR TRADING, UNIVERSAL EXPLORER, REPORTS & AUDIT) */}
+      {subTab === 'institutional_os' && <InstitutionalOsCenter lang={lang} />}
 
       {/* TAB: ETT SUPERTREND, FIBO ZONES & EMA/MA COLOR SIGNAL DEX AGENT (ZERO CEX / ZERO BITUNIX) */}
       {subTab === 'ett' && <EttSuperTrendPanel lang={lang} />}

@@ -1,0 +1,65 @@
+---
+version: "2.0"
+
+# ============================================================================
+# SafeBTC Agent · Akash Network Decentralized SDL Deployment Manifest
+# ============================================================================
+# Deploys:
+#  1. `safebtc-terminal`: Web Command Center & Safe Global Transaction Proposer
+#  2. `safebtc-agent-worker`: Off-chain Market Research, Strategy, Risk/Security Veto,
+#     Simulation, Zisk PAPER Optimizer & Self-Improving Core
+# Includes encrypted persistent storage for `paper.json`, `journal.jsonl`,
+# `learned.json`, `weights.json`, and append-only Merkle audit logs.
+# Zero private keys / zero seed phrases ever enter Akash containers.
+# ============================================================================
+
+services:
+  safebtc-terminal:
+    image: ghcr.io/simro0987/buy-simple-dca:latest
+    expose:
+      - port: 8080
+        as: 80
+        to:
+          - global: true
+    env:
+      - NODE_ENV=production
+      - TREASURY_LIVE=0
+      - VITE_SYSTEM_EXECUTION_MODE=PAPER
+      - SAFE_GUARD_ENFORCE_SELF_RECIPIENT=true
+      - SAFE_GUARD_BLOCK_EXTERNAL_TRANSFERS=true
+      - SAFE_GUARD_BLOCK_UNLIMITED_APPROVALS=true
+      - PRIMARY_AGENT_GOAL=ACCUMULATE_BTC
+      - PYTH_HERMES_ENDPOINT=https://hermes.pyth.network
+    params:
+      storage:
+        state_data:
+          mount: /data
+          readOnly: false
+
+profiles:
+  compute:
+    safebtc-terminal:
+      resources:
+        cpu:
+          units: 1.0
+        memory:
+          size: 1Gi
+        storage:
+          - size: 2Gi
+          - name: state_data
+            size: 10Gi
+            attributes:
+              persistent: true
+              class: beta3
+  placement:
+    dcloud:
+      pricing:
+        safebtc-terminal:
+          denom: uakt
+          amount: 1000
+
+deployment:
+  safebtc-terminal:
+    dcloud:
+      profile: safebtc-terminal
+      count: 1

@@ -123,9 +123,9 @@ export interface AgentExecutionLogEntry {
   learningNoteEn: string;
 }
 
-const AGENTS_STORAGE_KEY = 'autonomous-btc-agents-v1';
-const AGENT_LOGS_STORAGE_KEY = 'autonomous-agent-logs-v1';
-const SWARM_SYNAPSES_STORAGE_KEY = 'autonomous-swarm-synapses-v1';
+const AGENTS_STORAGE_KEY = 'autonomous-btc-agents-v2';
+const AGENT_LOGS_STORAGE_KEY = 'autonomous-agent-logs-v2';
+const SWARM_SYNAPSES_STORAGE_KEY = 'autonomous-swarm-synapses-v2';
 const AGENTS_EVENT = 'autonomous-btc-agents-changed';
 
 export const CANDIDATE_DISCOVERY_TOKENS: Array<{
@@ -177,8 +177,8 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     collectiveIqScore: 142.8,
     connectedPeerIds: ['agent-omni-hunter', 'agent-yield-harvester', 'aegis-website-guardian'],
     winRatePct: 78.5,
-    accumulatedBtc: 0.0482,
-    totalTradesExecuted: 42,
+    accumulatedBtc: 0,
+    totalTradesExecuted: 0,
     learningWeights: {
       rsiOversoldBuyWeight: 0.82,
       altProfitToBtcHarvestRatio: 0.75,
@@ -210,8 +210,8 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     collectiveIqScore: 138.4,
     connectedPeerIds: ['agent-satoshi-prime', 'agent-yield-harvester', 'aegis-website-guardian'],
     winRatePct: 74.2,
-    accumulatedBtc: 0.0294,
-    totalTradesExecuted: 28,
+    accumulatedBtc: 0,
+    totalTradesExecuted: 0,
     learningWeights: {
       rsiOversoldBuyWeight: 0.76,
       altProfitToBtcHarvestRatio: 0.80,
@@ -242,8 +242,8 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     collectiveIqScore: 145.1,
     connectedPeerIds: ['agent-satoshi-prime', 'agent-omni-hunter', 'aegis-website-guardian'],
     winRatePct: 89.1,
-    accumulatedBtc: 0.0365,
-    totalTradesExecuted: 35,
+    accumulatedBtc: 0,
+    totalTradesExecuted: 0,
     learningWeights: {
       rsiOversoldBuyWeight: 0.65,
       altProfitToBtcHarvestRatio: 0.90,
@@ -276,8 +276,8 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     collectiveIqScore: 148.6,
     connectedPeerIds: ['agent-satoshi-prime', 'agent-omni-hunter', 'agent-yield-harvester', 'aegis-website-guardian'],
     winRatePct: 86.4,
-    accumulatedBtc: 0.0198,
-    totalTradesExecuted: 47,
+    accumulatedBtc: 0,
+    totalTradesExecuted: 0,
     learningWeights: {
       rsiOversoldBuyWeight: 0.72,
       altProfitToBtcHarvestRatio: 0.88,
@@ -309,8 +309,8 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     collectiveIqScore: 151.2,
     connectedPeerIds: ['agent-satoshi-prime', 'agent-omni-hunter', 'agent-yield-harvester', 'agent-zisk-bot', 'aegis-website-guardian'],
     winRatePct: 88.2,
-    accumulatedBtc: 0.0314,
-    totalTradesExecuted: 64,
+    accumulatedBtc: 0,
+    totalTradesExecuted: 0,
     learningWeights: {
       rsiOversoldBuyWeight: 0.85,
       altProfitToBtcHarvestRatio: 0.90,
@@ -702,6 +702,11 @@ export function runAutonomousAgentCycle(
     }
   }
 
+  const hasConnectedWallet = Boolean(safeAddress && safeAddress.trim().startsWith('0x') && safeAddress.trim().length === 42);
+  const effectiveSafeAddress = hasConnectedWallet
+    ? safeAddress.trim()
+    : '0x0000000000000000000000000000000000000000';
+
   const proposedTx: ProposedAgentTransaction = {
     agentId: agent.id,
     agentName: agent.name,
@@ -710,7 +715,7 @@ export function runAutonomousAgentCycle(
     fromToken,
     toToken,
     amountUsd,
-    recipientAddress: safeAddress, // Strictly settles inside the user's Safe wallet
+    recipientAddress: effectiveSafeAddress,
     protocol: chain === 'solana' ? 'Jupiter v6 (Solana)' : 'CowSwap (MEV-Protected)',
     methodName: 'swapExactTokensForTokensSelfRecipient',
     expectedBtcGainBps: 42,
@@ -718,12 +723,16 @@ export function runAutonomousAgentCycle(
 
   const guardVerdict = validateAgentTransactionWithSafeGuard(
     proposedTx,
-    safeAddress,
+    effectiveSafeAddress,
     DEFAULT_SAFE_GUARD_POLICY,
     50_000,
   );
 
-  const btcAcquired = guardVerdict.allowed ? Number((amountUsd / btcPrice).toFixed(6)) : 0;
+  // IMPORTANT: If no Safe wallet is connected (`!hasConnectedWallet`), agents still learn & share Swarm intelligence,
+  // but they CANNOT execute real wallet trades or accumulate BTC (`btcAcquired = 0`, `tradesDelta = 0`).
+  const btcAcquired =
+    hasConnectedWallet && guardVerdict.allowed ? Number((amountUsd / btcPrice).toFixed(6)) : 0;
+  const tradesDelta = hasConnectedWallet && guardVerdict.allowed ? 1 : 0;
 
   // Blend weights with peer if available + self-reflection gradient
   const peerWeights = peerAgent?.learningWeights ?? agent.learningWeights;
@@ -739,8 +748,12 @@ export function runAutonomousAgentCycle(
     swarmSynapsesCount: (agent.swarmSynapsesCount || 30) + 2,
     collectiveIqScore: Number(((agent.collectiveIqScore || 140) + iqDelta).toFixed(2)),
     winRatePct: Number(Math.min(97.8, agent.winRatePct + 0.35).toFixed(2)),
-    accumulatedBtc: Number((agent.accumulatedBtc + btcAcquired).toFixed(6)),
-    totalTradesExecuted: agent.totalTradesExecuted + (guardVerdict.allowed ? 1 : 0),
+    accumulatedBtc: hasConnectedWallet
+      ? Number((agent.accumulatedBtc + btcAcquired).toFixed(6))
+      : 0,
+    totalTradesExecuted: hasConnectedWallet
+      ? agent.totalTradesExecuted + tradesDelta
+      : 0,
     learningWeights: {
       rsiOversoldBuyWeight: blend(agent.learningWeights.rsiOversoldBuyWeight, peerWeights.rsiOversoldBuyWeight, 0.008),
       altProfitToBtcHarvestRatio: blend(agent.learningWeights.altProfitToBtcHarvestRatio, peerWeights.altProfitToBtcHarvestRatio, 0.005),
@@ -865,21 +878,23 @@ export function runContinuousAutonomousFleetTick(
   }
 
   saveAutonomousAgents(nextAgents);
-  // Also advance Zisk Bot's continuous delta-neutral funding & Solana lending engine in lockstep with the Swarm
-  runZiskBotAutonomousTick(livePricesUsd.BTC ?? 75000);
-  // Also advance ETT SuperTrend + Fibo + EMA/MA Color Signal DEX Agent (100% On-Chain DEX, Zero CEX)
-  processEttTradingViewSignalOnDex(
-    {
-      strategy: 'ETT SuperTrend Strategy',
-      ticker: 'BTC/USD',
-      action: 'HARVEST_TO_BTC',
-      timeframe: '1h',
-      priceUsd: livePricesUsd.BTC ?? 75000,
-      amountUsd: 185,
-    },
-    safeAddress,
-    livePricesUsd.BTC ?? 75000,
-  );
+  const hasWallet = Boolean(safeAddress && safeAddress.trim().startsWith('0x') && safeAddress.trim().length === 42);
+  if (hasWallet) {
+    // Only advance real wallet trading ticks when a Safe wallet is actually connected
+    runZiskBotAutonomousTick(livePricesUsd.BTC ?? 75000);
+    processEttTradingViewSignalOnDex(
+      {
+        strategy: 'ETT SuperTrend Strategy',
+        ticker: 'BTC/USD',
+        action: 'HARVEST_TO_BTC',
+        timeframe: '1h',
+        priceUsd: livePricesUsd.BTC ?? 75000,
+        amountUsd: 185,
+      },
+      safeAddress,
+      livePricesUsd.BTC ?? 75000,
+    );
+  }
   return {
     agents: nextAgents,
     logs: latestLogs,
