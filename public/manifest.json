@@ -1,11 +1,16 @@
 {
-  "name": "Crypto DCA",
-  "short_name": "CryptoDCA",
-  "description": "Crypto DCA & Portfolio Tracker",
+  "name": "Edge Trader Terminal · Sovereign BTC & Safe AI",
+  "short_name": "EdgeTrader",
+  "description": "100% Non-Custodial Crypto DCA, Safe{Wallet} AI Agents & BTC Accumulation Terminal",
+  "iconPath": "icon-512.png",
+  "providedBy": {
+    "name": "Edge Trader Sovereign Stack",
+    "url": "https://buy-simple-dca.vercel.app"
+  },
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0d1117",
-  "theme_color": "#0d1117",
+  "background_color": "#050505",
+  "theme_color": "#050505",
   "orientation": "portrait",
   "icons": [
     {
@@ -16,7 +21,9 @@
     {
       "src": "/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     }
-  ]
+  ],
+  "safe_apps_permissions": []
 }

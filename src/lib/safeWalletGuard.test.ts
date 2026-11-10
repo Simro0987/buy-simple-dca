@@ -2,10 +2,8 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import {
   parseSafeAddressInput,
   validateAgentTransactionWithSafeGuard,
+  buildSafeGlobalPortalUrls,
   DEFAULT_SAFE_GUARD_POLICY,
-  SELECTABLE_WALLET_PROVIDERS,
-  deriveSafeVaultAddressFromOwner,
-  connectSelectedWalletAndResolveSafe,
   saveSafeSession,
   loadSafeSession,
   type ProposedAgentTransaction,
@@ -25,7 +23,7 @@ import {
 const SAFE_ADDR = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
 const EXTERNAL_ATTACKER = '0xDeadBeef00000000000000000000000000009999';
 
-describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => {
+describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => {
   beforeEach(() => {
     localStorage.clear();
   });
@@ -42,6 +40,22 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
 
     const invalid = parseSafeAddressInput('not-an-address');
     expect(invalid.valid).toBe(false);
+  });
+
+  it('builds official app.safe.global Non-Custodial Safe App & WalletConnect URLs', () => {
+    const urls = buildSafeGlobalPortalUrls({
+      chainId: 'arbitrum',
+      safeAddress: SAFE_ADDR,
+      appUrl: 'https://buy-simple-dca.vercel.app',
+      wcUri: 'wc:abc123@2?relay-protocol=irn&symKey=def456',
+    });
+
+    expect(urls.openAsSafeAppUrl).toContain('https://app.safe.global/apps/open');
+    expect(urls.openAsSafeAppUrl).toContain(encodeURIComponent(`arb1:${SAFE_ADDR}`));
+    expect(urls.openAsSafeAppUrl).toContain(encodeURIComponent('https://buy-simple-dca.vercel.app'));
+    expect(urls.openSafeDashboardUrl).toContain('https://app.safe.global/home');
+    expect(urls.openSafeDashboardUrl).toContain('wc=');
+    expect(urls.openSafeWelcomeUrl).toContain('https://app.safe.global/welcome?chain=arb1');
   });
 
   it('allows in-wallet DEX swaps and BTC harvesting when recipient === safeAddress', () => {
@@ -81,7 +95,6 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
     expect(res1.allowed).toBe(false);
     expect(res1.code).toBe('BLOCKED_EXTERNAL_TRANSFER_FORBIDDEN');
 
-    // Even if an agent disguises a swap to send output tokens to an external address, Guard blocks it
     const disguisedSwapToExternal: ProposedAgentTransaction = {
       agentId: 'agent-omni-hunter',
       agentName: 'Omni Hunter',
@@ -115,7 +128,6 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
     expect(futureAgent.ultimateObjective).toBe('ACCUMULATE_MORE_BTC');
     expect(futureAgent.managedTokens.some((t) => t.symbol === 'TAO')).toBe(true);
 
-    // Run learning cycle -> increases BTC balance and learning generation inside the Safe
     const { updatedAgent, logEntry } = runAutonomousAgentCycle(futureAgent, SAFE_ADDR, {
       BTC: 75000,
       ETH: 2200,
@@ -126,19 +138,20 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
     expect(updatedAgent.learningGeneration).toBe(futureAgent.learningGeneration + 1);
     expect(updatedAgent.accumulatedBtc).toBeGreaterThan(futureAgent.accumulatedBtc);
 
-    // Test forbidden external withdrawal block helper
     const blockedLog = testForbiddenExternalWithdrawalBlock(updatedAgent, SAFE_ADDR, EXTERNAL_ATTACKER);
     expect(blockedLog.guardVerdict.allowed).toBe(false);
     expect(blockedLog.btcAcquired).toBe(0);
   });
 
-  it('persists SafeSession with immutable Zodiac Guard flags and provides decentralized Web3 manifests', async () => {
+  it('persists Non-Custodial SafeSession with immutable Zodiac Guard flags and provides decentralized Web3 manifests', async () => {
     saveSafeSession({
       safeAddress: SAFE_ADDR,
+      owners: ['0x1111111111111111111111111111111111111111'],
       primaryChain: 'arbitrum',
       enabledChains: ['arbitrum', 'ethereum', 'solana', 'bitcoin'],
       connectedVia: 'safe_walletconnect',
       onChainVerified: true,
+      nonCustodial: true,
       threshold: 2,
       ownersCount: 3,
       zodiacRolesGuardActive: true,
@@ -148,6 +161,7 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
 
     const loaded = loadSafeSession();
     expect(loaded?.safeAddress).toBe(SAFE_ADDR);
+    expect(loaded?.nonCustodial).toBe(true);
     expect(loaded?.guardPolicy.allowExternalWithdrawals).toBe(false);
     expect(loaded?.guardPolicy.enforceSelfRecipientOnly).toBe(true);
     expect(loaded?.guardPolicy.primaryObjective).toBe('ACCUMULATE_BTC');
@@ -164,21 +178,5 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
     expect(snapshot.schemaVersion).toBe('edge-trader-sovereign-v1');
     expect(snapshot.arweaveTxTemplate.startsWith('ar://')).toBe(true);
     expect(snapshot.ipfsCidPreview.startsWith('bafybeig')).toBe(true);
-  });
-
-  it('allows user to pick any wallet (MetaMask, Rabby, Phantom, Trust, Ledger, etc.) and routes it via Safe Global', async () => {
-    expect(SELECTABLE_WALLET_PROVIDERS.length).toBeGreaterThanOrEqual(8);
-    const rabby = SELECTABLE_WALLET_PROVIDERS.find((w) => w.id === 'rabby')!;
-    const phantom = SELECTABLE_WALLET_PROVIDERS.find((w) => w.id === 'phantom')!;
-    expect(rabby).toBeDefined();
-    expect(phantom).toBeDefined();
-
-    const derived = deriveSafeVaultAddressFromOwner(SAFE_ADDR, 'rabby');
-    expect(derived).toMatch(/^0x[a-f0-9]{40}$/);
-
-    const resolved = await connectSelectedWalletAndResolveSafe(rabby, 'arbitrum');
-    expect(resolved.signerAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
-    expect(resolved.safeAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
-    expect(resolved.availableSafes.length).toBeGreaterThanOrEqual(1);
   });
 });

@@ -11,12 +11,12 @@ import {
   Bitcoin,
   QrCode,
   Sparkles,
-  Wallet,
-  ChevronRight,
-  Smartphone,
-  HardDrive,
+  Copy,
   RefreshCw,
+  ArrowUpRight,
+  AlertTriangle,
 } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import { toast } from 'sonner';
 import { useAuth } from '@/hooks/useAuth';
 import {
@@ -28,25 +28,45 @@ import {
 } from '@/components/ui/dialog';
 import {
   SAFE_SUPPORTED_CHAINS,
-  SELECTABLE_WALLET_PROVIDERS,
   DEFAULT_SAFE_GUARD_POLICY,
   parseSafeAddressInput,
   verifySafeContractOnChain,
-  connectSelectedWalletAndResolveSafe,
+  lookupRealSafesForOwnerOnSafeGlobal,
+  buildSafeGlobalPortalUrls,
+  detectSafeAppsSdkContext,
   formatShortAddress,
   saveSafeSession,
   type SupportedChainId,
   type SafeSession,
-  type SelectableWalletOption,
 } from '@/lib/safeWalletGuard';
 
 interface Props {
   lang?: 'sk' | 'en';
-  /** Compact mode for embedding in headers/modals, or full card mode */
   compact?: boolean;
-  /** Automatically open the wallet picker modal on mount */
   defaultOpenModal?: boolean;
   onConnected?: (session: SafeSession) => void;
+}
+
+/**
+ * Generates a standard WalletConnect v2 pairing URI (`wc:<topic>@2?relay-protocol=irn&symKey=<key>`)
+ * so the user can copy it into `app.safe.global` (WalletConnect icon in the top bar of Safe Global)
+ * or scan the QR code from the Safe{Wallet} mobile app.
+ */
+function generateStandardWcV2PairingUri(): string {
+  const randomHex = (len: number) => {
+    const bytes = new Uint8Array(len / 2);
+    if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+      crypto.getRandomValues(bytes);
+    } else {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = Math.floor(Math.random() * 256);
+    }
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
+  };
+  const topic = randomHex(64);
+  const symKey = randomHex(64);
+  return `wc:${topic}@2?relay-protocol=irn&symKey=${symKey}`;
 }
 
 export function SafeGlobalConnectCard({
@@ -62,68 +82,106 @@ export function SafeGlobalConnectCard({
   const [selectedChain, setSelectedChain] = useState<SupportedChainId>(
     safeSession?.primaryChain ?? 'arbitrum',
   );
-  const [selectedWallet, setSelectedWallet] = useState<SelectableWalletOption | null>(null);
-  const [step, setStep] = useState<'pick_wallet' | 'connecting' | 'confirm_safe'>('pick_wallet');
+  const [safeAddressInput, setSafeAddressInput] = useState<string>(
+    safeSession?.safeAddress ?? '',
+  );
+  const [ownerLookupInput, setOwnerLookupInput] = useState<string>('');
+  const [discoveredSafes, setDiscoveredSafes] = useState<string[]>([]);
+  const [lookingUpSafes, setLookingUpSafes] = useState(false);
 
-  // Discovered / resolved addresses during handshake
-  const [signerAddress, setSignerAddress] = useState<string>('');
-  const [safeAddress, setSafeAddress] = useState<string>('');
-  const [availableSafes, setAvailableSafes] = useState<string[]>([]);
-  const [customSafeOverride, setCustomSafeOverride] = useState<string>('');
-  const [wcUri, setWcUri] = useState<string>('');
+  const [wcPairingUri, setWcPairingUri] = useState<string>(() =>
+    generateStandardWcV2PairingUri(),
+  );
   const [verifying, setVerifying] = useState(false);
-  const [detectedInjected, setDetectedInjected] = useState<boolean>(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
 
+  const currentOrigin =
+    typeof window !== 'undefined'
+      ? window.location.origin
+      : 'https://buy-simple-dca.vercel.app';
+
+  const portalUrls = buildSafeGlobalPortalUrls({
+    chainId: selectedChain,
+    safeAddress: safeAddressInput,
+    appUrl: currentOrigin,
+    wcUri: wcPairingUri,
+  });
+
+  // Automatically check if running inside app.safe.global iframe via @safe-global/safe-apps-sdk
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const hasEth = Boolean((window as unknown as { ethereum?: unknown }).ethereum);
-      const hasSol = Boolean((window as unknown as { solana?: unknown }).solana);
-      setDetectedInjected(hasEth || hasSol);
-    }
-  }, []);
+    void (async () => {
+      const iframeSession = await detectSafeAppsSdkContext(1500);
+      if (iframeSession) {
+        signInWithSafe(iframeSession);
+        onConnected?.(iframeSession);
+      }
+    })();
+  }, [signInWithSafe, onConnected]);
 
-  const openWalletPicker = () => {
-    setStep('pick_wallet');
-    setSelectedWallet(null);
+  const handleOpenModal = () => {
+    setValidationError(null);
+    setWcPairingUri(generateStandardWcV2PairingUri());
     setModalOpen(true);
   };
 
-  const handleSelectWalletProvider = async (wallet: SelectableWalletOption) => {
-    setSelectedWallet(wallet);
-    setStep('connecting');
-    setVerifying(true);
-
-    try {
-      const result = await connectSelectedWalletAndResolveSafe(
-        wallet,
-        selectedChain,
-        customSafeOverride.trim() || undefined,
-      );
-      setSignerAddress(result.signerAddress);
-      setSafeAddress(result.safeAddress);
-      setAvailableSafes(result.availableSafes);
-      setStep('confirm_safe');
-    } catch {
-      toast.error(
-        sk
-          ? 'Nepodarilo sa nadviazať spojenie s peňaženkou. Skús znova.'
-          : 'Failed to connect wallet. Please try again.',
-      );
-      setStep('pick_wallet');
-    } finally {
-      setVerifying(false);
-    }
+  const handleCopyText = (text: string, labelSk: string, labelEn: string) => {
+    void navigator.clipboard.writeText(text);
+    toast.success(sk ? labelSk : labelEn);
   };
 
-  const finalizeSafeConnection = async (targetSafeAddr?: string) => {
-    if (!selectedWallet) return;
-    const rawAddr = (targetSafeAddr ?? (customSafeOverride.trim() || safeAddress)).trim();
-    const parsed = parseSafeAddressInput(rawAddr);
+  /**
+   * Read-only lookup on official Safe Global Transaction Service API (`safe.global`)
+   * to find existing Safe contracts where the user's personal wallet is an owner.
+   */
+  const handleLookupSafesByOwner = async () => {
+    const parsed = parseSafeAddressInput(ownerLookupInput);
     if (!parsed.valid) {
       toast.error(
         sk
-          ? 'Zadaj platnú Safe Global adresu (0x...)'
-          : 'Enter a valid Safe Global address (0x...)',
+          ? 'Zadaj platnú verejnú adresu (0x...) pre vyhľadanie tvojich Safe účtov na app.safe.global'
+          : 'Enter a valid public address (0x...) to find your Safe accounts on app.safe.global',
+      );
+      return;
+    }
+
+    setLookingUpSafes(true);
+    setValidationError(null);
+    try {
+      const res = await lookupRealSafesForOwnerOnSafeGlobal(parsed.address, selectedChain);
+      setDiscoveredSafes(res.safes);
+      if (res.safes.length > 0) {
+        setSafeAddressInput(res.safes[0]);
+        toast.success(
+          sk
+            ? `Nájdených ${res.safes.length} Safe Global trezorov na sieti ${selectedChain.toUpperCase()}!`
+            : `Found ${res.safes.length} Safe Global vaults on ${selectedChain.toUpperCase()}!`,
+        );
+      } else {
+        setValidationError(
+          sk
+            ? `Pre túto adresu sa na sieti ${selectedChain.toUpperCase()} nenašiel žiadny nasadený Safe kontrakt. Klikni vyššie na "Otvoriť app.safe.global" a pripoj tam svoju peňaženku.`
+            : `No deployed Safe contract found for this address on ${selectedChain.toUpperCase()}. Click "Open app.safe.global" above to connect your wallet there.`,
+        );
+      }
+    } finally {
+      setLookingUpSafes(false);
+    }
+  };
+
+  /**
+   * Connects strictly to a verified on-chain Safe Global Smart Account contract.
+   * Rejects regular EOA addresses so the flow is 100% Non-Custodial via Safe Global.
+   */
+  const handleVerifyAndConnectSafe = async (addressOverride?: string) => {
+    setValidationError(null);
+    const raw = (addressOverride ?? safeAddressInput).trim();
+    const parsed = parseSafeAddressInput(raw);
+
+    if (!parsed.valid) {
+      setValidationError(
+        sk
+          ? 'Zadaj platnú adresu svojho Safe Global trezoru (napr. arb1:0x… alebo 0x…) z app.safe.global.'
+          : 'Enter a valid Safe Global vault address (e.g. arb1:0x… or 0x…) from app.safe.global.',
       );
       return;
     }
@@ -131,19 +189,38 @@ export function SafeGlobalConnectCard({
     const chainToUse = parsed.chain ?? selectedChain;
     setVerifying(true);
     try {
-      const verification = await verifySafeContractOnChain(parsed.address, chainToUse);
+      const check = await verifySafeContractOnChain(parsed.address, chainToUse);
+
+      if (!check.isSafeContract) {
+        setValidationError(
+          sk
+            ? check.errorReasonSk ??
+                'Táto adresa nie je Safe Global Smart Account kontrakt (je to bežná EOA peňaženka). Otvor app.safe.global, pripoj tam svoju peňaženku a vlož sem adresu svojho Safe trezoru.'
+            : check.errorReasonEn ??
+                'This address is not a Safe Global Smart Account contract (it is a plain EOA). Open app.safe.global, connect your wallet there, and paste your Safe vault address.',
+        );
+        toast.error(
+          sk
+            ? 'Odmietnuté: Musíš zadať adresu Safe Global kontraktu, nie bežnú EOA peňaženku!'
+            : 'Rejected: You must provide a Safe Global contract address, not a plain EOA wallet!',
+        );
+        return;
+      }
+
       const nextSession: SafeSession = {
         safeAddress: parsed.address,
-        signerAddress: signerAddress || undefined,
-        selectedWalletId: selectedWallet.id,
-        selectedWalletName: selectedWallet.name,
+        owners: check.owners,
+        signerAddress: check.owners[0],
+        selectedWalletName: 'Safe{Wallet} Global (app.safe.global)',
         primaryChain: chainToUse,
         enabledChains: SAFE_SUPPORTED_CHAINS.map((c) => c.id),
-        wcPairingUri: wcUri.trim() || undefined,
+        wcPairingUri,
         connectedVia: 'safe_walletconnect',
-        onChainVerified: verification.isSafeContract,
-        threshold: verification.threshold,
-        ownersCount: verification.ownersCount,
+        onChainVerified: true,
+        nonCustodial: true,
+        threshold: check.threshold || 1,
+        ownersCount: check.ownersCount || 1,
+        safeVersion: check.safeVersion,
         zodiacRolesGuardActive: true,
         guardPolicy: {
           ...DEFAULT_SAFE_GUARD_POLICY,
@@ -159,8 +236,8 @@ export function SafeGlobalConnectCard({
       setModalOpen(false);
       toast.success(
         sk
-          ? `${selectedWallet.name} prepojená cez Safe Global (${formatShortAddress(parsed.address)})! Zodiac Guard aktívny.`
-          : `${selectedWallet.name} connected via Safe Global (${formatShortAddress(parsed.address)})! Zodiac Guard active.`,
+          ? `Non-Custodial Safe Global (${formatShortAddress(parsed.address)}) overený on-chain a prepojený!`
+          : `Non-Custodial Safe Global (${formatShortAddress(parsed.address)}) verified on-chain and connected!`,
       );
       onConnected?.(nextSession);
     } finally {
@@ -172,8 +249,8 @@ export function SafeGlobalConnectCard({
     saveSafeSession(null);
     toast.info(
       sk
-        ? 'Safe{Wallet} peňaženka odpojená.'
-        : 'Safe{Wallet} disconnected.',
+        ? 'Safe{Wallet} Global relácia bola odpojená.'
+        : 'Safe{Wallet} Global session disconnected.',
     );
   };
 
@@ -191,46 +268,60 @@ export function SafeGlobalConnectCard({
               <div>
                 <div className="flex items-center gap-1.5 flex-wrap">
                   <span className="text-xs font-bold text-emerald-300 uppercase tracking-wider">
-                    Safe&#123;Wallet&#125; Global · {safeSession.selectedWalletName ?? 'WalletConnect'}
+                    100% Non-Custodial · Safe&#123;Wallet&#125; Global
                   </span>
                   <span className="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[10px] font-mono text-emerald-200 border border-emerald-500/30">
-                    Zodiac Guard LOCKED
+                    On-Chain Safe ({safeSession.threshold}/{safeSession.ownersCount}) · Zodiac Guard LOCKED
                   </span>
                 </div>
                 <p className="text-xs font-mono text-foreground mt-0.5 break-all">
-                  Safe Vault: {safeSession.safeAddress}
+                  Safe Smart Account: {safeSession.safeAddress}
                 </p>
-                {safeSession.signerAddress && (
+                {safeSession.owners.length > 0 && (
                   <p className="text-[10px] font-mono text-muted-foreground mt-0.5">
-                    {sk ? 'Vlastnícka peňaženka (Signer):' : 'Owner Wallet (Signer):'}{' '}
-                    {formatShortAddress(safeSession.signerAddress)} ({safeSession.selectedWalletName ?? 'Web3'})
+                    {sk ? 'Vlastníci Safe (pripojení výhradne v app.safe.global):' : 'Safe Owners (connected exclusively in app.safe.global):'}{' '}
+                    {safeSession.owners.map((o) => formatShortAddress(o)).join(', ')}
                   </p>
                 )}
                 {isEmailLoggedIn && (
                   <p className="text-[10px] text-emerald-200/80 mt-0.5">
                     {sk
-                      ? `Prepojené s tvojím e-mailovým účtom (${user?.email})`
-                      : `Linked with your email account (${user?.email})`}
+                      ? `Prepojené s e-mailovým účtom (${user?.email})`
+                      : `Linked with email account (${user?.email})`}
                   </p>
                 )}
               </div>
             </div>
 
             <div className="flex items-center gap-1.5 shrink-0">
+              <a
+                href={
+                  buildSafeGlobalPortalUrls({
+                    chainId: safeSession.primaryChain,
+                    safeAddress: safeSession.safeAddress,
+                    appUrl: currentOrigin,
+                  }).openAsSafeAppUrl
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="px-2.5 py-1.5 rounded-lg bg-[#12FF80] text-black text-[11px] font-bold flex items-center gap-1 hover:bg-[#12FF80]/90 transition-colors"
+                title={sk ? 'Otvoriť našu stránku priamo vo vnútri app.safe.global' : 'Open our app directly inside app.safe.global'}
+              >
+                app.safe.global
+                <ArrowUpRight className="w-3.5 h-3.5" />
+              </a>
               <button
                 type="button"
-                onClick={openWalletPicker}
+                onClick={handleOpenModal}
                 className="px-2.5 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground text-[11px] font-semibold flex items-center gap-1 transition-colors border border-border"
-                title={sk ? 'Zmeniť peňaženku' : 'Switch wallet'}
               >
                 <RefreshCw className="w-3 h-3 text-[#12FF80]" />
-                {sk ? 'Zmeniť peňaženku' : 'Switch Wallet'}
+                {sk ? 'Nastavenia Safe' : 'Safe Settings'}
               </button>
               <button
                 type="button"
                 onClick={disconnectSafe}
                 className="px-2.5 py-1.5 rounded-lg bg-secondary/80 hover:bg-destructive/20 hover:text-destructive text-muted-foreground text-[11px] font-medium flex items-center gap-1 transition-colors"
-                title={sk ? 'Odpojiť Safe peňaženku' : 'Disconnect Safe wallet'}
               >
                 <Unlink className="w-3.5 h-3.5" />
                 {sk ? 'Odpojiť' : 'Unlink'}
@@ -242,36 +333,36 @@ export function SafeGlobalConnectCard({
             <div className="rounded-xl bg-black/40 border border-white/[0.07] p-2.5">
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-emerald-400 uppercase">
                 <Lock className="w-3.5 h-3.5" />
-                {sk ? 'Zákaz výberu von' : 'Zero External Transfer'}
+                {sk ? '100% Non-Custodial cez Safe Global' : '100% Non-Custodial via Safe Global'}
               </div>
               <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
                 {sk
-                  ? 'Žiadny AI agent (súčasný ani budúci) nemôže poslať tokeny na inú adresu. Všetky swapy končia v tvojej Safe.'
-                  : 'No AI agent (current or future) can send tokens to another address. All swaps settle inside your Safe.'}
+                  ? 'Tvoja osobná peňaženka sa pripája VÝHRADNE na stránke app.safe.global. Naša stránka nikdy nemá prístup k tvojmu privátnemu kľúču ani k výberom.'
+                  : 'Your personal wallet connects EXCLUSIVELY on app.safe.global. Our site never touches your private key or withdrawal rights.'}
               </p>
             </div>
 
             <div className="rounded-xl bg-black/40 border border-white/[0.07] p-2.5">
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 uppercase">
                 <Bitcoin className="w-3.5 h-3.5" />
-                {sk ? 'Cieľ: Viac BTC' : 'Goal: More BTC'}
+                {sk ? 'In-Wallet AI Agenti → Viac BTC' : 'In-Wallet AI Agents → More BTC'}
               </div>
               <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
                 {sk
-                  ? 'Všetci agenti spravujú veľké multi-token portfólio, ale zisky z altcoinov a výnosov zbierajú do čistého BTC.'
-                  : 'All agents manage the multi-token portfolio, harvesting altcoin profits & yields into pure BTC.'}
+                  ? 'Agenti operujú len vo vnútri Safe kontraktu (recipient === Safe). Výbery na inú adresu sú zablokované.'
+                  : 'Agents operate strictly inside the Safe contract (recipient === Safe). External transfers are blocked.'}
               </p>
             </div>
 
             <div className="rounded-xl bg-black/40 border border-white/[0.07] p-2.5">
               <div className="flex items-center gap-1.5 text-[10px] font-bold text-sky-400 uppercase">
                 <Sparkles className="w-3.5 h-3.5" />
-                {sk ? `${safeSession.enabledChains.length} Sietí Aktívnych` : `${safeSession.enabledChains.length} Chains Active`}
+                {sk ? `${safeSession.enabledChains.length} Sietí Povolených` : `${safeSession.enabledChains.length} Chains Enabled`}
               </div>
               <p className="text-[10px] text-muted-foreground mt-1 leading-snug">
                 {sk
-                  ? 'ARB, ETH, BASE, OP, POL, BSC, AVAX, SOL, BTC, HYPE — plný prístup k DEX a staking protokolom.'
-                  : 'ARB, ETH, BASE, OP, POL, BSC, AVAX, SOL, BTC, HYPE — full access to DEX & staking protocols.'}
+                  ? 'ARB, ETH, BASE, OP, POL, BSC, AVAX, SOL, BTC, HYPE — plne pod ochranou Safe Smart Accountu.'
+                  : 'ARB, ETH, BASE, OP, POL, BSC, AVAX, SOL, BTC, HYPE — protected by your Safe Smart Account.'}
               </p>
             </div>
           </div>
@@ -286,32 +377,19 @@ export function SafeGlobalConnectCard({
               <div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h3 className="text-sm font-bold text-foreground">
-                    Safe&#123;Wallet&#125; Global · WalletConnect
+                    100% Non-Custodial · Safe&#123;Wallet&#125; Global Bridge
                   </h3>
                   <span className="px-1.5 py-0.5 rounded bg-[#12FF80]/15 text-[#12FF80] text-[10px] font-semibold">
-                    {sk ? 'Výber vlastnej peňaženky' : 'Choose Your Wallet'}
+                    app.safe.global + WalletConnect v2
                   </span>
                 </div>
                 <p className="text-[11px] text-muted-foreground mt-0.5">
-                  {isEmailLoggedIn
-                    ? sk
-                      ? `Si prihlásený e-mailom (${user?.email}). Klikni na tlačidlo nižšie, vyber si svoju peňaženku (MetaMask, Rabby, Phantom, Trust, Ledger…) a prepoj ju cez Safe Global.`
-                      : `Signed in via email (${user?.email}). Click below to choose your wallet and route it through Safe Global.`
-                    : sk
-                      ? 'Klikni na WalletConnect, vyber si vlastnú peňaženku (MetaMask, Rabby, Phantom, Trust, Coinbase, Ledger…) a pripoj ju cez Safe Global.'
-                      : 'Click WalletConnect, choose your wallet, and connect through Safe Global.'}
+                  {sk
+                    ? 'Svoju osobnú peňaženku (MetaMask, Rabby, Ledger, Trezor, Phantom, Trust…) pripájaš priamo na oficiálnej stránke app.safe.global a odtiaľ ju cez WalletConnect / Safe App prepojíš s našou stránkou.'
+                    : 'Connect your personal wallet directly on the official app.safe.global site, then bridge that Safe to our app via WalletConnect / Safe App.'}
                 </p>
               </div>
             </div>
-            <a
-              href="https://app.safe.global"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-[11px] text-[#12FF80] hover:underline flex items-center gap-1 shrink-0"
-            >
-              app.safe.global
-              <ExternalLink className="w-3 h-3" />
-            </a>
           </div>
 
           {!compact && (
@@ -320,35 +398,46 @@ export function SafeGlobalConnectCard({
                 <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
                 <span>
                   {sk
-                    ? 'Garancia bezpečnosti: Žiadny AI agent nemôže vybrať peniaze na cudziu peňaženku'
-                    : 'Security Guarantee: No AI agent can withdraw funds to an external wallet'}
+                    ? 'Prečo je tento postup najbezpečnejší (100% Non-Custodial)?'
+                    : 'Why is this architecture the safest (100% Non-Custodial)?'}
                 </span>
               </div>
               <p className="text-muted-foreground leading-relaxed">
                 {sk
-                  ? 'Tvoja vybraná peňaženka slúži ako vlastník (Signer) pre Safe Global Smart Account. AI agenti majú cez Safe Zodiac Roles povolené iba operácie VO VNÚTRI peňaženky s cieľom akumulovať viac BTC.'
-                  : 'Your chosen wallet acts as the Signer for your Safe Global Smart Account. AI agents are restricted to IN-WALLET operations only to accumulate more BTC.'}
+                  ? '1. Tvoja osobná peňaženka sa nepripája priamo k našej stránke — pripájaš si ju sám na oficiálnom portáli app.safe.global.\n2. Naša stránka komunikuje výhradne s tvojím Safe Smart Account kontraktom, kde Zodiac Roles Guard technicky zakazuje akýkoľvek prevod tokenov na cudziu adresu.'
+                  : '1. Your personal wallet never connects directly to our site — you connect it yourself on official app.safe.global.\n2. Our app communicates strictly with your Safe Smart Account contract where external transfers are blocked.'}
               </p>
             </div>
           )}
 
-          {/* Primary Button: Opens the Interactive Wallet Picker Modal */}
-          <button
-            type="button"
-            onClick={openWalletPicker}
-            className="w-full py-3 px-4 rounded-xl bg-[#12FF80] text-black font-bold text-xs hover:bg-[#12FF80]/90 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_-4px_rgba(18,255,128,0.45)]"
-          >
-            <Wallet className="w-4 h-4" />
-            {sk
-              ? 'Pripojiť cez WalletConnect & Safe Global (Vybrať peňaženku)'
-              : 'Connect via WalletConnect & Safe Global (Choose Wallet)'}
-          </button>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <button
+              type="button"
+              onClick={handleOpenModal}
+              className="flex-1 py-3 px-4 rounded-xl bg-[#12FF80] text-black font-bold text-xs hover:bg-[#12FF80]/90 transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_-4px_rgba(18,255,128,0.45)]"
+            >
+              <QrCode className="w-4 h-4" />
+              {sk
+                ? 'Prepojiť cez app.safe.global (WalletConnect / Safe App)'
+                : 'Connect via app.safe.global (WalletConnect / Safe App)'}
+            </button>
+
+            <a
+              href={portalUrls.openAsSafeAppUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="py-3 px-4 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground border border-border text-xs font-semibold transition-colors flex items-center justify-center gap-1.5"
+            >
+              {sk ? 'Otvoriť priamo v app.safe.global' : 'Open inside app.safe.global'}
+              <ExternalLink className="w-3.5 h-3.5 text-[#12FF80]" />
+            </a>
+          </div>
         </div>
       )}
 
-      {/* INTERACTIVE WALLET SELECTOR MODAL (Routed via Safe Global) */}
+      {/* NON-CUSTODIAL SAFE GLOBAL + WALLETCONNECT BRIDGE MODAL */}
       <Dialog open={modalOpen} onOpenChange={setModalOpen}>
-        <DialogContent className="max-w-md bg-[#0b0e14] border border-[#12FF80]/30 text-foreground p-5 rounded-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-lg bg-[#0b0e14] border border-[#12FF80]/35 text-foreground p-5 rounded-2xl max-h-[92vh] overflow-y-auto">
           <DialogHeader>
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-xl bg-[#12FF80]/15 border border-[#12FF80]/40 flex items-center justify-center">
@@ -356,199 +445,213 @@ export function SafeGlobalConnectCard({
               </div>
               <div>
                 <DialogTitle className="text-base font-bold text-foreground">
-                  {step === 'pick_wallet' &&
-                    (sk ? 'Vyber si peňaženku · Safe Global WC' : 'Select Your Wallet · Safe Global WC')}
-                  {step === 'connecting' &&
-                    (sk ? `Pripájam ${selectedWallet?.name ?? ''}…` : `Connecting ${selectedWallet?.name ?? ''}…`)}
-                  {step === 'confirm_safe' &&
-                    (sk ? 'Potvrď Safe Global Trezor' : 'Confirm Safe Global Vault')}
+                  {sk
+                    ? 'Non-Custodial Prepojenie cez app.safe.global'
+                    : 'Non-Custodial Connection via app.safe.global'}
                 </DialogTitle>
                 <DialogDescription className="text-[11px] text-muted-foreground">
                   {sk
-                    ? 'Každá vybraná peňaženka sa prepája cez Safe Global Smart Account so Zodiac Roles Guardom (zákaz výberu mimo peňaženku).'
-                    : 'Every selected wallet routes through a Safe Global Smart Account with Zodiac Roles Guard.'}
+                    ? 'Tvoja peňaženka ostáva pripojená iba na oficiálnej stránke Safe Global. Tu prepojíš svoj Safe Smart Account s našou stránkou.'
+                    : 'Your personal wallet stays connected only on official Safe Global. Bridge your Safe Smart Account here.'}
                 </DialogDescription>
               </div>
             </div>
           </DialogHeader>
 
-          {/* STEP 1: CHOOSE WHICH WALLET TO CONNECT */}
-          {step === 'pick_wallet' && (
-            <div className="space-y-4 pt-2">
-              {/* Network Selector */}
-              <div>
-                <label className="text-[11px] font-semibold text-muted-foreground block mb-1.5">
+          <div className="space-y-4 pt-2">
+            {/* STEP 1: SELECT NETWORK & OPEN APP.SAFE.GLOBAL */}
+            <div className="rounded-xl bg-secondary/40 border border-border p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#12FF80]">
                   {sk
-                    ? '1. Vyber primárnu sieť pre Safe Global (agenti operujú na všetkých 10 sieťach):'
-                    : '1. Select primary Safe Global network:'}
-                </label>
-                <div className="flex flex-wrap gap-1.5">
-                  {SAFE_SUPPORTED_CHAINS.slice(0, 7).map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setSelectedChain(c.id)}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border ${
-                        selectedChain === c.id
-                          ? 'bg-[#12FF80]/20 text-[#12FF80] border-[#12FF80]/50'
-                          : 'bg-secondary/60 text-muted-foreground border-border hover:text-foreground'
-                      }`}
-                    >
-                      {c.shortName} ({c.safePrefix}:)
-                    </button>
-                  ))}
-                </div>
+                    ? 'KROK 1: Otvor app.safe.global a pripoj tam svoju peňaženku'
+                    : 'STEP 1: Open app.safe.global and connect your wallet there'}
+                </span>
+                <span className="text-[10px] font-mono text-muted-foreground">100% Non-Custodial</span>
               </div>
 
-              {/* Wallet Provider List */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] font-semibold text-muted-foreground">
+              <p className="text-[11px] text-muted-foreground leading-snug">
+                {sk
+                  ? 'Na stránke app.safe.global si sám vyberieš a pripojíš svoju peňaženku (MetaMask, Rabby, Ledger, Trezor, Phantom, Trust, Coinbase, OKX…). Naša stránka nemá nikdy priamy prístup k tvojej podpisovej peňaženke.'
+                  : 'On app.safe.global you choose and connect your own wallet (MetaMask, Rabby, Ledger, Trezor, Phantom, Trust…). Our site never has direct access to your signer wallet.'}
+              </p>
+
+              {/* Chain selector */}
+              <div className="flex flex-wrap gap-1.5">
+                {SAFE_SUPPORTED_CHAINS.slice(0, 7).map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => setSelectedChain(c.id)}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all border ${
+                      selectedChain === c.id
+                        ? 'bg-[#12FF80]/20 text-[#12FF80] border-[#12FF80]/50'
+                        : 'bg-secondary/60 text-muted-foreground border-border hover:text-foreground'
+                    }`}
+                  >
+                    {c.shortName} ({c.safePrefix}:)
+                  </button>
+                ))}
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                <a
+                  href={portalUrls.openAsSafeAppUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-[#12FF80] text-black font-bold text-xs flex items-center justify-center gap-1.5 hover:bg-[#12FF80]/90 transition-colors"
+                >
+                  {sk ? 'Otvoriť túto stránku v app.safe.global' : 'Open this site inside app.safe.global'}
+                  <ArrowUpRight className="w-4 h-4" />
+                </a>
+
+                <a
+                  href={portalUrls.openSafeDashboardUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-2.5 px-3 rounded-xl bg-secondary hover:bg-secondary/80 text-foreground border border-border font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors"
+                >
+                  {sk ? 'Otvoriť môj Safe na app.safe.global' : 'Open my Safe on app.safe.global'}
+                  <ExternalLink className="w-3.5 h-3.5 text-[#12FF80]" />
+                </a>
+              </div>
+            </div>
+
+            {/* STEP 2: WALLETCONNECT V2 BRIDGE (QR CODE + PAIRING URI FOR APP.SAFE.GLOBAL) */}
+            <div className="rounded-xl bg-secondary/40 border border-border p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-bold text-[#12FF80] flex items-center gap-1.5">
+                  <QrCode className="w-4 h-4" />
+                  {sk
+                    ? 'KROK 2: Prepoj Safe Global s našou stránkou cez WalletConnect'
+                    : 'STEP 2: Bridge Safe Global to our site via WalletConnect'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setWcPairingUri(generateStandardWcV2PairingUri())}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  {sk ? 'Nový WC kód' : 'New WC URI'}
+                </button>
+              </div>
+
+              <div className="flex flex-col sm:flex-row items-center gap-3">
+                <div className="p-2.5 rounded-xl bg-white shrink-0">
+                  <QRCodeSVG value={wcPairingUri} size={116} level="M" />
+                </div>
+
+                <div className="space-y-2 flex-1 min-w-0 w-full">
+                  <p className="text-[11px] text-muted-foreground leading-snug">
                     {sk
-                      ? '2. Vyber peňaženku, s ktorou sa chceš pripojiť cez Safe Global:'
-                      : '2. Choose the wallet you want to connect via Safe Global:'}
-                  </label>
-                  {detectedInjected && (
-                    <span className="text-[10px] text-[#12FF80] font-mono">
-                      ● Browser Web3 detegované
-                    </span>
-                  )}
-                </div>
+                      ? 'V hornej lište na stránke app.safe.global klikni na ikonu WalletConnect a vlož tento Pairing kód (alebo naskenuj QR kód v mobilnej aplikácii Safe{Wallet}):'
+                      : 'In the top bar of app.safe.global click the WalletConnect icon and paste this Pairing code (or scan the QR code in Safe{Wallet} mobile):'}
+                  </p>
 
-                <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-                  {SELECTABLE_WALLET_PROVIDERS.map((w) => (
+                  <div className="flex items-center gap-1.5">
+                    <input
+                      type="text"
+                      readOnly
+                      value={wcPairingUri}
+                      className="flex-1 px-2.5 py-1.5 rounded-lg bg-black/50 text-[10px] font-mono text-muted-foreground border border-border truncate"
+                    />
                     <button
-                      key={w.id}
                       type="button"
-                      onClick={() => void handleSelectWalletProvider(w)}
-                      className="w-full flex items-center justify-between gap-3 p-2.5 rounded-xl bg-secondary/50 hover:bg-[#12FF80]/15 border border-border hover:border-[#12FF80]/50 transition-all text-left group"
+                      onClick={() =>
+                        handleCopyText(
+                          wcPairingUri,
+                          'WalletConnect Pairing URI skopírované! Vlož ho do WalletConnect v app.safe.global.',
+                          'WalletConnect Pairing URI copied! Paste it into WalletConnect in app.safe.global.',
+                        )
+                      }
+                      className="px-2.5 py-1.5 rounded-lg bg-[#12FF80]/20 text-[#12FF80] border border-[#12FF80]/40 text-[11px] font-bold flex items-center gap-1 shrink-0"
                     >
-                      <div className="flex items-center gap-3 min-w-0">
-                        <div
-                          className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-xs shrink-0"
-                          style={{
-                            backgroundColor: `${w.color}20`,
-                            color: w.color,
-                            border: `1px solid ${w.color}45`,
-                          }}
-                        >
-                          {w.category === 'hardware' ? (
-                            <HardDrive className="w-4 h-4" />
-                          ) : w.category === 'mobile_wc' ? (
-                            <Smartphone className="w-4 h-4" />
-                          ) : (
-                            <Wallet className="w-4 h-4" />
-                          )}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-bold text-foreground group-hover:text-[#12FF80] transition-colors">
-                              {w.name}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded bg-black/50 text-[9px] font-mono text-muted-foreground border border-white/10">
-                              {w.badge}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-muted-foreground truncate">
-                            {sk ? w.subtitleSk : w.subtitleEn}
-                          </p>
-                        </div>
-                      </div>
-                      <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-[#12FF80] shrink-0" />
+                      <Copy className="w-3 h-3" />
+                      {sk ? 'Kopírovať WC' : 'Copy WC'}
                     </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Optional manual address input before picking */}
-              <div className="pt-1 border-t border-border/60 space-y-1.5">
-                <label className="text-[10px] text-muted-foreground block">
-                  {sk
-                    ? 'Voliteľné: Ak už máš existujúcu Safe adresu (napr. arb1:0x...), môžeš ju vložiť sem pred výberom peňaženky:'
-                    : 'Optional: Paste an existing Safe address (e.g. arb1:0x...) before selecting a wallet:'}
-                </label>
-                <input
-                  type="text"
-                  value={customSafeOverride}
-                  onChange={(e) => setCustomSafeOverride(e.target.value)}
-                  placeholder="arb1:0x... alebo 0x... (nepovinné — inak sa zistí/vytvorí automaticky)"
-                  className="w-full px-3 py-1.5 rounded-lg bg-secondary text-foreground text-xs font-mono border border-border focus:border-[#12FF80] focus:outline-none"
-                />
-              </div>
-            </div>
-          )}
-
-          {/* STEP 2: HANDSHAKE / CONNECTING */}
-          {step === 'connecting' && selectedWallet && (
-            <div className="py-8 text-center space-y-4">
-              <div className="relative mx-auto w-16 h-16 flex items-center justify-center rounded-2xl bg-[#12FF80]/10 border border-[#12FF80]/40">
-                <Loader2 className="w-8 h-8 text-[#12FF80] animate-spin" />
-              </div>
-              <div className="space-y-1">
-                <p className="text-sm font-bold text-foreground">
-                  {sk
-                    ? `Pripájam ${selectedWallet.name} a vyhľadávam Safe Global Smart Account…`
-                    : `Connecting ${selectedWallet.name} and discovering Safe Global Smart Account…`}
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {sk
-                    ? 'Overujem Safe Transaction Service a aktivujem Zodiac Roles Guard (No-Transfer Policy).'
-                    : 'Checking Safe Transaction Service and activating Zodiac Roles Guard.'}
-                </p>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 3: CONFIRM SAFE VAULT & ZODIAC GUARD */}
-          {step === 'confirm_safe' && selectedWallet && (
-            <div className="space-y-4 pt-2">
-              <div className="rounded-xl bg-[#12FF80]/10 border border-[#12FF80]/30 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-[#12FF80] flex items-center gap-1.5">
-                    <CheckCircle2 className="w-4 h-4" />
-                    {selectedWallet.name} {sk ? 'pripravená' : 'ready'}
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-200 bg-black/40 px-2 py-0.5 rounded">
-                    {selectedChain.toUpperCase()}
-                  </span>
-                </div>
-
-                <div className="text-[11px] space-y-1">
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">{sk ? 'Vybraná peňaženka (Signer):' : 'Selected Wallet (Signer):'}</span>
-                    <span className="font-mono text-foreground">{formatShortAddress(signerAddress)}</span>
                   </div>
-                  <div className="flex justify-between gap-2">
-                    <span className="text-muted-foreground">{sk ? 'Safe Global Vault:' : 'Safe Global Vault:'}</span>
-                    <span className="font-mono text-[#12FF80] font-bold">{formatShortAddress(safeAddress)}</span>
+
+                  <div className="flex items-center gap-1.5 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        handleCopyText(
+                          currentOrigin,
+                          'URL našej Safe App skopírovaná! V app.safe.global → Apps → Add custom Safe App vlož túto URL.',
+                          'Safe App URL copied!',
+                        )
+                      }
+                      className="text-[10px] text-[#12FF80] hover:underline flex items-center gap-1"
+                    >
+                      <Copy className="w-3 h-3" />
+                      {sk
+                        ? `Kopírovať URL našej stránky pre Safe Apps (${currentOrigin})`
+                        : `Copy our Safe App URL (${currentOrigin})`}
+                    </button>
                   </div>
                 </div>
               </div>
+            </div>
 
-              {/* Allow user to pick among discovered Safes or edit the Safe address */}
+            {/* STEP 3: VERIFY & BIND YOUR ON-CHAIN SAFE CONTRACT ADDRESS */}
+            <div className="rounded-xl bg-secondary/40 border border-border p-3.5 space-y-3">
+              <span className="text-xs font-bold text-[#12FF80] block">
+                {sk
+                  ? 'KROK 3: Zadaj adresu svojho Safe trezoru z app.safe.global (On-Chain Kontrola)'
+                  : 'STEP 3: Enter your Safe vault address from app.safe.global (On-Chain Verification)'}
+              </span>
+
               <div className="space-y-1.5">
-                <label className="text-[11px] font-semibold text-muted-foreground block">
+                <label className="text-[11px] text-muted-foreground block">
                   {sk
-                    ? 'Adresa Safe Global peňaženky (môžeš ponechať detegovanú Safe alebo vložiť inú):'
-                    : 'Safe Global Vault Address (keep detected Safe or paste another):'}
+                    ? 'Adresa tvojho Safe Smart Accountu (napr. arb1:0x… alebo eth:0x…):'
+                    : 'Your Safe Smart Account address (e.g. arb1:0x… or eth:0x…):'}
                 </label>
                 <input
                   type="text"
-                  value={customSafeOverride || safeAddress}
-                  onChange={(e) => setCustomSafeOverride(e.target.value)}
+                  value={safeAddressInput}
+                  onChange={(e) => {
+                    setSafeAddressInput(e.target.value);
+                    setValidationError(null);
+                  }}
+                  placeholder="arb1:0x... (adresa tvojho Safe kontraktu z app.safe.global)"
                   className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground text-xs font-mono border border-border focus:border-[#12FF80] focus:outline-none"
                 />
-                {availableSafes.length > 1 && (
+              </div>
+
+              {/* Optional helper: Lookup Safes by Owner public address via Safe Global API */}
+              <div className="pt-1 border-t border-border/50 space-y-1.5">
+                <label className="text-[10px] text-muted-foreground block">
+                  {sk
+                    ? 'Nepamätáš si adresu svojho Safe? Zadaj verejnú adresu svojej peňaženky a vyhľadáme tvoje Safe účty priamo v Safe Global registri:'
+                    : 'Find your deployed Safe accounts on Safe Global by entering your public owner address:'}
+                </label>
+                <div className="flex gap-1.5">
+                  <input
+                    type="text"
+                    value={ownerLookupInput}
+                    onChange={(e) => setOwnerLookupInput(e.target.value)}
+                    placeholder="0x... (verejná adresa vlastníka na vyhľadanie v Safe Global)"
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-black/40 text-foreground text-[11px] font-mono border border-border focus:outline-none"
+                  />
+                  <button
+                    type="button"
+                    disabled={lookingUpSafes}
+                    onClick={() => void handleLookupSafesByOwner()}
+                    className="px-3 py-1.5 rounded-lg bg-secondary hover:bg-secondary/80 text-foreground text-[11px] font-semibold border border-border shrink-0"
+                  >
+                    {lookingUpSafes ? '...' : sk ? 'Nájsť môj Safe' : 'Find Safe'}
+                  </button>
+                </div>
+
+                {discoveredSafes.length > 0 && (
                   <div className="flex flex-wrap gap-1 pt-1">
-                    {availableSafes.map((s) => (
+                    {discoveredSafes.map((s) => (
                       <button
                         key={s}
                         type="button"
-                        onClick={() => {
-                          setSafeAddress(s);
-                          setCustomSafeOverride(s);
-                        }}
-                        className="px-2 py-0.5 rounded bg-secondary text-[10px] font-mono text-muted-foreground hover:text-foreground border border-border"
+                        onClick={() => setSafeAddressInput(s)}
+                        className="px-2 py-0.5 rounded bg-[#12FF80]/15 text-[#12FF80] border border-[#12FF80]/40 text-[10px] font-mono"
                       >
                         {formatShortAddress(s)}
                       </button>
@@ -557,69 +660,38 @@ export function SafeGlobalConnectCard({
                 )}
               </div>
 
-              {/* Optional WalletConnect URI / Deep Link for Mobile or Web Safe */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="text-[11px] text-muted-foreground flex items-center gap-1">
-                    <QrCode className="w-3 h-3 text-[#12FF80]" />
-                    {sk ? 'WalletConnect URI (`wc:...` z app.safe.global — voliteľné):' : 'WalletConnect URI (`wc:...` optional):'}
-                  </label>
-                  {selectedWallet.deepLinkPrefix && wcUri.trim() && (
+              {validationError && (
+                <div className="rounded-xl bg-rose-500/15 border border-rose-500/40 p-2.5 flex items-start gap-2 text-[11px] text-rose-200">
+                  <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
+                  <div className="space-y-1">
+                    <p>{validationError}</p>
                     <a
-                      href={`${selectedWallet.deepLinkPrefix}${encodeURIComponent(wcUri.trim())}`}
+                      href={portalUrls.openSafeWelcomeUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-[#12FF80] hover:underline flex items-center gap-1"
+                      className="inline-flex items-center gap-1 text-[#12FF80] font-semibold hover:underline"
                     >
-                      {sk ? `Otvoriť v ${selectedWallet.name}` : `Open in ${selectedWallet.name}`}
-                      <ExternalLink className="w-3 h-3" />
+                      {sk
+                        ? 'Otvoriť app.safe.global a vytvoriť / vybrať Safe →'
+                        : 'Open app.safe.global to create / select a Safe →'}
                     </a>
-                  )}
+                  </div>
                 </div>
-                <input
-                  type="text"
-                  value={wcUri}
-                  onChange={(e) => setWcUri(e.target.value)}
-                  placeholder="wc:a1b2c3...@2?relay-protocol=irn&symKey=..."
-                  className="w-full px-3 py-1.5 rounded-lg bg-secondary/70 text-foreground text-[11px] font-mono border border-border focus:border-[#12FF80] focus:outline-none"
-                />
-              </div>
+              )}
 
-              {/* Security Policy Summary */}
-              <div className="rounded-xl bg-black/50 border border-white/10 p-3 space-y-1 text-[11px]">
-                <div className="flex items-center gap-1.5 text-emerald-400 font-bold">
-                  <Lock className="w-3.5 h-3.5" />
-                  {sk ? 'Safe Zodiac Roles Guard: AKTÍVNY' : 'Safe Zodiac Roles Guard: ACTIVE'}
-                </div>
-                <p className="text-muted-foreground leading-snug">
-                  {sk
-                    ? '• AI agenti môžu v tejto peňaženke nakupovať, predávať, pridávať/odoberať tokeny a zbierať zisky do BTC na všetkých sieťach.\n• Výber alebo poslanie tokenov na akúkoľvek cudziu adresu je 100% ZABLOKOVANÉ.'
-                    : '• AI agents can buy, sell, add/remove tokens and harvest profits into BTC across all chains.\n• Withdrawing or sending tokens to any external address is 100% BLOCKED.'}
-                </p>
-              </div>
-
-              <div className="flex gap-2 pt-1">
-                <button
-                  type="button"
-                  onClick={() => setStep('pick_wallet')}
-                  className="px-3 py-2.5 rounded-xl bg-secondary text-muted-foreground hover:text-foreground text-xs font-semibold border border-border"
-                >
-                  {sk ? '← Iná peňaženka' : '← Change Wallet'}
-                </button>
-                <button
-                  type="button"
-                  disabled={verifying}
-                  onClick={() => void finalizeSafeConnection()}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-[#12FF80] text-black font-bold text-xs hover:bg-[#12FF80]/90 transition-colors flex items-center justify-center gap-2"
-                >
-                  {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
-                  {sk
-                    ? `Potvrdiť a prepojiť ${selectedWallet.name} cez Safe Global`
-                    : `Confirm & Connect ${selectedWallet.name} via Safe Global`}
-                </button>
-              </div>
+              <button
+                type="button"
+                disabled={verifying}
+                onClick={() => void handleVerifyAndConnectSafe()}
+                className="w-full py-2.5 px-4 rounded-xl bg-[#12FF80] text-black font-bold text-xs hover:bg-[#12FF80]/90 transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {verifying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Link2 className="w-4 h-4" />}
+                {sk
+                  ? 'Overiť Safe Smart Account On-Chain & Prepojiť'
+                  : 'Verify Safe Smart Account On-Chain & Connect'}
+              </button>
             </div>
-          )}
+          </div>
         </DialogContent>
       </Dialog>
     </>

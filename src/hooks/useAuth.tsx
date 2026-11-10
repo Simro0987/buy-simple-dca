@@ -5,6 +5,7 @@ import {
   loadSafeSession,
   saveSafeSession,
   subscribeSafeSession,
+  detectSafeAppsSdkContext,
   type SafeSession,
 } from '@/lib/safeWalletGuard';
 
@@ -87,7 +88,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const validateStoredSession = async () => {
       try {
-        // If user already authenticated via Safe{Wallet} WalletConnect, unlock immediately
+        // 1. If opened inside app.safe.global (Safe App iframe), auto-authenticate via Official Safe Apps SDK
+        const iframeSafe = await detectSafeAppsSdkContext(1500);
+        if (iframeSafe && mounted) {
+          saveSafeSession(iframeSafe);
+          setSafeSession(iframeSafe);
+          setLoading(false);
+        }
+
+        // 2. If user already authenticated via Safe{Wallet} WalletConnect, unlock immediately
         const existingSafe = loadSafeSession();
         if (existingSafe && mounted) {
           setSafeSession(existingSafe);
