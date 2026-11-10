@@ -27,6 +27,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { usePrices } from '@/hooks/usePrices';
 import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
 import { WebsiteGuardianPanel } from '@/components/WebsiteGuardianPanel';
+import { ZiskBotPanel } from '@/components/ZiskBotPanel';
 import {
   SAFE_SUPPORTED_CHAINS,
   formatShortAddress,
@@ -89,7 +90,7 @@ export function AgentPage({ lang }: Props) {
   const { safeSession } = useAuth();
   const { data: marketPrices } = usePrices();
 
-  const [subTab, setSubTab] = useState<'fleet' | 'guardian' | 'decentralized' | 'chat'>('fleet');
+  const [subTab, setSubTab] = useState<'fleet' | 'zisk' | 'guardian' | 'decentralized' | 'chat'>('fleet');
   const [agents, setAgents] = useState<AutonomousAgentProfile[]>(loadAutonomousAgents);
   const [logs, setLogs] = useState<AgentExecutionLogEntry[]>(loadAgentExecutionLogs);
   const [synapses, setSynapses] = useState<SwarmSynapseEvent[]>(loadSwarmSynapses);
@@ -426,7 +427,7 @@ export function AgentPage({ lang }: Props) {
       </div>
 
       {/* Sub-navigation tabs */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 p-1 rounded-xl bg-secondary/70 border border-border">
         <button
           type="button"
           onClick={() => setSubTab('fleet')}
@@ -437,6 +438,17 @@ export function AgentPage({ lang }: Props) {
           }`}
         >
           {sk ? `Flotila Agentov (${agents.length})` : `Agent Fleet (${agents.length})`}
+        </button>
+        <button
+          type="button"
+          onClick={() => setSubTab('zisk')}
+          className={`py-2 px-2 rounded-lg text-xs font-semibold transition-all ${
+            subTab === 'zisk'
+              ? 'bg-amber-400 text-black shadow font-bold'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          {sk ? 'Zisk Bot (Funding)' : 'Zisk Bot (Funding)'}
         </button>
         <button
           type="button"
@@ -472,6 +484,9 @@ export function AgentPage({ lang }: Props) {
           {sk ? 'AI Risk Konzola' : 'AI Risk Console'}
         </button>
       </div>
+
+      {/* TAB: ZISK BOT (TREASURY, DELTA-NEUTRAL FUNDING CAPTURE & SOLANA LENDING) */}
+      {subTab === 'zisk' && <ZiskBotPanel lang={lang} />}
 
       {/* TAB: WEBSITE GUARDIAN, ENCRYPTION, AUTO-PATCHING & UI ARCHITECT */}
       {subTab === 'guardian' && <WebsiteGuardianPanel lang={lang} />}

@@ -29,6 +29,7 @@ import {
   type ProposedAgentTransaction,
   type SafeGuardValidationResult,
 } from './safeWalletGuard';
+import { runZiskBotAutonomousTick } from './ziskBotEngine';
 
 export interface AgentManagedToken {
   symbol: string;
@@ -147,6 +148,9 @@ export const CANDIDATE_DISCOVERY_TOKENS: Array<{
   { symbol: 'PYTH', name: 'Pyth Network Oracle', chain: 'solana', coingeckoId: 'pyth-network', defaultApy: 6.5 },
   { symbol: 'AKT', name: 'Akash Compute Cloud', chain: 'ethereum', coingeckoId: 'akash-network', defaultApy: 14.0 },
   { symbol: 'FIL', name: 'Filecoin Storage Market', chain: 'ethereum', coingeckoId: 'filecoin', defaultApy: 8.5 },
+  { symbol: 'INJ', name: 'Injective (Funding + Native Stake)', chain: 'ethereum', coingeckoId: 'injective-protocol', defaultApy: 15.8 },
+  { symbol: 'TIA', name: 'Celestia (Delta-Neutral Funding)', chain: 'ethereum', coingeckoId: 'celestia', defaultApy: 21.9 },
+  { symbol: 'ATOM', name: 'Cosmos Hub (Helix Perp Funding)', chain: 'ethereum', coingeckoId: 'cosmos', defaultApy: 21.8 },
 ];
 
 export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
@@ -249,6 +253,40 @@ export const DEFAULT_AUTONOMOUS_AGENTS: AutonomousAgentProfile[] = [
     lastPeerInsightSk: 'Vysiela živé DeFi APY krivky (Morpho Blue LBTC 11% APY) všetkým agentom v neurónovej sieti.',
     createdAt: Date.now() - 86400000 * 11,
   },
+  {
+    id: 'agent-zisk-bot',
+    name: 'Zisk Bot · Treasury, Delta-Neutral Funding & Solana Yield Optimizer',
+    roleSk: 'Integrovaný Zisk Bot (INJ/TIA/ATOM delta-neutral funding capture, Solana Kamino & Jupiter Lend, Akash AKT rezerva, 45% token cap, drawdown de-risk ≥ 6%) — zdieľa `learned.json` a `signal_weights.json` so sieťou a zlieva výnos do BTC.',
+    roleEn: 'Integrated Zisk Bot (INJ/TIA/ATOM delta-neutral funding capture, Solana Kamino & Jupiter Lend, Akash AKT reserve, 45% token cap, drawdown de-risk >= 6%) — shares learned weights with the swarm and funnels yield into BTC.',
+    strategyType: 'DEFI_YIELD_TO_BTC_HARVESTER',
+    enabled: true,
+    canWithdrawExternally: false,
+    ultimateObjective: 'ACCUMULATE_MORE_BTC',
+    allowedChains: SAFE_SUPPORTED_CHAINS.map((c) => c.id),
+    managedTokens: [
+      { symbol: 'BTC', name: 'Bitcoin (Zisk Harvest Reserve)', chain: 'bitcoin', coingeckoId: 'bitcoin', allocationWeightPct: 35, currentPnlPct: 16.4, apyPct: 7.0, addedByAgentAt: Date.now() - 86400000 * 13, status: 'ACTIVE' },
+      { symbol: 'INJ', name: 'Injective (Funding + Stake)', chain: 'ethereum', coingeckoId: 'injective-protocol', allocationWeightPct: 25, currentPnlPct: 13.5, apyPct: 15.8, addedByAgentAt: Date.now() - 86400000 * 13, status: 'HARVESTING_TO_BTC' },
+      { symbol: 'TIA', name: 'Celestia (Delta-Neutral Perp)', chain: 'ethereum', coingeckoId: 'celestia', allocationWeightPct: 15, currentPnlPct: 21.9, apyPct: 30.0, addedByAgentAt: Date.now() - 86400000 * 13, status: 'HARVESTING_TO_BTC' },
+      { symbol: 'ATOM', name: 'Cosmos (Helix Perp Funding)', chain: 'ethereum', coingeckoId: 'cosmos', allocationWeightPct: 10, currentPnlPct: 21.8, apyPct: 30.0, addedByAgentAt: Date.now() - 86400000 * 13, status: 'HARVESTING_TO_BTC' },
+      { symbol: 'SOL', name: 'Solana (Jupiter & Kamino Lend)', chain: 'solana', coingeckoId: 'solana', allocationWeightPct: 15, currentPnlPct: 9.8, apyPct: 5.45, addedByAgentAt: Date.now() - 86400000 * 13, status: 'ACTIVE' },
+    ],
+    learningGeneration: 18,
+    swarmSynapsesCount: 74,
+    collectiveIqScore: 148.6,
+    connectedPeerIds: ['agent-satoshi-prime', 'agent-omni-hunter', 'agent-yield-harvester', 'aegis-website-guardian'],
+    winRatePct: 86.4,
+    accumulatedBtc: 0.0198,
+    totalTradesExecuted: 47,
+    learningWeights: {
+      rsiOversoldBuyWeight: 0.72,
+      altProfitToBtcHarvestRatio: 0.88,
+      defiYieldWeight: 0.94,
+      onChainMomentumWeight: 0.78,
+      riskAversionFactor: 0.96,
+    },
+    lastPeerInsightSk: 'Zisk Bot zdieľal so Swarm sieťou 12 naučených váh (`signal_weights.json`: funding 0.60, volatility 0.60, stableFlow 0.60) a delta-neutral funding výnos z INJ/TIA/ATOM.',
+    createdAt: Date.now() - 86400000 * 13,
+  },
 ];
 
 const DEFAULT_SWARM_SYNAPSES: SwarmSynapseEvent[] = [
@@ -331,6 +369,13 @@ export function loadAutonomousAgents(): AutonomousAgentProfile[] {
     const parsed = JSON.parse(raw) as AutonomousAgentProfile[];
     if (!Array.isArray(parsed) || parsed.length === 0) {
       return DEFAULT_AUTONOMOUS_AGENTS;
+    }
+    // Ensure newly added built-in agents (like `agent-zisk-bot`) are automatically merged into existing localStorage
+    const existingIds = new Set(parsed.map((a) => a.id));
+    for (const defAgent of DEFAULT_AUTONOMOUS_AGENTS) {
+      if (!existingIds.has(defAgent.id)) {
+        parsed.push(defAgent);
+      }
     }
     const ids = parsed.map((a) => a.id);
     return parsed.map((a) => sanitizeAgentProfile(a, ids));
@@ -786,6 +831,8 @@ export function runContinuousAutonomousFleetTick(
   }
 
   saveAutonomousAgents(nextAgents);
+  // Also advance Zisk Bot's continuous delta-neutral funding & Solana lending engine in lockstep with the Swarm
+  runZiskBotAutonomousTick(livePricesUsd.BTC ?? 75000);
   return {
     agents: nextAgents,
     logs: latestLogs,

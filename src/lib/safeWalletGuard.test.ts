@@ -29,6 +29,13 @@ import {
   loadGeminiApiKey,
   askWebsiteGuardianAi,
 } from './websiteGuardianAgent';
+import {
+  loadZiskBotState,
+  runZiskBotAutonomousTick,
+  exportZiskLearnedSyncBundle,
+  importZiskLearnedSyncBundle,
+  ziskWeightedMerge,
+} from './ziskBotEngine';
 
 const SAFE_ADDR = '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
 const EXTERNAL_ATTACKER = '0xDeadBeef00000000000000000000000000009999';
@@ -228,6 +235,24 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
 
     const tickRes = runContinuousAutonomousFleetTick(SAFE_ADDR, { BTC: 75000, ETH: 2200, SOL: 90 }, true);
     expect(tickRes.btcGainedThisTick).toBeGreaterThan(0);
-    expect(tickRes.logs.length).toBeGreaterThanOrEqual(3);
+    expect(tickRes.logs.length).toBeGreaterThanOrEqual(4);
+    expect(tickRes.agents.some((a) => a.id === 'agent-zisk-bot')).toBe(true);
+
+    // Verify Zisk Bot Engine & `zisk-learned/1` wavg export/import
+    const zisk0 = loadZiskBotState();
+    expect(zisk0.canWithdrawExternally).toBe(false);
+    expect(zisk0.ultimateObjective).toBe('ACCUMULATE_MORE_BTC');
+    expect(zisk0.riskLimits.maxTokenCapPct).toBe(45);
+
+    const zisk1 = runZiskBotAutonomousTick(75000);
+    expect(zisk1.btcHarvestedFromYieldAndFunding).toBeGreaterThan(zisk0.btcHarvestedFromYieldAndFunding);
+
+    const exported = exportZiskLearnedSyncBundle();
+    expect(exported.format).toBe('zisk-learned/1');
+    expect(ziskWeightedMerge(0.6, 4, 0.8, 4)).toBeCloseTo(0.7, 3);
+
+    const imported = importZiskLearnedSyncBundle(exported);
+    expect(imported.mergedLearnedCount).toBeGreaterThanOrEqual(7);
+    expect(imported.mergedSignalsCount).toBeGreaterThanOrEqual(10);
   });
 });
