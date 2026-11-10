@@ -101,7 +101,12 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
 
         {showSafeDrawer && (
           <div className="pt-1 pb-2 animate-in fade-in slide-in-from-top-1">
-            <SafeGlobalConnectCard lang="sk" compact onConnected={() => setShowSafeDrawer(false)} />
+            <SafeGlobalConnectCard
+              lang="sk"
+              compact
+              defaultOpenModal={!safeSession}
+              onConnected={() => setShowSafeDrawer(false)}
+            />
           </div>
         )}
 

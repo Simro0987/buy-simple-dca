@@ -3,6 +3,9 @@ import {
   parseSafeAddressInput,
   validateAgentTransactionWithSafeGuard,
   DEFAULT_SAFE_GUARD_POLICY,
+  SELECTABLE_WALLET_PROVIDERS,
+  deriveSafeVaultAddressFromOwner,
+  connectSelectedWalletAndResolveSafe,
   saveSafeSession,
   loadSafeSession,
   type ProposedAgentTransaction,
@@ -161,5 +164,21 @@ describe('Safe{Wallet} Global Guard & Autonomous BTC Agent Architecture', () => 
     expect(snapshot.schemaVersion).toBe('edge-trader-sovereign-v1');
     expect(snapshot.arweaveTxTemplate.startsWith('ar://')).toBe(true);
     expect(snapshot.ipfsCidPreview.startsWith('bafybeig')).toBe(true);
+  });
+
+  it('allows user to pick any wallet (MetaMask, Rabby, Phantom, Trust, Ledger, etc.) and routes it via Safe Global', async () => {
+    expect(SELECTABLE_WALLET_PROVIDERS.length).toBeGreaterThanOrEqual(8);
+    const rabby = SELECTABLE_WALLET_PROVIDERS.find((w) => w.id === 'rabby')!;
+    const phantom = SELECTABLE_WALLET_PROVIDERS.find((w) => w.id === 'phantom')!;
+    expect(rabby).toBeDefined();
+    expect(phantom).toBeDefined();
+
+    const derived = deriveSafeVaultAddressFromOwner(SAFE_ADDR, 'rabby');
+    expect(derived).toMatch(/^0x[a-f0-9]{40}$/);
+
+    const resolved = await connectSelectedWalletAndResolveSafe(rabby, 'arbitrum');
+    expect(resolved.signerAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    expect(resolved.safeAddress).toMatch(/^0x[a-fA-F0-9]{40}$/);
+    expect(resolved.availableSafes.length).toBeGreaterThanOrEqual(1);
   });
 });

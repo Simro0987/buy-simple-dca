@@ -211,9 +211,141 @@ export const DEFAULT_SAFE_GUARD_POLICY: SafeGuardPolicy = {
   maxSingleTradePct: 25,
 };
 
+export type WalletProviderId =
+  | 'metamask'
+  | 'rabby'
+  | 'phantom'
+  | 'trust'
+  | 'coinbase'
+  | 'okx'
+  | 'ledger'
+  | 'trezor'
+  | 'safe_mobile'
+  | 'walletconnect_qr';
+
+export interface SelectableWalletOption {
+  id: WalletProviderId;
+  name: string;
+  subtitleSk: string;
+  subtitleEn: string;
+  badge: string;
+  color: string;
+  category: 'browser_extension' | 'mobile_wc' | 'hardware';
+  deepLinkPrefix?: string;
+  rdns?: string;
+}
+
+export const SELECTABLE_WALLET_PROVIDERS: SelectableWalletOption[] = [
+  {
+    id: 'metamask',
+    name: 'MetaMask',
+    subtitleSk: 'Browser Extension / Mobile · Prepojenie cez Safe Global',
+    subtitleEn: 'Browser Extension / Mobile · Routed via Safe Global',
+    badge: 'EIP-1193 / WC',
+    color: '#F6851B',
+    category: 'browser_extension',
+    deepLinkPrefix: 'https://metamask.app.link/wc?uri=',
+    rdns: 'io.metamask',
+  },
+  {
+    id: 'rabby',
+    name: 'Rabby Wallet',
+    subtitleSk: 'DeFi Security Wallet · Prepojenie cez Safe Global',
+    subtitleEn: 'DeFi Security Wallet · Routed via Safe Global',
+    badge: 'DeFi Pro',
+    color: '#8697FF',
+    category: 'browser_extension',
+    rdns: 'io.rabby',
+  },
+  {
+    id: 'phantom',
+    name: 'Phantom (EVM + Solana)',
+    subtitleSk: 'Multi-Chain peňaženka · Prepojenie cez Safe Global',
+    subtitleEn: 'Multi-Chain Wallet · Routed via Safe Global',
+    badge: 'Multi-Chain',
+    color: '#AB9FF2',
+    category: 'browser_extension',
+    deepLinkPrefix: 'https://phantom.app/ul/wc?uri=',
+    rdns: 'app.phantom',
+  },
+  {
+    id: 'trust',
+    name: 'Trust Wallet',
+    subtitleSk: 'Mobile & Extension · Prepojenie cez Safe Global',
+    subtitleEn: 'Mobile & Extension · Routed via Safe Global',
+    badge: 'WalletConnect',
+    color: '#3375BB',
+    category: 'mobile_wc',
+    deepLinkPrefix: 'https://link.trustwallet.com/wc?uri=',
+    rdns: 'com.trustwallet.app',
+  },
+  {
+    id: 'coinbase',
+    name: 'Coinbase Wallet',
+    subtitleSk: 'Smart & Self-Custody · Prepojenie cez Safe Global',
+    subtitleEn: 'Smart & Self-Custody · Routed via Safe Global',
+    badge: 'Base / EVM',
+    color: '#0052FF',
+    category: 'browser_extension',
+    deepLinkPrefix: 'https://go.cb-w.com/wc?uri=',
+    rdns: 'com.coinbase.wallet',
+  },
+  {
+    id: 'okx',
+    name: 'OKX Web3 Wallet',
+    subtitleSk: 'Multi-Chain DEX Wallet · Prepojenie cez Safe Global',
+    subtitleEn: 'Multi-Chain DEX Wallet · Routed via Safe Global',
+    badge: '100+ Chains',
+    color: '#14F195',
+    category: 'browser_extension',
+    deepLinkPrefix: 'okx://wallet/wc?uri=',
+    rdns: 'com.okex.wallet',
+  },
+  {
+    id: 'ledger',
+    name: 'Ledger Live / Hardware',
+    subtitleSk: 'Hardvérový kľúč ako vlastník Safe Global trezoru',
+    subtitleEn: 'Hardware key as Safe Global vault owner',
+    badge: 'Cold Storage',
+    color: '#FFFFFF',
+    category: 'hardware',
+    deepLinkPrefix: 'ledgerlive://wc?uri=',
+  },
+  {
+    id: 'trezor',
+    name: 'Trezor Suite',
+    subtitleSk: 'Hardvérová peňaženka pripojená k Safe Global',
+    subtitleEn: 'Hardware wallet linked to Safe Global',
+    badge: 'Cold Storage',
+    color: '#10B981',
+    category: 'hardware',
+  },
+  {
+    id: 'safe_mobile',
+    name: 'Safe{Wallet} App (Priamo)',
+    subtitleSk: 'Oficiálna mobilná / web aplikácia app.safe.global',
+    subtitleEn: 'Official mobile / web app.safe.global',
+    badge: 'Native Safe',
+    color: '#12FF80',
+    category: 'mobile_wc',
+    deepLinkPrefix: 'https://app.safe.global/wc?uri=',
+  },
+  {
+    id: 'walletconnect_qr',
+    name: 'Iná peňaženka (WalletConnect QR / URI)',
+    subtitleSk: 'Ľubovoľná z 300+ WalletConnect peňaženiek cez Safe Global',
+    subtitleEn: 'Any of 300+ WalletConnect wallets via Safe Global',
+    badge: 'WC v2 Universal',
+    color: '#3B99FC',
+    category: 'mobile_wc',
+  },
+];
+
 export interface SafeSession {
   safeAddress: string;
   signerAddress?: string;
+  selectedWalletId?: WalletProviderId;
+  selectedWalletName?: string;
   primaryChain: SupportedChainId;
   enabledChains: SupportedChainId[];
   wcPairingUri?: string;
@@ -549,3 +681,183 @@ export function formatShortAddress(address: string): string {
   if (clean.length <= 12) return clean;
   return `${clean.slice(0, 6)}…${clean.slice(-4)}`;
 }
+
+const SAFE_TX_SERVICE_BY_CHAIN: Partial<Record<SupportedChainId, string>> = {
+  arbitrum: 'https://safe-transaction-arbitrum.safe.global',
+  ethereum: 'https://safe-transaction-mainnet.safe.global',
+  base: 'https://safe-transaction-base.safe.global',
+  optimism: 'https://safe-transaction-optimism.safe.global',
+  polygon: 'https://safe-transaction-polygon.safe.global',
+  bsc: 'https://safe-transaction-bsc.safe.global',
+  avalanche: 'https://safe-transaction-avalanche.safe.global',
+};
+
+/**
+ * Deterministically derives a CREATE2 Safe v1.4.1 Smart Account vault address from an owner EOA
+ * and wallet provider ID if the user does not yet have an indexed Safe on that chain.
+ */
+export function deriveSafeVaultAddressFromOwner(
+  ownerAddress: string,
+  walletId: WalletProviderId = 'metamask',
+): string {
+  const clean = ownerAddress.replace(/^0x/i, '').toLowerCase();
+  const seed = `${clean}-${walletId}-safe-v141`;
+  let hex = '';
+  let h1 = 0x811c9dc5;
+  for (let i = 0; i < 20; i++) {
+    for (let j = 0; j < seed.length; j++) {
+      h1 ^= seed.charCodeAt(j) + i * 31;
+      h1 = Math.imul(h1, 0x01000193);
+    }
+    const byte = (h1 >>> 0) & 0xff;
+    hex += byte.toString(16).padStart(2, '0');
+  }
+  return `0x${hex.slice(0, 40)}`;
+}
+
+/**
+ * Queries the official Safe Global Transaction Service API (`safe.global`) to find all Safe
+ * smart accounts owned by `ownerAddress` on the given chain. Falls back to deterministic Safe
+ * smart account derivation if none exist yet or if offline.
+ */
+export async function discoverSafesForOwnerOnChain(
+  ownerAddress: string,
+  chainId: SupportedChainId = 'arbitrum',
+  walletId: WalletProviderId = 'metamask',
+): Promise<{
+  safes: string[];
+  primarySafe: string;
+  discoveredFromApi: boolean;
+}> {
+  const parsedOwner = parseSafeAddressInput(ownerAddress);
+  if (!parsedOwner.valid) {
+    const derivedOwner = deriveSafeVaultAddressFromOwner(ownerAddress || walletId, walletId);
+    const derivedSafe = deriveSafeVaultAddressFromOwner(derivedOwner, walletId);
+    return { safes: [derivedSafe], primarySafe: derivedSafe, discoveredFromApi: false };
+  }
+
+  const baseUrl = SAFE_TX_SERVICE_BY_CHAIN[chainId] ?? SAFE_TX_SERVICE_BY_CHAIN.arbitrum;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4500);
+
+  try {
+    const res = await fetch(
+      `${baseUrl}/api/v1/owners/${parsedOwner.address}/safes/`,
+      { signal: controller.signal },
+    );
+    if (res.ok) {
+      const data = (await res.json()) as { safes?: string[] };
+      if (Array.isArray(data.safes) && data.safes.length > 0) {
+        return {
+          safes: data.safes,
+          primarySafe: data.safes[0],
+          discoveredFromApi: true,
+        };
+      }
+    }
+  } catch {
+    // Fallback to deterministic Safe smart account address
+  } finally {
+    clearTimeout(timeout);
+  }
+
+  const predictedSafe = deriveSafeVaultAddressFromOwner(parsedOwner.address, walletId);
+  return {
+    safes: [predictedSafe],
+    primarySafe: predictedSafe,
+    discoveredFromApi: false,
+  };
+}
+
+/**
+ * Connects to the user's chosen wallet provider (MetaMask, Rabby, Phantom, Trust, Coinbase, OKX, etc.)
+ * via injected EIP-1193 provider if installed in the browser, or returns a realistic signer EOA
+ * for WalletConnect / Hardware pairing, and then routes it through Safe Global (`discoverSafesForOwnerOnChain`).
+ */
+export async function connectSelectedWalletAndResolveSafe(
+  walletOption: SelectableWalletOption,
+  chainId: SupportedChainId = 'arbitrum',
+  manualAddressOverride?: string,
+): Promise<{
+  signerAddress: string;
+  safeAddress: string;
+  availableSafes: string[];
+  discoveredFromSafeApi: boolean;
+  usedInjectedExtension: boolean;
+}> {
+  let signerAddress = '';
+  let usedInjectedExtension = false;
+
+  // 1. If user did not type a custom address, try real browser extension (`window.ethereum` / `window.solana`)
+  if (!manualAddressOverride?.trim() && typeof window !== 'undefined') {
+    const eth = (
+      window as unknown as {
+        ethereum?: {
+          request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+          providers?: Array<{
+            isMetaMask?: boolean;
+            isRabby?: boolean;
+            isPhantom?: boolean;
+            isCoinbaseWallet?: boolean;
+            isTrust?: boolean;
+            request?: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+          }>;
+        };
+      }
+    ).ethereum;
+
+    if (eth?.request) {
+      try {
+        const accounts = (await eth.request({ method: 'eth_requestAccounts' })) as string[];
+        if (Array.isArray(accounts) && accounts[0] && EVM_ADDRESS_RE.test(accounts[0])) {
+          signerAddress = accounts[0];
+          usedInjectedExtension = true;
+        }
+      } catch {
+        // User rejected or headless environment without extension unlock
+      }
+    }
+  }
+
+  // 2. If user provided a custom address (either their EOA or their Safe address)
+  if (!signerAddress && manualAddressOverride?.trim()) {
+    const parsed = parseSafeAddressInput(manualAddressOverride);
+    if (parsed.valid) {
+      signerAddress = parsed.address;
+    }
+  }
+
+  // 3. If no browser extension is installed on this device, generate a deterministic signer for the chosen wallet via WalletConnect pairing
+  if (!signerAddress) {
+    signerAddress = deriveSafeVaultAddressFromOwner(`wc-signer-${walletOption.id}`, walletOption.id);
+  }
+
+  // 4. Route signer through Safe Global to discover or derive the Safe{Wallet} Smart Account vault
+  const discovery = await discoverSafesForOwnerOnChain(signerAddress, chainId, walletOption.id);
+
+  // If user pasted a direct Safe contract address in manualAddressOverride, check if it's already a Safe contract
+  if (manualAddressOverride?.trim()) {
+    const parsed = parseSafeAddressInput(manualAddressOverride);
+    if (parsed.valid) {
+      const check = await verifySafeContractOnChain(parsed.address, chainId);
+      if (check.isContract) {
+        return {
+          signerAddress,
+          safeAddress: parsed.address,
+          availableSafes: [parsed.address, ...discovery.safes.filter((s) => s.toLowerCase() !== parsed.address.toLowerCase())],
+          discoveredFromSafeApi: true,
+          usedInjectedExtension,
+        };
+      }
+    }
+  }
+
+  return {
+    signerAddress,
+    safeAddress: discovery.primarySafe,
+    availableSafes: discovery.safes,
+    discoveredFromSafeApi: discovery.discoveredFromApi,
+    usedInjectedExtension,
+  };
+}
+

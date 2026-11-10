@@ -333,7 +333,7 @@ export default function AuthPage() {
             <SafeGlobalConnectCard lang="sk" compact />
           </div>
         ) : (
-          <SafeGlobalConnectCard lang="sk" />
+          <SafeGlobalConnectCard lang="sk" defaultOpenModal />
         )}
       </div>
     </div>
