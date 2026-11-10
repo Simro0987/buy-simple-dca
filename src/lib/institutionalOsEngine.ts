@@ -427,6 +427,125 @@ export const INSTITUTIONAL_15_AGENTS: SpecializedInstitutionalAgent[] = [
     forbidden: 'Nesmie novému agentovi prideliť Safe oprávnenia bez ľudského 2-z-2 multisig schválenia',
     lastDecisionSk: 'Flotila harmonizovaná; navrhnutý Olas Signal Connector v režime SHADOW (iba read-only signály).',
   },
+  {
+    id: 'agent-16-portfolio-brain',
+    order: 16,
+    name: '16. Portfolio Brain & Cross-Margin Risk Coordinator',
+    layer: 'DECISION_COMMITTEE',
+    hasVetoPower: true,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'ACTIVE',
+    canRead: 'Spot, DCA, lending, borrowing, leverage, perps, collateral, debt, USDC rozpočty, token/chain/protocol koncentrácia',
+    canPropose: 'Koordinácia všetkých stratégií tak, aby sa navzájom nebili (napr. DCA nenakupuje, kým Deleverage spláca dlh)',
+    canExecute: 'VETO pri prekročení globálneho risk budgetu alebo krížovom konflikte stratégií',
+    forbidden: 'Nesmie presúvať aktíva medzi vaultmi ani podpisovať transakcie',
+    lastDecisionSk: '0 konfliktov medzi DCA Core, Zisk Funding a ETT SuperTrend; celková páka v norme.',
+  },
+  {
+    id: 'agent-17-volatility-regime',
+    order: 17,
+    name: '17. Volatility & Market-Regime Controller Agent',
+    layer: 'DECISION_COMMITTEE',
+    hasVetoPower: true,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'ACTIVE',
+    canRead: 'ATR, 7d/30d realizovaná volatilita, hĺbka orderbooku/poolov, depeg indikátory, stav orákul',
+    canPropose: 'Režimy: LOW_VOL, BULL_TREND, BEAR_TREND, RANGE, HIGH_VOLATILITY, LIQUIDITY_STRESS, DATA_CONFLICT, PROTOCOL_INCIDENT',
+    canExecute: 'Pri HIGH_VOLATILITY zníži risk budget na polovicu; pri DATA_CONFLICT a PROTOCOL_INCIDENT vynúti PAUSE/NO TRADE',
+    forbidden: 'Nesmie otvárať obchody ani vypnúť ochranný režim bez overenia dát',
+    lastDecisionSk: 'Režim BULL_TREND / NORMAL — povolené DCA, Position, Swing a Delta-Neutral Carry.',
+  },
+  {
+    id: 'agent-18-meta-strategy-allocator',
+    order: 18,
+    name: '18. Meta Strategy Allocator Agent (Rozdeľovač Risk Budgetu)',
+    layer: 'DECISION_COMMITTEE',
+    hasVetoPower: false,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'PAPER',
+    canRead: 'Netto P/L po poplatkoch, drawdown, stabilita, Sharpe/Sortino a korelácia všetkých 22 modulov',
+    canPropose: 'Dynamické rozdelenie: DCA Core 45%, Trend 15%, Yield/Lending 15%, Mean-Reversion 10%, Funding/Basis 5%, Stable Reserve 10%',
+    canExecute: 'Pri zhoršovaní výsledkov automaticky znižuje risk budget danej stratégie',
+    forbidden: 'Nikdy nesmie automaticky navýšiť risk budget nad on-chain schválený strop',
+    lastDecisionSk: 'Risk budget alokovaný podľa cieľovej matice (45/15/15/10/5/10%).',
+  },
+  {
+    id: 'agent-19-stablecoin-peg-guard',
+    order: 19,
+    name: '19. Stablecoin Peg & Depeg Defense Agent',
+    layer: 'DECISION_COMMITTEE',
+    hasVetoPower: true,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'ACTIVE',
+    canRead: 'USDC, USDT, sUSDS, sDAI, sUSDe peg odchýlka voči $1.00, Curve/Uniswap pool imbalance, TVL koncentrácia',
+    canPropose: 'Okamžitá blokácia nových expozícií v depegnutom stablecoine + návrh ochrannej rotácie do BTC/zdravého stablecoinu',
+    canExecute: 'VETO pri odchýlke pegu > 0.35% alebo strate likvidity v lending pooloch',
+    forbidden: 'Nesmie poslať prostriedky mimo Strategy Safe',
+    lastDecisionSk: 'Peg stabilný: USDC $1.0001, USDT $0.9999, sUSDS peg skóre 96/100.',
+  },
+  {
+    id: 'agent-20-mev-firewall',
+    order: 20,
+    name: '20. MEV & Transaction Firewall Agent',
+    layer: 'DECISION_COMMITTEE',
+    hasVetoPower: true,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'ACTIVE',
+    canRead: 'Viacero DEX rout (CowSwap, 1inch, Odos, Jupiter), mempool riziko, price impact, transakčný deadline a gas',
+    canPropose: 'Výber MEV-chránenej trasy (CowSwap CoW batch / Flashbots Protect / Jito) alebo rozdelenie veľkého obchodu',
+    canExecute: 'VETO pri price impacte > 1.0%, chýbajúcom deadline alebo podozrení na sandwich útok',
+    forbidden: 'Nesmie povoliť nechránený swap s vysokým sklzom',
+    lastDecisionSk: 'MEV ochrana aktívna: 100% EVM swapov smerovaných cez CowSwap CoW batch settlement.',
+  },
+  {
+    id: 'agent-21-post-trade-reconciler',
+    order: 21,
+    name: '21. Post-Trade Reconciliation & Tax-Lot Attribution Agent',
+    layer: 'OVERSIGHT_GOVERNANCE',
+    hasVetoPower: true,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'ACTIVE',
+    canRead: 'Plánovaný expectedReceive vs. skutočný on-chain receive, gas, slippage, funding, borrow úroky a tax-lot ID',
+    canPropose: 'Netto P/L atribúcia po všetkých nákladoch (podklad pre Learning Agenta a Investor Reporty)',
+    canExecute: 'Pri odchýlke reálneho výsledku od simulácie > 0.5% okamžite prepne daný modul do PAUSE a vytvorí incident',
+    forbidden: 'Nesmie vykazovať hrubý zisk bez odpočítania všetkých poplatkov',
+    lastDecisionSk: 'Reconciliation 100% zhoda (odchýlka simulácia vs. exekúcia 0.02% < 0.50% limit).',
+  },
+  {
+    id: 'agent-22-olas-signal-bridge',
+    order: 22,
+    name: '22. Olas & External AI Signal Sandbox Bridge Agent',
+    layer: 'SELF_IMPROVING_CORE',
+    hasVetoPower: false,
+    canApproveTrade: false,
+    canCreateSafeProposal: false,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    lifecycleStatus: 'SHADOW',
+    canRead: 'Externé signály z Olas / Bittensor TAO / TradingView / on-chain indexérov (The Graph) s anti-prompt-injection filtrom',
+    canPropose: 'Iba neviazané analytické hypotézy do SHADOW/PAPER laboratória na nezávislé preverenie',
+    canExecute: 'Žiadny priamy prístup k Safe peňaženke; pri výpadku Olas systém pokračuje bezpečne bez neho',
+    forbidden: 'Nikdy nesmie obísť náš Risk & Security Veto výbor ani držať podpisové oprávnenia',
+    lastDecisionSk: 'SHADOW režim: Olas benchmark signály čítané v read-only sandboxe (0 priamych oprávnení).',
+  },
 ];
 
 export const STRATEGY_SCHEDULER_PRIORITY = [
@@ -1182,7 +1301,7 @@ export const INFRASTRUCTURE_DEPENDENCY_MAP: InfrastructureDependencyRow[] = [
   },
 ];
 
-const INST_AGENTS_STORAGE_KEY = 'safebtc-institutional-15-agents-v1';
+const INST_AGENTS_STORAGE_KEY = 'safebtc-institutional-22-agents-v1';
 const INST_AGENTS_EVENT = 'safebtc-institutional-15-agents-changed';
 
 const DEFAULT_AGENT_TOKEN_SETS: Record<number, AgentDynamicTokenAllocation[]> = {
@@ -1201,6 +1320,13 @@ const DEFAULT_AGENT_TOKEN_SETS: Record<number, AgentDynamicTokenAllocation[]> = 
   13: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'UNI', chain: 'base', weightPct: 25 }],
   14: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 65 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 20 }, { symbol: 'AAVE', chain: 'arbitrum', weightPct: 15 }],
   15: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'TAO', chain: 'ethereum', weightPct: 20 }, { symbol: 'HYPE', chain: 'hyperliquid', weightPct: 20 }, { symbol: 'AKT', chain: 'akash', weightPct: 15 }],
+  16: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'SOL', chain: 'solana', weightPct: 15 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 10 }],
+  17: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 55 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'PYTH', chain: 'solana', weightPct: 20 }],
+  18: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 20 }, { symbol: 'SOL', chain: 'solana', weightPct: 15 }, { symbol: 'INJ', chain: 'injective', weightPct: 10 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 10 }],
+  19: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 30 }, { symbol: 'USDT', chain: 'arbitrum', weightPct: 20 }],
+  20: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 30 }, { symbol: 'SOL', chain: 'solana', weightPct: 20 }],
+  21: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 60 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 20 }, { symbol: 'SOL', chain: 'solana', weightPct: 20 }],
+  22: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'TAO', chain: 'ethereum', weightPct: 30 }, { symbol: 'AKT', chain: 'akash', weightPct: 25 }],
 };
 
 function enrichInstitutionalAgent(a: SpecializedInstitutionalAgent): SpecializedInstitutionalAgent {
@@ -1215,7 +1341,7 @@ function enrichInstitutionalAgent(a: SpecializedInstitutionalAgent): Specialized
     canTransferExternally: false,
     collectiveIqScore: Number.isFinite(a.collectiveIqScore) ? a.collectiveIqScore : 140 + a.order * 0.8,
     swarmSynapsesCount: Number.isFinite(a.swarmSynapsesCount) ? a.swarmSynapsesCount : 48 + a.order * 3,
-    connectedMeshNodesCount: 20,
+    connectedMeshNodesCount: 28,
     managedTokens:
       Array.isArray(a.managedTokens) && a.managedTokens.length > 0
         ? a.managedTokens
@@ -1228,7 +1354,7 @@ export function loadInstitutional15Agents(): SpecializedInstitutionalAgent[] {
     const raw = localStorage.getItem(INST_AGENTS_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as SpecializedInstitutionalAgent[];
-      if (Array.isArray(parsed) && parsed.length === 15) {
+      if (Array.isArray(parsed) && parsed.length === INSTITUTIONAL_15_AGENTS.length) {
         return parsed.map(enrichInstitutionalAgent);
       }
     }
@@ -1398,4 +1524,284 @@ export function runInstitutional15AgentsSwarmTick(): SpecializedInstitutionalAge
   saveInstitutional15Agents(next);
   return next;
 }
+
+export interface AgentHierarchyTier {
+  tierLevel: 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  tierTitleSk: string;
+  authorityBadgeSk: string;
+  colorHex: string;
+  canOverrideLowerTiers: boolean;
+  descriptionSk: string;
+  nodes: Array<{
+    id: string;
+    name: string;
+    roleBadge: string;
+    powerSk: string;
+  }>;
+}
+
+/**
+ * Complete 7-Tier Pyramid Hierarchy Tree ("Od Vrcholu až na Spodok") covering all 28 nodes
+ * + the On-Chain Safe Multisig / SafeBTCGuard.sol sovereign apex.
+ */
+export const AGENT_HIERARCHY_PYRAMID_TREE: AgentHierarchyTier[] = [
+  {
+    tierLevel: 0,
+    tierTitleSk: 'ÚROVEŇ 0 (VRCHOL PYRAMÍDY): Ty (2-z-2 Safe Multisig + Timelock) & On-Chain SafeBTCGuard.sol',
+    authorityBadgeSk: 'ABSOLÚTNY SUVERÉN & ON-CHAIN ZÁKON',
+    colorHex: '#14F195',
+    canOverrideLowerTiers: true,
+    descriptionSk:
+      'Najvyšší vrchol systému. Žiadny AI agent nemôže nikdy obísť on-chain kontrakt SafeBTCGuard.sol ani tvoj 2-z-2 multisig podpis. Tu je natvrdo zakázaný akýkoľvek výber mimo peňaženku, DelegateCall a Unlimited Approvals.',
+    nodes: [
+      {
+        id: 'apex-owner-multisig',
+        name: 'Vlastník (2-z-2 Safe Global Multisig + Hardware Signer)',
+        roleBadge: 'ROOT OWNER',
+        powerSk: 'Jediný má právo schváliť live transakciu, zmeniť policy cez Timelock alebo zapnúť modul.',
+      },
+      {
+        id: 'apex-safebtc-guard',
+        name: 'SafeBTCGuard.sol + Globálny KILL SWITCH (On-Chain Firewall)',
+        roleBadge: 'IMMUTABLE CONTRACT',
+        powerSk: 'Kryptograficky zablokuje akýkoľvek pokus o externý transfer na cudziu adresu ešte pred vykonaním.',
+      },
+    ],
+  },
+  {
+    tierLevel: 1,
+    tierTitleSk: 'ÚROVEŇ 1: Núdzová Obrana & Záchrana Kapitálu (Emergency & Anti-Liquidation Override)',
+    authorityBadgeSk: 'NAJVYŠŠIA AGENTOVÁ PRIORITA #1',
+    colorHex: '#F43F5E',
+    canOverrideLowerTiers: true,
+    descriptionSk:
+      'Najvyššie postavení AI agenti. Ak hrozí likvidácia, depeg stablecoinu, útok na web alebo anomália, okamžite preberajú riadenie, pozastavia všetky ziskové stratégie nižšie a znižujú riziko.',
+    nodes: [
+      {
+        id: 'agent-06-liquidation-defense',
+        name: 'Liquidation Defense Agent (Ochranca Kolaterálu & LTV)',
+        roleBadge: 'PRIORITY #1 OVERRIDE',
+        powerSk: 'Má prednosť pred všetkými obchodnými stratégiami — smie iba splácať dlh a znižovať riziko.',
+      },
+      {
+        id: 'aegis-website-guardian',
+        name: 'Aegis Sentinel · Website Security & AES-256-GCM Guardian',
+        roleBadge: 'ANTI-HACK SHIELD',
+        powerSk: 'Chráni celú webstránku, šifruje dáta cez AES-256-GCM, aplikuje záplaty a blokuje XSS/phishing.',
+      },
+      {
+        id: 'agent-10-oversight-watchdog',
+        name: 'Agent Watchdog & Oversight Supervisor',
+        roleBadge: 'SYSTEM WATCHDOG',
+        powerSk: 'Sleduje zdravie všetkých agentov; pri chybe okamžite prepne chybujúci uzol do PAUSED/QUARANTINED.',
+      },
+      {
+        id: 'agent-19-stablecoin-peg-guard',
+        name: 'Stablecoin Peg & Depeg Defense Agent',
+        roleBadge: 'DEPEG VETO',
+        powerSk: 'Pri odchýlke USDC/USDT/sUSDS od $1.00 okamžite zablokuje nové stable expozície.',
+      },
+    ],
+  },
+  {
+    tierLevel: 2,
+    tierTitleSk: 'ÚROVEŇ 2: Nezávislý Kontrolný Výbor s Právom VETA (Supreme Veto Gatekeepers)',
+    authorityBadgeSk: 'NEZÁVISLÉ PRÁVO VETA (FAIL-CLOSED)',
+    colorHex: '#F59E0B',
+    canOverrideLowerTiers: true,
+    descriptionSk:
+      'Štyria strážcovia brány. Žiadny návrh obchodu z nižších vrstiev nemôže prejsť do Execution Queue, pokiaľ každý jeden z týchto 4 agentov nedá explicitný súhlas. Ak čo i len jeden povie VETO, výsledok je NO TRADE.',
+    nodes: [
+      {
+        id: 'agent-04-risk-security',
+        name: 'Risk & Security Agent (Najvyššie Právo Veta)',
+        roleBadge: 'SUPREME VETO',
+        powerSk: 'Kontroluje allowlisty, recipient === SafeAddress, 45% token cap a denný/týždenný risk budget.',
+      },
+      {
+        id: 'agent-01-data-quality',
+        name: 'Data Quality Agent (Brána Čerstvosti & Súladu Orákul)',
+        roleBadge: 'DATA VETO',
+        powerSk: 'Povoľuje obchod len v stave HEALTHY (odchýlka Pyth vs. Chainlink vs. DEX ≤ 1.2%).',
+      },
+      {
+        id: 'agent-05-simulation',
+        name: 'Simulation Agent (Pre-Trade Calldata & Slippage Veto)',
+        roleBadge: 'SIMULATION VETO',
+        powerSk: 'Pred každým obchodom simuluje presnú calldata, gas a minReceive; pri zlyhaní návrh zamietne.',
+      },
+      {
+        id: 'agent-20-mev-firewall',
+        name: 'MEV & Transaction Firewall Agent',
+        roleBadge: 'ANTI-SANDWICH VETO',
+        powerSk: 'Vynucuje MEV-chránený routing (CowSwap CoW batch / Jito) a blokuje vysoký price impact.',
+      },
+    ],
+  },
+  {
+    tierLevel: 3,
+    tierTitleSk: 'ÚROVEŇ 3: Makro Mozog Portfólia & Rozdeľovanie Kapitálu (Brain & Meta-Coordination)',
+    authorityBadgeSk: 'KOORDINÁCIA & RISK BUDGETY',
+    colorHex: '#38BDF8',
+    canOverrideLowerTiers: true,
+    descriptionSk:
+      ' Mozog, ktorý vidí celé portfólio naraz. Určuje trhový režim (Market Regime), rozdeľuje risk budgety medzi stratégie a zabezpečuje, aby sa nižšie obchodné stratégie navzájom nebili.',
+    nodes: [
+      {
+        id: 'agent-16-portfolio-brain',
+        name: 'Portfolio Brain & Cross-Margin Risk Coordinator',
+        roleBadge: 'SINGLE SOURCE OF TRUTH',
+        powerSk: 'Zabraňuje konfliktom medzi DCA, pákou, lendingom a perps naprieč celým portfóliom.',
+      },
+      {
+        id: 'agent-17-volatility-regime',
+        name: 'Volatility & Market-Regime Controller Agent',
+        roleBadge: 'REGIME CONTROLLER',
+        powerSk: 'Určuje režim trhu (BULL, BEAR, RANGE, HIGH_VOL, CRISIS) a upravuje povolené stratégie.',
+      },
+      {
+        id: 'agent-18-meta-strategy-allocator',
+        name: 'Meta Strategy Allocator Agent',
+        roleBadge: 'CAPITAL ALLOCATOR',
+        powerSk: 'Priraďuje % risk budgety (DCA 45%, Trend 15%, Yield 15%, Mean-Rev 10%, Funding 5%).',
+      },
+      {
+        id: 'agent-02-market-research',
+        name: 'Market Research Agent (Universal Asset Scanner)',
+        roleBadge: 'RESEARCH INTEL',
+        powerSk: 'Skenuje likviditu, TVL, RSI, 200WMA a objavuje tokeny do Universal Asset Registry.',
+      },
+    ],
+  },
+  {
+    tierLevel: 4,
+    tierTitleSk: 'ÚROVEŇ 4: Špecializovaní Stratégovia & Tvorcovia Návrhov (Alpha & BTC Accumulation Fleet)',
+    authorityBadgeSk: 'TVORBA NÁVRHOV & DYNAMICKÉ % TOKENOV',
+    colorHex: '#A855F7',
+    canOverrideLowerTiers: false,
+    descriptionSk:
+      'Výkonná flotila 6 špecializovaných stratégov. Vyhodnocujú DCA koše, ETT SuperTrend + Fibo 0.618, Zisk Delta-Neutral Funding a DeFi výnosy. Dynamicky upravujú % váhy tokenov, pridávajú/odoberajú tokeny a navrhujú obchody s jediným cieľom: Viac BTC.',
+    nodes: [
+      {
+        id: 'agent-03-strategy',
+        name: 'Strategy Agent (Hlavný Inštitucionálny Stratég)',
+        roleBadge: 'CORE STRATEGY',
+        powerSk: 'Spája výstupy výskumu a DCA/RSI pravidiel do štruktúrovaných návrhov obchodov.',
+      },
+      {
+        id: 'agent-satoshi-prime',
+        name: 'Satoshi Prime · Master Portfolio & BTC Accumulator',
+        roleBadge: 'SWARM LEADER',
+        powerSk: 'Riadi jadrovú akumuláciu BTC a preklápa zisky zo satelitných tokenov do čistého Bitcoinu.',
+      },
+      {
+        id: 'agent-ett-supertrend-dex',
+        name: 'ETT SuperTrend · Fibo 0.618 & EMA/MA Signal DEX Agent',
+        roleBadge: '100% DEX SIGNALS',
+        powerSk: ' Počíta SuperTrend, Fibo Golden Pocket a EMA/MA Color Change pre 100% on-chain DEX swapy (0% CEX).',
+      },
+      {
+        id: 'agent-zisk-bot',
+        name: 'Zisk Bot · Treasury, Delta-Neutral Funding & Solana Yield',
+        roleBadge: 'FUNDING & LENDING',
+        powerSk: 'Spravuje INJ/TIA/ATOM delta-neutral funding, Kamino/Jupiter Lend a 45% token cap.',
+      },
+      {
+        id: 'agent-omni-hunter',
+        name: 'Omni-Chain Alpha Hunter · Dynamic Token Sieve',
+        roleBadge: 'ALPHA HUNTER',
+        powerSk: 'Vyhľadáva vysoko-rastové tokeny na 10 sieťach, pridáva/odoberá ich a zisk zlieva do BTC.',
+      },
+      {
+        id: 'agent-yield-harvester',
+        name: 'DeFi Yield-to-BTC Harvester (Morpho / Aave / Sanctum)',
+        roleBadge: 'YIELD -> BTC',
+        powerSk: 'Zbiera staking a lending výnosy (weETH, rETH, INF, LBTC) a konvertuje ich na BTC.',
+      },
+    ],
+  },
+  {
+    tierLevel: 5,
+    tierTitleSk: 'ÚROVEŇ 5: Jediná Exekučná Fronta & Post-Trade Audit (Single Execution Queue & Ledger)',
+    authorityBadgeSk: '1 SAFE = 1 EXECUTION QUEUE',
+    colorHex: '#10B981',
+    canOverrideLowerTiers: false,
+    descriptionSk:
+      'Exekučná a účtovná vrstva. Prijíma výhradne návrhy, ktoré prešli všetkými VETO bránami z Úrovní 1–3, radí ich do jedinej fronty bez nonce konfliktov a po vykonaní porovnáva plán so skutočnosťou.',
+    nodes: [
+      {
+        id: 'agent-07-execution',
+        name: 'Execution Agent (Single Queue & Safe Proposal Builder)',
+        roleBadge: 'SINGLE QUEUE',
+        powerSk: 'Pripravuje nepodpísaný Safe Transaction Proposal (nemá private key, nesmie posielať von).',
+      },
+      {
+        id: 'agent-21-post-trade-reconciler',
+        name: 'Post-Trade Reconciliation & Tax-Lot Attribution Agent',
+        roleBadge: 'RECONCILIATION',
+        powerSk: 'Porovnáva expected vs. actual receive po každom obchode; pri odchýlke > 0.5% spúšťa PAUSE.',
+      },
+      {
+        id: 'agent-09-audit-monitoring',
+        name: 'Audit & Monitoring Agent (Merkle Root & Evidence Vault)',
+        roleBadge: 'MERKLE AUDITOR',
+        powerSk: 'Zapisuje nemenný append-only audit log a počíta SHA-256 Merkle Root pre on-chain ukotvenie.',
+      },
+    ],
+  },
+  {
+    tierLevel: 6,
+    tierTitleSk: 'ÚROVEŇ 6 (ZÁKLADŇA PYRAMÍDY): Samo-Zlepšovacie Laboratórium, Sandbox Opravy & Governance',
+    authorityBadgeSk: 'IBA SANDBOX / SHADOW / PAPER (0% PRÍSTUP K PEŇAZOM)',
+    colorHex: '#6366F1',
+    canOverrideLowerTiers: false,
+    descriptionSk:
+      'Základňa pyramídy, ktorá nepretržite zdokonaľuje celý systém zdola nahor, ale je 100% oddelená od finančných prostriedkov. Trénuje Challenger modely, skúma incidenty, pripravuje sandbox opravy a testuje ich cez nezávislého QA audítora.',
+    nodes: [
+      {
+        id: 'agent-08-learning',
+        name: 'Learning Agent (Champion / Challenger Walk-Forward Lab)',
+        roleBadge: 'SELF-LEARNING',
+        powerSk: 'Učí sa z netto výsledkov po poplatkoch, verzionuje modely a umožňuje 1-klik rollback.',
+      },
+      {
+        id: 'agent-11-performance-evaluator',
+        name: 'Performance Evaluator (Timeframe Scorecard)',
+        roleBadge: 'SCORECARD',
+        powerSk: 'Hodnotí každého agenta podľa jeho timeframe a Sharpe/Sortino; bráni optimalizácii na náhodu.',
+      },
+      {
+        id: 'agent-12-incident-investigator',
+        name: 'Incident Investigator (Forenzná Analýza)',
+        roleBadge: 'FORENSICS',
+        powerSk: 'Rekonštruuje príčiny chýb z dataset replay snapshotov a vytvára dôkazné reporty.',
+      },
+      {
+        id: 'agent-13-repair-engineer',
+        name: 'Repair Engineer (Izolovaný Sandbox Patcher)',
+        roleBadge: 'SANDBOX CODER',
+        powerSk: 'Pripravuje opravy a vylepšenia výhradne v izolovanom sandboxe s diffom a testami.',
+      },
+      {
+        id: 'agent-14-qa-security-reviewer',
+        name: 'QA & Security Reviewer (Nezávislé Veto Opráv)',
+        roleBadge: 'QA VETO',
+        powerSk: 'Nezávisle testuje každý patch od Repair Engineera pred povolením do SHADOW/PAPER.',
+      },
+      {
+        id: 'agent-15-architect-retirement',
+        name: 'Agent Architect & Retirement Committee',
+        roleBadge: 'LIFECYCLE GOV',
+        powerSk: 'Navrhuje nových špecializovaných agentov do sandboxu a archivuje vyradené modely.',
+      },
+      {
+        id: 'agent-22-olas-signal-bridge',
+        name: 'Olas & External AI Signal Sandbox Bridge',
+        roleBadge: 'READ-ONLY SANDBOX',
+        powerSk: 'Prijíma externé AI signály v izolovanom read-only režime s anti-prompt-injection filtrom.',
+      },
+    ],
+  },
+];
+
 

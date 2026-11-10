@@ -45,6 +45,7 @@ import {
 import {
   FOUR_SAFE_VAULTS,
   INSTITUTIONAL_15_AGENTS,
+  AGENT_HIERARCHY_PYRAMID_TREE,
   loadInstitutional15Agents,
   updateInstitutionalAgentTokenPct,
   addTokenToInstitutionalAgent,
@@ -304,8 +305,9 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     const noWalletTick = runContinuousAutonomousFleetTick('', { BTC: 75000, ETH: 2200, SOL: 90 }, true);
     expect(noWalletTick.btcGainedThisTick).toBe(0);
 
-    // Verify Institutional DeFi OS (15 Agents, 4 Vaults, Veto Committee, Pair Trading, Reports)
-    expect(INSTITUTIONAL_15_AGENTS.length).toBe(15);
+    // Verify Institutional DeFi OS (22 Institutional Agents + 7-Tier Pyramid Tree, 4 Vaults, Veto Committee, Pair Trading, Reports)
+    expect(INSTITUTIONAL_15_AGENTS.length).toBe(22);
+    expect(AGENT_HIERARCHY_PYRAMID_TREE.length).toBe(7);
     expect(FOUR_SAFE_VAULTS.length).toBe(4);
     expect(FOUR_SAFE_VAULTS[0].agentAccess).toBe('ZERO_ACCESS_IMMUTABLE');
     expect(TRADING_STYLES_LIBRARY.length).toBe(8);
@@ -347,8 +349,8 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     expect(sumSwarmPct).toBe(100);
 
     const instLoaded = loadInstitutional15Agents();
-    expect(instLoaded.length).toBe(15);
-    expect(instLoaded[0].connectedMeshNodesCount).toBe(20);
+    expect(instLoaded.length).toBe(22);
+    expect(instLoaded[0].connectedMeshNodesCount).toBe(28);
 
     const afterAdd = addTokenToInstitutionalAgent('agent-03-strategy', 'PENDLE', 'arbitrum', 15);
     const stratAgent = afterAdd.find((a) => a.id === 'agent-03-strategy')!;

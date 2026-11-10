@@ -465,7 +465,7 @@ export function AgentPage({ lang }: Props) {
               : 'text-muted-foreground hover:text-foreground'
           }`}
         >
-          {sk ? 'DeFi OS (15 Agentov)' : 'DeFi OS (15 Agents)'}
+          {sk ? 'DeFi OS (28 Uzlov)' : 'DeFi OS (28 Nodes)'}
         </button>
         <button
           type="button"

@@ -28,6 +28,7 @@ import {
   addTokenToInstitutionalAgent,
   removeTokenFromInstitutionalAgent,
   STRATEGY_SCHEDULER_PRIORITY,
+  AGENT_HIERARCHY_PYRAMID_TREE,
   TRADING_STYLES_LIBRARY,
   UNIVERSAL_MARKETS_REGISTRY,
   CONSOLIDATED_AUDIT_MATRIX,
@@ -53,13 +54,14 @@ export function InstitutionalOsCenter({ lang }: Props) {
   const isSafeConnected = Boolean(safeSession?.safeAddress);
 
   const [osSection, setOsSection] = useState<
+    | 'hierarchy_tree'
     | 'committee'
     | 'vaults_guard'
     | 'styles_pair'
     | 'universal_markets'
     | 'reports'
     | 'spec_audit'
-  >('committee');
+  >('hierarchy_tree');
 
   const [executionMode, setExecutionMode] = useState<SystemExecutionMode>('PAPER');
   const [killSwitchActive, setKillSwitchActive] = useState(false);
@@ -310,10 +312,11 @@ export function InstitutionalOsCenter({ lang }: Props) {
         </div>
       </div>
 
-      {/* SUB-NAVIGATION FOR THE 6 INSTITUTIONAL OS MODULES */}
-      <div className="grid grid-cols-2 sm:grid-cols-6 gap-1.5 p-1 rounded-xl bg-secondary/80 border border-border">
+      {/* SUB-NAVIGATION FOR THE 7 INSTITUTIONAL OS MODULES */}
+      <div className="grid grid-cols-2 sm:grid-cols-7 gap-1.5 p-1 rounded-xl bg-secondary/80 border border-border">
         {[
-          { id: 'committee' as const, label: '15 Agentov & Veto' },
+          { id: 'hierarchy_tree' as const, label: 'Strom Hierarchie (28)' },
+          { id: 'committee' as const, label: '22 Agentov & %' },
           { id: 'vaults_guard' as const, label: '4 Trezory & Guard' },
           { id: 'styles_pair' as const, label: 'Štýly & BTC/ETH Pair' },
           { id: 'universal_markets' as const, label: 'Universal Explorer' },
@@ -334,6 +337,96 @@ export function InstitutionalOsCenter({ lang }: Props) {
           </button>
         ))}
       </div>
+
+      {/* SECTION 0: VISUAL 7-TIER PYRAMID HIERARCHY TREE (OD VRCHOLU AŽ NA SPODOK) */}
+      {osSection === 'hierarchy_tree' && (
+        <div className="space-y-3">
+          <div className="glass-card p-4 border border-[#14F195]/35 space-y-2">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="text-sm font-bold text-foreground flex items-center gap-2">
+                  <GitBranch className="w-4 h-4 text-[#14F195]" />
+                  Pyramída &amp; Strom Hierarchie (Od Vrcholu až na Spodok · 7 Úrovní · 28 Uzlov)
+                </h3>
+                <p className="text-[11px] text-muted-foreground mt-0.5">
+                  Vyššia úroveň má vždy absolútnu moc pozastaviť (PAUSE) alebo vetovať (VETO) ktorúkoľvek nižšiu úroveň. Žiadny agent v pyramíde nemá privátny kľúč a nikto nemôže poslať aktíva mimo Safe.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-[#14F195]/20 text-[#14F195] text-[10px] font-mono font-bold">
+                VRCHOL → ZÁKLADŇA (FAIL-CLOSED)
+              </span>
+            </div>
+          </div>
+
+          {AGENT_HIERARCHY_PYRAMID_TREE.map((tier, idx) => (
+            <div key={tier.tierLevel} className="space-y-2">
+              <div
+                className="rounded-2xl p-4 border bg-black/50 space-y-2.5"
+                style={{
+                  borderColor: `${tier.colorHex}55`,
+                  boxShadow: idx === 0 ? `0 0 24px -8px ${tier.colorHex}55` : 'none',
+                }}
+              >
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span
+                    className="text-xs font-black uppercase tracking-wider"
+                    style={{ color: tier.colorHex }}
+                  >
+                    {tier.tierTitleSk}
+                  </span>
+                  <span
+                    className="px-2 py-0.5 rounded text-[10px] font-mono font-bold"
+                    style={{
+                      backgroundColor: `${tier.colorHex}20`,
+                      color: tier.colorHex,
+                      border: `1px solid ${tier.colorHex}45`,
+                    }}
+                  >
+                    {tier.authorityBadgeSk}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  {tier.descriptionSk}
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                  {tier.nodes.map((node) => (
+                    <div
+                      key={node.id}
+                      className="rounded-xl bg-secondary/50 border border-border/80 p-2.5 space-y-1 text-xs"
+                    >
+                      <div className="flex items-center justify-between gap-1.5">
+                        <span className="font-bold text-foreground">{node.name}</span>
+                        <span
+                          className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold shrink-0"
+                          style={{
+                            backgroundColor: `${tier.colorHex}18`,
+                            color: tier.colorHex,
+                          }}
+                        >
+                          {node.roleBadge}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground leading-snug">
+                        {node.powerSk}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {idx < AGENT_HIERARCHY_PYRAMID_TREE.length - 1 && (
+                <div className="flex justify-center py-0.5">
+                  <div className="px-3 py-0.5 rounded-full bg-secondary/80 border border-border text-[10px] font-mono text-muted-foreground">
+                    ▼ Nadriadená kontrola &amp; Právo VETA nad Úrovňou {tier.tierLevel + 1} ▼
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* SECTION 1: 15 SPECIALIZED AGENTS, VETO PIPELINE, EVIDENCE PACKAGES & SELF-IMPROVING CORE */}
       {osSection === 'committee' && (
@@ -414,14 +507,14 @@ export function InstitutionalOsCenter({ lang }: Props) {
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
-                  Jednotná Sieť 15 Inštitucionálnych Agentov (P2P Samo-Učenie, Zmena % Váhy, Pridávanie &amp; Odoberanie Tokenov)
+                  Jednotná Sieť 22 Inštitucionálnych Agentov + 6 Výkonných Agentov (28 Uzlov · P2P Samo-Učenie, Zmena % Váhy, Pridávanie &amp; Odoberanie Tokenov)
                 </h3>
                 <p className="text-[11px] text-muted-foreground">
-                  Všetci agenti sú navzájom prepojení do jednej neurónovej siete (20 uzlov spolu s obchodnou flotilou), automaticky sa učia a pri každom tokene môžeš meniť % alokáciu, pridávať nové tokeny alebo ich odoberať.
+                  Všetci agenti sú navzájom prepojení do jednej neurónovej siete (28 uzlov spolu s obchodnou flotilou a Aegis Guardianom), automaticky sa učia a pri každom tokene môžeš meniť % alokáciu, pridávať nové tokeny alebo ich odoberať.
                 </p>
               </div>
               <span className="px-2.5 py-1 rounded-full bg-[#14F195]/20 text-[#14F195] text-[10px] font-mono font-bold">
-                20/20 UZLOV PREPOJENÝCH V SIETI
+                28/28 UZLOV PREPOJENÝCH V SIETI
               </span>
             </div>
 
