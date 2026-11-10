@@ -44,6 +44,8 @@ import {
   loadSwarmSynapses,
   subscribeAutonomousAgents,
   createNewAutonomousAgent,
+  updateAgentTokenPercentage,
+  normalizeAgentTokenWeights,
   testForbiddenExternalWithdrawalBlock,
   type AutonomousAgentProfile,
   type AgentExecutionLogEntry,
@@ -205,29 +207,30 @@ export function AgentPage({ lang }: Props) {
     const next = agents.map((a) => {
       if (a.id !== agentId) return a;
       if (a.managedTokens.some((t) => t.symbol.toUpperCase() === sym)) return a;
+      const nextTokens = [
+        ...a.managedTokens,
+        {
+          symbol: meta.symbol,
+          name: meta.name,
+          chain: meta.chain,
+          coingeckoId: meta.coingeckoId,
+          allocationWeightPct: 12,
+          currentPnlPct: 2.5,
+          apyPct: meta.defaultApy,
+          addedByAgentAt: Date.now(),
+          status: 'ACTIVE' as const,
+        },
+      ];
       return {
         ...a,
-        managedTokens: [
-          ...a.managedTokens,
-          {
-            symbol: meta.symbol,
-            name: meta.name,
-            chain: meta.chain,
-            coingeckoId: meta.coingeckoId,
-            allocationWeightPct: 10,
-            currentPnlPct: 2.5,
-            apyPct: meta.defaultApy,
-            addedByAgentAt: Date.now(),
-            status: 'ACTIVE' as const,
-          },
-        ],
+        managedTokens: normalizeAgentTokenWeights(nextTokens),
       };
     });
 
     setAgents(next);
     saveAutonomousAgents(next);
     setTokenToAddByAgent((prev) => ({ ...prev, [agentId]: '' }));
-    toast.success(sk ? `Token ${sym} pridaný pod správu agenta.` : `Token ${sym} added to agent management.`);
+    toast.success(sk ? `Token ${sym} pridaný a % váhy automaticky prepočítané na 100%.` : `Token ${sym} added & % weights auto-normalized to 100%.`);
   };
 
   const handleRemoveTokenFromAgent = (agentId: string, symbol: string) => {
@@ -237,14 +240,25 @@ export function AgentPage({ lang }: Props) {
     }
     const next = agents.map((a) => {
       if (a.id !== agentId) return a;
+      const filtered = a.managedTokens.filter((t) => t.symbol.toUpperCase() !== symbol.toUpperCase());
       return {
         ...a,
-        managedTokens: a.managedTokens.filter((t) => t.symbol.toUpperCase() !== symbol.toUpperCase()),
+        managedTokens: normalizeAgentTokenWeights(filtered),
       };
     });
     setAgents(next);
     saveAutonomousAgents(next);
-    toast.info(sk ? `Token ${symbol} odobraný a zostatok zrotovaný do BTC.` : `Token ${symbol} removed and balance rotated into BTC.`);
+    toast.info(sk ? `Token ${symbol} odobraný a jeho % podiel presunutý do BTC a zvyšných aktív.` : `Token ${symbol} removed and its % weight rotated into BTC.`);
+  };
+
+  const handleAdjustTokenPct = (agentId: string, symbol: string, nextPct: number) => {
+    const updated = updateAgentTokenPercentage(agentId, symbol, nextPct);
+    setAgents(updated);
+    toast.success(
+      sk
+        ? `Podiel ${symbol} upravený a zosynchronizovaný v celej sieti agentov!`
+        : `${symbol} % updated and synced across the agent network!`,
+    );
   };
 
   const handleCreateCustomAgent = () => {
@@ -762,13 +776,16 @@ export function AgentPage({ lang }: Props) {
                 </div>
               )}
 
-              {/* Managed Tokens under this Agent (Add / Remove dynamically) */}
+              {/* Managed Tokens under this Agent (Dynamic % adjustment, Add / Remove) */}
               <div className="space-y-2">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-1">
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
                     {sk
-                      ? `Spravované tokeny v portfóliu (${agent.managedTokens.length}) · Všetky siete povolené`
-                      : `Managed Portfolio Tokens (${agent.managedTokens.length}) · All chains enabled`}
+                      ? `Spravované tokeny & % váhy (${agent.managedTokens.length}) · Súčet 100% · Max 45% alt cap`
+                      : `Managed Tokens & % Weights (${agent.managedTokens.length}) · Sum 100% · Max 45% alt cap`}
+                  </span>
+                  <span className="text-[10px] font-mono text-[#14F195]">
+                    Prepojené v 20-uzlovej sieti agentov
                   </span>
                 </div>
 
@@ -776,12 +793,35 @@ export function AgentPage({ lang }: Props) {
                   {agent.managedTokens.map((tok) => (
                     <div
                       key={`${agent.id}-${tok.symbol}`}
-                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-secondary/80 border border-border text-xs"
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-secondary/80 border border-border text-xs font-mono"
                     >
-                      <span className="font-bold text-foreground font-mono">{tok.symbol}</span>
+                      <span className="font-bold text-foreground">{tok.symbol}</span>
                       <span className="text-[10px] text-muted-foreground uppercase">{tok.chain}</span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleAdjustTokenPct(agent.id, tok.symbol, tok.allocationWeightPct - 5)
+                        }
+                        className="px-1 rounded bg-black/50 hover:bg-black text-muted-foreground hover:text-foreground text-[10px] font-bold"
+                        title={sk ? 'Znížiť % alokáciu o 5%' : 'Decrease % by 5%'}
+                      >
+                        −
+                      </button>
+                      <span className="text-[#14F195] font-bold">
+                        {tok.allocationWeightPct}%
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          handleAdjustTokenPct(agent.id, tok.symbol, tok.allocationWeightPct + 5)
+                        }
+                        className="px-1 rounded bg-black/50 hover:bg-black text-muted-foreground hover:text-foreground text-[10px] font-bold"
+                        title={sk ? 'Zvýšiť % alokáciu o 5%' : 'Increase % by 5%'}
+                      >
+                        +
+                      </button>
                       <span
-                        className={`text-[10px] font-mono ${
+                        className={`text-[10px] ${
                           tok.currentPnlPct >= 0 ? 'text-emerald-400' : 'text-rose-400'
                         }`}
                       >
@@ -793,7 +833,7 @@ export function AgentPage({ lang }: Props) {
                           type="button"
                           onClick={() => handleRemoveTokenFromAgent(agent.id, tok.symbol)}
                           className="text-muted-foreground hover:text-destructive ml-0.5 text-[10px] font-bold"
-                          title={sk ? 'Odstrániť token a presunúť zostatok do BTC' : 'Remove token & rotate into BTC'}
+                          title={sk ? 'Odstrániť token a presunúť % do BTC' : 'Remove token & rotate % into BTC'}
                         >
                           ×
                         </button>

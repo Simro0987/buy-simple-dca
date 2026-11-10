@@ -31,6 +31,7 @@ import {
 } from './safeWalletGuard';
 import { runZiskBotAutonomousTick } from './ziskBotEngine';
 import { processEttTradingViewSignalOnDex } from './ettSuperTrendAgent';
+import { runInstitutional15AgentsSwarmTick } from './institutionalOsEngine';
 
 export interface AgentManagedToken {
   symbol: string;
@@ -482,6 +483,111 @@ export function subscribeAutonomousAgents(cb: () => void): () => void {
 }
 
 /**
+ * Normalizes token allocation percentages for an agent so that:
+ *  - Every token weight is clamped between 2% and 45% (except BTC which can be up to 80% as the core reserve)
+ *  - Total sum across all managed tokens equals 100%.
+ */
+export function normalizeAgentTokenWeights(tokens: AgentManagedToken[]): AgentManagedToken[] {
+  if (tokens.length === 0) return [];
+  if (tokens.length === 1) {
+    return [{ ...tokens[0], allocationWeightPct: 100 }];
+  }
+  const clamped = tokens.map((t) => {
+    const isBtc = t.symbol.toUpperCase() === 'BTC';
+    const maxCap = isBtc ? 80 : 45;
+    const raw = Number.isFinite(t.allocationWeightPct) ? t.allocationWeightPct : 10;
+    return {
+      ...t,
+      allocationWeightPct: Math.max(2, Math.min(maxCap, raw)),
+    };
+  });
+  const sum = clamped.reduce((s, t) => s + t.allocationWeightPct, 0) || 100;
+  let running = 0;
+  return clamped.map((t, idx) => {
+    if (idx === clamped.length - 1) {
+      return { ...t, allocationWeightPct: Math.max(1, 100 - running) };
+    }
+    const norm = Math.max(2, Math.round((t.allocationWeightPct / sum) * 100));
+    running += norm;
+    return { ...t, allocationWeightPct: norm };
+  });
+}
+
+/**
+ * Updates a specific token's allocation percentage (`allocationWeightPct`) inside an agent
+ * and automatically re-normalizes all other tokens in that agent so the sum stays 100%.
+ */
+export function updateAgentTokenPercentage(
+  agentId: string,
+  tokenSymbol: string,
+  newWeightPct: number,
+): AutonomousAgentProfile[] {
+  const sym = tokenSymbol.trim().toUpperCase();
+  const isBtc = sym === 'BTC';
+  const clampedTarget = Math.max(2, Math.min(isBtc ? 85 : 45, Math.round(newWeightPct)));
+
+  const agents = loadAutonomousAgents();
+  const next = agents.map((ag) => {
+    if (ag.id !== agentId) return ag;
+    const targetExists = ag.managedTokens.some((t) => t.symbol.toUpperCase() === sym);
+    if (!targetExists) return ag;
+
+    const others = ag.managedTokens.filter((t) => t.symbol.toUpperCase() !== sym);
+    if (others.length === 0) {
+      return {
+        ...ag,
+        managedTokens: ag.managedTokens.map((t) => ({ ...t, allocationWeightPct: 100 })),
+      };
+    }
+
+    const remainingPct = Math.max(others.length * 2, 100 - clampedTarget);
+    const othersSum = others.reduce((s, t) => s + t.allocationWeightPct, 0) || 1;
+    let allocatedOthers = 0;
+
+    const updatedTokens = ag.managedTokens.map((t) => {
+      if (t.symbol.toUpperCase() === sym) {
+        return { ...t, allocationWeightPct: 100 - remainingPct };
+      }
+      return t;
+    });
+
+    let otherIdx = 0;
+    const finalTokens = updatedTokens.map((t) => {
+      if (t.symbol.toUpperCase() === sym) return t;
+      otherIdx++;
+      if (otherIdx === others.length) {
+        return { ...t, allocationWeightPct: Math.max(1, remainingPct - allocatedOthers) };
+      }
+      const share = Math.max(2, Math.round((t.allocationWeightPct / othersSum) * remainingPct));
+      allocatedOthers += share;
+      return { ...t, allocationWeightPct: share };
+    });
+
+    return {
+      ...ag,
+      managedTokens: finalTokens,
+      lastPeerInsightSk: `Upravené % rozdelenie tokenu ${sym} na ${100 - remainingPct}% (zvyšné tokeny automaticky prepočítané na súčet 100%).`,
+    };
+  });
+
+  saveAutonomousAgents(next);
+  appendSwarmSynapse({
+    id: `syn-pct-${Date.now()}`,
+    ts: Date.now(),
+    fromAgentId: agentId,
+    fromAgentName: next.find((a) => a.id === agentId)?.name.split('·')[0].trim() ?? agentId,
+    toAgentId: 'ALL_SWARM',
+    toAgentName: 'Celá sieť agentov (20 Uzlov)',
+    signalType: 'SELF_REFLECTION_WEIGHT_TUNING',
+    sharedTokenSymbol: sym,
+    iqDelta: 0.35,
+    messageSk: `Dynamická úprava alokácie: Token ${sym} nastavený na ${clampedTarget}% a zosynchronizovaný v celej neurónovej sieti.`,
+    messageEn: `Dynamic allocation update: Token ${sym} set to ${clampedTarget}% and synced across the neural network.`,
+  });
+  return next;
+}
+
+/**
  * Factory for creating new future AI agents.
  * Immediately wires the new agent into the Swarm Collective Intelligence Mesh,
  * inheriting the best collective weights from existing peer agents and locking `canWithdrawExternally = false`.
@@ -640,7 +746,19 @@ export function runAutonomousAgentCycle(
     peerInsightSk = `Autonómna sebareflexia na vlastných obchodoch — spresnený prah konverzie zisku do BTC.`;
   }
 
-  // 2. IN-WALLET PORTFOLIO DECISION TOWARD MORE BTC
+  // 2. IN-WALLET PORTFOLIO DECISION TOWARD MORE BTC + DYNAMIC % ALLOCATION & TOKEN ADD/REMOVE
+  // Dynamically adjust allocationWeightPct based on momentum & APY so winning tokens get higher % (up to 45% cap)
+  // and weak tokens get trimmed or removed automatically!
+  for (const tok of tokens) {
+    if (tok.symbol === 'BTC') {
+      tok.allocationWeightPct = Math.max(30, tok.allocationWeightPct + 2);
+    } else if (tok.currentPnlPct >= 14) {
+      tok.allocationWeightPct = Math.min(45, tok.allocationWeightPct + 3);
+    } else if (tok.currentPnlPct < 3) {
+      tok.allocationWeightPct = Math.max(4, tok.allocationWeightPct - 2);
+    }
+  }
+
   const profitableAlt = tokens
     .filter((t) => t.symbol !== 'BTC')
     .sort((a, b) => b.currentPnlPct - a.currentPnlPct)[0];
@@ -661,8 +779,8 @@ export function runAutonomousAgentCycle(
     amountUsd = Math.round(180 + profitableAlt.currentPnlPct * 6);
     profitableAlt.status = 'HARVESTING_TO_BTC';
     profitableAlt.currentPnlPct = Number((profitableAlt.currentPnlPct * 0.75).toFixed(2));
-    learningNoteSk = `Samo-učenie & Zdieľaná inteligencia: Zisk z ${fromToken} uzamknutý do čistého BTC v Safe trezore. ${peerInsightSk}`;
-    learningNoteEn = `Self-learning & Swarm intelligence: Profit from ${fromToken} locked into pure BTC inside Safe vault.`;
+    learningNoteSk = `Samo-učenie & Zdieľaná inteligencia: Zisk z ${fromToken} uzamknutý do čistého BTC a % váhy automaticky prepočítané. ${peerInsightSk}`;
+    learningNoteEn = `Self-learning & Swarm intelligence: Profit from ${fromToken} locked into pure BTC and % weights auto-rebalanced.`;
   } else if (tokens.length < 7) {
     const existingSyms = new Set(tokens.map((t) => t.symbol.toUpperCase()));
     const candidate = CANDIDATE_DISCOVERY_TOKENS.find((c) => !existingSyms.has(c.symbol));
@@ -683,24 +801,37 @@ export function runAutonomousAgentCycle(
         addedByAgentAt: Date.now(),
         status: 'ACTIVE',
       });
-      learningNoteSk = `Kolektívna sieť objavila momentum na ${candidate.symbol} (${candidate.chain.toUpperCase()}), pridané do portfólia pre zber zisku do BTC. ${peerInsightSk}`;
-      learningNoteEn = `Collective swarm discovered momentum on ${candidate.symbol}, added to portfolio for BTC harvesting.`;
+      learningNoteSk = `Kolektívna sieť objavila a pridala token ${candidate.symbol} (${candidate.chain.toUpperCase()}) a upravila % rozdelenie portfólia. ${peerInsightSk}`;
+      learningNoteEn = `Collective swarm discovered & added ${candidate.symbol}, auto-adjusting portfolio % weights.`;
     }
   } else {
     const weakest = tokens
       .filter((t) => t.symbol !== 'BTC')
       .sort((a, b) => a.currentPnlPct - b.currentPnlPct)[0];
-    if (weakest) {
+    if (weakest && tokens.length > 5 && weakest.currentPnlPct < 4) {
+      // Automatically prune weak token and shift its % allocation into BTC
+      action = 'REMOVE_TOKEN';
+      fromToken = weakest.symbol;
+      toToken = 'BTC';
+      chain = weakest.chain;
+      amountUsd = 190;
+      const idxToRemove = tokens.findIndex((t) => t.symbol === weakest.symbol);
+      if (idxToRemove >= 0) tokens.splice(idxToRemove, 1);
+      learningNoteSk = `Swarm optimalizácia: Slabší token ${fromToken} automaticky odobraný a jeho % podiel presunutý do BTC. ${peerInsightSk}`;
+      learningNoteEn = `Swarm optimization: Weaker token ${fromToken} automatically removed and its % weight rotated into BTC.`;
+    } else if (weakest) {
       action = 'REBALANCE_TO_BTC';
       fromToken = weakest.symbol;
       toToken = 'BTC';
       chain = weakest.chain;
       amountUsd = 200;
       weakest.currentPnlPct = Number((weakest.currentPnlPct + 5.4).toFixed(2));
-      learningNoteSk = `Swarm optimalizácia: Rebalansovaná pozícia ${fromToken} → BTC v Safe peňaženke. ${peerInsightSk}`;
-      learningNoteEn = `Swarm optimization: Rebalanced position ${fromToken} → BTC inside Safe wallet.`;
+      learningNoteSk = `Swarm optimalizácia: Upravené % váhy a rebalansovaná pozícia ${fromToken} → BTC. ${peerInsightSk}`;
+      learningNoteEn = `Swarm optimization: Adjusted % weights and rebalanced ${fromToken} → BTC.`;
     }
   }
+
+  const normalizedTokens = normalizeAgentTokenWeights(tokens);
 
   const hasConnectedWallet = Boolean(safeAddress && safeAddress.trim().startsWith('0x') && safeAddress.trim().length === 42);
   const effectiveSafeAddress = hasConnectedWallet
@@ -743,7 +874,7 @@ export function runAutonomousAgentCycle(
 
   const updatedAgent: AutonomousAgentProfile = sanitizeAgentProfile({
     ...agent,
-    managedTokens: tokens,
+    managedTokens: normalizedTokens,
     learningGeneration: agent.learningGeneration + 1,
     swarmSynapsesCount: (agent.swarmSynapsesCount || 30) + 2,
     collectiveIqScore: Number(((agent.collectiveIqScore || 140) + iqDelta).toFixed(2)),
@@ -878,6 +1009,8 @@ export function runContinuousAutonomousFleetTick(
   }
 
   saveAutonomousAgents(nextAgents);
+  // Advance the 15 Institutional OS agents' P2P learning & dynamic % optimization simultaneously
+  runInstitutional15AgentsSwarmTick();
   const hasWallet = Boolean(safeAddress && safeAddress.trim().startsWith('0x') && safeAddress.trim().length === 42);
   if (hasWallet) {
     // Only advance real wallet trading ticks when a Safe wallet is actually connected

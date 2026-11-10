@@ -142,6 +142,12 @@ export const FOUR_SAFE_VAULTS: SafeVaultConfig[] = [
   },
 ];
 
+export interface AgentDynamicTokenAllocation {
+  symbol: string;
+  chain: string;
+  weightPct: number;
+}
+
 export interface SpecializedInstitutionalAgent {
   id: string;
   order: number;
@@ -158,6 +164,11 @@ export interface SpecializedInstitutionalAgent {
   canExecute: string;
   forbidden: string;
   lastDecisionSk: string;
+  /** Unified Neural Swarm Mesh properties so ALL 15 agents learn, connect & manage token % */
+  collectiveIqScore?: number;
+  swarmSynapsesCount?: number;
+  connectedMeshNodesCount?: number;
+  managedTokens?: AgentDynamicTokenAllocation[];
 }
 
 export const INSTITUTIONAL_15_AGENTS: SpecializedInstitutionalAgent[] = [
@@ -1170,3 +1181,221 @@ export const INFRASTRUCTURE_DEPENDENCY_MAP: InfrastructureDependencyRow[] = [
     holdsKeysOrSeeds: 'NIKDY (0% prístup ku kľúčom)',
   },
 ];
+
+const INST_AGENTS_STORAGE_KEY = 'safebtc-institutional-15-agents-v1';
+const INST_AGENTS_EVENT = 'safebtc-institutional-15-agents-changed';
+
+const DEFAULT_AGENT_TOKEN_SETS: Record<number, AgentDynamicTokenAllocation[]> = {
+  1: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 30 }, { symbol: 'SOL', chain: 'solana', weightPct: 20 }],
+  2: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 40 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'SOL', chain: 'solana', weightPct: 20 }, { symbol: 'INJ', chain: 'injective', weightPct: 15 }],
+  3: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 20 }, { symbol: 'SOL', chain: 'solana', weightPct: 15 }, { symbol: 'LINK', chain: 'arbitrum', weightPct: 10 }, { symbol: 'AAVE', chain: 'arbitrum', weightPct: 10 }],
+  4: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 55 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 25 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 20 }],
+  5: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'SOL', chain: 'solana', weightPct: 15 }, { symbol: 'HYPE', chain: 'hyperliquid', weightPct: 15 }],
+  6: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 60 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 25 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 15 }],
+  7: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 20 }, { symbol: 'SOL', chain: 'solana', weightPct: 15 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 15 }],
+  8: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 40 }, { symbol: 'TAO', chain: 'ethereum', weightPct: 20 }, { symbol: 'PENDLE', chain: 'arbitrum', weightPct: 20 }, { symbol: 'INJ', chain: 'injective', weightPct: 20 }],
+  9: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'AR', chain: 'ethereum', weightPct: 25 }, { symbol: 'FIL', chain: 'ethereum', weightPct: 25 }],
+  10: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 55 }, { symbol: 'AKT', chain: 'akash', weightPct: 25 }, { symbol: 'PYTH', chain: 'solana', weightPct: 20 }],
+  11: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'SOL', chain: 'solana', weightPct: 15 }, { symbol: 'TIA', chain: 'celestia', weightPct: 15 }],
+  12: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 60 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 20 }, { symbol: 'LINK', chain: 'arbitrum', weightPct: 20 }],
+  13: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 50 }, { symbol: 'ETH', chain: 'arbitrum', weightPct: 25 }, { symbol: 'UNI', chain: 'base', weightPct: 25 }],
+  14: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 65 }, { symbol: 'USDC', chain: 'arbitrum', weightPct: 20 }, { symbol: 'AAVE', chain: 'arbitrum', weightPct: 15 }],
+  15: [{ symbol: 'BTC', chain: 'bitcoin', weightPct: 45 }, { symbol: 'TAO', chain: 'ethereum', weightPct: 20 }, { symbol: 'HYPE', chain: 'hyperliquid', weightPct: 20 }, { symbol: 'AKT', chain: 'akash', weightPct: 15 }],
+};
+
+function enrichInstitutionalAgent(a: SpecializedInstitutionalAgent): SpecializedInstitutionalAgent {
+  const defaultTokens = DEFAULT_AGENT_TOKEN_SETS[a.order] ?? [
+    { symbol: 'BTC', chain: 'bitcoin', weightPct: 50 },
+    { symbol: 'ETH', chain: 'arbitrum', weightPct: 30 },
+    { symbol: 'SOL', chain: 'solana', weightPct: 20 },
+  ];
+  return {
+    ...a,
+    canHoldPrivateKey: false,
+    canTransferExternally: false,
+    collectiveIqScore: Number.isFinite(a.collectiveIqScore) ? a.collectiveIqScore : 140 + a.order * 0.8,
+    swarmSynapsesCount: Number.isFinite(a.swarmSynapsesCount) ? a.swarmSynapsesCount : 48 + a.order * 3,
+    connectedMeshNodesCount: 20,
+    managedTokens:
+      Array.isArray(a.managedTokens) && a.managedTokens.length > 0
+        ? a.managedTokens
+        : defaultTokens,
+  };
+}
+
+export function loadInstitutional15Agents(): SpecializedInstitutionalAgent[] {
+  try {
+    const raw = localStorage.getItem(INST_AGENTS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as SpecializedInstitutionalAgent[];
+      if (Array.isArray(parsed) && parsed.length === 15) {
+        return parsed.map(enrichInstitutionalAgent);
+      }
+    }
+  } catch { /* ignore */ }
+  const initial = INSTITUTIONAL_15_AGENTS.map(enrichInstitutionalAgent);
+  saveInstitutional15Agents(initial);
+  return initial;
+}
+
+export function saveInstitutional15Agents(agents: SpecializedInstitutionalAgent[]): void {
+  try {
+    const hardened = agents.map(enrichInstitutionalAgent);
+    localStorage.setItem(INST_AGENTS_STORAGE_KEY, JSON.stringify(hardened));
+    window.dispatchEvent(new CustomEvent(INST_AGENTS_EVENT));
+  } catch { /* ignore */ }
+}
+
+export function subscribeInstitutional15Agents(cb: () => void): () => void {
+  window.addEventListener(INST_AGENTS_EVENT, cb);
+  window.addEventListener('storage', cb);
+  return () => {
+    window.removeEventListener(INST_AGENTS_EVENT, cb);
+    window.removeEventListener('storage', cb);
+  };
+}
+
+function normalizeDynamicAllocations(
+  tokens: AgentDynamicTokenAllocation[],
+  targetSym?: string,
+  targetPct?: number,
+): AgentDynamicTokenAllocation[] {
+  if (tokens.length === 0) return [];
+  if (tokens.length === 1) return [{ ...tokens[0], weightPct: 100 }];
+
+  if (targetSym && typeof targetPct === 'number') {
+    const sym = targetSym.toUpperCase();
+    const clampedTarget = Math.max(2, Math.min(sym === 'BTC' ? 85 : 45, Math.round(targetPct)));
+    const others = tokens.filter((t) => t.symbol.toUpperCase() !== sym);
+    const remaining = Math.max(others.length * 2, 100 - clampedTarget);
+    const othersSum = others.reduce((s, t) => s + t.weightPct, 0) || 1;
+    let used = 0;
+    let seen = 0;
+    return tokens.map((t) => {
+      if (t.symbol.toUpperCase() === sym) {
+        return { ...t, weightPct: 100 - remaining };
+      }
+      seen++;
+      if (seen === others.length) {
+        return { ...t, weightPct: Math.max(1, remaining - used) };
+      }
+      const share = Math.max(2, Math.round((t.weightPct / othersSum) * remaining));
+      used += share;
+      return { ...t, weightPct: share };
+    });
+  }
+
+  const total = tokens.reduce((s, t) => s + t.weightPct, 0) || 100;
+  let running = 0;
+  return tokens.map((t, i) => {
+    if (i === tokens.length - 1) {
+      return { ...t, weightPct: Math.max(1, 100 - running) };
+    }
+    const w = Math.max(2, Math.round((t.weightPct / total) * 100));
+    running += w;
+    return { ...t, weightPct: w };
+  });
+}
+
+export function updateInstitutionalAgentTokenPct(
+  agentId: string,
+  symbol: string,
+  newPct: number,
+): SpecializedInstitutionalAgent[] {
+  const current = loadInstitutional15Agents();
+  const next = current.map((ag) => {
+    if (ag.id !== agentId) return ag;
+    const updatedTokens = normalizeDynamicAllocations(ag.managedTokens ?? [], symbol, newPct);
+    return {
+      ...ag,
+      managedTokens: updatedTokens,
+      collectiveIqScore: Number(((ag.collectiveIqScore ?? 142) + 0.2).toFixed(1)),
+      swarmSynapsesCount: (ag.swarmSynapsesCount ?? 50) + 1,
+      lastDecisionSk: `Upravené % rozdelenie tokenu ${symbol.toUpperCase()} (${updatedTokens.find((t) => t.symbol.toUpperCase() === symbol.toUpperCase())?.weightPct ?? newPct}%) a zosynchronizované v celej sieti 20 agentov.`,
+    };
+  });
+  saveInstitutional15Agents(next);
+  return next;
+}
+
+export function addTokenToInstitutionalAgent(
+  agentId: string,
+  symbol: string,
+  chain = 'arbitrum',
+  initialPct = 12,
+): SpecializedInstitutionalAgent[] {
+  const sym = symbol.trim().toUpperCase();
+  if (!sym) return loadInstitutional15Agents();
+  const current = loadInstitutional15Agents();
+  const next = current.map((ag) => {
+    if (ag.id !== agentId) return ag;
+    const list = [...(ag.managedTokens ?? [])];
+    if (list.some((t) => t.symbol.toUpperCase() === sym)) return ag;
+    list.push({ symbol: sym, chain, weightPct: initialPct });
+    const normalized = normalizeDynamicAllocations(list, sym, initialPct);
+    return {
+      ...ag,
+      managedTokens: normalized,
+      collectiveIqScore: Number(((ag.collectiveIqScore ?? 142) + 0.35).toFixed(1)),
+      swarmSynapsesCount: (ag.swarmSynapsesCount ?? 50) + 2,
+      lastDecisionSk: `Pridaný token ${sym} (${chain.toUpperCase()}) s váhou ${initialPct}% — informácia odoslaná všetkým 20 prepojeným agentom v sieti.`,
+    };
+  });
+  saveInstitutional15Agents(next);
+  return next;
+}
+
+export function removeTokenFromInstitutionalAgent(
+  agentId: string,
+  symbol: string,
+): SpecializedInstitutionalAgent[] {
+  const sym = symbol.trim().toUpperCase();
+  if (sym === 'BTC') return loadInstitutional15Agents(); // BTC is core reserve
+  const current = loadInstitutional15Agents();
+  const next = current.map((ag) => {
+    if (ag.id !== agentId) return ag;
+    const filtered = (ag.managedTokens ?? []).filter((t) => t.symbol.toUpperCase() !== sym);
+    const normalized = normalizeDynamicAllocations(filtered);
+    return {
+      ...ag,
+      managedTokens: normalized,
+      swarmSynapsesCount: (ag.swarmSynapsesCount ?? 50) + 1,
+      lastDecisionSk: `Token ${sym} odobraný a jeho % podiel automaticky prerozdelený v prospech BTC a zvyšných aktív.`,
+    };
+  });
+  saveInstitutional15Agents(next);
+  return next;
+}
+
+/**
+ * Advances continuous P2P self-learning and dynamic % allocation optimization across all 15 Institutional OS agents.
+ */
+export function runInstitutional15AgentsSwarmTick(): SpecializedInstitutionalAgent[] {
+  const current = loadInstitutional15Agents();
+  const idx = Math.floor(Date.now() / 1000) % current.length;
+  const next = current.map((ag, i) => {
+    if (i !== idx) return ag;
+    const list = [...(ag.managedTokens ?? [])];
+    if (list.length >= 2) {
+      // Slightly increase BTC weight and re-normalize to 100%
+      const btc = list.find((t) => t.symbol === 'BTC');
+      if (btc) {
+        const nextBtcPct = Math.min(70, btc.weightPct + 1);
+        return {
+          ...ag,
+          managedTokens: normalizeDynamicAllocations(list, 'BTC', nextBtcPct),
+          collectiveIqScore: Number(((ag.collectiveIqScore ?? 142) + 0.15).toFixed(1)),
+          swarmSynapsesCount: (ag.swarmSynapsesCount ?? 50) + 1,
+        };
+      }
+    }
+    return {
+      ...ag,
+      collectiveIqScore: Number(((ag.collectiveIqScore ?? 142) + 0.15).toFixed(1)),
+      swarmSynapsesCount: (ag.swarmSynapsesCount ?? 50) + 1,
+    };
+  });
+  saveInstitutional15Agents(next);
+  return next;
+}
+

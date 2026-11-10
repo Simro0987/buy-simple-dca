@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ShieldCheck,
   ShieldAlert,
@@ -15,13 +15,18 @@ import {
   Scale,
   Database,
   Cpu,
+  Plus,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Lang } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import {
   FOUR_SAFE_VAULTS,
-  INSTITUTIONAL_15_AGENTS,
+  loadInstitutional15Agents,
+  subscribeInstitutional15Agents,
+  updateInstitutionalAgentTokenPct,
+  addTokenToInstitutionalAgent,
+  removeTokenFromInstitutionalAgent,
   STRATEGY_SCHEDULER_PRIORITY,
   TRADING_STYLES_LIBRARY,
   UNIVERSAL_MARKETS_REGISTRY,
@@ -35,6 +40,7 @@ import {
   type MarketRegimeState,
   type InvestorReportPeriod,
   type EvidencePackageRecord,
+  type SpecializedInstitutionalAgent,
 } from '@/lib/institutionalOsEngine';
 
 interface Props {
@@ -62,6 +68,16 @@ export function InstitutionalOsCenter({ lang }: Props) {
 
   const [marketSearch, setMarketSearch] = useState('');
   const [reportPeriod, setReportPeriod] = useState<InvestorReportPeriod>('WEEKLY');
+  const [instAgents, setInstAgents] = useState<SpecializedInstitutionalAgent[]>(() =>
+    loadInstitutional15Agents(),
+  );
+  const [newTokenByAgent, setNewTokenByAgent] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    return subscribeInstitutional15Agents(() => {
+      setInstAgents(loadInstitutional15Agents());
+    });
+  }, []);
 
   // Evidence package interactive simulator state
   const [evidenceLogs, setEvidenceLogs] = useState<EvidencePackageRecord[]>(() => [
@@ -393,16 +409,27 @@ export function InstitutionalOsCenter({ lang }: Props) {
             ))}
           </div>
 
-          {/* All 15 Specialized Agents Capability Matrix */}
+          {/* All 15 Specialized Agents Capability Matrix + Unified Swarm P2P Learning & Token % Controls */}
           <div className="glass-card p-4 space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-              Capability Matrix: 15 Nezávislých Agentov (Rozhodovací výbor, Dohľad &amp; Self-Improving Core)
-            </h3>
-            <div className="space-y-2">
-              {INSTITUTIONAL_15_AGENTS.map((ag) => (
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-foreground">
+                  Jednotná Sieť 15 Inštitucionálnych Agentov (P2P Samo-Učenie, Zmena % Váhy, Pridávanie &amp; Odoberanie Tokenov)
+                </h3>
+                <p className="text-[11px] text-muted-foreground">
+                  Všetci agenti sú navzájom prepojení do jednej neurónovej siete (20 uzlov spolu s obchodnou flotilou), automaticky sa učia a pri každom tokene môžeš meniť % alokáciu, pridávať nové tokeny alebo ich odoberať.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full bg-[#14F195]/20 text-[#14F195] text-[10px] font-mono font-bold">
+                20/20 UZLOV PREPOJENÝCH V SIETI
+              </span>
+            </div>
+
+            <div className="space-y-2.5">
+              {instAgents.map((ag) => (
                 <div
                   key={ag.id}
-                  className="rounded-xl bg-secondary/40 border border-border/70 p-3 space-y-1.5 text-xs"
+                  className="rounded-xl bg-secondary/40 border border-border/70 p-3 space-y-2 text-xs"
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2 flex-wrap">
@@ -416,10 +443,19 @@ export function InstitutionalOsCenter({ lang }: Props) {
                         {ag.layer}
                       </span>
                     </div>
-                    <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 text-[10px] font-mono font-bold">
-                      {ag.lifecycleStatus}
-                    </span>
+                    <div className="flex items-center gap-1.5 font-mono text-[10px]">
+                      <span className="px-2 py-0.5 rounded bg-[#14F195]/15 text-[#14F195] font-bold">
+                        IQ {(ag.collectiveIqScore ?? 142.5).toFixed(1)}
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-black/50 text-foreground">
+                        {ag.swarmSynapsesCount ?? 54} synapsií
+                      </span>
+                      <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 font-bold">
+                        {ag.lifecycleStatus}
+                      </span>
+                    </div>
                   </div>
+
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 text-[10px] text-muted-foreground">
                     <div>
                       <strong className="text-foreground/80">Číta / Navrhuje:</strong> {ag.canRead} → {ag.canPropose}
@@ -428,8 +464,97 @@ export function InstitutionalOsCenter({ lang }: Props) {
                       <strong className="text-rose-300/90">Zakázané:</strong> {ag.forbidden}
                     </div>
                   </div>
+
+                  {/* Interactive Token Allocation % & Add/Remove per Agent */}
+                  <div className="rounded-lg bg-black/40 border border-white/[0.06] p-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-[10px]">
+                      <span className="font-bold text-muted-foreground uppercase">
+                        Spravované tokeny &amp; Dynamické % rozdelenie (Súčet = 100% · Max 45% na altcoin):
+                      </span>
+                      <span className="font-mono text-[#14F195]">
+                        Prepojené s {ag.connectedMeshNodesCount ?? 20} agentmi
+                      </span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-1.5">
+                      {(ag.managedTokens ?? []).map((tok) => (
+                        <div
+                          key={`${ag.id}-${tok.symbol}`}
+                          className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg bg-secondary/80 border border-border text-[11px] font-mono"
+                        >
+                          <span className="font-bold text-foreground">{tok.symbol}</span>
+                          <span className="text-[9px] text-muted-foreground uppercase">{tok.chain}</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setInstAgents(
+                                updateInstitutionalAgentTokenPct(ag.id, tok.symbol, tok.weightPct - 5),
+                              )
+                            }
+                            className="px-1 rounded bg-black/50 hover:bg-black text-muted-foreground hover:text-foreground text-[10px] font-bold"
+                            title="Znížiť % o 5%"
+                          >
+                            −
+                          </button>
+                          <span className="text-[#14F195] font-bold">{tok.weightPct}%</span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setInstAgents(
+                                updateInstitutionalAgentTokenPct(ag.id, tok.symbol, tok.weightPct + 5),
+                              )
+                            }
+                            className="px-1 rounded bg-black/50 hover:bg-black text-muted-foreground hover:text-foreground text-[10px] font-bold"
+                            title="Zvýšiť % o 5%"
+                          >
+                            +
+                          </button>
+                          {tok.symbol !== 'BTC' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setInstAgents(removeTokenFromInstitutionalAgent(ag.id, tok.symbol));
+                                toast.info(`Token ${tok.symbol} odobraný z agenta ${ag.name.split('.')[1]?.trim() ?? ag.name}.`);
+                              }}
+                              className="text-muted-foreground hover:text-rose-400 font-bold ml-0.5"
+                              title="Odobrať token a presunúť % do BTC"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex items-center gap-1.5 pt-0.5">
+                      <input
+                        type="text"
+                        value={newTokenByAgent[ag.id] ?? ''}
+                        onChange={(e) =>
+                          setNewTokenByAgent((prev) => ({ ...prev, [ag.id]: e.target.value }))
+                        }
+                        placeholder="Pridať token (napr. PENDLE, TAO, INJ, TIA, HYPE, AR, FIL, AKT, PYTH)…"
+                        className="flex-1 px-2.5 py-1 rounded-md bg-secondary text-foreground text-[11px] font-mono border border-border focus:outline-none focus:border-[#14F195]"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const sym = (newTokenByAgent[ag.id] ?? '').trim().toUpperCase();
+                          if (!sym) return;
+                          setInstAgents(addTokenToInstitutionalAgent(ag.id, sym, 'arbitrum', 12));
+                          setNewTokenByAgent((prev) => ({ ...prev, [ag.id]: '' }));
+                          toast.success(`Token ${sym} (12%) pridaný a zosynchronizovaný v sieti agentov!`);
+                        }}
+                        className="px-2.5 py-1 rounded-md bg-[#14F195]/20 hover:bg-[#14F195] text-[#14F195] hover:text-black text-[10px] font-bold border border-[#14F195]/40 transition-colors flex items-center gap-1"
+                      >
+                        <Plus className="w-3 h-3" />
+                        Pridať token
+                      </button>
+                    </div>
+                  </div>
+
                   <p className="text-[10px] font-mono text-[#14F195]">
-                    Posledný stav: {ag.lastDecisionSk}
+                    Posledný stav v sieti: {ag.lastDecisionSk}
                   </p>
                 </div>
               ))}

@@ -13,6 +13,7 @@ import {
   createNewAutonomousAgent,
   runAutonomousAgentCycle,
   runContinuousAutonomousFleetTick,
+  updateAgentTokenPercentage,
   testForbiddenExternalWithdrawalBlock,
 } from './autonomousAgentEngine';
 import {
@@ -44,6 +45,10 @@ import {
 import {
   FOUR_SAFE_VAULTS,
   INSTITUTIONAL_15_AGENTS,
+  loadInstitutional15Agents,
+  updateInstitutionalAgentTokenPct,
+  addTokenToInstitutionalAgent,
+  removeTokenFromInstitutionalAgent,
   TRADING_STYLES_LIBRARY,
   UNIVERSAL_MARKETS_REGISTRY,
   evaluateBtcEthPairCrossMarginRisk,
@@ -334,5 +339,29 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     expect(report.completenessStatus).toBe('PARTIAL_MISSING_LIVE_WALLET');
     expect(report.liveBtcBalance).toBe(0);
     expect(report.merkleRootOnChainHash).toMatch(/^0x[a-f0-9]+$/);
+
+    // Verify dynamic % allocation adjustment, token add/remove across both Swarm and 15 Institutional agents
+    const updatedSwarm = updateAgentTokenPercentage('agent-satoshi-prime', 'ETH', 25);
+    const satoshi = updatedSwarm.find((a) => a.id === 'agent-satoshi-prime')!;
+    const sumSwarmPct = satoshi.managedTokens.reduce((s, t) => s + t.allocationWeightPct, 0);
+    expect(sumSwarmPct).toBe(100);
+
+    const instLoaded = loadInstitutional15Agents();
+    expect(instLoaded.length).toBe(15);
+    expect(instLoaded[0].connectedMeshNodesCount).toBe(20);
+
+    const afterAdd = addTokenToInstitutionalAgent('agent-03-strategy', 'PENDLE', 'arbitrum', 15);
+    const stratAgent = afterAdd.find((a) => a.id === 'agent-03-strategy')!;
+    expect(stratAgent.managedTokens?.some((t) => t.symbol === 'PENDLE')).toBe(true);
+    expect(stratAgent.managedTokens?.reduce((s, t) => s + t.weightPct, 0)).toBe(100);
+
+    const afterPct = updateInstitutionalAgentTokenPct('agent-03-strategy', 'BTC', 55);
+    const stratAgent2 = afterPct.find((a) => a.id === 'agent-03-strategy')!;
+    expect(stratAgent2.managedTokens?.reduce((s, t) => s + t.weightPct, 0)).toBe(100);
+
+    const afterRem = removeTokenFromInstitutionalAgent('agent-03-strategy', 'PENDLE');
+    const stratAgent3 = afterRem.find((a) => a.id === 'agent-03-strategy')!;
+    expect(stratAgent3.managedTokens?.some((t) => t.symbol === 'PENDLE')).toBe(false);
+    expect(stratAgent3.managedTokens?.reduce((s, t) => s + t.weightPct, 0)).toBe(100);
   });
 });
