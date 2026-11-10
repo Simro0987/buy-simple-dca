@@ -38,11 +38,13 @@ import {
   saveAutonomousAgents,
   loadAgentExecutionLogs,
   appendAgentExecutionLog,
+  loadSwarmSynapses,
   subscribeAutonomousAgents,
   createNewAutonomousAgent,
   testForbiddenExternalWithdrawalBlock,
   type AutonomousAgentProfile,
   type AgentExecutionLogEntry,
+  type SwarmSynapseEvent,
 } from '@/lib/autonomousAgentEngine';
 import {
   DECENTRALIZED_PROTOCOLS,
@@ -90,6 +92,7 @@ export function AgentPage({ lang }: Props) {
   const [subTab, setSubTab] = useState<'fleet' | 'guardian' | 'decentralized' | 'chat'>('fleet');
   const [agents, setAgents] = useState<AutonomousAgentProfile[]>(loadAutonomousAgents);
   const [logs, setLogs] = useState<AgentExecutionLogEntry[]>(loadAgentExecutionLogs);
+  const [synapses, setSynapses] = useState<SwarmSynapseEvent[]>(loadSwarmSynapses);
 
   useEffect(() => {
     const openGuardian = () => setSubTab('guardian');
@@ -97,6 +100,7 @@ export function AgentPage({ lang }: Props) {
     const unsub = subscribeAutonomousAgents(() => {
       setAgents(loadAutonomousAgents());
       setLogs(loadAgentExecutionLogs());
+      setSynapses(loadSwarmSynapses());
     });
     return () => {
       window.removeEventListener('aegis-open-guardian-subtab', openGuardian);
@@ -370,8 +374,8 @@ export function AgentPage({ lang }: Props) {
           <span className="h-2 w-2 rounded-full bg-[#14F195] animate-ping" />
           <span>
             {sk
-              ? '24/7 AUTOPILOT AKTÍVNY · Agenti sa sami učia a obchodujú v peňaženke'
-              : '24/7 AUTOPILOT ACTIVE · Agents auto-learn & trade inside wallet'}
+              ? 'NEURÓNOVÁ SIEŤ AGENTOV · Učia sa sami na sebe aj navzájom medzi sebou'
+              : 'NEURAL AGENT SWARM · Continuous self-learning & peer-to-peer evolution'}
           </span>
         </div>
       </div>
@@ -472,9 +476,68 @@ export function AgentPage({ lang }: Props) {
       {/* TAB: WEBSITE GUARDIAN, ENCRYPTION, AUTO-PATCHING & UI ARCHITECT */}
       {subTab === 'guardian' && <WebsiteGuardianPanel lang={lang} />}
 
-      {/* TAB 1: AUTONOMOUS AGENT FLEET */}
+      {/* TAB 1: AUTONOMOUS AGENT FLEET & COLLECTIVE NEURAL SWARM MESH */}
       {subTab === 'fleet' && (
         <div className="space-y-4">
+          {/* Peer-to-Peer Neural Swarm Matrix (Agents learning from themselves & from each other) */}
+          <div className="rounded-2xl border border-[#14F195]/35 bg-[#14F195]/[0.05] p-4 space-y-3">
+            <div className="flex items-start justify-between gap-2 flex-wrap">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <Sparkles className="w-4 h-4 text-[#14F195]" />
+                  <h2 className="text-sm font-bold text-foreground">
+                    {sk
+                      ? 'Kolektívna Neurónová Sieť Agentov (Swarm Intelligence Mesh)'
+                      : 'Collective Neural Agent Network (Swarm Intelligence Mesh)'}
+                  </h2>
+                  <span className="px-2 py-0.5 rounded-full bg-[#14F195]/20 text-[#14F195] text-[10px] font-mono font-bold">
+                    P2P SYNAPSE SYNC
+                  </span>
+                </div>
+                <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
+                  {sk
+                    ? 'Žiadne manuálne ani oddelené učiace cykly — všetci agenti sú prepojení do jednej živej neurónovej siete. Každý agent sa nepretržite zdokonaľuje sám na svojich vlastných rozhodnutiach (sebareflexia) a zároveň v reálnom čase preberá najlepšie stratégie, váhy a objavené tokeny od všetkých ostatných agentov v sieti.'
+                    : 'No discrete learning cycles — all agents form a single live neural mesh, continuously learning from their own actions and sharing winning strategies with every other agent in real time.'}
+                </p>
+              </div>
+            </div>
+
+            {/* Live Inter-Agent Synapse Stream */}
+            <div className="rounded-xl bg-black/50 border border-white/[0.08] p-3 space-y-2">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="font-bold text-[#14F195] uppercase tracking-wider">
+                  {sk
+                    ? 'Živý tok zdieľaných vedomostí medzi agentmi (Swarm Synapsie)'
+                    : 'Live Inter-Agent Knowledge Transfer Stream (Swarm Synapses)'}
+                </span>
+                <span className="font-mono text-muted-foreground">
+                  {agents.reduce((s, a) => s + (a.swarmSynapsesCount || 0), 0)} synapsií v sieti
+                </span>
+              </div>
+
+              <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                {synapses.slice(0, 5).map((syn) => (
+                  <div
+                    key={syn.id}
+                    className="rounded-lg bg-secondary/50 border border-border/60 px-2.5 py-1.5 text-[11px] flex flex-col gap-0.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono font-bold text-foreground">
+                        {syn.fromAgentName} <span className="text-[#14F195]">⇄</span> {syn.toAgentName}
+                      </span>
+                      <span className="text-[10px] font-mono text-emerald-400">
+                        +{syn.iqDelta.toFixed(2)} IQ · {syn.sharedTokenSymbol ?? 'BTC'}
+                      </span>
+                    </div>
+                    <p className="text-muted-foreground text-[10px] leading-snug">
+                      {sk ? syn.messageSk : syn.messageEn}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Create New Future Agent Button / Builder */}
           <div className="glass-card p-4 space-y-3 border border-primary/30">
             <div className="flex items-center justify-between gap-2">
@@ -609,15 +672,19 @@ export function AgentPage({ lang }: Props) {
                 </button>
               </div>
 
-              {/* Self-Learning & BTC Metrics */}
+              {/* Collective Intelligence & BTC Metrics */}
               <div className="grid grid-cols-4 gap-2 bg-secondary/40 rounded-xl p-2.5 border border-border/60 text-center">
                 <div>
-                  <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Generácia učenia' : 'Learning Gen'}</p>
-                  <p className="text-xs font-bold text-foreground font-mono">Gen #{agent.learningGeneration}</p>
+                  <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Kolektívne IQ' : 'Collective IQ'}</p>
+                  <p className="text-xs font-bold text-[#14F195] font-mono">
+                    {(agent.collectiveIqScore || 142.5).toFixed(1)} IQ
+                  </p>
                 </div>
                 <div>
-                  <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Úspešnosť' : 'Win Rate'}</p>
-                  <p className="text-xs font-bold text-emerald-400 font-mono">{agent.winRatePct.toFixed(1)}%</p>
+                  <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Swarm Synapsie' : 'Swarm Synapses'}</p>
+                  <p className="text-xs font-bold text-foreground font-mono">
+                    {agent.swarmSynapsesCount || 54} prepojení
+                  </p>
                 </div>
                 <div>
                   <p className="text-[9px] uppercase text-muted-foreground">{sk ? 'Získané BTC' : 'BTC Stacked'}</p>
@@ -630,6 +697,13 @@ export function AgentPage({ lang }: Props) {
                   </p>
                 </div>
               </div>
+
+              {agent.lastPeerInsightSk && (
+                <div className="rounded-xl bg-black/40 border border-[#14F195]/20 px-3 py-2 text-[11px] text-muted-foreground">
+                  <span className="font-bold text-[#14F195]">Swarm P2P Zdokaľovanie: </span>
+                  {agent.lastPeerInsightSk}
+                </div>
+              )}
 
               {/* Managed Tokens under this Agent (Add / Remove dynamically) */}
               <div className="space-y-2">
@@ -698,8 +772,8 @@ export function AgentPage({ lang }: Props) {
                   <span className="h-2 w-2 rounded-full bg-[#14F195] animate-pulse shrink-0" />
                   <span>
                     {sk
-                      ? `Automaticky sa učí (Gen #${agent.learningGeneration}) a obchoduje v Safe peňaženke → +BTC`
-                      : `Automatically learning (Gen #${agent.learningGeneration}) & trading inside Safe wallet → +BTC`}
+                      ? `Učí sa sám na sebe + zdieľa vedomosti s ${agent.connectedPeerIds?.length ?? 3} agentmi v sieti · Obchoduje v Safe → +BTC`
+                      : `Self-learning + sharing intelligence with ${agent.connectedPeerIds?.length ?? 3} peer agents · Trading in Safe → +BTC`}
                   </span>
                 </div>
 

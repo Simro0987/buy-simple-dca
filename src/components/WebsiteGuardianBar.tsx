@@ -118,14 +118,14 @@ export function WebsiteGuardianBar() {
             {guardian.securityScore}/100 SECURE
           </span>
           <span className="hidden sm:inline-flex items-center gap-1 text-white/60 font-mono">
-            · <Lock className="w-2.5 h-2.5 text-emerald-400" /> AES-256 · Gen #{totalGens} · +{totalBtcStacked.toFixed(4)} ₿
+            · <Lock className="w-2.5 h-2.5 text-emerald-400" /> AES-256 · Swarm Mesh IQ {totalGens} · +{totalBtcStacked.toFixed(4)} ₿
           </span>
         </button>
 
         <div className="flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 font-mono font-semibold">
             <Activity className="w-2.5 h-2.5 animate-pulse text-emerald-400" />
-            <span>24/7 AUTO-UČENIE &amp; OBCHODOVANIE</span>
+            <span>SWARM SIEŤ AGENTOV · SAMO-UČENIE &amp; OBCHODOVANIE</span>
           </span>
 
           <button
