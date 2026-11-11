@@ -1,3 +1,5 @@
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -326,6 +328,31 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
+
+  // ── Auth guard ─────────────────────────────────────────
+  // Accept either the shared edge-function secret (used by pg_cron) or a valid
+  // Supabase user JWT. Blocks unauthenticated public callers.
+  {
+    const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
+    const providedSecret = req.headers.get('x-edge-secret') ?? '';
+    const secretOk = edgeSecret.length > 0 && providedSecret === edgeSecret;
+    if (!secretOk) {
+      const authHeader = req.headers.get('authorization') ?? '';
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const token = authHeader.slice(7).trim();
+      const authClient = createClient(
+        Deno.env.get('SUPABASE_URL')!,
+        Deno.env.get('SUPABASE_ANON_KEY')!,
+      );
+      const { data: claims, error: claimsErr } = await authClient.auth.getClaims(token);
+      if (claimsErr || !claims?.claims?.sub) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+  }
+
 
   try {
     const { currencies, kind, lang } = await req.json();

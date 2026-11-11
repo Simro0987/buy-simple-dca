@@ -7,7 +7,6 @@ const corsHeaders = {
 
 const GATEWAY_URL = 'https://connector-gateway.lovable.dev/telegram';
 const COIN_CG: Record<string, string> = { BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana' };
-const COIN_KEY: Record<string, string> = { BTC: 'btc', ETH: 'eth', SOL: 'sol' };
 
 async function notifyTelegram(text: string) {
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -64,15 +63,14 @@ Deno.serve(async (req) => {
           filled_at: new Date().toISOString(),
         }).eq('id', p.id);
 
-        // Update manual_holdings + initial_cost_basis (invested USD)
-        const { data: s } = await supabase.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle();
-        if (s) {
-          const mh = (s.manual_holdings ?? {}) as Record<string, number>;
-          const cb = (s.initial_cost_basis ?? {}) as Record<string, number>;
-          const k = COIN_KEY[p.coin];
-          mh[k] = Number(mh[k] ?? 0) + qty;
-          cb[k] = Number(cb[k] ?? 0) + Number(p.amount_usd);
-          await supabase.from('app_settings').update({ manual_holdings: mh, initial_cost_basis: cb }).eq('id', s.id);
+        // History BUY record (dedupe by note — client may also write it).
+        const note = `DCA limit fill (${p.id})`;
+        const { data: dup } = await supabase.from('token_transactions').select('id').eq('note', note).limit(1);
+        if (!dup || dup.length === 0) {
+          await supabase.from('token_transactions').insert({
+            user_id: p.user_id, coingecko_id: COIN_CG[p.coin], symbol: p.coin, side: 'buy',
+            quantity: qty, price_usd: cur, executed_at: new Date().toISOString(), note,
+          });
         }
 
         await notifyTelegram(

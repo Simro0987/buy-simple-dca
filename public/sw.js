@@ -1,44 +1,15 @@
-const CACHE_NAME = "edge-trading-v1";
-const PRECACHE_URLS = ["/", "/manifest.json", "/icon-192.png", "/icon-512.png"];
-
-self.addEventListener("install", (event) => {
+// Legacy service worker kept only to unregister stale installations.
+self.addEventListener('install', () => self.skipWaiting());
+self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(PRECACHE_URLS)),
-  );
-  self.skipWaiting();
-});
-
-self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys
-          .filter((key) => key !== CACHE_NAME)
-          .map((key) => caches.delete(key)),
-      ),
-    ),
-  );
-  self.clients.claim();
-});
-
-self.addEventListener("fetch", (event) => {
-  if (event.request.method !== "GET") return;
-
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-
-      return fetch(event.request)
-        .then((response) => {
-          if (!response || response.status !== 200 || response.type !== "basic") {
-            return response;
-          }
-
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-          return response;
-        })
-        .catch(() => caches.match("/"));
-    }),
+    (async () => {
+      try {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      } catch {
+        /* noop */
+      }
+      await self.registration.unregister();
+    })(),
   );
 });

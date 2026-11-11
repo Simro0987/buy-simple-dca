@@ -53,7 +53,25 @@ function getResponseText(actionType: string): string {
   return ACTION_RESPONSES[actionType] || '✅ Akcia zaznamenaná.';
 }
 
-Deno.serve(async () => {
+Deno.serve(async (req) => {
+  // ── Auth guard ─────────────────────────────────────────
+  {
+    const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
+    const providedSecret = req.headers.get('x-edge-secret') ?? '';
+    const secretOk = edgeSecret.length > 0 && providedSecret === edgeSecret;
+    if (!secretOk) {
+      const authHeader = req.headers.get('authorization') ?? '';
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+      const verify = await fetch(`${Deno.env.get('SUPABASE_URL')}/auth/v1/user`, {
+        headers: { Authorization: authHeader, apikey: Deno.env.get('SUPABASE_ANON_KEY') ?? '' },
+      });
+      if (!verify.ok) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+      }
+    }
+  }
   const startTime = Date.now();
 
   const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
@@ -68,6 +86,16 @@ Deno.serve(async () => {
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   let totalProcessed = 0;
+
+  // Resolve the owning account so every callback log row is user-scoped.
+  const { data: ownerCfg } = await supabase
+    .from('telegram_config')
+    .select('user_id')
+    .not('user_id', 'is', null)
+    .order('updated_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const ownerId = (ownerCfg?.user_id as string | null) ?? null;
 
   // Read current offset
   const { data: state, error: stateErr } = await supabase
@@ -172,6 +200,7 @@ Deno.serve(async () => {
       // 3. Log to database
       try {
         await supabase.from('telegram_callback_log').insert({
+          user_id: ownerId,
           callback_data: callbackData,
           action_type: actionType,
           token: token || null,

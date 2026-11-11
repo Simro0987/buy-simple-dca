@@ -1,0 +1,2 @@
+ALTER TABLE public.staking_positions DROP CONSTRAINT IF EXISTS staking_positions_symbol_check;
+ALTER TABLE public.staking_positions ADD CONSTRAINT staking_positions_symbol_check CHECK (symbol IN ('BTC','ETH','SOL','LINK','AAVE','GMX','PENDLE','MORPHO'));

@@ -14,3 +14,12 @@ verify_jwt = false
 
 [functions.gas-prices]
 verify_jwt = false
+
+[functions.market-proxy]
+verify_jwt = false
+
+[functions.token-tokenomics]
+verify_jwt = false
+
+[functions.btc-indicators]
+verify_jwt = false

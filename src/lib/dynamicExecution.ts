@@ -1,0 +1,375 @@
+// Dynamic Per-Coin Execution Engine
+// Calculates Market/Limit split and limit distance per coin based on:
+// 1) Final Score (0-100) → base split
+// 2) Per-coin 14D volatility → distance multiplier
+// 3) Per-coin 14D momentum → market% adjustment
+
+export type CoinKey = 'btc' | 'eth' | 'sol';
+
+export interface MultiplierBreakdown {
+  T: -1 | 0 | 1;          // trend: 1 bull, 0 neutral, -1 bear
+  VR: number;             // volatility ratio vs BTC (>=0)
+  fill: number;           // historical fill rate 0..1
+  base: number;           // base multiplier (trend tier)
+  vol: number;            // volatility adjustment factor
+  fb: number;             // feedback-loop factor
+  total: number;          // base * vol * fb
+}
+
+export interface CoinExecution {
+  coin: CoinKey;
+  symbol: 'BTC' | 'ETH' | 'SOL';
+  marketPct: number;       // 25-90
+  limitPct: number;        // 100 - marketPct
+  limitDistancePct: number; // negative, e.g. -4.0
+  volatility30d: number;   // %, std-dev daily returns
+  momentum30d: number;     // %, price change vs 30d ago
+  baseMarketPct: number;
+  baseLimitPct: number;
+  baseDistance: number;
+  volatilityMultiplier: number;
+  momentumAdjustment: number;
+  rationale: string;
+  /** Set for ETH/SOL when computed via executive multiplier formulas. */
+  multiplierBreakdown?: MultiplierBreakdown;
+}
+
+export interface FillRates {
+  eth: number; // 0..1
+  sol: number; // 0..1
+}
+
+/** Trend tier from 14D momentum: >+3% bull, <-3% bear, else neutral. */
+export function getTrendTier(momentum30d: number): -1 | 0 | 1 {
+  if (momentum30d > 3) return 1;
+  if (momentum30d < -3) return -1;
+  return 0;
+}
+
+/** Volatility ratio vs BTC, floored at 0 (asset = BTC → 0, asset = 2×BTC → 1). */
+export function getVolatilityRatio(assetVol: number, btcVol: number): number {
+  if (!btcVol || btcVol <= 0) return 0;
+  return Math.max(0, assetVol / btcVol - 1);
+}
+
+/**
+ * ETH multiplier:
+ *   base = T==1 ? 1.20 : T==0 ? 1.25 : 1.28
+ *   total = base * (1 + VR*0.05) * (1 + (0.50 - ETH_Fill) * 0.2)
+ */
+export function ethMultiplier(T: -1 | 0 | 1, VR: number, ethFill: number): MultiplierBreakdown {
+  const base = T === 1 ? 1.20 : T === 0 ? 1.25 : 1.28;
+  const vol = 1 + VR * 0.05;
+  const fb = 1 + (0.50 - ethFill) * 0.2;
+  return { T, VR, fill: ethFill, base, vol, fb, total: base * vol * fb };
+}
+
+/**
+ * SOL multiplier:
+ *   base = T==1 ? 1.35 : T==0 ? 1.50 : 1.55
+ *   total = base * (1 + VR*0.08) * (1 + (0.50 - SOL_Fill) * 0.3)
+ */
+export function solMultiplier(T: -1 | 0 | 1, VR: number, solFill: number): MultiplierBreakdown {
+  const base = T === 1 ? 1.35 : T === 0 ? 1.50 : 1.55;
+  const vol = 1 + VR * 0.08;
+  const fb = 1 + (0.50 - solFill) * 0.3;
+  return { T, VR, fill: solFill, base, vol, fb, total: base * vol * fb };
+}
+
+export interface BaseSplit {
+  marketPct: number;
+  limitPct: number;
+  distance: number; // negative
+}
+
+/** Adaptive overrides z DB engine_params. */
+export interface AdaptiveOverrides {
+  baseMarketHigh?: number;     // default 85
+  baseMarketLow?: number;      // default 30
+  baseDistanceLow?: number;    // default -1.5
+  baseDistanceHigh?: number;   // default -6.5
+  volatilitySensitivity?: number; // default 0.25
+  momentumSensitivity?: number;   // default 0.6
+}
+
+const DEFAULTS: Required<AdaptiveOverrides> = {
+  baseMarketHigh: 85,
+  baseMarketLow: 30,
+  baseDistanceLow: -1.5,
+  baseDistanceHigh: -6.5,
+  volatilitySensitivity: 0.25,
+  momentumSensitivity: 0.6,
+};
+
+let CURRENT_OVERRIDES: Required<AdaptiveOverrides> = { ...DEFAULTS };
+
+/** Voliteľne nastav adaptive parametre z DB (volá sa raz pri načítaní engine_params). */
+export function setAdaptiveOverrides(o: AdaptiveOverrides | null | undefined): void {
+  CURRENT_OVERRIDES = {
+    baseMarketHigh: o?.baseMarketHigh ?? DEFAULTS.baseMarketHigh,
+    baseMarketLow: o?.baseMarketLow ?? DEFAULTS.baseMarketLow,
+    baseDistanceLow: o?.baseDistanceLow ?? DEFAULTS.baseDistanceLow,
+    baseDistanceHigh: o?.baseDistanceHigh ?? DEFAULTS.baseDistanceHigh,
+    volatilitySensitivity: o?.volatilitySensitivity ?? DEFAULTS.volatilitySensitivity,
+    momentumSensitivity: o?.momentumSensitivity ?? DEFAULTS.momentumSensitivity,
+  };
+}
+
+/**
+ * Kontinuálny base split — žiadne skokové pásma. Hodnoty riadi adaptívny engine
+ * (engine_params v DB). Defaults: 85→30 market, -1.5→-6.5 distance.
+ */
+export function getBaseSplit(score: number): BaseSplit {
+  const s = Math.max(0, Math.min(100, score));
+  const t = s / 100; // 0..1
+  const { baseMarketHigh, baseMarketLow, baseDistanceLow, baseDistanceHigh } = CURRENT_OVERRIDES;
+  const marketPct = Math.round(baseMarketHigh - (baseMarketHigh - baseMarketLow) * t);
+  const distance = baseDistanceLow - (Math.abs(baseDistanceHigh) - Math.abs(baseDistanceLow)) * t;
+  return {
+    marketPct,
+    limitPct: 100 - marketPct,
+    distance: Math.round(distance * 10) / 10,
+  };
+}
+
+/**
+ * Kontinuálny multiplier (nie skokový) — aj malý rozdiel vol medzi BTC/ETH/SOL
+ * generuje viditeľne odlišný limit distance.
+ * Mapovanie: vol 0% → 0.5×, vol 2% → 1.0×, vol 4% → 1.5×, vol 6%+ → 2.0× (cap).
+ */
+export function getVolatilityMultiplier(vol30d: number): number {
+  const sens = CURRENT_OVERRIDES.volatilitySensitivity;
+  const mult = 0.5 + vol30d * sens;
+  return Math.max(0.5, Math.min(2.0, mult));
+}
+
+/**
+ * Kontinuálny momentum adjustment na Market% — koeficient riadi engine_params.
+ * mom 0 % → 0, |mom| × momentumSensitivity, cap ±15.
+ */
+export function getMomentumAdjustment(mom30d: number): number {
+  const sens = CURRENT_OVERRIDES.momentumSensitivity;
+  const adj = Math.abs(mom30d) * sens;
+  return Math.max(0, Math.min(15, Math.round(adj * 10) / 10));
+}
+
+const SYMBOLS: Record<CoinKey, 'BTC' | 'ETH' | 'SOL'> = {
+  btc: 'BTC', eth: 'ETH', sol: 'SOL',
+};
+
+export interface CoinMetrics {
+  volatility30d: number;
+  momentum30d: number;
+}
+
+/**
+ * Per-coin execution.
+ * Market% / Limit% sú **rovnaké pre všetky tokeny** (riadi ich celkové Score + agregované momentum) —
+ * splity sa menia v čase podľa indikátorov, ale v rámci jedného týždňa sú konzistentné naprieč coins.
+ * Limit Distance % je **per-coin** — riadi ho 14D volatilita daného tokenu (volatilnejší token = širší distance).
+ *
+ * @param sharedMomentumAdj voliteľný spoločný momentum adjustment (z agregátu BTC+ETH+SOL).
+ *                          Ak nie je daný, použije sa per-coin momentum (legacy).
+ */
+export function calcCoinExecution(
+  coin: CoinKey,
+  score: number,
+  metrics: CoinMetrics,
+  sharedMomentumAdj?: number,
+): CoinExecution {
+  const base = getBaseSplit(score);
+  const volMult = getVolatilityMultiplier(metrics.volatility30d);
+  const momAdj = sharedMomentumAdj ?? getMomentumAdjustment(metrics.momentum30d);
+
+  // Per-coin momentum bias na DISTANCE — kontinuálne, žiadne pásma.
+  //   downtrend (m<0) → multiplier > 1 (širší limit, čakaj nižšiu cenu)
+  //   uptrend   (m>0) → multiplier < 1 (tesnejší limit, chyť trend)
+  // Lineárne: mult = 1 - m/50, clamp [0.75, 1.25]
+  const m = metrics.momentum30d;
+  const momDistMult = Math.max(0.75, Math.min(1.25, 1 - m / 50));
+
+  // Distance: PER-COIN — base × per-coin volatility × per-coin momentum, clamp [-10, -1.5]
+  const rawDist = base.distance * volMult * momDistMult;
+  const distance = Math.round(Math.max(-10, Math.min(-1.5, rawDist)) * 10) / 10;
+
+  // Market%: SHARED — base + shared adjustment, clamp [25, 90]
+  // Zaokrúhľujeme na celé čísla, aby Market + Limit = 100 % vždy presne.
+  const rawMarket = base.marketPct + momAdj;
+  const marketPct = Math.round(Math.max(25, Math.min(90, rawMarket)));
+  const limitPct = 100 - marketPct;
+
+  // Per-coin rationale: vol + momentum (rovnaká pre BTC/ETH/SOL)
+  const volPart =
+    metrics.volatility30d >= 4 ? `vysoká 14D vol ${metrics.volatility30d.toFixed(1)}%`
+    : metrics.volatility30d >= 2.5 ? `stredná 14D vol ${metrics.volatility30d.toFixed(1)}%`
+    : metrics.volatility30d >= 1.5 ? `nižšia 14D vol ${metrics.volatility30d.toFixed(1)}%`
+    : `nízka 14D vol ${metrics.volatility30d.toFixed(1)}%`;
+  const momPart =
+    m < -10 ? `silný downtrend ${m.toFixed(1)}% → širší limit`
+    : m < -3 ? `mierny downtrend ${m.toFixed(1)}% → mierne širší limit`
+    : m <= 3 ? `neutrálne momentum ${m.toFixed(1)}%`
+    : m <= 10 ? `mierny uptrend +${m.toFixed(1)}% → tesnejší limit`
+    : `silný uptrend +${m.toFixed(1)}% → tesný limit`;
+  const rationale = `${volPart} + ${momPart} → distance ${distance.toFixed(1)}%.`;
+
+  return {
+    coin,
+    symbol: SYMBOLS[coin],
+    marketPct,
+    limitPct,
+    limitDistancePct: distance,
+    volatility30d: metrics.volatility30d,
+    momentum30d: metrics.momentum30d,
+    baseMarketPct: base.marketPct,
+    baseLimitPct: base.limitPct,
+    baseDistance: base.distance,
+    volatilityMultiplier: volMult,
+    momentumAdjustment: momAdj,
+    rationale,
+  };
+}
+
+/**
+ * Vypočíta jednotný Market/Limit % split pre všetky tokeny + per-coin distance.
+ * Toto je hlavná vstupná funkcia (Part 6).
+ */
+export function calcUnifiedExecution(
+  score: number,
+  metrics: Record<CoinKey, CoinMetrics>,
+  fillRates: FillRates = { eth: 0.5, sol: 0.5 },
+): {
+  executions: Record<CoinKey, CoinExecution>;
+  sharedMarketPct: number;
+  sharedLimitPct: number;
+  sharedMomentumAvg: number;
+  sharedMomentumAdj: number;
+  base: BaseSplit;
+} {
+  const coins: CoinKey[] = ['btc', 'eth', 'sol'];
+  // Agregované momentum (priemer per-coin) — riadi spoločný Market% adjustment
+  const avgMom = coins.reduce((s, c) => s + (metrics[c]?.momentum30d ?? 0), 0) / coins.length;
+  const sharedMomAdj = getMomentumAdjustment(avgMom);
+  const base = getBaseSplit(score);
+  const out = {} as Record<CoinKey, CoinExecution>;
+  for (const c of coins) {
+    out[c] = calcCoinExecution(c, score, metrics[c] ?? { volatility30d: 0, momentum30d: 0 }, sharedMomAdj);
+  }
+
+  // Executive formula override for ETH & SOL — limit distance je odvodené od BTC distance
+  // násobeného multiplierom z trendu, volatility ratio a fill-rate feedback loop.
+  const btcDist = out.btc.limitDistancePct; // negatívne, napr. -3
+  const btcVol = metrics.btc?.volatility30d ?? 0;
+
+  const applyMultiplier = (
+    c: 'eth' | 'sol',
+    bd: MultiplierBreakdown,
+  ) => {
+    const raw = btcDist * bd.total; // -3 * 1.20 = -3.6
+    const distance = Math.round(Math.max(-15, Math.min(-1.5, raw)) * 10) / 10;
+    const trendLabel = bd.T === 1 ? 'bull' : bd.T === -1 ? 'bear' : 'neutral';
+    out[c] = {
+      ...out[c],
+      limitDistancePct: distance,
+      multiplierBreakdown: bd,
+      rationale:
+        `Trend ${trendLabel} (base ×${bd.base.toFixed(2)}) · ` +
+        `VR ${bd.VR.toFixed(2)} (vol ×${bd.vol.toFixed(3)}) · ` +
+        `fill ${(bd.fill * 100).toFixed(0)}% (fb ×${bd.fb.toFixed(3)}) ` +
+        `→ mult ×${bd.total.toFixed(3)} × BTC ${btcDist.toFixed(1)}% = ${distance.toFixed(1)}%.`,
+    };
+  };
+
+  const ethT = getTrendTier(metrics.eth?.momentum30d ?? 0);
+  const ethVR = getVolatilityRatio(metrics.eth?.volatility30d ?? 0, btcVol);
+  applyMultiplier('eth', ethMultiplier(ethT, ethVR, fillRates.eth));
+
+  const solT = getTrendTier(metrics.sol?.momentum30d ?? 0);
+  const solVR = getVolatilityRatio(metrics.sol?.volatility30d ?? 0, btcVol);
+  applyMultiplier('sol', solMultiplier(solT, solVR, fillRates.sol));
+
+  // Všetky majú rovnaký marketPct/limitPct
+  const shared = out.btc;
+  return {
+    executions: out,
+    sharedMarketPct: shared.marketPct,
+    sharedLimitPct: shared.limitPct,
+    sharedMomentumAvg: avgMom,
+    sharedMomentumAdj: sharedMomAdj,
+    base,
+  };
+}
+
+// Fallback when dynamic engine is OFF
+export function fixedExecution(coin: CoinKey): CoinExecution {
+  return {
+    coin,
+    symbol: SYMBOLS[coin],
+    marketPct: 60,
+    limitPct: 40,
+    limitDistancePct: -4,
+    volatility30d: 0,
+    momentum30d: 0,
+    baseMarketPct: 60,
+    baseLimitPct: 40,
+    baseDistance: -4,
+    volatilityMultiplier: 1,
+    momentumAdjustment: 0,
+    rationale: 'Fixný 60/40 split (Dynamic Engine vypnutý).',
+  };
+}
+
+// ─────────────────────────────────────────────────────────────
+// CONTINUOUS MARKET/LIMIT GEARBOX (linear interpolation, žiadne tvrdé prahy)
+// ─────────────────────────────────────────────────────────────
+
+const FG_COEF = 0.6;         // pp Market na 1 bod odchýlky F&G od 50
+const BTC_WMA_COEF = 0.8;    // pp Market na 1 % odchýlky BTC od 200WMA
+const SAT_EMA_COEF = 2.0;    // pp Market na 1 % odchýlky ceny od 50D EMA
+const SAT_ATR_MULT = 1.5;    // limit set 1.5× denného ATR pod cenu
+
+/**
+ * BTC continuous Market %:
+ *   base 50, fg_offset = (50 − FG)·0.6, wma_offset = −wmaDistPct·0.8
+ *   pod WMA (záporný dist) → pridá Market; nad WMA → uberá.
+ *   clamp(20, 80).
+ */
+export function btcContinuousMarketPct(
+  fearGreed: number | null,
+  btcWmaDistPct: number | null,
+): number {
+  const fg = fearGreed ?? 50;
+  const wma = btcWmaDistPct ?? 0;
+  const fgOffset = (50 - fg) * FG_COEF;
+  const wmaOffset = -wma * BTC_WMA_COEF;
+  return Math.round(Math.max(20, Math.min(80, 50 + fgOffset + wmaOffset)));
+}
+
+/**
+ * ETH/SOL continuous Market %:
+ *   base 50, ema_diff = (price − ema50)/ema50, market = 50 − ema_diff·100·2.0
+ *   pod EMA (záporný diff) → pridá Market; nad EMA → uberá.
+ *   clamp(20, 80).
+ */
+export function satContinuousMarketPct(price: number, ema50: number): number {
+  if (!(price > 0) || !(ema50 > 0)) return 50;
+  const emaDiffPct = ((price - ema50) / ema50) * 100;
+  return Math.round(Math.max(20, Math.min(80, 50 - emaDiffPct * SAT_EMA_COEF)));
+}
+
+/**
+ * ETH/SOL limit discount (positive %): 1.5× denného ATR pod cenu.
+ * atrDaily = ATR v USD (napr. atr7). Vráti percento, na ktoré posadiť limit.
+ */
+export function satAtrLimitDiscountPct(price: number, atrDaily: number): number {
+  if (!(price > 0) || !(atrDaily > 0)) return 0;
+  return Math.max(0.3, Math.min(15, (SAT_ATR_MULT * atrDaily) / price * 100));
+}
+
+
+export function overallNarrative(executions: CoinExecution[]): string {
+  if (executions.length === 0) return '';
+  const avgMarket = executions.reduce((s, e) => s + e.marketPct, 0) / executions.length;
+  if (avgMarket > 70) return '🟢 Lacný/volatilný trh — uprednostni okamžitú expozíciu.';
+  if (avgMarket >= 50) return '🟡 Normálne podmienky — vyvážená exekúcia.';
+  return '🔴 Drahý/pokojný trh — buď trpezlivý s limitmi.';
+}

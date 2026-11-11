@@ -52,17 +52,52 @@ const FALLBACKS = {
   atr14d: { BTC: 2.0, ETH: 2.8, SOL: 4.2 } as Record<string, number>,
 };
 
+// ---- CoinGecko 429 backoff (exponential cooldown, no immediate retries) ----
+const BACKOFF_STEPS_MS = [30_000, 60_000, 120_000, 300_000];
+const cooldown = new Map<string, { until: number; step: number }>();
+
+function hostKey(url: string): string {
+  try { return new URL(url).host; } catch { return url; }
+}
+function inCooldown(url: string): boolean {
+  const c = cooldown.get(hostKey(url));
+  return !!c && Date.now() < c.until;
+}
+function noteRateLimit(url: string) {
+  const key = hostKey(url);
+  const prev = cooldown.get(key);
+  const step = prev && Date.now() < prev.until + 600_000 ? Math.min(prev.step + 1, BACKOFF_STEPS_MS.length - 1) : 0;
+  const wait = BACKOFF_STEPS_MS[step];
+  cooldown.set(key, { until: Date.now() + wait, step });
+  addDebug(`429 rate limited → cooldown ${wait / 1000}s host=${key}`);
+}
+function clearRateLimit(url: string) {
+  cooldown.delete(hostKey(url));
+}
+
 async function safeFetchJson(url: string, init?: RequestInit, logFailures = true): Promise<unknown | null> {
+  if (inCooldown(url)) {
+    if (logFailures) addDebug(`skipped (backoff active) url=${url}`);
+    return null;
+  }
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), 8000);
       const res = await fetch(url, { ...init, signal: ctrl.signal });
       clearTimeout(t);
-      if (res.ok) return await res.json();
+      if (res.ok) {
+        clearRateLimit(url);
+        return await res.json();
+      }
       const body = await res.text().catch(() => 'unreadable body');
       if (logFailures) addDebug(`fetch failed attempt=${attempt + 1} status=${res.status} url=${url} body=${body.slice(0, 220)}`);
-      if (attempt === 0 && (res.status === 429 || res.status >= 500)) {
+      // 429 → NEVER retry in-request; start/extend the exponential cooldown.
+      if (res.status === 429) {
+        noteRateLimit(url);
+        return null;
+      }
+      if (attempt === 0 && res.status >= 500) {
         await new Promise(r => setTimeout(r, 1500));
         continue;
       }
@@ -78,6 +113,7 @@ async function safeFetchJson(url: string, init?: RequestInit, logFailures = true
   }
   return null;
 }
+
 
 type BinanceKline = [number, string, string, string, string, string, ...unknown[]];
 
@@ -192,11 +228,23 @@ async function fetchRsi14d(symbol: string): Promise<number | null> {
   return Math.max(0, Math.min(100, rsi));
 }
 
+/** Historical (200d) data — cached 1 hour; DCA analysis needs no realtime precision. */
+const HISTORICAL_TTL_MS = 60 * 60 * 1000;
+
+function readFreshCache<T>(key: string, ttlMs: number): T | null {
+  const c = cache.get(key) as Cached<T> | undefined;
+  if (c && Date.now() - c.ts < ttlMs) return c.data;
+  return null;
+}
+
 async function fetchMayerMultiple(): Promise<{ value: number; price: number; ma200d: number }> {
   const key = 'mayer';
+  const fresh = readFreshCache<{ value: number; price: number; ma200d: number }>(key, HISTORICAL_TTL_MS);
+  if (fresh) return fresh;
   try {
     const url = `https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=210`;
     const json = await safeFetchJson(url) as { prices?: [number, number][] } | null;
+
     const prices = json?.prices ?? [];
     if (prices.length >= 200) {
       const buckets = new Map<string, number>();
@@ -261,13 +309,14 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders });
 
   try {
-    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr, ethRsi, solRsi] = await Promise.all([
+    const [mayer, solTvl, unlocks, btcAtr, ethAtr, solAtr, btcRsi, ethRsi, solRsi] = await Promise.all([
       fetchMayerMultiple(),
       fetchSolanaTvl(),
       fetchUpcomingUnlocks(['ARB', 'OP', 'SUI', 'AVAX']),
       fetchAtr14d('BTCUSDT'),
       fetchAtr14d('ETHUSDT'),
       fetchAtr14d('SOLUSDT'),
+      fetchRsi14d('BTCUSDT'),
       fetchRsi14d('ETHUSDT'),
       fetchRsi14d('SOLUSDT'),
     ]);
@@ -289,6 +338,7 @@ Deno.serve(async (req) => {
         realizedPrice: FALLBACKS.btcRealizedPrice,
         miningCost: FALLBACKS.btcMiningCost,
         atr14d: btcAtr,
+        rsi14: btcRsi,
       },
       eth: { atr14d: ethAtr, rsi14: ethRsi },
       sol: { tvl: solTvl, atr14d: solAtr, rsi14: solRsi },
@@ -305,7 +355,7 @@ Deno.serve(async (req) => {
     addDebug(`top-level error=${e instanceof Error ? e.message : String(e)}`);
     return new Response(JSON.stringify({
       generatedAt: new Date().toISOString(),
-      btc: { ma200w: FALLBACKS.btc200wma, ma200wStale: true, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC },
+      btc: { ma200w: FALLBACKS.btc200wma, ma200wStale: true, mayerMultiple: FALLBACKS.btcMayer, ma200d: 0, price: 0, realizedPrice: FALLBACKS.btcRealizedPrice, miningCost: FALLBACKS.btcMiningCost, atr14d: FALLBACKS.atr14d.BTC, rsi14: null },
       eth: { atr14d: FALLBACKS.atr14d.ETH, rsi14: null },
       sol: { tvl: FALLBACKS.solanaTvl, atr14d: FALLBACKS.atr14d.SOL, rsi14: null },
       unlocks: FALLBACKS.unlocksWarning,

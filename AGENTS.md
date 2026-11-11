@@ -1,24 +1,21 @@
-# AGENTS.md
+# Architecture rules
 
-## Cursor Cloud specific instructions
-
-### What this is
-Single-product Vite + React + TypeScript PWA ("Crypto DCA & Portfolio Tracker", a.k.a. "Edge Trader Terminal"). There is no local backend server: the app talks to a **hosted/remote Supabase project** whose URL/keys are committed in `.env` (`VITE_*`). No local database, Docker, or Supabase CLI is required to run the app. The `supabase/` folder (migrations + edge functions) is only for backend development against the hosted project and is optional for local dev.
-
-### Package manager
-Use **npm** (the update script runs `npm install`). Both `bun.lock` and `package-lock.json` are committed, but `bun` is not installed in this environment; npm + Node 22 works.
-
-### Commands (see `package.json` scripts)
-- Dev server: `npm run dev` — Vite on port **8080** (`http://localhost:8080/`).
-- Build: `npm run build`; preview built assets: `npm run preview`.
-- Tests: `npm run test` (Vitest, jsdom) — all unit tests pass.
-- Lint: `npm run lint` (ESLint flat config). NOTE: the repo currently has **pre-existing lint errors** (`no-explicit-any`, `react-hooks/exhaustive-deps`, etc.) in existing source and `supabase/functions`; `eslint .` runs fine but does not exit clean. Do not treat these as regressions from setup.
-
-### PIN lock gotcha (important for testing the UI)
-The app is gated behind a 4-digit **PIN lock screen** (`src/components/PinLock.tsx`, `src/lib/pin.ts`). Unlock state is stored in `sessionStorage` under the key **`bsdca-unlocked`** (value `'1'`).
-- If the remote Supabase `app_settings` row already has a `pin_hash`, you will be prompted to "Enter PIN" and cannot guess it.
-- To bypass for local testing, set `sessionStorage.setItem('bsdca-unlocked','1')` in the browser console (or via the automation tool) and reload the page.
-- If no `pin_hash` exists remotely, the first launch instead lets you create a new PIN (enter it twice).
-
-### External data / "API Disconnected"
-The dashboard calls public market APIs (CoinGecko, alternative.me, DeFiLlama, etc.) directly from the browser. When these are rate-limited/unreachable, the UI shows an "API Disconnected – showing static data" banner and renders cached/static values. This is graceful degradation, not a setup failure.
+- `src/lib/assetBaskets.ts` is the single registry of allowed tokens, their basket and price source; Portfolio and DCA token lists derive from it so both sections always show the same set.
+- Daily indicators route by registry `priceSource` (Binance→CoinGecko candles, DexScreener live price override, Yahoo via `market-proxy` edge function) inside `useTokenDailyIndicators`, so every card shares one math engine.
+- `src/lib/dcaBasketEngine.ts` owns DCA hard-stop hysteresis and inverse-RSI intra-basket redistribution so badges, percentages, and USD amounts share one calculation.
+- `coreSatelliteEngine` owns four-basket macro percentages, while `satelliteAllocation` applies those budgets before unchanged intra-basket weighting and waterfall rules.
+- Displayed DCA basket percentages derive from final `satelliteAllocation.basketUsd` after waterfall, so labels and allocation bars match actual fiat distribution.
+- High-Beta KROK 1 tokenomics come from the `token-tokenomics` edge function (CoinGecko primary, Mobula fallback via server secret, daily supply snapshots for 7D inflation); third-party API keys never live in client code.
+- DCA yield strategy selection and safe per-token fallbacks live in `useLlamaStakingApy`; BTC and generic token cards consume its shared formatter so LP alternatives never replace safer fixed strategies.
+- MSTR (PROXY) gating lives in `proxySieve` (dcaBasketEngine) with automatic mNAV from the `mstr-mnav` edge function (scrape → market-cap calculation) and MSTR pool flows routed through `applyBrakeBoost`'s global bonus_pool; the mNAV multiplier is applied in `allocateCoreSatellite` so card, banners and basket totals share one result.
+- Portfolio quantities come only from `token_transactions` history; every executed DCA market buy or filled limit writes a BUY record there (deduplicated by order id in the note), and the old manual base balances are migrated once by `manualBaseMigration` so nothing gets counted twice.
+- `src/lib/dataSync.ts` owns global refresh: every app load, every hour and the header's refresh button start a new cache window and refetch all active data. Persistent caches treat older entries as stale but still use them if a refetch fails.
+- `useLiveMarketData` shares the validated public CoinGecko spot-price query with `useMarketData` and portfolio prices; core valuations must never substitute static fallback prices.
+- `portfolioActionStore` owns shared advisory confirmations and layer transfers; `RecordActionButton` consumes it to prevent duplicate transfers without creating duplicate transaction history.
+- `TokenValue` and `rawTokenAmount` keep token quantities primary and copy-safe; USD remains secondary and wallet simulations stay isolated from real holdings.
+- `leverageEngine` separates recorded debt/collateral risk from proposed additional borrowing, enforces per-asset caps, and conserves three-pillar USDC budgets; SOL never mounts the five-layer engine.
+- `stakeAlmStore` persists advisory BTC/ETH ALM configuration only; weekly deposits are the sole Boost trigger and local switches do not represent verified on-chain activation.
+- `stakeOperationsStore` owns asset-isolated operation modes, recorded Layer 5 supply quantities and recovered USDC; `leverageEngine.unwindPlan` caps repayments to recovered funds and collateral withdrawals to safe live-price LTV. Reverse actions update the authoritative layer snapshot without changing transaction history.
+- `multiProtocolBtc` recognises collateral (BTC or ETH family, per module target) and USD/EUR debt universally by symbol + oracle peg across all 5 protocols; BTC and ETH Stake modules each scan their own saved wallet and feed `computeRoboAction` with asset-specific profiles (`ETH_ROBO`) so every risk number shares one source.
+- `src/lib/oracleRegistry.ts` is the single app-wide source for BTC/ETH/SOL USD, EUR rate and Fear & Greed: every screen reads them via `readOracle`/`readFearGreed` (60s shared memo, cleared by global refresh) so tabs never disagree; other tokens keep their own price chains.
+- `src/lib/btcSmartTurbo.ts` owns BTC Smart Turbo rules (Aave V3 whitelist + anchoring, Boost math, unwind ladder, F&G/MVRV semafor); `btc-indicators` edge function owns the BTC multi-API waterfall so third-party keys stay server-side.

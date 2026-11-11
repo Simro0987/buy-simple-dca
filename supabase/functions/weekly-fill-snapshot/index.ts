@@ -31,6 +31,11 @@ Deno.serve(async (req) => {
     const lastWeekRef = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
     const targetWeek = getIsoWeek(lastWeekRef);
 
+    const { data: settingsRow } = await supabase
+      .from('app_settings').select('user_id').limit(1).maybeSingle();
+    const uid = settingsRow?.user_id as string | undefined;
+    if (!uid) throw new Error('No user configured');
+
     const { data: rows, error } = await supabase
       .from('dca_executions')
       .select('coin, status')
@@ -52,8 +57,8 @@ Deno.serve(async (req) => {
       const { error: upErr } = await supabase
         .from('weekly_fill_snapshots')
         .upsert(
-          { week_number: targetWeek, coin, filled, expired, cancelled, total_closed, fill_rate },
-          { onConflict: 'week_number,coin' },
+          { user_id: uid, week_number: targetWeek, coin, filled, expired, cancelled, total_closed, fill_rate },
+          { onConflict: 'user_id,week_number,coin' },
         );
       if (upErr) throw upErr;
 

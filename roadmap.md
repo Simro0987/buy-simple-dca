@@ -1,0 +1,24 @@
+- [x] DCA: štyri jasné koše, HYPE iba v High-Beta
+- [x] DCA: falling-knife filtre, inverse-RSI prerozdelenie a sort prepínače
+- [x] Portfólio: graf rozloženia všetkých štyroch košov
+- [x] DCA kaskáda: HIGH-BETA → SATELITY → CORE pri 0 schválených
+- [x] DCA karta: RSI-based MKT/LMT split + stavové badge Zrealizované / Čaká na burze
+- [x] Master Dynamic Allocation: 4-košový makro split, segmenty a prepojené medzisúčty
+
+- [x] Chýbajúce údaje: slovenské stavy načítania/výpadku a výstražná farba naprieč aplikáciou
+- [x] 200WMA: kruh a vzdialenosť používajú rovnakú hodnotu bez falošného limitu 20 %
+- [x] BTC: zobraziť KDE STAKOVAŤ s cold storage bez výnosu
+- [x] Výnosy: aktualizovať záložné sadzby a bezpečné stratégie bez LP pre vybrané tokeny
+- [x] DCA: percentá košov, lišta a hlavičky podľa výsledných súm po waterfall
+- [x] Fáza 1: živé CoinGecko ceny BTC/ETH/SOL a DefiLlama Aave/Morpho výnosy
+- [x] Fáza 1: samostatné simulované sledovanie DeFi Saver peňaženky
+- [x] Fáza 1: tokenové množstvá ako hlavné hodnoty, USD druhotne a číselné kopírovanie
+- [x] Fáza 1: spoločný stav zaznamenaných akcií a overenie hlavných tokov
+- [x] Fáza 2: živé výnosové trasy BTC/ETH a dynamický ETH split
+- [x] Fáza 2: LTV hardcap BTC 33 %, ETH 25 %, likvidačný výpočet
+- [x] Fáza 2: DeFi Saver konfigurácia a Boost iba po týždennom DCA vklade
+- [x] Fáza 2: tri izolované piliere USDC, plynulá vizualizácia a skúšobné indikátory
+- [x] Fáza 2: SOL presne dve vrstvy a overenie tokov
+- [x] Fáza 3: obojsmerné režimy BTC/ETH, rozpustenie alokácie a vypnutie ALM
+- [x] Fáza 3: splácanie z dostupných USDC, bezpečný výber kolaterálu a rizikové upozornenia
+- [x] Fáza 3: testy výpočtov a overenie oboch režimov; SOL bez pôžičiek
