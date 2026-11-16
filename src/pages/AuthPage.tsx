@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { toast } from 'sonner';
-import { Lock, Mail, Loader2, CloudOff, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Lock, Mail, Loader2, CloudOff, RefreshCw, ShieldCheck, Wallet } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
 import { runtimeEnv } from '@/lib/runtimeConfig';
+import { isSiweAuthMode } from '@/lib/siweAuth';
+import { SiweSignInCard } from '@/components/wallet/SiweSignInCard';
 
 const RETRY_DELAY_MS = 4_000;
 const MAX_ATTEMPTS = 6;
@@ -32,6 +34,8 @@ export default function AuthPage() {
   const [wakeState, setWakeState] = useState<null | 'waking' | 'failed'>(null);
   const [attempt, setAttempt] = useState(0);
   const cancelWake = useRef(false);
+
+  const siwe = isSiweAuthMode();
 
   const pingBackend = useCallback(async () => {
     const backendUrl = runtimeEnv('VITE_SUPABASE_URL');
@@ -250,8 +254,8 @@ export default function AuthPage() {
                 : 'text-muted-foreground hover:text-foreground'
             }`}
           >
-            <Mail className="w-3.5 h-3.5" />
-            E-mail &amp; Heslo
+            {siwe ? <Wallet className="w-3.5 h-3.5" /> : <Mail className="w-3.5 h-3.5" />}
+            {siwe ? 'Peňaženka (SIWE)' : <>E-mail &amp; Heslo</>}
           </button>
           <button
             type="button"
@@ -267,7 +271,12 @@ export default function AuthPage() {
           </button>
         </div>
 
-        {authTab === 'email' ? (
+        {authTab === 'email' && siwe ? (
+          <div className="space-y-4">
+            <SiweSignInCard />
+            <SafeGlobalConnectCard lang="sk" compact />
+          </div>
+        ) : authTab === 'email' ? (
           <div className="space-y-4">
             <form onSubmit={submit} className="bg-card/60 backdrop-blur border border-border rounded-2xl p-5 space-y-4">
               <div className="flex items-center justify-between">

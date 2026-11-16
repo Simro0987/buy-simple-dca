@@ -1,10 +1,12 @@
 # Builds the linux/amd64 images Flux needs and pushes them to GitHub Container Registry
 # (on push to main / v*.*.* tags). Pull requests only build + smoke test, nothing is pushed.
 # Images: ghcr.io/simro0987/buy-simple-dca:<tag>  (web)
-#         ghcr.io/simro0987/buy-simple-dca-agent-runner:<tag>  (agent runner, 2nd Flux component)
+#         ghcr.io/simro0987/buy-simple-dca-agent-runner:<tag>  (agent runner)
+#         ghcr.io/simro0987/buy-simple-dca-api:<tag>  (own API replacing Supabase)
+#         ghcr.io/simro0987/buy-simple-dca-db:<tag>   (own Postgres + encrypted backups)
 # IMPORTANT (one-time): GHCR packages are PRIVATE by default and Flux cannot pull private images.
 # After the first run go to github.com/users/Simro0987/packages/container/buy-simple-dca/settings
-# -> "Change visibility" -> Public.  Do the same for the buy-simple-dca-agent-runner package.
+# -> "Change visibility" -> Public.  Do the same for the -agent-runner, -api and -db packages.
 # The runner image contains NO keys; keys are provided only at runtime on Flux.
 name: docker-publish
 
@@ -23,6 +25,10 @@ permissions:
 env:
   IMAGE: ghcr.io/simro0987/buy-simple-dca
   RUNNER_IMAGE: ghcr.io/simro0987/buy-simple-dca-agent-runner
+  API_IMAGE: ghcr.io/simro0987/buy-simple-dca-api
+  DB_IMAGE: ghcr.io/simro0987/buy-simple-dca-db
+  POSTGREST_VERSION: v14.18
+  POSTGREST_SHA256: 98de1c0be7787aea5f5e11a25f303ea0077634d6fc1000b687bfa825fd27d299
 
 jobs:
   build:
@@ -114,6 +120,116 @@ jobs:
           for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8090/healthz && break; sleep 1; done
           curl -fsS http://127.0.0.1:8090/status | grep -q '"dryRun":true'
           test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8090/status)" = "405"
+
+  api:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: ci-only-password
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck:api
+      - run: npm run test:api
+      - run: npm run build:api
+      - name: PostgREST binary (pinned + checksum)
+        run: |
+          curl -fsSL -o /tmp/pgrst.tar.xz "https://github.com/PostgREST/postgrest/releases/download/${POSTGREST_VERSION}/postgrest-${POSTGREST_VERSION}-linux-static-x86-64.tar.xz"
+          echo "${POSTGREST_SHA256}  /tmp/pgrst.tar.xz" | sha256sum -c -
+          tar -xJf /tmp/pgrst.tar.xz -C /tmp postgrest
+      - name: Integration tests (SIWE + PostgREST/RLS + functions on real Postgres)
+        run: |
+          env -i PATH="$PATH" HOME="$HOME" DB_HOST=127.0.0.1 DB_PASSWORD=ci-only-password DATA_DIR=/tmp/apidata \
+            POSTGREST_BIN=/tmp/postgrest SIWE_DOMAINS=localhost:8070 SCHEDULER_ENABLED=false \
+            node api/dist/api.mjs > /tmp/api.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:8070/healthz && break; sleep 1; done
+          API_TEST_URL=http://localhost:8070 npm run test:api || { cat /tmp/api.log; exit 1; }
+          # migrations are idempotent: restart against the same database
+          pkill -f api/dist/api.mjs; sleep 2
+          env -i PATH="$PATH" HOME="$HOME" DB_HOST=127.0.0.1 DB_PASSWORD=ci-only-password DATA_DIR=/tmp/apidata \
+            POSTGREST_BIN=/tmp/postgrest SIWE_DOMAINS=localhost:8070 SCHEDULER_ENABLED=false \
+            node api/dist/api.mjs > /tmp/api2.log 2>&1 &
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:8070/healthz && break; sleep 1; done
+          if grep -q "migration applied" /tmp/api2.log; then echo "migrations re-applied on restart"; exit 1; fi
+          API_TEST_URL=http://localhost:8070 npm run test:api
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.API_IMAGE }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: api/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,mode=max,scope=api
+
+  db:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.DB_IMAGE }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      - uses: docker/build-push-action@v6
+        with:
+          context: db
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=db
+          cache-to: type=gha,mode=max,scope=db
+      - name: Smoke test db (generated password, encrypted backup + restore round trip)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker buildx build --platform linux/amd64 --load -t db-smoke db
+          mkdir -p /tmp/dbs/secrets /tmp/dbs/data
+          docker run -d --name dbs -v /tmp/dbs/data:/var/lib/postgresql/data -v /tmp/dbs/secrets:/run/secrets/db db-smoke
+          for i in $(seq 1 40); do docker exec dbs pg_isready -h 127.0.0.1 -U postgres -q && break; sleep 1; done
+          sleep 3
+          test "$(sudo stat -c '%a %g' /tmp/dbs/secrets/postgres_password)" = "640 1000"
+          docker exec -e PGPASSWORD="$(sudo cat /tmp/dbs/secrets/postgres_password)" dbs psql -h 127.0.0.1 -U postgres -Atc 'create table t(x int); insert into t values (42)'
+          docker exec -u postgres dbs sh -c 'age-keygen -o /tmp/k.txt 2>/dev/null'
+          pub="$(docker exec -u postgres dbs age-keygen -y /tmp/k.txt)"
+          docker exec -u postgres dbs bash -c "set -o pipefail; pg_dump -Fp postgres | gzip | age -r $pub -o /tmp/b.age && age -d -i /tmp/k.txt /tmp/b.age | gunzip | grep -q 'COPY public.t'"
+          rc=0; docker exec -u postgres dbs backup.sh || rc=$?; test "$rc" = 3   # not configured -> skips cleanly (exit 3)
+          docker logs dbs 2>&1 | grep -q "postgres password synced"
 
   contracts:
     runs-on: ubuntu-latest

@@ -27,3 +27,7 @@ contracts/cache
 agent-runner/dist
 runner-data/
 *.key
+
+# API bundle
+api/dist
+api-data/

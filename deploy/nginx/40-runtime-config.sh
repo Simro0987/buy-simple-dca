@@ -5,7 +5,7 @@
 set -eu
 mkdir -p /tmp/runtime
 OUT=/tmp/runtime/env-config.js
-KEYS="VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PROJECT_ID VITE_WALLETCONNECT_PROJECT_ID VITE_SYSTEM_EXECUTION_MODE VITE_DEFAULT_SAFE_CHAIN VITE_AGENT_STATUS_URL"
+KEYS="VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PROJECT_ID VITE_WALLETCONNECT_PROJECT_ID VITE_SYSTEM_EXECUTION_MODE VITE_DEFAULT_SAFE_CHAIN VITE_AGENT_STATUS_URL VITE_AUTH_MODE"
 {
   printf 'window.__APP_CONFIG__ = {'
   first=1
@@ -49,5 +49,39 @@ NGINX
     echo "runtime-config: agent status proxy -> $UP"
   else
     echo "runtime-config: ignoring invalid AGENT_STATUS_UPSTREAM (expected http://host:port)" >&2
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# Optional proxy to the own API (Flux component "api": SIWE auth + PostgREST + edge functions).
+# API_UPSTREAM=http://fluxapi_<appname>:8070  -> browser uses VITE_SUPABASE_URL=/sb (same origin).
+API_PROXY=/tmp/runtime/nginx-api.conf
+rm -f "$API_PROXY"
+AUP="${API_UPSTREAM:-}"
+if [ -n "$AUP" ]; then
+  if printf '%s' "$AUP" | grep -Eq '^http://[A-Za-z0-9._-]+:[0-9]{2,5}$'; then
+    cat > "$API_PROXY" <<NGINX
+location /sb/ {
+    resolver 127.0.0.11 valid=30s ipv6=off;
+    set \$api_upstream "$AUP";
+    rewrite ^/sb/(.*)\$ /\$1 break;
+    proxy_pass \$api_upstream;
+    proxy_http_version 1.1;
+    proxy_set_header Host \$http_host;
+    proxy_set_header X-Forwarded-Host \$http_host;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    client_max_body_size 2m;
+    proxy_connect_timeout 5s;
+    proxy_read_timeout 130s;
+    proxy_buffering off;
+    add_header Cache-Control "no-store" always;
+    include /etc/nginx/snippets/security-headers.conf;
+}
+NGINX
+    echo "runtime-config: api proxy /sb/ -> $AUP"
+  else
+    echo "runtime-config: ignoring invalid API_UPSTREAM (expected http://host:port)" >&2
   fi
 fi

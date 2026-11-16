@@ -12,3 +12,4 @@ test-results
 runner-data
 **/*.key
 agent-runner/dist
+api/dist
