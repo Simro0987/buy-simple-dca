@@ -252,7 +252,15 @@ export interface SafeSession {
   threshold: number;
   ownersCount: number;
   safeVersion?: string;
+  /**
+   * True ONLY when an on-chain guard or module was detected on the Safe. The off-chain
+   * `validateAgentTransactionWithSafeGuard()` policy is always active, but it is NOT an on-chain lock.
+   */
   zodiacRolesGuardActive: boolean;
+  /** Guard contract currently set on the Safe (eth_getStorageAt of the Safe guard slot), if any. */
+  onChainGuard?: string | null;
+  /** Modules enabled on the Safe (getModulesPaginated), e.g. a Zodiac Roles modifier. */
+  onChainModules?: string[];
   guardPolicy: SafeGuardPolicy;
   connectedAt: number;
 }
@@ -381,7 +389,7 @@ export async function detectSafeAppsSdkContext(timeoutMs = 1800): Promise<SafeSe
       nonCustodial: true,
       threshold: safeInfo.threshold || 1,
       ownersCount: Array.isArray(safeInfo.owners) ? safeInfo.owners.length : 1,
-      zodiacRolesGuardActive: true,
+      zodiacRolesGuardActive: false,
       guardPolicy: DEFAULT_SAFE_GUARD_POLICY,
       connectedAt: Date.now(),
     };
@@ -397,17 +405,103 @@ export interface OnChainSafeVerification {
   owners: string[];
   ownersCount: number;
   safeVersion?: string;
+  /** Guard contract set on the Safe (null = no guard). */
+  guard?: string | null;
+  /** Enabled modules (e.g. Zodiac Roles). Modules can execute WITHOUT owner signatures - review them! */
+  modules?: string[];
   chainChecked: SupportedChainId;
   errorReasonSk?: string;
   errorReasonEn?: string;
 }
 
+/** keccak256("guard_manager.guard.address") - storage slot where Safe >= 1.3 keeps its guard. */
+export const SAFE_GUARD_STORAGE_SLOT =
+  '0x4a204f620c8c5ccdca3fd54d003badd85ba500436a431f0cbda4f558c93c34c8';
+const SEL_GET_THRESHOLD = '0xe75235b8';
+const SEL_GET_OWNERS = '0xa0e67e2b';
+const SEL_VERSION = '0xffa1ad74';
+// getModulesPaginated(address start = SENTINEL(0x1), uint256 pageSize = 20)
+const CALL_GET_MODULES =
+  '0xcc2f8452' +
+  '0000000000000000000000000000000000000000000000000000000000000001' +
+  '0000000000000000000000000000000000000000000000000000000000000014';
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+/** Decodes an ABI-encoded `address[]` that starts at `wordOffset` (in 32-byte words) of `hex`. */
+export function decodeAbiAddressArray(hex: string, wordOffset = 0): string[] {
+  const body = hex.startsWith('0x') ? hex.slice(2) : hex;
+  const word = (i: number) => body.slice(i * 64, (i + 1) * 64);
+  const offsetWords = parseInt(word(wordOffset), 16) / 32;
+  if (!Number.isFinite(offsetWords)) return [];
+  const len = parseInt(word(offsetWords), 16);
+  if (!Number.isFinite(len) || len < 0 || len > 1000) return [];
+  const out: string[] = [];
+  for (let i = 0; i < len; i++) {
+    const w = word(offsetWords + 1 + i);
+    if (w.length !== 64) return [];
+    out.push(`0x${w.slice(24)}`);
+  }
+  return out;
+}
+
+function decodeAbiString(hex: string): string | undefined {
+  try {
+    const body = hex.startsWith('0x') ? hex.slice(2) : hex;
+    const len = parseInt(body.slice(64, 128), 16);
+    if (!Number.isFinite(len) || len <= 0 || len > 64) return undefined;
+    const bytes = body.slice(128, 128 + len * 2);
+    let out = '';
+    for (let i = 0; i < bytes.length; i += 2) out += String.fromCharCode(parseInt(bytes.slice(i, i + 2), 16));
+    return out;
+  } catch {
+    return undefined;
+  }
+}
+
+async function rpcCall(
+  rpcUrl: string,
+  method: string,
+  params: unknown[],
+  signal: AbortSignal,
+): Promise<string> {
+  const res = await fetch(rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params }),
+    signal,
+  });
+  if (!res.ok) throw new Error(`RPC HTTP ${res.status}`);
+  const json = (await res.json()) as { result?: string; error?: { message?: string } };
+  if (json.error || typeof json.result !== 'string') {
+    throw new Error(json.error?.message || 'RPC error');
+  }
+  return json.result;
+}
+
+function failVerification(
+  chain: SupportedChainId,
+  sk: string,
+  en: string,
+  isContract = false,
+): OnChainSafeVerification {
+  return {
+    isContract,
+    isSafeContract: false,
+    threshold: 0,
+    owners: [],
+    ownersCount: 0,
+    chainChecked: chain,
+    errorReasonSk: sk,
+    errorReasonEn: en,
+  };
+}
+
 /**
- * Strictly verifies on-chain via public RPC AND Safe Global Transaction Service API whether an
- * address is a genuine deployed Safe Smart Account contract (`eth_getCode`, `getThreshold()`, `getOwners()`).
+ * Verifies ON-CHAIN (public RPC, no API key needed) that an address is a deployed Safe Smart Account:
+ * `eth_getCode` + `getThreshold()` + `getOwners()` (+ `VERSION()`, guard slot, modules).
  *
- * Unlike custodial or fake-wallet mocks, if an address is a regular EOA (not a Safe smart contract),
- * `isSafeContract` returns `false` so the user is guided to `app.safe.global` to use a real Safe!
+ * FAIL-CLOSED: any RPC error, timeout or unexpected answer => `isSafeContract: false`.
+ * (Previously network errors returned `isSafeContract: true`, i.e. any address was accepted.)
  */
 export async function verifySafeContractOnChain(
   address: string,
@@ -415,140 +509,107 @@ export async function verifySafeContractOnChain(
 ): Promise<OnChainSafeVerification> {
   const parsed = parseSafeAddressInput(address);
   if (!parsed.valid) {
-    return {
-      isContract: false,
-      isSafeContract: false,
-      threshold: 0,
-      owners: [],
-      ownersCount: 0,
-      chainChecked: chainId,
-      errorReasonSk: 'Neplatný formát Ethereum/EVM adresy (očakáva sa 0x… alebo arb1:0x…).',
-      errorReasonEn: 'Invalid EVM address format (expected 0x… or arb1:0x…).',
-    };
+    return failVerification(
+      chainId,
+      'Neplatný formát Ethereum/EVM adresy (očakáva sa 0x… alebo arb1:0x…).',
+      'Invalid EVM address format (expected 0x… or arb1:0x…).',
+    );
   }
 
   const effectiveChain = parsed.chain ?? chainId;
-  const chainInfo =
-    SAFE_SUPPORTED_CHAINS.find((c) => c.id === effectiveChain) ?? SAFE_SUPPORTED_CHAINS[0];
+  const chainInfo = SAFE_SUPPORTED_CHAINS.find((c) => c.id === effectiveChain);
+  if (!chainInfo || !chainInfo.rpcUrl || !chainInfo.chainIdNumeric) {
+    return failVerification(
+      effectiveChain,
+      `Sieť ${chainInfo?.name ?? effectiveChain} nepodporuje Safe{Wallet} (EVM) overenie. Vyber Arbitrum, Ethereum, Base, Optimism, Polygon, BSC alebo Avalanche.`,
+      `${chainInfo?.name ?? effectiveChain} does not support Safe{Wallet} (EVM) verification. Pick an EVM chain.`,
+    );
+  }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  const rpc = chainInfo.rpcUrl;
+  const addr = parsed.address;
 
   try {
-    // 1. Try Official Safe Global Transaction Service API first (returns owners, threshold, version)
-    if (chainInfo.safeTxServiceUrl) {
-      try {
-        const apiRes = await fetch(
-          `${chainInfo.safeTxServiceUrl}/api/v1/safes/${parsed.address}/`,
-          { signal: controller.signal },
-        );
-        if (apiRes.ok) {
-          const safeData = (await apiRes.json()) as {
-            address?: string;
-            threshold?: number;
-            owners?: string[];
-            version?: string;
-          };
-          if (safeData && Array.isArray(safeData.owners) && safeData.owners.length > 0) {
-            return {
-              isContract: true,
-              isSafeContract: true,
-              threshold: Number(safeData.threshold) || 1,
-              owners: safeData.owners,
-              ownersCount: safeData.owners.length,
-              safeVersion: safeData.version,
-              chainChecked: effectiveChain,
-            };
-          }
-        }
-      } catch {
-        // Continue to direct on-chain RPC verification if Safe API is rate-limited
-      }
+    const bytecode = await rpcCall(rpc, 'eth_getCode', [addr, 'latest'], controller.signal);
+    if (!bytecode || bytecode === '0x' || bytecode.length <= 4) {
+      return failVerification(
+        effectiveChain,
+        `Adresa ${formatShortAddress(addr)} na sieti ${chainInfo.name} nie je Safe kontrakt (je to bežná peňaženka/EOA alebo Safe je na inej sieti). Skontroluj sieť alebo vytvor Safe na app.safe.global.`,
+        `Address ${formatShortAddress(addr)} on ${chainInfo.name} is not a Safe contract (plain EOA, or the Safe lives on another chain). Check the network or create a Safe on app.safe.global.`,
+      );
     }
 
-    // 2. Direct On-Chain RPC Verification: `eth_getCode` + `getThreshold()` (0xe75235b8)
-    if (chainInfo.rpcUrl) {
-      const codeResp = await fetch(chainInfo.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 1,
-          method: 'eth_getCode',
-          params: [parsed.address, 'latest'],
-        }),
-        signal: controller.signal,
-      });
-      const codeJson = await codeResp.json();
-      const bytecode: string = codeJson?.result ?? '0x';
-      const isContract = typeof bytecode === 'string' && bytecode.length > 4 && bytecode !== '0x';
-
-      if (!isContract) {
-        return {
-          isContract: false,
-          isSafeContract: false,
-          threshold: 0,
-          owners: [],
-          ownersCount: 0,
-          chainChecked: effectiveChain,
-          errorReasonSk: `Adresa ${formatShortAddress(parsed.address)} na sieti ${chainInfo.name} je obyčajná peňaženka (EOA), nie nasadený Safe Global Smart Account kontrakt! Pre non-custodial bezpečnosť vytvor alebo otvor svoj Safe na app.safe.global.`,
-          errorReasonEn: `Address ${formatShortAddress(parsed.address)} on ${chainInfo.name} is a plain EOA wallet, not a deployed Safe Global Smart Account contract! Open app.safe.global to use a Safe.`,
-        };
-      }
-
-      // Query Safe `getThreshold()` (selector 0xe75235b8)
-      const threshResp = await fetch(chainInfo.rpcUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id: 2,
-          method: 'eth_call',
-          params: [{ to: parsed.address, data: '0xe75235b8' }, 'latest'],
-        }),
-        signal: controller.signal,
-      });
-      const threshJson = await threshResp.json();
-      const rawHex: string = threshJson?.result ?? '';
-      if (rawHex && rawHex.startsWith('0x') && rawHex.length >= 66) {
-        const threshold = Math.max(1, parseInt(rawHex.slice(-8), 16) || 1);
-        return {
-          isContract: true,
-          isSafeContract: true,
-          threshold,
-          owners: [],
-          ownersCount: threshold,
-          chainChecked: effectiveChain,
-        };
-      }
-
-      return {
-        isContract: true,
-        isSafeContract: true,
-        threshold: 1,
-        owners: [],
-        ownersCount: 1,
-        chainChecked: effectiveChain,
-      };
+    const threshHex = await rpcCall(
+      rpc,
+      'eth_call',
+      [{ to: addr, data: SEL_GET_THRESHOLD }, 'latest'],
+      controller.signal,
+    );
+    const ownersHex = await rpcCall(
+      rpc,
+      'eth_call',
+      [{ to: addr, data: SEL_GET_OWNERS }, 'latest'],
+      controller.signal,
+    );
+    const threshold = threshHex.length >= 66 ? parseInt(threshHex.slice(-64), 16) : 0;
+    const owners = decodeAbiAddressArray(ownersHex);
+    if (!threshold || owners.length === 0 || threshold > owners.length) {
+      return failVerification(
+        effectiveChain,
+        `Kontrakt ${formatShortAddress(addr)} nevyzerá ako Safe (getOwners/getThreshold neodpovedá správne).`,
+        `Contract ${formatShortAddress(addr)} does not look like a Safe (getOwners/getThreshold answered unexpectedly).`,
+        true,
+      );
     }
+
+    // Optional extras - failures here do not reject the Safe, they only leave fields empty.
+    let safeVersion: string | undefined;
+    let guard: string | null | undefined;
+    let modules: string[] | undefined;
+    try {
+      safeVersion = decodeAbiString(
+        await rpcCall(rpc, 'eth_call', [{ to: addr, data: SEL_VERSION }, 'latest'], controller.signal),
+      );
+    } catch { /* ignore */ }
+    try {
+      const slot = await rpcCall(
+        rpc,
+        'eth_getStorageAt',
+        [addr, SAFE_GUARD_STORAGE_SLOT, 'latest'],
+        controller.signal,
+      );
+      const g = `0x${slot.slice(-40)}`;
+      guard = g.toLowerCase() === ZERO_ADDRESS ? null : g;
+    } catch { /* ignore */ }
+    try {
+      const modsHex = await rpcCall(
+        rpc,
+        'eth_call',
+        [{ to: addr, data: CALL_GET_MODULES }, 'latest'],
+        controller.signal,
+      );
+      modules = decodeAbiAddressArray(modsHex, 0);
+    } catch { /* ignore */ }
 
     return {
       isContract: true,
       isSafeContract: true,
-      threshold: 1,
-      owners: [],
-      ownersCount: 1,
+      threshold,
+      owners,
+      ownersCount: owners.length,
+      safeVersion,
+      guard,
+      modules,
       chainChecked: effectiveChain,
     };
   } catch {
-    return {
-      isContract: true,
-      isSafeContract: true,
-      threshold: 1,
-      owners: [],
-      ownersCount: 1,
-      chainChecked: effectiveChain,
-    };
+    return failVerification(
+      effectiveChain,
+      `Nepodarilo sa overiť Safe na sieti ${chainInfo.name} (RPC nedostupné alebo timeout). Skús znova o chvíľu.`,
+      `Could not verify the Safe on ${chainInfo.name} (RPC unavailable or timed out). Please retry.`,
+    );
   } finally {
     clearTimeout(timeout);
   }
@@ -642,20 +703,50 @@ const FORBIDDEN_ACTIONS: Set<AgentActionKind> = new Set([
   'UNLIMITED_APPROVAL_EXTERNAL',
 ]);
 
-const FORBIDDEN_METHOD_PATTERNS = [
-  /^transfer\s*\(/i,
-  /^transferFrom\s*\(/i,
-  /^send\s*\(/i,
-  /^withdrawTo\s*\(/i,
-  /^addOwnerWithThreshold/i,
-  /^removeOwner/i,
-  /^swapOwner/i,
-  /^changeThreshold/i,
-  /^setGuard/i,
-  /^disableModule/i,
-  /^enableModule/i,
-  /^execTransactionFromModule.*external/i,
-];
+/**
+ * Method names (bare identifier, case-insensitive) that move funds out of the Safe or change who
+ * controls it. Matched against the identifier BEFORE any "(" so "transfer", "transfer(address,uint256)"
+ * and " Transfer " are all caught.
+ */
+const FORBIDDEN_METHOD_NAMES = new Set(
+  [
+    'transfer',
+    'transferFrom',
+    'safeTransfer',
+    'safeTransferFrom',
+    'safeBatchTransferFrom',
+    'send',
+    'sendValue',
+    'withdrawTo',
+    'permit',
+    'increaseAllowance',
+    'setApprovalForAll',
+    'addOwnerWithThreshold',
+    'removeOwner',
+    'swapOwner',
+    'changeThreshold',
+    'setGuard',
+    'setModuleGuard',
+    'enableModule',
+    'disableModule',
+    'setFallbackHandler',
+    'setup',
+    'execTransaction',
+    'execTransactionFromModule',
+    'execTransactionFromModuleReturnData',
+    'multiSend',
+    'delegatecall',
+    'selfdestruct',
+  ].map((m) => m.toLowerCase()),
+);
+
+export function isForbiddenAgentMethod(methodName: string): boolean {
+  const ident = methodName.trim().split('(')[0].trim().toLowerCase();
+  if (!ident) return false;
+  if (FORBIDDEN_METHOD_NAMES.has(ident)) return true;
+  // Generic catch-alls: anything that sends/withdraws "to" an arbitrary address.
+  return /^(withdraw|send|bridge|transfer).*to$/i.test(ident);
+}
 
 /**
  * Core Security Guard: Validates any transaction proposed by any AI agent (current or future).
@@ -685,15 +776,13 @@ export function validateAgentTransactionWithSafeGuard(
 
   // 2. Block any forbidden method signatures (e.g. ERC20.transfer to external address)
   if (tx.methodName) {
-    for (const pattern of FORBIDDEN_METHOD_PATTERNS) {
-      if (pattern.test(tx.methodName.trim())) {
-        return {
-          allowed: false,
-          code: 'BLOCKED_FORBIDDEN_METHOD',
-          reasonSk: `ZABLOKOVANÉ (Zodiac Roles Guard): Volanie metódy "${tx.methodName}" je na čiernej listine pre všetkých AI agentov.`,
-          reasonEn: `BLOCKED (Zodiac Roles Guard): Method "${tx.methodName}" is blacklisted for all AI agents.`,
-        };
-      }
+    if (isForbiddenAgentMethod(tx.methodName)) {
+      return {
+        allowed: false,
+        code: 'BLOCKED_FORBIDDEN_METHOD',
+        reasonSk: `ZABLOKOVANÉ (Safe Guard): Volanie metódy "${tx.methodName}" je na čiernej listine pre všetkých AI agentov.`,
+        reasonEn: `BLOCKED (Safe Guard): Method "${tx.methodName}" is blacklisted for all AI agents.`,
+      };
     }
   }
 
@@ -707,8 +796,21 @@ export function validateAgentTransactionWithSafeGuard(
     };
   }
 
-  // 4. Enforce single-trade size cap relative to portfolio
-  if (portfolioTotalUsd > 0 && tx.amountUsd > 0) {
+  // 4. Enforce single-trade size cap relative to portfolio (fail-closed on bad numbers)
+  if (
+    !Number.isFinite(tx.amountUsd) ||
+    tx.amountUsd < 0 ||
+    !Number.isFinite(portfolioTotalUsd) ||
+    portfolioTotalUsd <= 0
+  ) {
+    return {
+      allowed: false,
+      code: 'BLOCKED_TRADE_EXCEEDS_CAP',
+      reasonSk: 'ZABLOKOVANÉ (Risk Limit): Neplatná suma obchodu alebo neznáma hodnota portfólia.',
+      reasonEn: 'BLOCKED (Risk Limit): Invalid trade amount or unknown portfolio value.',
+    };
+  }
+  if (tx.amountUsd > 0) {
     const pct = (tx.amountUsd / portfolioTotalUsd) * 100;
     if (pct > policy.maxSingleTradePct) {
       return {
@@ -746,28 +848,11 @@ export async function submitSafeAppTransactionBatch(
     return { submittedToSafeGlobal: false, guardVerdict };
   }
 
-  if (typeof window !== 'undefined' && window.parent !== window) {
-    try {
-      const sdk = new SafeAppsSDK();
-      const { safeTxHash } = await sdk.txs.send({
-        txs: [
-          {
-            to: safeAddress,
-            value: '0',
-            data: '0x',
-          },
-        ],
-      });
-      return {
-        submittedToSafeGlobal: true,
-        safeTxHash,
-        guardVerdict,
-      };
-    } catch {
-      return { submittedToSafeGlobal: false, guardVerdict };
-    }
-  }
-
+  // NOTE: there is no calldata builder for real swaps yet. The previous version proposed a
+  // meaningless `to: safe, data: 0x` transaction which owners could have signed by mistake.
+  // Until real, decoded & simulated calldata exists, nothing is proposed to Safe{Wallet}.
+  // Real agent execution must go through the on-chain Zodiac Roles scope (see SAFE_AGENT_PERMISSIONS.md).
+  void SafeAppsSDK;
   return { submittedToSafeGlobal: false, guardVerdict };
 }
 
@@ -789,7 +874,9 @@ export function loadSafeSession(): SafeSession | null {
       blockOwnerAndGuardChanges: true,
       primaryObjective: 'ACCUMULATE_BTC',
     };
-    parsed.zodiacRolesGuardActive = true;
+    parsed.zodiacRolesGuardActive = Boolean(
+      parsed.onChainGuard || (Array.isArray(parsed.onChainModules) && parsed.onChainModules.length > 0),
+    );
     return parsed;
   } catch {
     return null;
@@ -805,7 +892,10 @@ export function saveSafeSession(session: SafeSession | null): void {
         ...session,
         nonCustodial: true,
         owners: Array.isArray(session.owners) ? session.owners : [],
-        zodiacRolesGuardActive: true,
+        zodiacRolesGuardActive: Boolean(
+          session.onChainGuard ||
+            (Array.isArray(session.onChainModules) && session.onChainModules.length > 0),
+        ),
         guardPolicy: {
           ...DEFAULT_SAFE_GUARD_POLICY,
           ...session.guardPolicy,

@@ -2,9 +2,15 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 import { brokeredPreviewStorage } from './previewAuthStorage';
+import { runtimeEnv } from '@/lib/runtimeConfig';
 
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Runtime (Flux/Docker env) values win over build-time values. createClient() throws on an
+// empty URL, which used to blank the whole app when the image was built without .env.
+const SUPABASE_URL = runtimeEnv('VITE_SUPABASE_URL') || 'https://supabase-not-configured.invalid';
+const SUPABASE_PUBLISHABLE_KEY = runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY') || 'not-configured';
+if (SUPABASE_URL.endsWith('.invalid')) {
+  console.warn('[config] VITE_SUPABASE_URL is not set - cloud sync / edge functions are disabled.');
+}
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

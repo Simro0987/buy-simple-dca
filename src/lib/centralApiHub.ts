@@ -4,13 +4,14 @@
  * "API & indikátory" box all read this same payload so numbers never disagree.
  */
 import type { BtcIndicators } from '@/hooks/useBtcIndicators';
+import { runtimeEnv } from '@/lib/runtimeConfig';
 
 const MEMO_MS = 60_000;
 let hit: { at: number; p: Promise<BtcIndicators> } | null = null;
 
 export function fetchCentralHub(): Promise<BtcIndicators> {
   if (hit && Date.now() - hit.at < MEMO_MS) return hit.p;
-  const p = fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/btc-indicators`)
+  const p = fetch(`${runtimeEnv('VITE_SUPABASE_URL')}/functions/v1/btc-indicators`)
     .then((r) => { if (!r.ok) throw new Error(`${r.status}`); return r.json() as Promise<BtcIndicators>; })
     .catch((e) => { hit = null; throw e; });
   hit = { at: Date.now(), p };

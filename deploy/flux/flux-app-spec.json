@@ -1,0 +1,40 @@
+{
+  "version": 8,
+  "name": "buysimpledca",
+  "description": "Non-custodial crypto DCA terminal (static web app, PAPER mode by default)",
+  "owner": "REPLACE_WITH_YOUR_ZELID",
+  "instances": 3,
+  "compose": [
+    {
+      "name": "web",
+      "description": "nginx serving the built SPA on port 8080",
+      "repotag": "ghcr.io/simro0987/buy-simple-dca:latest",
+      "ports": [
+        37080
+      ],
+      "containerPorts": [
+        8080
+      ],
+      "domains": [
+        ""
+      ],
+      "environmentParameters": [
+        "TREASURY_LIVE=0",
+        "VITE_SYSTEM_EXECUTION_MODE=PAPER",
+        "VITE_WALLETCONNECT_PROJECT_ID="
+      ],
+      "commands": [],
+      "containerData": "/appdata",
+      "cpu": 0.5,
+      "ram": 500,
+      "hdd": 1,
+      "repoauth": ""
+    }
+  ],
+  "contacts": [],
+  "geolocation": [],
+  "expire": 88000,
+  "nodes": [],
+  "staticip": false,
+  "enterprise": ""
+}
