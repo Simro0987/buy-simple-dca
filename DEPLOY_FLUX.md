@@ -8,7 +8,7 @@ v kontajneri – Supabase / RPC / Safe sú externé služby.
 
 | # | Problém | Oprava |
 |---|---------|--------|
-| 1 | **Image nikdy nebol publikovaný.** `ghcr.io/simro0987/buy-simple-dca:latest` neexistuje / nie je verejný (anonymný pull vracia 403), na Docker Hube `simro0987` nemá žiadny repozitár. Flux nody si image musia vedieť stiahnuť **verejne**. | `deploy/github-actions/docker-publish.yml` (presuň do `.github/workflows/`) buildí a pushuje image. Balík na GHCR treba **raz prepnúť na Public** (GHCR je defaultne private). |
+| 1 | **Image nikdy nebol publikovaný.** `ghcr.io/simro0987/buy-simple-dca:latest` neexistuje / nie je verejný (anonymný pull vracia 403), na Docker Hube `simro0987` nemá žiadny repozitár. Flux nody si image musia vedieť stiahnuť **verejne**. | `.github/workflows/docker-publish.yml` buildí a pushuje image. Balík na GHCR treba **raz prepnúť na Public** (GHCR je defaultne private). |
 | 2 | **Architektúra.** Image zbuildovaný na Macu s Apple Silicon je `arm64`; Flux nody sú `amd64` → „architecture not supported“. | Workflow a `docker-compose.yml` buildia `linux/amd64`. Ručne: `docker buildx build --platform linux/amd64 ...` |
 | 3 | **Neplatná Flux špecifikácia.** Flux v8 povoľuje v komponente len `name, description, repotag, ports, containerPorts, environmentParameters, commands, containerData, domains, repoauth, cpu, ram, hdd` – napr. `tiered`/`secrets` → „Unsupported parameter“. Názov komponentu len `a-z A-Z 0-9`. Verejný port `8080` alebo `<1024` je „enterprise“ port (spoplatnený navyše). | `deploy/flux/flux-app-spec.json` – overené voči zdrojákom FluxOS (`appValidator.js`). Verejný port `37080` → kontajner `8080`. |
 | 4 | **Env premenné nefungovali.** `VITE_*` sa do Vite appky „zapečú“ pri builde – `environmentParameters` vo Fluxe za behu nemali žiadny efekt. | Kontajner pri štarte vygeneruje `/env-config.js` (`window.__APP_CONFIG__`) z povoleného zoznamu verejných premenných; appka ich číta cez `src/lib/runtimeConfig.ts`. |
@@ -19,7 +19,7 @@ v kontajneri – Supabase / RPC / Safe sú externé služby.
 ## Krok za krokom
 
 ### 1. Publikuj image (raz, potom automaticky)
-0. **Najprv aktivuj workflow:** skopíruj `deploy/github-actions/docker-publish.yml` do `.github/workflows/docker-publish.yml`
+0. **Workflow je už aktívny** v `.github/workflows/docker-publish.yml` (spustí sa po merge do `main`).
    (na GitHube: *Add file → Create new file*, vlož obsah, commit). Automatizácia ho nemohla pushnúť – token nemá `workflow` scope.
 1. Mergni PR do `main` → GitHub Actions spustí **docker-publish** a pushne
    `ghcr.io/simro0987/buy-simple-dca:latest` a `:sha-xxxxxxx` (pri tagu `v1.2.3` aj `:v1.2.3`).
