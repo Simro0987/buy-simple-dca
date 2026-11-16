@@ -4,7 +4,51 @@
 # The `runner` service mirrors the second Flux component (testnet + DRY_RUN by default).
 #   Put agent config in ./runner-data/agents.json and the agent key in ./runner-data/keys/<id>.key
 #   (runner-data/ is git-ignored). Status: http://localhost:8080/agent-api/status
+# `db` + `api` mirror the own-Postgres components (replace Supabase): login with a wallet (SIWE).
+#   Optional secrets for the api (Telegram, AI, ...): ./api-data/secrets.env  (git-ignored)
+#   Optional backup config for the db: copy db/backup.env.example into the db-data volume as backup.env
 services:
+  db:
+    build:
+      context: db
+    image: ghcr.io/simro0987/buy-simple-dca-db:local
+    platform: linux/amd64
+    # no published ports: only the api talks to Postgres
+    environment:
+      - BACKUP_HOUR_UTC=${BACKUP_HOUR_UTC:-2}
+      - BACKUP_KEEP_DAYS=${BACKUP_KEEP_DAYS:-30}
+      - BACKUP_AGE_RECIPIENTS=${BACKUP_AGE_RECIPIENTS:-}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+      - db-secrets:/run/secrets/db
+    shm_size: 128m
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+
+  api:
+    build:
+      context: .
+      dockerfile: api/Dockerfile
+    image: ghcr.io/simro0987/buy-simple-dca-api:local
+    platform: linux/amd64
+    depends_on:
+      - db
+    # no published ports: the browser reaches it via the web proxy at /sb/
+    environment:
+      - DB_HOST=db
+      - SIWE_DOMAINS=${SIWE_DOMAINS:-localhost:8080}
+      - API_ALLOWED_ORIGINS=${API_ALLOWED_ORIGINS:-}
+    volumes:
+      - ./api-data:/appdata
+      - db-secrets:/run/secrets/db:ro
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true # entrypoint drops root -> node (su-exec) after fixing /appdata ownership
+    restart: unless-stopped
+
   web:
     build:
       context: .
@@ -19,6 +63,11 @@ services:
       # Optional: enables the real WalletConnect pairing with Safe{Wallet} (https://cloud.reown.com)
       - VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID:-}
       - AGENT_STATUS_UPSTREAM=http://runner:8090
+      # own API (SIWE login, data, edge functions) behind /sb/ on the same origin
+      - API_UPSTREAM=http://api:8070
+      - VITE_SUPABASE_URL=/sb
+      - VITE_SUPABASE_PUBLISHABLE_KEY=public-anon
+      - VITE_AUTH_MODE=siwe
     read_only: true
     tmpfs:
       - /tmp:mode=1777,uid=101,gid=101
@@ -48,3 +97,7 @@ services:
     security_opt:
       - no-new-privileges:true # entrypoint drops root -> node (su-exec) after fixing /appdata ownership
     restart: unless-stopped
+
+volumes:
+  db-data:
+  db-secrets:

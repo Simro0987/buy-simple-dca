@@ -83,6 +83,11 @@ export async function connectSafeViaWalletConnect(
   return { address, chainIdNumeric, chain, peerName };
 }
 
+/** The live WalletConnect (Safe{Wallet}) EIP-1193 provider, e.g. for a Sign-In with Ethereum signature. */
+export function getActiveWalletConnectProvider(): WcProvider | null {
+  return activeProvider;
+}
+
 export async function disconnectWalletConnect(): Promise<void> {
   const p = activeProvider;
   activeProvider = null;

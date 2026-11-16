@@ -13,7 +13,10 @@
     "test:watch": "vitest",
     "test:runner": "vitest run --config agent-runner/vitest.config.ts",
     "build:runner": "esbuild agent-runner/src/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=agent-runner/dist/runner.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
-    "runner:safe-tx": "tsx agent-runner/scripts/safe-tx-builder.ts"
+    "runner:safe-tx": "tsx agent-runner/scripts/safe-tx-builder.ts",
+    "test:api": "vitest run --config api/vitest.config.ts",
+    "build:api": "node api/build.mjs",
+    "typecheck:api": "tsc -p api"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -83,6 +86,7 @@
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^22.16.5",
+    "@types/pg": "^8.23.1",
     "@types/react": "^18.3.23",
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
@@ -94,6 +98,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "jsdom": "^20.0.3",
+    "pg": "^8.23.1",
     "postcss": "^8.5.6",
     "postgres": "^3.4.9",
     "tailwindcss": "^3.4.17",

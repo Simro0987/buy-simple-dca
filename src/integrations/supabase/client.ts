@@ -6,7 +6,13 @@ import { runtimeEnv } from '@/lib/runtimeConfig';
 
 // Runtime (Flux/Docker env) values win over build-time values. createClient() throws on an
 // empty URL, which used to blank the whole app when the image was built without .env.
-const SUPABASE_URL = runtimeEnv('VITE_SUPABASE_URL') || 'https://supabase-not-configured.invalid';
+// A relative URL (e.g. "/sb" on Flux, proxied by nginx to the own API component) is resolved
+// against the current origin, because supabase-js needs an absolute URL.
+const RAW_SUPABASE_URL = runtimeEnv('VITE_SUPABASE_URL');
+const SUPABASE_URL =
+  RAW_SUPABASE_URL.startsWith('/') && typeof window !== 'undefined'
+    ? `${window.location.origin}${RAW_SUPABASE_URL.replace(/\/+$/, '')}`
+    : RAW_SUPABASE_URL || 'https://supabase-not-configured.invalid';
 const SUPABASE_PUBLISHABLE_KEY = runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY') || 'not-configured';
 if (SUPABASE_URL.endsWith('.invalid')) {
   console.warn('[config] VITE_SUPABASE_URL is not set - cloud sync / edge functions are disabled.');

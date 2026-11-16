@@ -1,13 +1,57 @@
 {
   "version": 8,
   "name": "buysimpledca",
-  "description": "Non-custodial DCA terminal + swap-only AI agent runner (testnet, dry-run by default)",
+  "description": "Non-custodial DCA terminal: own Postgres + API (SIWE), web, swap-only agent runner (testnet, dry-run)",
   "owner": "REPLACE_WITH_YOUR_ZELID",
   "instances": 1,
   "compose": [
     {
+      "name": "db",
+      "description": "Own Postgres 16 (not public). Nightly age-encrypted backups to Storj (S3).",
+      "repotag": "ghcr.io/simro0987/buy-simple-dca-db:latest",
+      "ports": [],
+      "containerPorts": [],
+      "domains": [],
+      "environmentParameters": [
+        "BACKUP_HOUR_UTC=2",
+        "BACKUP_KEEP_DAYS=30",
+        "BACKUP_KEEP_MIN=7",
+        "S3_ENDPOINT=https://gateway.storjshare.io",
+        "S3_PREFIX=buy-simple-dca/",
+        "BACKUP_AGE_RECIPIENTS=age1REPLACE_WITH_YOUR_AGE_PUBLIC_KEY",
+        "PG_SHARED_BUFFERS=96MB",
+        "PG_MAX_CONNECTIONS=30"
+      ],
+      "commands": [],
+      "containerData": "/var/lib/postgresql/data|m:secrets:/run/secrets/db",
+      "cpu": 0.3,
+      "ram": 500,
+      "hdd": 5,
+      "repoauth": ""
+    },
+    {
+      "name": "api",
+      "description": "API replacing Supabase: SIWE wallet login, PostgREST (RLS), edge functions, cron. Not public.",
+      "repotag": "ghcr.io/simro0987/buy-simple-dca-api:latest",
+      "ports": [],
+      "containerPorts": [],
+      "domains": [],
+      "environmentParameters": [
+        "DB_HOST=fluxdb_buysimpledca",
+        "SIWE_DOMAINS=REPLACE_WITH_YOUR_APP_DOMAIN",
+        "API_ALLOWED_ORIGINS=",
+        "API_SECRETS_FILE=/appdata/secrets.env"
+      ],
+      "commands": [],
+      "containerData": "/appdata|c:0:secrets:/run/secrets/db",
+      "cpu": 0.3,
+      "ram": 300,
+      "hdd": 1,
+      "repoauth": ""
+    },
+    {
       "name": "web",
-      "description": "nginx SPA on 8080; proxies read-only /agent-api/status to the runner",
+      "description": "nginx SPA on 8080; proxies /sb/ to the api and read-only /agent-api/status to the runner",
       "repotag": "ghcr.io/simro0987/buy-simple-dca:latest",
       "ports": [
         37080
@@ -22,7 +66,11 @@
         "TREASURY_LIVE=0",
         "VITE_SYSTEM_EXECUTION_MODE=PAPER",
         "VITE_WALLETCONNECT_PROJECT_ID=",
-        "AGENT_STATUS_UPSTREAM=http://fluxrunner_buysimpledca:8090"
+        "AGENT_STATUS_UPSTREAM=http://fluxrunner_buysimpledca:8090",
+        "API_UPSTREAM=http://fluxapi_buysimpledca:8070",
+        "VITE_SUPABASE_URL=/sb",
+        "VITE_SUPABASE_PUBLISHABLE_KEY=public-anon",
+        "VITE_AUTH_MODE=siwe"
       ],
       "commands": [],
       "containerData": "/appdata",

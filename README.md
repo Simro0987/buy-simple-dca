@@ -54,4 +54,10 @@ Pre nasadenie na decentralizovanú sieť **Akash Network** použite manifest `de
 
 ## Agent runner (autonómne obchodovanie na Flux)
 
-`agent-runner/` je druhý Flux komponent: agenti obchodujú sami, ale **iba** cez `AgentSwapModule` (výsledok vždy späť do Safe). Testnet + DRY_RUN predvolene. Návod: `DEPLOY_FLUX.md` → Časť B.
+`agent-runner/` je Flux komponent: agenti obchodujú sami, ale **iba** cez `AgentSwapModule` (výsledok vždy späť do Safe). Testnet + DRY_RUN predvolene. Návod: `DEPLOY_FLUX.md` → Časť B.
+
+## Vlastná databáza + API (namiesto Supabase)
+
+`db/` (Postgres 16 + nočná age-šifrovaná záloha na Storj/S3) a `api/` (prihlásenie peňaženkou/Safe cez SIWE,
+PostgREST s RLS, 32 pôvodných edge funkcií, cron) bežia ako ďalšie komponenty tej istej Flux appky.
+Návod, zálohy, obnova a presun dát zo Supabase: `DEPLOY_FLUX.md` → Časť C. Vývoj: `api/README.md`.
