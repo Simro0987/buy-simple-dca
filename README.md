@@ -50,3 +50,8 @@ node scripts/backup-restore-state.mjs backup
 Nasadenie na **Flux (runonflux.io)**: pozri **[DEPLOY_FLUX.md](DEPLOY_FLUX.md)** a `deploy/flux/flux-app-spec.json`.
 Pripojenie Safe{Wallet}: **[docs/SAFE_CONNECT.md](docs/SAFE_CONNECT.md)**.
 Pre nasadenie na decentralizovanú sieť **Akash Network** použite manifest `deploy/akash-sdl.yaml`.
+
+
+## Agent runner (autonómne obchodovanie na Flux)
+
+`agent-runner/` je druhý Flux komponent: agenti obchodujú sami, ale **iba** cez `AgentSwapModule` (výsledok vždy späť do Safe). Testnet + DRY_RUN predvolene. Návod: `DEPLOY_FLUX.md` → Časť B.

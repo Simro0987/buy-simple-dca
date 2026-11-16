@@ -9,3 +9,6 @@ dist-ssr
 coverage
 playwright-report
 test-results
+runner-data
+**/*.key
+agent-runner/dist

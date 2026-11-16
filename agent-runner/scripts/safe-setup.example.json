@@ -1,0 +1,12 @@
+{
+  "chainId": 421614,
+  "safe": "0xYOUR_SAFE_ADDRESS_ON_ARBITRUM_SEPOLIA_______",
+  "module": "0xDEPLOYED_AGENT_SWAP_MODULE_ADDRESS_________",
+  "tokens": [
+    { "token": "0xUSDC_ON_THIS_CHAIN________________________", "usdFeed": "0xCHAINLINK_USDC_USD_FEED___________________" },
+    { "token": "0xWBTC_OR_WETH_ON_THIS_CHAIN________________", "usdFeed": "0xCHAINLINK_BTC_USD_FEED____________________" }
+  ],
+  "pools": [
+    { "tokenIn": "0xUSDC_ON_THIS_CHAIN________________________", "tokenOut": "0xWBTC_OR_WETH_ON_THIS_CHAIN________________", "fee": 500 }
+  ]
+}

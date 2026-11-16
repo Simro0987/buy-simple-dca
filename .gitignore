@@ -24,3 +24,6 @@ dist-ssr
 *.sw?
 contracts/out
 contracts/cache
+agent-runner/dist
+runner-data/
+*.key

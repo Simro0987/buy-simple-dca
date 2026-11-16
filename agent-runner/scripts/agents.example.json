@@ -1,0 +1,17 @@
+[
+  {
+    "id": "btcdca",
+    "name": "BTC DCA tyzdenne",
+    "enabled": true,
+    "strategy": "dca-brake-boost",
+    "indicatorSymbol": "BTCUSDT",
+    "module": "0x0000000000000000000000000000000000000000",
+    "tokenIn": "0x0000000000000000000000000000000000000000",
+    "tokenOut": "0x0000000000000000000000000000000000000000",
+    "fee": 500,
+    "amountUsd": 25,
+    "maxDailyUsd": 50,
+    "intervalMinutes": 10080,
+    "maxSlippageBps": 50
+  }
+]

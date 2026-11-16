@@ -15,7 +15,7 @@ version: "2.0"
 
 services:
   safebtc-terminal:
-    # Image must be PUBLIC on GHCR and contain linux/amd64 (built by deploy/github-actions/docker-publish.yml once moved to .github/workflows/)
+    # Image must be PUBLIC on GHCR and contain linux/amd64 (built by .github/workflows/docker-publish.yml)
     image: ghcr.io/simro0987/buy-simple-dca:latest
     expose:
       - port: 8080
