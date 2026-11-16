@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { fetchTokenPrice, COINGECKO_ID } from '@/lib/apiManager';
 import { useTokenRemoved } from '@/lib/dcaTokenVisibility';
 import { basketAsset } from '@/lib/assetBaskets';
+import { runtimeEnv } from '@/lib/runtimeConfig';
 
 export interface TokenDailyIndicators {
   price: number;
@@ -122,10 +123,10 @@ async function fetchFromCoinGecko(symbol: string, cgId?: string | null): Promise
   const id = cgId || COINGECKO_ID[symbol.toUpperCase()];
   if (!id) return null;
   try {
-    const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/coingecko-proxy`
+    const url = `${runtimeEnv('VITE_SUPABASE_URL')}/functions/v1/coingecko-proxy`
       + `?path=${encodeURIComponent(`/coins/${id}/market_chart`)}&vs_currency=usd&days=365`;
     const res = await fetch(url, {
-      headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '' },
+      headers: { apikey: runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '' },
     });
     if (!res.ok) return null;
     const j = await res.json() as { prices?: Array<[number, number]>; total_volumes?: Array<[number, number]> };
@@ -254,8 +255,8 @@ function fromOhlc(highs: number[], lows: number[], closes: number[], livePrice: 
 
 /** Akcie (MSTR) — Yahoo Finance cez backend proxy `market-proxy`. */
 async function fetchFromYahoo(ticker: string): Promise<TokenDailyIndicators> {
-  const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/market-proxy?ticker=${encodeURIComponent(ticker)}`;
-  const res = await fetch(url, { headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '' } });
+  const url = `${runtimeEnv('VITE_SUPABASE_URL')}/functions/v1/market-proxy?ticker=${encodeURIComponent(ticker)}`;
+  const res = await fetch(url, { headers: { apikey: runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '' } });
   if (!res.ok) throw new Error(`yahoo ${res.status}`);
   const j = await res.json() as { price: number; highs: number[]; lows: number[]; closes: number[] };
   if (!Array.isArray(j.closes) || j.closes.length < 40) throw new Error('insufficient candles');

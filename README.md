@@ -1,6 +1,6 @@
 # SafeBTC Agent · Inštitucionálny Decentralizovaný DeFi Operating System
 
-Tento repozitár spája **Crypto DCA & Portfolio Tracker**, **Zisk Bot (PAPER Optimizer, Delta-Neutral Funding, Solana Lending, Learn-Sync)**, **ETT SuperTrend + Fibo + EMA/MA DEX stratégiu**, **Safe Global (`app.safe.global`) 2-z-2 Multisig + On-Chain Safe Guard (`contracts/SafeBTCGuard.sol`)** a **15-agentovú kolektívnu architektúru s právom veta** do jedného produkčne pripraveného self-custody terminálu.
+Tento repozitár spája **Crypto DCA & Portfolio Tracker**, **Zisk Bot (PAPER Optimizer, Delta-Neutral Funding, Solana Lending, Learn-Sync)**, **ETT SuperTrend + Fibo + EMA/MA DEX stratégiu**, **Safe Global (`app.safe.global`) Multisig + on-chain swap-only agent modul (`contracts/AgentSwapModule.sol`)** a **15-agentovú kolektívnu architektúru s právom veta** do jedného produkčne pripraveného self-custody terminálu.
 
 > **Upozornenie o riziku:** Tento systém nesľubuje ani negarantuje žiadny finančný výnos ani „úplnú ochranu pred stratou“. Každý on-chain swap, staking, lending alebo perp hedge nesie trhové riziko, smart-contract riziko, riziko depegu, sklzu (slippage) a výpadku orákul. Predvolený režim systému je striktne **PAPER / SHADOW** (`TREASURY_LIVE=0`).
 
@@ -9,17 +9,12 @@ Tento repozitár spája **Crypto DCA & Portfolio Tracker**, **Zisk Bot (PAPER Op
 ## 1. Architektúra a 3 Vrstvy Oprávnení
 
 1. **Immutable Security Layer (Nemenná on-chain bezpečnostná vrstva)**
-   - Smart kontrakt `contracts/SafeBTCGuard.sol` + 4 oddelené Safe trezory:
-     - **Cold Treasury Safe**: Hlavné dlhodobé BTC rezervy — AI agenti k nemu nemajú žiadny prístup (`0%` obchodovanie).
-     - **Strategy Safe**: Vymedzená časť kapitálu pre povolené DEX swapy v rámci prísneho risk budgetu.
-     - **Gas Safe**: Oddelený malý rozpočet na gas a Akash prevádzku.
-     - **Profit Vault**: Zisk sa periodicky uzamyká sem; agent z neho nikdy nevie poslať kapitál späť.
-   - **Tvrdé zákazy v `SafeBTCGuard.sol`**:
-     - Zákaz natívnych a ERC-20 transferov na akékoľvek externé adresy (`ExternalTransferForbidden`).
-     - Zákaz `DelegateCall` (`DelegateCallForbidden`).
-     - Zákaz `Unlimited Approvals` (`approve(..., uint256.max)` je zablokované; povolené len presné limity pre schválené DEX routre).
-     - Zákaz zmeny vlastníkov Safe (`addOwner`, `removeOwner`, `swapOwner`), `changeThreshold`, `setGuard`, `enableModule` a `setFallbackHandler` cez agenta.
-     - Globálny **KILL SWITCH** a **PAUSE** pri anomálii.
+   - Aplikácia nemá **žiadne privátne kľúče** a sama nič nepodpisuje. Každú transakciu podpisujú vlastníci Safe v `app.safe.global`.
+   - Ak má AI agent obchodovať sám, dostane vlastný kľúč, ktorý smie on-chain **iba** volať `contracts/AgentSwapModule.sol`:
+     - jediná akcia = swap cez Uniswap V3 s príjemcom natvrdo = tento Safe (žiadne prevody von, žiadny `transfer`, žiadny native send, žiadny DELEGATECALL),
+     - len povolené tokeny a pooly, cenová ochrana cez Chainlink (max. sklz ≤ 5 %), limity na obchod/deň, cooldown,
+     - agent nemôže meniť vlastníkov, threshold, guard, moduly ani limity; vlastníci modul kedykoľvek vypnú (`disableModule`).
+   - Detaily, hrozby a nastavenie: **[SAFE_AGENT_PERMISSIONS.md](SAFE_AGENT_PERMISSIONS.md)**. (Pôvodný `SafeBTCGuard.sol` bol odstránený – po inštalácii by natrvalo zablokoval aj vlastníkov.)
 
 2. **Decision, Oversight & Learning Layer (15 Špecializovaných AI Agentov s právom veta)**
    - Povinný rozhodovací reťazec:
@@ -34,7 +29,7 @@ Tento repozitár spája **Crypto DCA & Portfolio Tracker**, **Zisk Bot (PAPER Op
 
 ---
 
-## 2. Spustenie (Lokálne, Docker/Podman, Akash Network)
+## 2. Spustenie (Lokálne, Docker/Podman, Flux, Akash Network)
 
 ```bash
 # 1. Lokálny vývoj a testy
@@ -52,4 +47,6 @@ docker compose up -d --build
 node scripts/backup-restore-state.mjs backup
 ```
 
+Nasadenie na **Flux (runonflux.io)**: pozri **[DEPLOY_FLUX.md](DEPLOY_FLUX.md)** a `deploy/flux/flux-app-spec.json`.
+Pripojenie Safe{Wallet}: **[docs/SAFE_CONNECT.md](docs/SAFE_CONNECT.md)**.
 Pre nasadenie na decentralizovanú sieť **Akash Network** použite manifest `deploy/akash-sdl.yaml`.

@@ -5,6 +5,7 @@ import { Lock, Mail, Loader2, CloudOff, RefreshCw, ShieldCheck } from 'lucide-re
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
+import { runtimeEnv } from '@/lib/runtimeConfig';
 
 const RETRY_DELAY_MS = 4_000;
 const MAX_ATTEMPTS = 6;
@@ -33,8 +34,8 @@ export default function AuthPage() {
   const cancelWake = useRef(false);
 
   const pingBackend = useCallback(async () => {
-    const backendUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
-    const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+    const backendUrl = runtimeEnv('VITE_SUPABASE_URL');
+    const publishableKey = runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY');
 
     if (!backendUrl || !publishableKey) {
       setBackendStatus('offline');

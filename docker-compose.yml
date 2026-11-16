@@ -1,34 +1,23 @@
-version: "3.9"
-
-# ============================================================================
-# SafeBTC Agent · Docker / Podman Compose (Local PAPER & Shadow Environment)
-# ============================================================================
-# Default mode is strictly PAPER (`TREASURY_LIVE=0`).
-# Never mount seed phrases, keyrings, or private keys into any container!
-# ============================================================================
-
+# Local test of the exact image that runs on Flux.
+#   docker compose up -d --build   ->  http://localhost:8080
+# Default mode is strictly PAPER (TREASURY_LIVE=0). Never mount seed phrases or private keys.
 services:
-  safebtc-web-terminal:
+  web:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: safebtc-web-terminal
+    image: ghcr.io/simro0987/buy-simple-dca:local
+    platform: linux/amd64
     ports:
       - "8080:8080"
     environment:
-      - NODE_ENV=production
       - TREASURY_LIVE=0
-      - TREASURY_INSTANCE_ID=safebtc-local-paper
       - VITE_SYSTEM_EXECUTION_MODE=PAPER
-    volumes:
-      - safebtc_persistent_state:/data
+      # Optional: enables the real WalletConnect pairing with Safe{Wallet} (https://cloud.reown.com)
+      - VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID:-}
+    read_only: true
     tmpfs:
-      - /tmp:mode=1777
-    restart: unless-stopped
+      - /tmp:mode=1777,uid=101,gid=101
     security_opt:
       - no-new-privileges:true
-    read_only: true
-
-volumes:
-  safebtc_persistent_state:
-    driver: local
+    restart: unless-stopped

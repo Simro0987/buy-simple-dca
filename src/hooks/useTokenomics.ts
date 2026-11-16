@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { runtimeEnv } from '@/lib/runtimeConfig';
 
 export interface TokenomicsRow {
   symbol: string;
@@ -16,8 +17,8 @@ export function useTokenomics() {
   return useQuery({
     queryKey: ['token-tokenomics'],
     queryFn: async () => {
-      const r = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/token-tokenomics`, {
-        headers: { apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ?? '' },
+      const r = await fetch(`${runtimeEnv('VITE_SUPABASE_URL')}/functions/v1/token-tokenomics`, {
+        headers: { apikey: runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '' },
       });
       if (!r.ok) throw new Error(`tokenomics ${r.status}`);
       const j = (await r.json()) as { tokens: TokenomicsRow[] };
