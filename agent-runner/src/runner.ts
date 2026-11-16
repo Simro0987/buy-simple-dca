@@ -1,7 +1,7 @@
 import { getAddress, type Address } from 'viem';
 import type { AgentExecutor, ChainReader, ModuleState, TokenConfig } from './chain';
 import type { LoadedAgent, RunnerConfig } from './config';
-import type { Logger } from './log';
+import { safeError, type Logger } from './log';
 import { amountForUsd, fromUsd18, isStale, minAmountOut, price18, usd18 } from './quote';
 import type { StateStore, TradeRecord } from './state';
 import { decide, type IndicatorSource } from './strategies';
@@ -71,7 +71,7 @@ export class AgentRunner {
         problems.push(`pool ${agent.tokenIn}->${agent.tokenOut} fee ${agent.fee} not allow-listed`);
       }
     } catch (e) {
-      problems.push(`preflight error: ${(e as Error).message}`);
+      problems.push(`preflight error: ${safeError(e)}`);
     }
     const p = { ok: problems.length === 0, problems, checkedAt: new Date(this.now()).toISOString() };
     this.preflights.set(agent.id, p);
@@ -91,7 +91,7 @@ export class AgentRunner {
           }
           await this.runAgent(agent);
         } catch (e) {
-          this.d.log('error', 'agent tick failed', { agent: agent.id, error: (e as Error).message });
+          this.d.log('error', 'agent tick failed', { agent: agent.id, error: safeError(e) });
         }
       }
     } finally {
@@ -223,7 +223,7 @@ export class AgentRunner {
     try {
       simulatedOut = await ex.simulateSwap(args);
     } catch (e) {
-      return this.finish(agent, { ...base, status: 'error', reason: `simulation reverted: ${(e as Error).message.slice(0, 300)}` }, RETRY_MS);
+      return this.finish(agent, { ...base, status: 'error', reason: `simulation reverted: ${safeError(e)}` }, RETRY_MS);
     }
 
     if (config.dryRun) {
@@ -233,7 +233,17 @@ export class AgentRunner {
 
     const hash = await ex.sendSwap(args);
     this.d.log('info', 'swap sent', { agent: agent.id, txHash: hash });
-    const receipt = await ex.waitForReceipt(hash);
+    let receipt: { status: string };
+    try {
+      receipt = await ex.waitForReceipt(hash);
+    } catch (e) {
+      // Never resend blindly: back off; the on-chain cooldown also blocks a duplicate.
+      return this.finish(
+        agent,
+        { ...base, simulatedOut: simulatedOut.toString(), txHash: hash, status: 'sent', reason: `receipt pending: ${safeError(e)}` },
+        RETRY_MS,
+      );
+    }
     return this.finish(
       agent,
       {

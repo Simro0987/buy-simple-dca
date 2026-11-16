@@ -23,6 +23,7 @@ WORKDIR /app
 COPY --from=builder /app/agent-runner/dist/runner.mjs ./runner.mjs
 COPY --chmod=0755 agent-runner/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 ENV NODE_ENV=production \
+    NODE_OPTIONS=--max-old-space-size=128 \
     NETWORK=arbitrum-sepolia \
     DRY_RUN=true \
     KILL_SWITCH=false \

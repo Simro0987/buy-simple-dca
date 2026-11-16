@@ -6,18 +6,33 @@
   "outputDirectory": "dist",
   "headers": [
     {
-      "source": "/manifest.json",
+      "source": "/(.*)",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "*" },
-        { "key": "Access-Control-Allow-Methods", "value": "GET, OPTIONS" },
-        { "key": "Access-Control-Allow-Headers", "value": "X-Requested-With, content-type, Authorization" }
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "https://app.safe.global"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors 'self' https://app.safe.global https://*.safe.global;"
+        }
       ]
     },
     {
-      "source": "/(.*)",
+      "source": "/manifest.json",
       "headers": [
-        { "key": "Access-Control-Allow-Origin", "value": "https://app.safe.global" },
-        { "key": "Content-Security-Policy", "value": "frame-ancestors 'self' https://app.safe.global https://*.safe.global;" }
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "X-Requested-With, content-type, Authorization"
+        }
       ]
     }
   ],

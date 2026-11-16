@@ -1,6 +1,6 @@
 import { createViemExecutor, createViemReader, type AgentExecutor } from './chain';
 import { ConfigError, loadConfig } from './config';
-import { consoleLogger as log } from './log';
+import { consoleLogger as log, safeError } from './log';
 import { AgentRunner } from './runner';
 import { StateStore } from './state';
 import { createStatusServer } from './statusServer';
@@ -11,7 +11,7 @@ async function main() {
   try {
     config = loadConfig();
   } catch (e) {
-    log('error', 'invalid configuration - refusing to start', { error: (e as Error).message });
+    log('error', 'invalid configuration - refusing to start', { error: safeError(e) });
     if (e instanceof ConfigError) process.exit(2);
     throw e;
   }
@@ -67,6 +67,6 @@ async function main() {
 }
 
 main().catch((e) => {
-  log('error', 'fatal', { error: (e as Error).message });
+  log('error', 'fatal', { error: safeError(e) });
   process.exit(1);
 });

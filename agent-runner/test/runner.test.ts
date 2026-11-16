@@ -138,3 +138,20 @@ describe('AgentRunner', () => {
     expect(json).toContain('btcdca');
   });
 });
+
+describe('AgentRunner receipt handling', () => {
+  it('does not resend when the receipt times out; records "sent" and backs off', async () => {
+    const { FakeExecutor } = await import('./helpers');
+    const ex = new FakeExecutor();
+    ex.waitForReceipt = async () => { throw new Error('timeout https://rpc.example/key123'); };
+    const cfg = makeConfig({ dryRun: false });
+    const { runner, state } = makeRunner({ config: cfg, ex });
+    const rec = await runner.runAgent(cfg.agents[0]);
+    expect(rec?.status).toBe('sent');
+    expect(rec?.reason).not.toContain('key123');
+    expect(ex.sent).toHaveLength(1);
+    await runner.runAgent(cfg.agents[0]); // immediately again: still backing off
+    expect(ex.sent).toHaveLength(1);
+    expect(state.get().trades[0].txHash).toMatch(/^0x(ab){32}$/);
+  });
+});

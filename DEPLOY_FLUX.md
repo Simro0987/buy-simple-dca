@@ -16,15 +16,31 @@ v kontajneri – Supabase / RPC / Safe sú externé služby.
 | 6 | Kontajner bežal ako `node` s `/data` – Flux mountuje `containerData` ako root → zápis by zlyhal. Appka nič nezapisuje, takže to nie je potrebné. | nginx-unprivileged (uid 101), zapisuje len do `/tmp`; `containerData` je len formálne `/appdata`. |
 | 7 | Prázdne `VITE_SUPABASE_URL` → `createClient()` vyhodil chybu → čierna obrazovka. | Bezpečný fallback v `src/integrations/supabase/client.ts`. |
 
+## Zdroje a cena na Fluxe (držané na minime)
+
+Na Fluxe bežia **len 2 malé kontajnery** – žiadna databáza (Postgres/Redis…). Databáza zostáva **mimo Fluxu**
+v hostovanom Supabase (zadarmo/lacno), web ju volá priamo z prehliadača. Runner si drží len malý JSON súbor so stavom.
+
+| Komponent | CPU | RAM | SSD | Reálna spotreba (meraná lokálne) |
+|---|---|---|---|---|
+| `web` (nginx, statické súbory) | 0.1 | 100 MB | 1 GB | ~7 MB RAM, ~0 % CPU |
+| `runner` (Node, 1 tick/min) | 0.2 | 200 MB | 1 GB | ~25–80 MB RAM (heap obmedzený na 128 MB) |
+| **Spolu** | **0.3** | **300 MB** | **2 GB** | 1 inštancia (`"instances": 1`) |
+
+0.1 CPU / 100 MB / 1 GB je **minimum**, ktoré Flux povolí (`appValidator.js`). Viac inštancií = vyššia cena;
+pre web zvýš `instances` až keď treba vyššiu dostupnosť (runner kľúče potom treba nahrať na každú inštanciu).
+Stav runnera (`/appdata/agent-runner-state.json`, max. 200 posledných obchodov) má pár desiatok kB.
+
 ## Krok za krokom
 
 ### 1. Publikuj image (raz, potom automaticky)
 0. **Workflow je už aktívny** v `.github/workflows/docker-publish.yml` (spustí sa po merge do `main`).
-   (na GitHube: *Add file → Create new file*, vlož obsah, commit). Automatizácia ho nemohla pushnúť – token nemá `workflow` scope.
-1. Mergni PR do `main` → GitHub Actions spustí **docker-publish** a pushne
-   `ghcr.io/simro0987/buy-simple-dca:latest` a `:sha-xxxxxxx` (pri tagu `v1.2.3` aj `:v1.2.3`).
+1. Mergni PR do `main` → GitHub Actions spustí **docker-publish** a pushne dva image:
+   `ghcr.io/simro0987/buy-simple-dca:latest` (web) a `ghcr.io/simro0987/buy-simple-dca-agent-runner:latest` (runner),
+   oba aj s tagom `:sha-xxxxxxx` (pri git tagu `v1.2.3` aj `:v1.2.3`).
 2. Otvor `https://github.com/users/Simro0987/packages/container/buy-simple-dca/settings`
-   → **Change visibility → Public**.
+   a `https://github.com/users/Simro0987/packages/container/buy-simple-dca-agent-runner/settings`
+   → **Change visibility → Public** (pri oboch; Flux nevie stiahnuť súkromný image).
 3. Over (bez prihlásenia): `docker pull ghcr.io/simro0987/buy-simple-dca:latest`
    a `docker buildx imagetools inspect ghcr.io/simro0987/buy-simple-dca:latest` → musí obsahovať `linux/amd64`.
 
