@@ -1,10 +1,12 @@
 # >>> MOVE THIS FILE TO .github/workflows/docker-publish.yml (GitHub web UI: Add file -> Create new file).
 # It could not be pushed from the automation token (missing `workflow` scope).
 # Builds the linux/amd64 image Flux needs and pushes it to GitHub Container Registry.
-# Image: ghcr.io/simro0987/buy-simple-dca:<tag>
+# Images: ghcr.io/simro0987/buy-simple-dca:<tag>  (web)
+#         ghcr.io/simro0987/buy-simple-dca-agent-runner:<tag>  (agent runner, 2nd Flux component)
 # IMPORTANT (one-time): GHCR packages are PRIVATE by default and Flux cannot pull private images.
 # After the first run go to github.com/users/Simro0987/packages/container/buy-simple-dca/settings
-# -> "Change visibility" -> Public.
+# -> "Change visibility" -> Public.  Do the same for the buy-simple-dca-agent-runner package.
+# The runner image contains NO keys; keys are provided only at runtime on Flux.
 name: docker-publish
 
 on:
@@ -21,6 +23,7 @@ permissions:
 
 env:
   IMAGE: ghcr.io/simro0987/buy-simple-dca
+  RUNNER_IMAGE: ghcr.io/simro0987/buy-simple-dca-agent-runner
 
 jobs:
   build:
@@ -34,6 +37,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm test
+      - run: npm run test:runner
 
       - uses: docker/setup-buildx-action@v3
 
@@ -71,6 +75,46 @@ jobs:
           for i in $(seq 1 20); do curl -fsS http://127.0.0.1:8080/healthz && break; sleep 1; done
           curl -fsS http://127.0.0.1:8080/ | grep -q '<div id="root">'
           curl -fsSI http://127.0.0.1:8080/manifest.json | grep -qi 'access-control-allow-origin: \*'
+
+  runner:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name != 'pull_request'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.RUNNER_IMAGE }}
+          tags: |
+            type=semver,pattern=v{{version}}
+            type=sha,format=short,prefix=sha-
+            type=raw,value=latest,enable={{is_default_branch}}
+      # runner tests run inside the Dockerfile builder stage, so a failing test fails the image build
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: agent-runner/Dockerfile
+          platforms: linux/amd64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=runner
+          cache-to: type=gha,mode=max,scope=runner
+      - name: Smoke test runner (refuses mainnet, serves /healthz)
+        if: github.event_name == 'pull_request'
+        run: |
+          docker buildx build --platform linux/amd64 --load -f agent-runner/Dockerfile -t runner-smoke .
+          if docker run --rm -e NETWORK=arbitrum -e SAFE_ADDRESS=0x0000000000000000000000000000000000000001 runner-smoke; then echo "mainnet not refused"; exit 1; fi
+          docker run -d --name rs -p 8090:8090 -e SAFE_ADDRESS=0x0000000000000000000000000000000000000001 runner-smoke
+          for i in $(seq 1 30); do curl -fsS http://127.0.0.1:8090/healthz && break; sleep 1; done
+          curl -fsS http://127.0.0.1:8090/status | grep -q '"dryRun":true'
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X POST http://127.0.0.1:8090/status)" = "405"
 
   contracts:
     runs-on: ubuntu-latest

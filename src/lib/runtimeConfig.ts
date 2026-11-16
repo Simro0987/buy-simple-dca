@@ -14,7 +14,8 @@ export type RuntimeConfigKey =
   | 'VITE_SUPABASE_PROJECT_ID'
   | 'VITE_WALLETCONNECT_PROJECT_ID'
   | 'VITE_SYSTEM_EXECUTION_MODE'
-  | 'VITE_DEFAULT_SAFE_CHAIN';
+  | 'VITE_DEFAULT_SAFE_CHAIN'
+  | 'VITE_AGENT_STATUS_URL';
 
 declare global {
   interface Window {
@@ -29,6 +30,7 @@ const BUILD_TIME: Partial<Record<RuntimeConfigKey, string | undefined>> = {
   VITE_WALLETCONNECT_PROJECT_ID: import.meta.env.VITE_WALLETCONNECT_PROJECT_ID,
   VITE_SYSTEM_EXECUTION_MODE: import.meta.env.VITE_SYSTEM_EXECUTION_MODE,
   VITE_DEFAULT_SAFE_CHAIN: import.meta.env.VITE_DEFAULT_SAFE_CHAIN,
+  VITE_AGENT_STATUS_URL: import.meta.env.VITE_AGENT_STATUS_URL,
 };
 
 export function runtimeEnv(key: RuntimeConfigKey): string {

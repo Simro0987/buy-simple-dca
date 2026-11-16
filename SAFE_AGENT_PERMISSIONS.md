@@ -53,20 +53,22 @@ swapExactInputSingle(tokenIn, tokenOut, fee, amountIn, amountOutMinimum)
 - Hlavné BTC drž v **Cold Safe bez akéhokoľvek modulu**. Modul daj iba na Strategy Safe s obmedzenou sumou.
 
 ### Nastavenie (TESTNET – Arbitrum Sepolia; mainnet až po review/audite)
-1. Vytvor nový kľúč pre agenta (napr. `cast wallet new`) – drž ho len na serveri agenta, nikdy v appke/repo/Flux env.
+Kompletný postup (deploy skript, Transaction Builder JSON, Flux runner) je v **`DEPLOY_FLUX.md` → Časť B**. Skrátene:
+
+1. Vytvor nový kľúč pre agenta (napr. `cast wallet new`) – drž ho len v runner komponente (súbor na Flux volume alebo enterprise env), nikdy v appke/repo/web env.
 2. Nasaď modul (adresy routera / feedov si over v oficiálnej dokumentácii Uniswap a data.chain.link pre danú sieť):
    ```bash
-   forge create contracts/AgentSwapModule.sol:AgentSwapModule \
-     --rpc-url $ARB_SEPOLIA_RPC --private-key $DEPLOYER_KEY --broadcast \
-     --constructor-args <SAFE> <SWAP_ROUTER02> <AGENT_ADDR> \
-       100000000000000000000 300000000000000000000 3600 100 86400
-   #   perSwap=$100   daily=$300   cooldown=1h  slippage=1%  oracleMaxAge=24h  (USD s 18 desatinnými miestami)
+   SAFE_ADDRESS=0x.. SWAP_ROUTER=0x.. AGENT_ADDRESS=0x.. PER_SWAP_USD=100 DAILY_USD=300 \
+   forge script contracts/script/DeployAgentSwapModule.s.sol:DeployAgentSwapModule \
+     --rpc-url $RPC_URL --account deployer --broadcast
+   #   skript povolí len testnety (Sepolia, Arbitrum Sepolia, Base Sepolia), mainnet iba s ALLOW_MAINNET=true
    ```
-3. V `app.safe.global` → *Transaction Builder* (podpisujú vlastníci):
+3. V `app.safe.global` → *Transaction Builder* (podpisujú vlastníci) – JSON vygeneruje `npm run runner:safe-tx -- moj-setup.json`:
    - `enableModule(<MODUL>)` na adrese Safe,
    - `setToken(USDC, true, USDC_USD_FEED)`, `setToken(WBTC, true, BTC_USD_FEED)`,
    - `setPool(USDC, WBTC, 500, true)` (a opačný smer, ak chceš aj predávať).
-4. Agent server volá `swapExactInputSingle(...)` svojím kľúčom (gas platí agent kľúč, nie Safe).
+4. Flux komponent `runner` (`agent-runner/`) volá `swapExactInputSingle(...)` svojím kľúčom (gas platí agent kľúč, nie Safe).
+   Kód runnera nemá žiadnu inú cestu: nepozná `transfer`, `approve`, `sendTransaction` ani inú cieľovú adresu než modul (overuje to test `agent-runner/test/safety.test.ts`).
 5. Vypnutie: `disableModule(prevModule, <MODUL>)` v Safe alebo `setAgent(0x0)`.
 
 Orientačné adresy Arbitrum One (**over pred použitím**): SwapRouter02 `0x68b3465833fb72A70ecDF485E0e4C7bD8665Fc45`,
@@ -82,4 +84,4 @@ plus *allowance* limity. Nevýhoda: Roles nevie porovnať `amountOutMinimum` s c
 ### Čo nikdy nerobiť
 - Nedávaj agentovi kľúč vlastníka Safe ani ho nepridávaj ako ownera.
 - Neinštaluj Guard, ktorý blokuje aj vlastníkov (ako bol pôvodný `SafeBTCGuard`).
-- Nedávaj agent kľúč do `.env`, do Flux `environmentParameters` web kontajnera ani do prehliadača – všetko z web kontajnera je verejné.
+- Nedávaj agent kľúč do `.env`, do gitu, do web kontajnera ani do prehliadača. Ani do bežných (nešifrovaných) Flux `environmentParameters` – tie sú verejné.

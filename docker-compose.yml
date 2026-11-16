@@ -1,6 +1,9 @@
 # Local test of the exact image that runs on Flux.
 #   docker compose up -d --build   ->  http://localhost:8080
-# Default mode is strictly PAPER (TREASURY_LIVE=0). Never mount seed phrases or private keys.
+# Default mode is strictly PAPER (TREASURY_LIVE=0). Never mount seed phrases or private keys into `web`.
+# The `runner` service mirrors the second Flux component (testnet + DRY_RUN by default).
+#   Put agent config in ./runner-data/agents.json and the agent key in ./runner-data/keys/<id>.key
+#   (runner-data/ is git-ignored). Status: http://localhost:8080/agent-api/status
 services:
   web:
     build:
@@ -15,9 +18,33 @@ services:
       - VITE_SYSTEM_EXECUTION_MODE=PAPER
       # Optional: enables the real WalletConnect pairing with Safe{Wallet} (https://cloud.reown.com)
       - VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID:-}
+      - AGENT_STATUS_UPSTREAM=http://runner:8090
     read_only: true
     tmpfs:
       - /tmp:mode=1777,uid=101,gid=101
     security_opt:
       - no-new-privileges:true
+    restart: unless-stopped
+
+  runner:
+    build:
+      context: .
+      dockerfile: agent-runner/Dockerfile
+    image: ghcr.io/simro0987/buy-simple-dca-agent-runner:local
+    platform: linux/amd64
+    # no published ports: only the web proxy can read /status
+    environment:
+      - NETWORK=${NETWORK:-arbitrum-sepolia}
+      - ALLOW_MAINNET=false
+      - DRY_RUN=${DRY_RUN:-true}
+      - KILL_SWITCH=${KILL_SWITCH:-false}
+      - RPC_URL=${RPC_URL:-}
+      - SAFE_ADDRESS=${SAFE_ADDRESS:-0x0000000000000000000000000000000000000001}
+      - AGENTS_FILE=/appdata/agents.json
+      - AGENT_BTCDCA_PRIVATE_KEY_FILE=/appdata/keys/btcdca.key
+    volumes:
+      - ./runner-data:/appdata
+    read_only: true
+    security_opt:
+      - no-new-privileges:true # entrypoint drops root -> node (su-exec) after fixing /appdata ownership
     restart: unless-stopped

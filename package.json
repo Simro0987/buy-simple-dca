@@ -10,7 +10,10 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:runner": "vitest run --config agent-runner/vitest.config.ts",
+    "build:runner": "esbuild agent-runner/src/main.ts --bundle --platform=node --format=esm --target=node22 --outfile=agent-runner/dist/runner.mjs --banner:js=\"import { createRequire } from 'module'; const require = createRequire(import.meta.url);\"",
+    "runner:safe-tx": "tsx agent-runner/scripts/safe-tx-builder.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

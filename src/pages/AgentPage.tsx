@@ -26,6 +26,7 @@ import { Lang } from '@/lib/i18n';
 import { useAuth } from '@/hooks/useAuth';
 import { usePrices } from '@/hooks/usePrices';
 import { SafeGlobalConnectCard } from '@/components/wallet/SafeGlobalConnectCard';
+import { AgentRunnerStatusCard } from '@/components/wallet/AgentRunnerStatusCard';
 import { WebsiteGuardianPanel } from '@/components/WebsiteGuardianPanel';
 import { ZiskBotPanel } from '@/components/ZiskBotPanel';
 import { EttSuperTrendPanel } from '@/components/EttSuperTrendPanel';
@@ -401,6 +402,7 @@ export function AgentPage({ lang }: Props) {
 
       {/* Safe Global Connection + Guard Card (works for both Email and WalletConnect users) */}
       <SafeGlobalConnectCard lang={lang} compact />
+      <AgentRunnerStatusCard lang={lang} />
 
       {/* Top KPI Summary Bar */}
       <div className="grid grid-cols-3 gap-2">
