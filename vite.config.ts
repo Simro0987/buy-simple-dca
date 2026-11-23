@@ -3,6 +3,16 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { VitePWA } from "vite-plugin-pwa";
 
+// Local dev: the browser talks to /api (same origin) like in production; Vite forwards it to the
+// API process (default http://127.0.0.1:8070, override with API_PROXY_TARGET).
+const apiProxy = {
+  "/api": {
+    target: process.env.API_PROXY_TARGET || "http://127.0.0.1:8070",
+    changeOrigin: false,
+    rewrite: (p: string) => p.replace(/^\/api/, ""),
+  },
+};
+
 export default defineConfig(() => ({
   base: "./",
   server: {
@@ -11,6 +21,11 @@ export default defineConfig(() => ({
     hmr: {
       overlay: false,
     },
+    proxy: apiProxy,
+  },
+  preview: {
+    port: 8080,
+    proxy: apiProxy,
   },
   plugins: [
     react(),
@@ -54,9 +69,9 @@ export default defineConfig(() => ({
         ],
       },
       manifest: {
-        name: "Môj Crypto Dashboard",
-        short_name: "CryptoDCA",
-        description: "Crypto DCA & Portfolio Tracker pre Android",
+        name: "Buy Simple DCA",
+        short_name: "BuySimpleDCA",
+        description: "Non-custodial weekly DCA planner for a Safe{Wallet}",
         start_url: "/",
         display: "standalone",
         background_color: "#0d1117",

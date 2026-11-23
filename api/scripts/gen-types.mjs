@@ -31,7 +31,7 @@ const { rows } = await client.query(`
    where c.table_schema = 'public'
    order by c.table_name, c.ordinal_position`);
 const { rows: enums } = await client.query(`
-  select t.typname as name, array_agg(e.enumlabel order by e.enumsortorder) as labels
+  select t.typname as name, array_agg(e.enumlabel::text order by e.enumsortorder) as labels
     from pg_type t join pg_enum e on e.enumtypid = t.oid
     join pg_namespace n on n.oid = t.typnamespace
    where n.nspname = 'public' group by t.typname order by t.typname`);
