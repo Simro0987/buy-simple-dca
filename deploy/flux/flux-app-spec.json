@@ -18,7 +18,7 @@
         "BACKUP_KEEP_MIN=7",
         "S3_ENDPOINT=https://gateway.storjshare.io",
         "S3_PREFIX=buy-simple-dca/",
-        "BACKUP_AGE_RECIPIENTS=age1REPLACE_WITH_YOUR_AGE_PUBLIC_KEY",
+        "BACKUP_AGE_RECIPIENTS=age15d8gtkd0wq8uc349kc7j3gmwfvx9l86rzd88ytrvcmyln4d293dqlxc206",
         "PG_SHARED_BUFFERS=96MB",
         "PG_MAX_CONNECTIONS=30"
       ],
@@ -31,14 +31,14 @@
     },
     {
       "name": "api",
-      "description": "API replacing Supabase: SIWE wallet login, PostgREST (RLS), edge functions, cron. Not public.",
+      "description": "Own API: SIWE wallet login, PostgREST (RLS), edge functions, cron. Not public.",
       "repotag": "ghcr.io/simro0987/buy-simple-dca-api:latest",
       "ports": [],
       "containerPorts": [],
       "domains": [],
       "environmentParameters": [
         "DB_HOST=fluxdb_buysimpledca",
-        "SIWE_DOMAINS=REPLACE_WITH_YOUR_APP_DOMAIN",
+        "SIWE_DOMAINS=buysimpledca.app.runonflux.io",
         "API_ALLOWED_ORIGINS=",
         "API_SECRETS_FILE=/appdata/secrets.env"
       ],
@@ -51,7 +51,7 @@
     },
     {
       "name": "web",
-      "description": "nginx SPA on 8080; proxies /sb/ to the api and read-only /agent-api/status to the runner",
+      "description": "nginx SPA on 8080; proxies /api/ to the api and read-only /agent-api/status to the runner",
       "repotag": "ghcr.io/simro0987/buy-simple-dca:latest",
       "ports": [
         37080
@@ -68,9 +68,8 @@
         "VITE_WALLETCONNECT_PROJECT_ID=",
         "AGENT_STATUS_UPSTREAM=http://fluxrunner_buysimpledca:8090",
         "API_UPSTREAM=http://fluxapi_buysimpledca:8070",
-        "VITE_SUPABASE_URL=/sb",
-        "VITE_SUPABASE_PUBLISHABLE_KEY=public-anon",
-        "VITE_AUTH_MODE=siwe"
+        "VITE_API_URL=/api",
+        "VITE_PUBLIC_APP_URL=https://buysimpledca.app.runonflux.io"
       ],
       "commands": [],
       "containerData": "/appdata",

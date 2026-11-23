@@ -3,7 +3,7 @@
 // - confirmed_steps: JSON map of stepKey -> { update }
 // Sync API surface backed by in-memory cache; hydrated by CloudSyncProvider.
 
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { addStake, removeStake } from '@/lib/stakingLedger';
 import { addEthDebt } from '@/lib/ethDebt';
 
@@ -41,14 +41,14 @@ export function setCyborgConfirmedCache(v: Record<string, ConfirmedStepData>): v
 
 function persistDebt(): void {
   if (!currentUserId) return;
-  void supabase.from('defi_positions').upsert(
+  void api.from('defi_positions').upsert(
     { user_id: currentUserId, usdc_debt: usdcDebtCache },
     { onConflict: 'user_id' },
   );
 }
 function persistConfirmed(): void {
   if (!currentUserId) return;
-  void supabase.from('defi_positions').upsert(
+  void api.from('defi_positions').upsert(
     { user_id: currentUserId, confirmed_steps: confirmedCache as any },
     { onConflict: 'user_id' },
   );

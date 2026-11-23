@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import type { Session, User } from '@/lib/api/core';
+import { api } from '@/lib/api/client';
 import {
   loadSafeSession,
   saveSafeSession,
@@ -62,7 +62,7 @@ function buildSyntheticSessionFromSafe(safe: SafeSession): Session {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
+  const [dbSession, setDbSession] = useState<Session | null>(null);
   const [safeSession, setSafeSession] = useState<SafeSession | null>(() => loadSafeSession());
   const [loading, setLoading] = useState(true);
 
@@ -76,12 +76,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
-      setSupabaseSession(s);
+    const { data: sub } = api.auth.onAuthStateChange((_e, s) => {
+      setDbSession(s);
       setLoading(false);
     });
 
-    // Fail-safe so the app never hangs on a black screen even if Supabase is unreachable
+    // Fail-safe so the app never hangs on a black screen even if the API is unreachable
     const failSafe = setTimeout(() => {
       if (mounted) setLoading(false);
     }, 4500);
@@ -103,10 +103,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
 
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await api.auth.getSession();
         if (!sessionData?.session) {
           if (mounted) {
-            setSupabaseSession(null);
+            setDbSession(null);
             setLoading(false);
           }
           return;
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let userOk = true;
         let invalidToken = false;
         try {
-          const { data: userData, error } = await supabase.auth.getUser();
+          const { data: userData, error } = await api.auth.getUser();
           if (error) {
             const status = (error as { status?: number }).status ?? 0;
             invalidToken = status === 401 || status === 403;
@@ -129,16 +129,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (invalidToken || !userOk) {
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          try { await api.auth.signOut(); } catch { /* ignore */ }
           if (mounted) {
-            setSupabaseSession(null);
+            setDbSession(null);
             setLoading(false);
           }
           return;
         }
 
         if (mounted) {
-          setSupabaseSession(sessionData.session);
+          setDbSession(sessionData.session);
           setLoading(false);
         }
       } catch {
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const effectiveSession = supabaseSession ?? (safeSession ? buildSyntheticSessionFromSafe(safeSession) : null);
+  const effectiveSession = dbSession ?? (safeSession ? buildSyntheticSessionFromSafe(safeSession) : null);
 
   return (
     <Ctx.Provider
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           saveSafeSession(null);
           setSafeSession(null);
           try {
-            await supabase.auth.signOut();
+            await api.auth.signOut();
           } catch {
             // ignore offline signOut errors
           }

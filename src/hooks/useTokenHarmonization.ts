@@ -12,7 +12,7 @@
  */
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useTrackedTokens, type TokenCategory } from './useTrackedTokens';
 import { useDcaTokenVisibility } from '@/lib/dcaTokenVisibility';
 
@@ -52,7 +52,7 @@ export function useTokenHarmonization(): void {
 
     (async () => {
       try {
-        const { data: userRes } = await supabase.auth.getUser();
+        const { data: userRes } = await api.auth.getUser();
         const uid = userRes?.user?.id;
         if (!uid) { ran.current = false; return; } // skús znova po prihlásení
 
@@ -70,7 +70,7 @@ export function useTokenHarmonization(): void {
         );
 
         if (missing.length > 0) {
-          const { error } = await supabase.from('tracked_tokens').insert(
+          const { error } = await api.from('tracked_tokens').insert(
             missing.map((t) => ({
               user_id: uid,
               coingecko_id: t.cgId,

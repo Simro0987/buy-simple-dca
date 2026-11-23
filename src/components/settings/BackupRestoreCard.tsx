@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Download, Upload } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 const TABLES = [
   'app_settings',
@@ -33,7 +33,7 @@ export function BackupRestoreCard() {
         tables: {},
       };
       for (const t of TABLES) {
-        const { data, error } = await supabase.from(t).select('*');
+        const { data, error } = await api.from(t).select('*');
         if (error) throw error;
         payload.tables[t] = data ?? [];
       }
@@ -80,7 +80,7 @@ export function BackupRestoreCard() {
         const s = settingsRows[0] as Record<string, unknown>;
         const { id, ...rest } = s;
         if (id) {
-          await supabase.from('app_settings').update(rest as never).eq('id', id as string);
+          await api.from('app_settings').update(rest as never).eq('id', id as string);
         }
       }
 
@@ -88,10 +88,10 @@ export function BackupRestoreCard() {
       for (const t of dataTables) {
         const rows = confirmImport.tables[t] ?? [];
         // Wipe + insert
-        await supabase.from(t).delete().neq('id', '00000000-0000-0000-0000-000000000000');
+        await api.from(t).delete().neq('id', '00000000-0000-0000-0000-000000000000');
         if (rows.length > 0) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const { error } = await supabase.from(t).insert(rows as any);
+          const { error } = await api.from(t).insert(rows as any);
           if (error) throw error;
         }
       }

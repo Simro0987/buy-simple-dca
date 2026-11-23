@@ -72,11 +72,20 @@ export function boostGate(price: number | null | undefined, sma200: number | nul
   return { allowed: !belowSma, belowSma, rsiGreen: rsi != null && rsi < 35 };
 }
 
-export const UNWIND_LADDER = [
+const UNWIND_STEPS = [
   { mult: 1.3, repayPct: 33, label: 'Splatiť 33 % dlhu (Unwind)' },
   { mult: 1.5, repayPct: 33, label: 'Splatiť ďalších 33 % dlhu (Unwind)' },
   { mult: 1.8, repayPct: 100, label: 'Splatiť 100 % dlhu a vybrať čistý WBTC do Cold Storage' },
-].map(s => ({ ...s, price: Math.round(MACRO_ATH * s.mult) }));
+];
+
+/** Unwind ladder anchored to the given ATH (live ATH from the indicator feed when available). */
+export function unwindLadder(ath: number | null | undefined) {
+  const base = ath && Number.isFinite(ath) && ath > 0 ? ath : MACRO_ATH;
+  return UNWIND_STEPS.map(s => ({ ...s, price: Math.round(base * s.mult) }));
+}
+
+/** Ladder from the 2024 reference ATH (fallback only; UI passes the live ATH). */
+export const UNWIND_LADDER = unwindLadder(MACRO_ATH);
 
 export type SemaforPhase = 0 | 1 | 2 | 3;
 /** F&G + MVRV Z-Score override semafor. */

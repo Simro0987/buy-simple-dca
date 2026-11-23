@@ -23,7 +23,7 @@ import { NETWORK_STYLE } from '@/lib/yieldTokens';
 import { setPendingStake, navigateToTab } from '@/lib/pendingActions';
 import { toast } from 'sonner';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { useLimitFillRates } from '@/hooks/useLimitFillRates';
@@ -168,7 +168,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
   const { data: executionsRows } = useQuery({
     queryKey: ['dca_executions', week],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('dca_executions')
         .select('*')
         .eq('week_number', week);
@@ -196,7 +196,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     setIsMarketActive(coin);
     try {
       try {
-        const { error } = await supabase.functions.invoke('dca-execute', {
+        const { error } = await api.functions.invoke('dca-execute', {
           body: { coin, kind: 'market', amount_usd: amount, target_price: price },
         });
         if (error) throw error;
@@ -225,7 +225,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     setIsDynamicActive(coin);
     try {
       try {
-        const { error } = await supabase.functions.invoke('dca-execute', {
+        const { error } = await api.functions.invoke('dca-execute', {
           body: { coin, kind: 'limit', amount_usd: amount, target_price: price },
         });
         if (error) throw error;
@@ -250,7 +250,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
     setCancelBusy(`${coin.toLowerCase()}-limit`);
     try {
-      const { error } = await supabase.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', id);
+      const { error } = await api.from('dca_executions').update({ status: 'CANCELLED' }).eq('id', id);
       if (error) throw error;
       toast.success(`${coin} limit zrušený`);
       qc.invalidateQueries({ queryKey: ['dca_executions', week] });
@@ -270,14 +270,14 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     if (!confirm(`Zrušiť Market ${coin} a vrátiť hodnoty z portfólia?`)) return;
     setCancelBusy(`${coin.toLowerCase()}-market`);
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('dca_executions')
         .update({ status: 'CANCELLED' })
         .eq('id', id);
       if (error) throw error;
 
       // Revert app_settings.manual_holdings + initial_cost_basis (columns exist at runtime, not in generated types)
-      const { data: settingsRow } = await (supabase as any)
+      const { data: settingsRow } = await (api as any)
         .from('app_settings')
         .select('id, manual_holdings, initial_cost_basis')
         .limit(1)
@@ -288,7 +288,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         const cb = { ...((settingsRow.initial_cost_basis as Record<string, number> | null) ?? {}) };
         mh[key] = Math.max(0, Number(mh[key] ?? 0) - Number(qty || 0));
         cb[key] = Math.max(0, Number(cb[key] ?? 0) - Number(amountUsd || 0));
-        await (supabase as any)
+        await (api as any)
           .from('app_settings')
           .update({ manual_holdings: mh, initial_cost_basis: cb })
           .eq('id', settingsRow.id);
@@ -310,7 +310,7 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
     if (!confirm(`Označiť ${coin} limit ako nenaplnený (EXPIRED)?`)) return;
     setCancelBusy(`${coin.toLowerCase()}-limit`);
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('dca_executions')
         .update({ status: 'EXPIRED', filled_at: new Date().toISOString() })
         .eq('id', id);
@@ -348,13 +348,13 @@ export function DynamicExecutionCard({ score, prices, investableUsd }: Props) {
         const px = Number(lim.executed_price ?? 0);
         const usd = Number(lim.amount_usd ?? 0);
         void (async () => {
-          const { data: userRes } = await supabase.auth.getUser();
+          const { data: userRes } = await api.auth.getUser();
           const uid = userRes.user?.id;
           if (!uid) return;
           const note = `DCA limit fill (${lim.id})`;
-          const { data: existing } = await supabase.from('token_transactions').select('id').eq('note', note).limit(1);
+          const { data: existing } = await api.from('token_transactions').select('id').eq('note', note).limit(1);
           if (existing && existing.length > 0) { localStorage.setItem(writtenKey, '1'); return; }
-          const { error: insErr } = await supabase.from('token_transactions').insert({
+          const { error: insErr } = await api.from('token_transactions').insert({
             user_id: uid,
             coingecko_id: cgMap[coinSym] ?? coinSym.toLowerCase(),
             symbol: coinSym,

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 /** Automatické mNAV pre MSTR (saylortracker scrape → výpočet z trhovej kapitalizácie). */
 export interface MstrMnav {
@@ -16,7 +16,7 @@ export function useMstrMnav() {
   return useQuery({
     queryKey: ['mstr-mnav'],
     queryFn: async (): Promise<MstrMnav> => {
-      const { data, error } = await supabase.functions.invoke('mstr-mnav');
+      const { data, error } = await api.functions.invoke('mstr-mnav');
       if (error || !data || !(Number(data.mnav) > 0)) throw new Error(error?.message ?? 'mNAV nedostupné');
       return data as MstrMnav;
     },

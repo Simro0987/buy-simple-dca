@@ -1,14 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
+import { solanaRpc } from '@/lib/api/dataProxy';
 
 // Live staking yield hooks with static fallbacks.
-// SOL → Helius RPC (inflation based), ETH → Lido stETH APR (SMA).
+// SOL → Solana RPC via our data-proxy (inflation based), ETH → Lido stETH APR (SMA).
 
 export const SOL_APY_FALLBACK = 4.5;
 export const LIDO_APR_FALLBACK = 3.1;
 
-const HELIUS_RPC = 'https://mainnet.helius-rpc.com/';
-const HELIUS_API = 'https://api.helius.xyz/v0/rpc';
-const PUBLIC_SOL_RPC = 'https://api.mainnet-beta.solana.com';
 
 // Share of circulating supply that is staked — used to convert network
 // inflation into a per-staker APY. Conservative long-run average.
@@ -16,49 +14,23 @@ const STAKE_RATIO = 0.65;
 
 const TIMEOUT_MS = 4000;
 
-async function postRpc(url: string, method: string): Promise<unknown | null> {
-  try {
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ jsonrpc: '2.0', id: 1, method, params: [] }),
-      signal: ctrl.signal,
-    });
-    clearTimeout(t);
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json?.result ?? null;
-  } catch {
-    return null;
-  }
-}
-
 export interface SolApyData {
   apy: number;
-  source: 'helius' | 'rpc' | 'fallback';
+  source: 'rpc' | 'fallback';
 }
 
-/** Live SOL native staking APY (Helius RPC, public RPC fallback, static fallback). */
+/** Live SOL native staking APY (Solana RPC via data-proxy, static fallback). */
 export function useSolStakingApy() {
   return useQuery<SolApyData>({
     queryKey: ['sol-staking-apy'],
     staleTime: 10 * 60 * 1000,
     refetchInterval: 15 * 60 * 1000,
     queryFn: async () => {
-      const attempts: Array<{ url: string; source: SolApyData['source'] }> = [
-        { url: HELIUS_RPC, source: 'helius' },
-        { url: HELIUS_API, source: 'helius' },
-        { url: PUBLIC_SOL_RPC, source: 'rpc' },
-      ];
-      for (const a of attempts) {
-        const result = await postRpc(a.url, 'getInflationRate');
-        const validator = (result as { validator?: number } | null)?.validator;
-        if (typeof validator === 'number' && validator > 0) {
-          const apy = (validator / STAKE_RATIO) * 100;
-          if (apy > 0.5 && apy < 20) return { apy, source: a.source };
-        }
+      const result = await solanaRpc<{ validator?: number }>('getInflationRate', [], TIMEOUT_MS);
+      const validator = result?.validator;
+      if (typeof validator === 'number' && validator > 0) {
+        const apy = (validator / STAKE_RATIO) * 100;
+        if (apy > 0.5 && apy < 20) return { apy, source: 'rpc' };
       }
       return { apy: SOL_APY_FALLBACK, source: 'fallback' };
     },

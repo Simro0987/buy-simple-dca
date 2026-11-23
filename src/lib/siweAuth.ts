@@ -2,26 +2,18 @@
  * Sign-In with Ethereum (EIP-4361) against the own API (Flux component "api").
  * Works with an injected wallet (MetaMask, Rabby, ...) and with Safe{Wallet} over WalletConnect:
  * a Safe signs off-chain (owners co-sign up to the threshold) and the API verifies it via EIP-1271.
- * The resulting session is a normal supabase-js session, so all existing data code keeps working.
+ * The resulting session is stored by the own API client (src/lib/api/core.ts).
  * Signing a SIWE message never moves funds and never sends a transaction.
  */
 import { getAddress, toHex } from 'viem';
 import { createSiweMessage } from 'viem/siwe';
-import { supabase } from '@/integrations/supabase/client';
-import { runtimeEnv } from '@/lib/runtimeConfig';
+import { api, apiBaseUrl } from '@/lib/api/client';
 
 export interface Eip1193Provider {
   request(args: { method: string; params?: unknown[] | object }): Promise<unknown>;
 }
 
-export function isSiweAuthMode(): boolean {
-  return runtimeEnv('VITE_AUTH_MODE').trim().toLowerCase() === 'siwe';
-}
-
-function apiBase(): string {
-  const raw = runtimeEnv('VITE_SUPABASE_URL').replace(/\/+$/, '');
-  return raw.startsWith('/') ? `${window.location.origin}${raw}` : raw;
-}
+const apiBase = apiBaseUrl;
 
 export function getInjectedProvider(): Eip1193Provider | null {
   const eth = (window as unknown as { ethereum?: Eip1193Provider }).ethereum;
@@ -81,7 +73,7 @@ export async function signInWithEthereum(provider: Eip1193Provider, expectedAddr
   });
   if (!res.ok) throw new Error(await readError(res));
   const s = (await res.json()) as { access_token: string; refresh_token: string };
-  const { error } = await supabase.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
+  const { error } = await api.auth.setSession({ access_token: s.access_token, refresh_token: s.refresh_token });
   if (error) throw error;
   return address;
 }

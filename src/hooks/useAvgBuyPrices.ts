@@ -7,7 +7,7 @@
  *  - `app_settings.initial_cost_basis` + `manual_holdings` (baseline BTC/ETH/SOL)
  */
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface CostBasisEntry {
@@ -45,18 +45,18 @@ export function useAvgBuyPrices() {
         e.cost -= sold * avg;
       };
 
-      const { data: txs, error: txErr } = await supabase
+      const { data: txs, error: txErr } = await api
         .from('token_transactions')
         .select('symbol,coingecko_id,side,quantity,price_usd,executed_at')
         .order('executed_at', { ascending: true });
       if (txErr) throw txErr;
 
-      const { data: dca, error: dcaErr } = await supabase
+      const { data: dca, error: dcaErr } = await api
         .from('dca_purchases')
         .select('btc_amount,eth_amount,sol_amount,btc_price,eth_price,sol_price');
       if (dcaErr) throw dcaErr;
 
-      const { data: settings } = await supabase
+      const { data: settings } = await api
         .from('app_settings')
         .select('manual_holdings,initial_cost_basis')
         .limit(1)

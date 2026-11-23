@@ -1,8 +1,8 @@
+import { Collapsible } from '@/components/ui/collapsible-section';
 import { useEffect, useMemo, useState } from 'react';import { Activity, RefreshCw, Download, Trash2, Info, ChevronDown, ChevronUp, TrendingUp, TrendingDown, AlertTriangle, ShieldCheck, Sparkles, X, Zap, BarChart3, Heart, Activity as ActivityIcon } from 'lucide-react';
 
 import { MoneyModePanel } from '@/components/MoneyModePanel';
 import { CapitalInputCard } from '@/components/dca/CapitalInputCard';
-import { MoneyModeSignal } from '@/components/dca/MoneyModeSignal';
 import { CoreSatelliteEngineCard } from '@/components/dca/CoreSatelliteEngineCard';
 import { SmartTimingEngineCard } from '@/components/dca/SmartTimingEngineCard';
 import { useSmartTiming } from '@/hooks/useSmartTiming';
@@ -193,13 +193,6 @@ export function DCAPage({ lang: _lang }: Props) {
     ? { bg: 'bg-amber-500/15', text: 'text-amber-400', label: 'Medium' }
     : { bg: 'bg-rose-500/15', text: 'text-rose-400', label: 'Low' };
 
-  // MONEY MODE state derived from final cycle score
-  const moneyModeState: 'CAPITULATION' | 'NEUTRAL' | 'PARABOLIC' =
-    effectiveScore <= 25 ? 'CAPITULATION' : effectiveScore >= 80 ? 'PARABOLIC' : 'NEUTRAL';
-  const mmStyle =
-    moneyModeState === 'CAPITULATION' ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40 animate-pulse'
-    : moneyModeState === 'PARABOLIC'   ? 'bg-rose-500/15 text-rose-300 border-rose-500/40 animate-pulse'
-    : 'bg-secondary text-foreground border-border';
 
   // SMART TIMING — final checkpoint before execution (live BTC 4H RSI + CET time)
   const timing = useSmartTiming();
@@ -230,15 +223,40 @@ export function DCAPage({ lang: _lang }: Props) {
         </div>
       </div>
 
-      {/* HIGH-VISIBILITY MONEY MODE BADGE — driven by effectiveScore */}
-      <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg border ${mmStyle}`}>
-        <span className="flex items-center gap-1.5 text-xs font-bold tracking-wide">
-          <Zap className="w-4 h-4" />
-          MONEY MODE: {moneyModeState}
-        </span>
-        <span className="text-[10px] tabular-nums opacity-80">Score {effectiveScore}/100</span>
+      {/* ONE WEEKLY DECISION — everything else is detail */}
+      <div className="glass-card p-5 border border-primary/30">
+        <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold">Rozhodnutie na tento týždeň · {thisMondayIso()}</p>
+        <div className="mt-2 flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <p className="text-3xl font-bold text-foreground tabular-nums">{formatUsd(plan.investableUsd)}</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              investovať ({plan.finalAllocationPct} % týždenného rozpočtu) · rezerva {formatUsd(plan.reservedUsd)}
+            </p>
+          </div>
+          <div className="text-right">
+            <p className={`text-sm font-bold ${rs.text}`}>{plan.regimeLabel}</p>
+            <p className="text-[11px] text-muted-foreground">skóre {plan.factorScore}/100 (0 = lacný, 100 = drahý) · dôvera {confStyle.label}</p>
+          </div>
+        </div>
+        <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-2">
+          {plan.perAsset.filter(a => a.weight > 0).map(a => (
+            <div key={a.symbol} className="rounded-lg bg-secondary/40 p-2.5">
+              <p className="text-xs font-bold" style={{ color: a.color }}>{a.symbol} · {Math.round(a.weight * 100)} %</p>
+              <p className="text-[11px] text-foreground tabular-nums">market {formatUsd(a.marketUsd)}</p>
+              <p className="text-[11px] text-muted-foreground tabular-nums">limit {formatUsd(a.limitUsd)} @ {formatPrice(a.limitPrice)} (−{a.limitDiscountPct}%)</p>
+            </div>
+          ))}
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <button onClick={handleSaveWeek} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold active:scale-95">
+            Uložiť týždeň do histórie
+          </button>
+          <p className="text-[10px] text-muted-foreground">Nákupy robíš sám (Safe / burza). Aplikácia nič nevykonáva automaticky.</p>
+        </div>
       </div>
 
+      <Collapsible title="Ako sa to počíta" subtitle="Faktory, režim, exekúcia market/limit, checklist a história">
+        <div className="space-y-4">
       {/* TOP — Regime · Score · Confidence · Allocation */}
       <div className="glass-card p-5">
         <div className={`flex items-center justify-between gap-2 px-3 py-2 rounded-lg mb-4 ${rs.bg} border ${rs.border}`}>
@@ -417,8 +435,6 @@ export function DCAPage({ lang: _lang }: Props) {
 
       {/* Portfolio allocation matrix odstránená — váhy riadi Master Dynamic Allocation engine (Core ≥ 50 %). */}
 
-      {/* MONEY MODE SIGNAL — BTC cycle-derived regime badge driving Market/Limit bias */}
-      <MoneyModeSignal score={effectiveScore} />
 
       {/* PIPELINE CONNECTOR — 5 Factors → Dynamic Execution Engine */}
       <div className="flex items-center justify-center gap-2 -my-1">
@@ -556,6 +572,9 @@ export function DCAPage({ lang: _lang }: Props) {
           </div>
         )}
       </div>
+
+        </div>
+      </Collapsible>
 
       {/* MONDAY RITUAL */}
       {showRitual && (

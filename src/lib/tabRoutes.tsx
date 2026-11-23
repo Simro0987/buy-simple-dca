@@ -1,5 +1,5 @@
 import { lazy, Suspense } from 'react';
-import { TabId } from '@/components/BottomNav';
+import type { TabId } from '@/lib/navItems';
 import { Lang } from '@/lib/i18n';
 import { PriceData, AthData } from '@/lib/crypto';
 import { MarketCycleResult } from '@/hooks/useMarketCycle';
@@ -11,18 +11,13 @@ const OverviewPage = lazy(() => import('@/pages/OverviewPage').then(m => ({ defa
 const DCAPage = lazy(() => import('@/pages/DCAPage').then(m => ({ default: m.DCAPage })));
 const PortfolioProfitPage = lazy(() => import('@/pages/PortfolioProfitPage').then(m => ({ default: m.PortfolioProfitPage })));
 const NewPortfolioPage = lazy(() => import('@/pages/NewPortfolioPage').then(m => ({ default: m.NewPortfolioPage })));
-const ActionPage = lazy(() => import('@/pages/ActionPage').then(m => ({ default: m.ActionPage })));
-const SmartAllocPage = lazy(() => import('@/pages/SmartAllocPage').then(m => ({ default: m.SmartAllocPage })));
 const SettingsPage = lazy(() => import('@/pages/SettingsPage').then(m => ({ default: m.SettingsPage })));
 const AnalysisRiskPage = lazy(() => import('@/pages/AnalysisRiskPage').then(m => ({ default: m.AnalysisRiskPage })));
 const StakingPage = lazy(() => import('@/pages/StakingPage').then(m => ({ default: m.StakingPage })));
 const WalletsPage = lazy(() => import('@/pages/WalletsPage').then(m => ({ default: m.WalletsPage })));
-const HomePage = lazy(() => import('@/pages/HomePage').then(m => ({ default: m.HomePage })));
 const TerminalDashboard = lazy(() => import('@/components/TerminalDashboard').then(m => ({ default: m.TerminalDashboard })));
 const SwapPage = lazy(() => import('@/pages/SwapPage').then(m => ({ default: m.SwapPage })));
 const AgentPage = lazy(() => import('@/pages/AgentPage').then(m => ({ default: m.AgentPage })));
-const ExecutionTracker = lazy(() => import('@/components/ExecutionTracker').then(m => ({ default: m.ExecutionTracker })));
-const WeeklyChecklist = lazy(() => import('@/components/WeeklyChecklist').then(m => ({ default: m.WeeklyChecklist })));
 
 
 export interface TabContext {
@@ -55,12 +50,6 @@ export const TAB_ROUTES: Record<TabId, TabRenderer> = {
   portfolio: ({ lang }) => wrap(<NewPortfolioPage lang={lang} />),
   dca: ({ lang }) => wrap(<DCAPage lang={lang} />),
   swap: ({ lang }) => wrap(<SwapPage lang={lang} />),
-  risk: ({ lang, prices, athData, cycleResult }) => wrap(
-    <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
-  ),
-  analysis: ({ lang, prices, athData, cycleResult }) => wrap(
-    <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
-  ),
   market: ({ lang, prices, athData, cycleResult }) => wrap(
     <AnalysisRiskPage lang={lang} prices={prices} athData={athData} cycleResult={cycleResult} />
   ),

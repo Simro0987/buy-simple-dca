@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export type TxSide = 'buy' | 'sell';
 
@@ -25,7 +25,7 @@ export function useTokenTransactions() {
   return useQuery({
     queryKey: ['token_transactions'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('token_transactions')
         .select('*')
         .order('executed_at', { ascending: true });
@@ -70,10 +70,10 @@ export function useAddTokenTransaction() {
       executed_at?: string;
       note?: string;
     }) => {
-      const { data: userRes } = await supabase.auth.getUser();
+      const { data: userRes } = await api.auth.getUser();
       const uid = userRes.user?.id;
       if (!uid) throw new Error('Nie si prihlásený');
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('token_transactions')
         .insert({
           user_id: uid,
@@ -105,7 +105,7 @@ export function useDeleteTokenTransaction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('token_transactions').delete().eq('id', id);
+      const { error } = await api.from('token_transactions').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {

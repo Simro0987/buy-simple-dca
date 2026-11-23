@@ -6,7 +6,7 @@
  * - Token without history but with manual qty + WACB → inserted as a single "Initial BUY"
  *   at that WACB (cost basis preserved), then the manual base is reset to 0.
  */
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { getHoldings, setHolding } from '@/lib/portfolioHoldings';
 import { HARVEST_TOKENS } from '@/lib/harvestEngine';
 import { basketAsset } from '@/lib/assetBaskets';
@@ -17,11 +17,11 @@ const DONE_KEY = 'manual-base-migrated-v1';
 
 export async function migrateManualBaseToHistory(): Promise<boolean> {
   if (localStorage.getItem(DONE_KEY)) return false;
-  const { data: userRes } = await supabase.auth.getUser();
+  const { data: userRes } = await api.auth.getUser();
   const uid = userRes.user?.id;
   if (!uid) return false;
 
-  const { data: txs, error } = await supabase.from('token_transactions').select('symbol');
+  const { data: txs, error } = await api.from('token_transactions').select('symbol');
   if (error) return false;
   const withHistory = new Set((txs ?? []).map(t => String(t.symbol).toUpperCase()));
 
@@ -31,7 +31,7 @@ export async function migrateManualBaseToHistory(): Promise<boolean> {
     if (!m || m.qty <= 0) continue;
     if (!withHistory.has(t) && m.wacb > 0) {
       const cgId = basketAsset(t)?.cgId || t.toLowerCase();
-      const { error: insErr } = await supabase.from('token_transactions').insert({
+      const { error: insErr } = await api.from('token_transactions').insert({
         user_id: uid, coingecko_id: cgId, symbol: t, side: 'buy',
         quantity: m.qty, price_usd: m.wacb, note: 'Initial BUY (migrated manual base)',
       });

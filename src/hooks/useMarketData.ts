@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useLiveMarketData } from './useLiveMarketData';
 
 export interface MarketDataPayload {
@@ -34,7 +34,7 @@ function readCache(): MarketDataPayload | null {
 
 async function fetchMarketData(): Promise<MarketDataPayload> {
   try {
-    const { data, error } = await supabase.functions.invoke('market-data-service');
+    const { data, error } = await api.functions.invoke('market-data-service');
     if (error || !data) {
       const message = error?.message ?? 'empty market-data-service response';
       const cached = readCache();

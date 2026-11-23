@@ -1,7 +1,7 @@
 /**
  * Portfolio Factory Reset
  * ------------------------
- * Detects legacy mock / seed data in Supabase and wipes it on mount so the
+ * Detects legacy mock / seed data in the database and wipes it on mount so the
  * Portfolio always renders from a verified "source of truth" zero-state.
  *
  * Detection rules:
@@ -11,11 +11,11 @@
  *     match a known hardcoded fingerprint from prior builds.
  *
  * On reset:
- *  - DELETE matching rows from Supabase.
+ *  - DELETE matching rows from the database.
  *  - PATCH `app_settings` so holdings/cost-basis are zeroed.
  *  - Clear legacy mock localStorage keys.
  */
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 const MOCK_NOTE_REGEX = /\b(mock|test|seed|demo|sample|placeholder|fixture)\b/i;
 
@@ -67,27 +67,28 @@ export async function runPortfolioFactoryReset(): Promise<FactoryResetResult> {
 
   // 1) Scan purchases & capital entries for mock notes
   const [purchases, capitals, settingsRes] = await Promise.all([
-    supabase.from('dca_purchases').select('id, note'),
-    supabase.from('capital_entries').select('id, note'),
-    supabase.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle(),
+    api.from('dca_purchases').select('id, notes'),
+    api.from('capital_entries').select('id, note'),
+    api.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle(),
   ]);
 
+  // dca_purchases uses `notes`; capital_entries uses `note` (see api/migrations/0002).
   const mockPurchaseIds = (purchases.data ?? [])
-    .filter((r: any) => r?.note && MOCK_NOTE_REGEX.test(String(r.note)))
+    .filter((r: any) => r?.notes && MOCK_NOTE_REGEX.test(String(r.notes)))
     .map((r: any) => r.id as string);
   const mockCapitalIds = (capitals.data ?? [])
     .filter((r: any) => r?.note && MOCK_NOTE_REGEX.test(String(r.note)))
     .map((r: any) => r.id as string);
 
   if (mockPurchaseIds.length) {
-    const { error } = await supabase.from('dca_purchases').delete().in('id', mockPurchaseIds);
+    const { error } = await api.from('dca_purchases').delete().in('id', mockPurchaseIds);
     if (!error) {
       result.deletedPurchases = mockPurchaseIds.length;
       result.ran = true;
     }
   }
   if (mockCapitalIds.length) {
-    const { error } = await supabase.from('capital_entries').delete().in('id', mockCapitalIds);
+    const { error } = await api.from('capital_entries').delete().in('id', mockCapitalIds);
     if (!error) {
       result.deletedCapitalEntries = mockCapitalIds.length;
       result.ran = true;
@@ -105,7 +106,7 @@ export async function runPortfolioFactoryReset(): Promise<FactoryResetResult> {
       const patch: { manual_holdings?: any; initial_cost_basis?: any } = {};
       if (mhMock) patch.manual_holdings = { btc: 0, eth: 0, sol: 0 };
       if (icMock) patch.initial_cost_basis = { btc: 0, eth: 0, sol: 0 };
-      const { error } = await supabase.from('app_settings').update(patch).eq('id', settings.id);
+      const { error } = await api.from('app_settings').update(patch).eq('id', settings.id);
       if (!error) {
         result.resetSettings = true;
         result.ran = true;

@@ -4,7 +4,7 @@
 # The `runner` service mirrors the second Flux component (testnet + DRY_RUN by default).
 #   Put agent config in ./runner-data/agents.json and the agent key in ./runner-data/keys/<id>.key
 #   (runner-data/ is git-ignored). Status: http://localhost:8080/agent-api/status
-# `db` + `api` mirror the own-Postgres components (replace Supabase): login with a wallet (SIWE).
+# `db` + `api` are the own Postgres + API components: login with a wallet (SIWE) only.
 #   Optional secrets for the api (Telegram, AI, ...): ./api-data/secrets.env  (git-ignored)
 #   Optional backup config for the db: copy db/backup.env.example into the db-data volume as backup.env
 services:
@@ -34,7 +34,7 @@ services:
     platform: linux/amd64
     depends_on:
       - db
-    # no published ports: the browser reaches it via the web proxy at /sb/
+    # no published ports: the browser reaches it via the web proxy at /api/
     environment:
       - DB_HOST=db
       - SIWE_DOMAINS=${SIWE_DOMAINS:-localhost:8080}
@@ -63,11 +63,9 @@ services:
       # Optional: enables the real WalletConnect pairing with Safe{Wallet} (https://cloud.reown.com)
       - VITE_WALLETCONNECT_PROJECT_ID=${VITE_WALLETCONNECT_PROJECT_ID:-}
       - AGENT_STATUS_UPSTREAM=http://runner:8090
-      # own API (SIWE login, data, edge functions) behind /sb/ on the same origin
+      # own API (SIWE login, data, server functions) behind /api/ on the same origin
       - API_UPSTREAM=http://api:8070
-      - VITE_SUPABASE_URL=/sb
-      - VITE_SUPABASE_PUBLISHABLE_KEY=public-anon
-      - VITE_AUTH_MODE=siwe
+      - VITE_API_URL=/api
     read_only: true
     tmpfs:
       - /tmp:mode=1777,uid=101,gid=101

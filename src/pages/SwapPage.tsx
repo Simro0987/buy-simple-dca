@@ -433,12 +433,12 @@ export function SwapPage({ lang }: Props) {
   const t = lang === 'sk'
     ? {
         title: 'SWAP Skener',
-        sub: 'Porovnaj 26 platforiem a swapni manuálne tam, kde dostaneš najviac.',
+        sub: 'Odhad kurzov z modelu (nie živé ponuky). Presnú cenu uvidíš až na stránke platformy, kde swap podpíšeš sám.',
         from: 'Z (zdroj)', to: 'Na (cieľ)', amount: 'Suma', best: 'NAJLEPŠÍ KURZ / NAJNIŽŠÍ POPLATOK',
         scan: 'Skenujem protokoly…', expected: 'Očakávaný výstup', netFee: 'Sieť + gas',
         bridgeFee: 'Bridge fee', time: 'Čas', cta: 'Otvoriť',
         all: 'Všetky platformy (zoradené podľa čistého výstupu po fee, impact a slippage)',
-        info: 'Tento nástroj skenuje 26 agregátorov a bridge protokolov, aby našiel najlepší kurz. Žiadne transakcie sa tu nevykonávajú — len ťa presmeruje na platformu.',
+        info: 'Tento nástroj odhaduje kurzy agregátorov a bridge protokolov zo živých cien a typických poplatkov (nie sú to živé ponuky). Žiadne transakcie sa tu nevykonávajú — len ťa presmeruje na platformu.',
         invalid: 'Vyber dva rôzne tokeny.', enter: 'Zadaj sumu pre skenovanie protokolov.',
         sameChain: 'Same-Chain Swap', crossChain: 'Cross-Chain Bridge',
         notSupported: 'Nepodporuje túto trasu',
@@ -469,7 +469,7 @@ export function SwapPage({ lang }: Props) {
         gasRefuel: 'Gas Refuel',
         gasWarning: (g: string, c: string) => `💡 Pozn.: Na cieľovej sieti budeš potrebovať natívny ${g} (${c}) na zaplatenie gasu pre ďalšie pohyby.`,
         copy: 'Kopírovať súhrn', copied: 'Skopírované',
-        savedVs: (u: string) => `🔥 Ušetríš ${u} oproti ostatným trasám!`,
+        savedVs: (u: string) => `Odhad: o ${u} viac ako medián ostatných trás`,
         quickPairs: 'Rýchle páry',
         limitNotice: 'Limit objednávky sú obmedzené na smart-contract siete (EVM + Solana). BTC, LN a XMR sú dočasne nedostupné.',
         mevEthBoost: 'Ethereum + MEV ochrana → CoW Swap a 1inch Fusion sú prioritizované.',
@@ -485,12 +485,12 @@ export function SwapPage({ lang }: Props) {
       }
     : {
         title: 'SWAP Scanner',
-        sub: 'Compare 26 platforms and swap manually where you get the most.',
+        sub: 'Modelled rate ESTIMATES (not live quotes). You see the exact price only on the platform, where you sign yourself.',
         from: 'From (source)', to: 'To (destination)', amount: 'Amount', best: 'BEST VALUE / LOWEST FEE',
         scan: 'Scanning protocols…', expected: 'Expected output', netFee: 'Network + gas',
         bridgeFee: 'Bridge fee', time: 'Time', cta: 'Go to',
         all: 'All platforms (sorted by net output after fees, impact & slippage)',
-        info: 'This tool scans 26 aggregators and bridges to find the best rate. No transactions happen here — it just redirects you to the chosen platform.',
+        info: 'This tool estimates aggregator and bridge rates from live prices and typical fees (not live quotes). No transactions happen here — it just redirects you to the chosen platform.',
         invalid: 'Pick two different tokens.', enter: 'Enter an amount to scan protocols.',
         sameChain: 'Same-Chain Swap', crossChain: 'Cross-Chain Bridge',
         notSupported: 'Not Supported for this route',
@@ -518,7 +518,7 @@ export function SwapPage({ lang }: Props) {
         gasRefuel: 'Gas Refuel',
         gasWarning: (g: string, c: string) => `💡 Note: You will need native ${g} on ${c} to pay gas for further movements.`,
         copy: 'Copy summary', copied: 'Copied',
-        savedVs: (u: string) => `🔥 Saved ${u} compared to other routes!`,
+        savedVs: (u: string) => `Estimate: ${u} more than the median of other routes`,
         quickPairs: 'Quick pairs',
         limitNotice: 'Limit orders are restricted to smart-contract chains (EVM + Solana). BTC, LN and XMR are temporarily unavailable.',
         mevEthBoost: 'Ethereum + MEV protection → CoW Swap and 1inch Fusion are prioritized.',
@@ -873,13 +873,9 @@ export function SwapPage({ lang }: Props) {
           <Shield className="w-3 h-3 text-primary" />
           <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{t.filters}</span>
         </div>
-        <div className={`grid gap-1.5 ${orderType === 'limit' ? 'grid-cols-2 sm:grid-cols-6' : 'grid-cols-2 sm:grid-cols-5'}`}>
+        <div className={`grid gap-1.5 ${orderType === 'limit' ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-2 sm:grid-cols-3'}`}>
           <FilterToggle icon={Wallet} label={t.fCustomRecipient} tooltip={t.fCustomRecipientT}
             active={!!filters.customRecipient} onToggle={() => toggleFilter('customRecipient')} />
-          <FilterToggle icon={EyeOff} label={t.fNoKyc} tooltip={t.fNoKycT}
-            active={!!filters.noKyc} onToggle={() => toggleFilter('noKyc')} />
-          <FilterToggle icon={Ban} label={t.fNoWallet} tooltip={t.fNoWalletT}
-            active={!!filters.noWallet} onToggle={() => toggleFilter('noWallet')} />
           <FilterToggle icon={Shield} label={t.fMev} tooltip={t.fMevT}
             active={!!filters.mevProtected} onToggle={() => toggleFilter('mevProtected')} />
           <FilterToggle icon={Activity} label={t.fHealthy} tooltip={t.fHealthyT}
@@ -967,6 +963,7 @@ export function SwapPage({ lang }: Props) {
             <div className="flex items-center gap-1.5 mb-2 flex-wrap">
               <Zap className="w-3 h-3 text-emerald-400" />
               <span className="text-[9px] font-bold tracking-widest text-emerald-400">{t.best}</span>
+              <span className="text-[9px] font-bold tracking-widest text-amber-400 border border-amber-500/40 rounded px-1">{lang === 'sk' ? 'ODHAD' : 'ESTIMATE'}</span>
               <span className="ml-auto"><SwapTypeBadge type={swapType} /></span>
             </div>
             <div className="flex items-baseline justify-between mb-1">
@@ -974,7 +971,7 @@ export function SwapPage({ lang }: Props) {
                 <div className="text-lg font-bold text-foreground truncate">{best.platformName}</div>
                 {best.officialUrl && (
                   <div className="text-[9px] font-medium text-emerald-500/80 tracking-wide">
-                    Verified: {best.officialUrl}
+                    {lang === 'sk' ? 'Oficiálna doména' : 'Official domain'}: {best.officialUrl}
                   </div>
                 )}
               </div>
@@ -1104,7 +1101,7 @@ export function SwapPage({ lang }: Props) {
                       </div>
                       {q.officialUrl && (
                         <div className="text-[9px] font-medium text-emerald-500/80 tracking-wide truncate">
-                          Verified: {q.officialUrl}
+                          {lang === 'sk' ? 'Doména' : 'Domain'}: {q.officialUrl}
                         </div>
                       )}
                       <div className="text-[10px] text-muted-foreground">

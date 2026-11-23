@@ -10,7 +10,7 @@
  * Query key `['globalBalances']` — invalidovať pri každom write ktorý mení zostatky.
  */
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export type BalanceMap = Record<string, number>; // SYMBOL -> quantity
@@ -39,7 +39,7 @@ export function useGlobalBalances() {
       };
 
       // 1) token_transactions (buy − sell)
-      const { data: txs, error: txErr } = await supabase
+      const { data: txs, error: txErr } = await api
         .from('token_transactions')
         .select('symbol,coingecko_id,side,quantity');
       if (txErr) throw txErr;
@@ -50,7 +50,7 @@ export function useGlobalBalances() {
       }
 
       // 2) dca_purchases (BTC/ETH/SOL)
-      const { data: dca, error: dcaErr } = await supabase
+      const { data: dca, error: dcaErr } = await api
         .from('dca_purchases')
         .select('btc_amount,eth_amount,sol_amount');
       if (dcaErr) throw dcaErr;
@@ -61,7 +61,7 @@ export function useGlobalBalances() {
       }
 
       // 3) app_settings.manual_holdings baseline (jediný riadok pre používateľa)
-      const { data: settings } = await supabase
+      const { data: settings } = await api
         .from('app_settings')
         .select('manual_holdings')
         .limit(1)

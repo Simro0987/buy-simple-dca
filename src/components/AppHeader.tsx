@@ -24,24 +24,26 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
   const [showSafeDrawer, setShowSafeDrawer] = useState(false);
 
   const busy = isFetching || syncing;
+  const wallet = (user?.user_metadata?.wallet_address as string | undefined) ?? null;
   const syncLabel = syncing ? 'Synchronizujem…' : lastSyncAt
     ? `Ceny: ${new Date(lastSyncAt).toLocaleTimeString('sk', { hour: '2-digit', minute: '2-digit' })}`
     : 'Načítavam...';
 
   return (
     <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-[#050505]/90 backdrop-blur-xl">
-      <div className="max-w-lg mx-auto px-4 py-3 md:pl-[52px] space-y-2">
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 py-2.5 space-y-2">
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
             <h1 className="text-sm font-black text-white truncate tracking-tight">
-              Edge Trader Terminal
+              Buy Simple DCA
             </h1>
             <p className="text-[10px] text-white/35 font-mono mt-0.5 truncate">
-              {now.toLocaleDateString('sk', { weekday: 'short', day: 'numeric', month: 'short' })}
-              {' · '}
-              {now.toLocaleTimeString('sk', { hour: '2-digit', minute: '2-digit' })}
-              {' · '}<span className={syncing ? 'text-amber-300/80' : 'text-emerald-300/70'}>{syncLabel}</span>
-              {user?.email && <span className="text-white/25"> · {user.email}</span>}
+              <span className="hidden sm:inline">
+                {now.toLocaleDateString('sk', { weekday: 'short', day: 'numeric', month: 'short' })}
+                {' · '}
+              </span>
+              <span className={syncing ? 'text-amber-300/80' : 'text-emerald-300/70'}>{syncLabel}</span>
+              {wallet && <span className="hidden sm:inline text-white/25"> · {formatShortAddress(wallet)}</span>}
             </p>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -56,8 +58,8 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
               }`}
               title={
                 safeSession
-                  ? `Safe Global pripojené (${safeSession.safeAddress}) · Zodiac Guard aktívny`
-                  : 'Pripoj Safe Global peňaženku cez WalletConnect (dostupné aj pri e-mail prihlásení)'
+                  ? `Safe Global pripojené (${safeSession.safeAddress})`
+                  : 'Pripoj Safe Global peňaženku cez WalletConnect'
               }
             >
               {safeSession ? (
@@ -68,12 +70,12 @@ export function AppHeader({ now, totalValue, isFetching, onRefresh }: AppHeaderP
               ) : (
                 <>
                   <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
-                  <span>Safe WC</span>
+                  <span className="hidden sm:inline">Safe</span>
                 </>
               )}
             </button>
 
-            <div className="text-right">
+            <div className="text-right hidden sm:block">
               <Label className="!text-[9px]">Portfólio</Label>
               <Money size="sm" className="!text-base block">
                 {totalValue > 0 ? formatUsd(totalValue) : '—'}

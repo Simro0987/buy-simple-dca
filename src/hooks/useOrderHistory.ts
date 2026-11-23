@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { getDcaPurchases } from '@/lib/profitTaking';
 
 export interface OrderHistoryEntry {
@@ -11,7 +11,7 @@ export interface OrderHistoryEntry {
   price: number;
   timestamp: string;
   amountUsd: number;
-  source: 'supabase' | 'local';
+  source: 'db' | 'local';
 }
 
 const TOKEN_LABEL: Record<string, string> = {
@@ -44,7 +44,7 @@ function mapExecution(row: {
     price: Number(row.executed_price ?? row.target_price) || 0,
     timestamp: row.filled_at ?? row.created_at,
     amountUsd: Number(row.amount_usd) || 0,
-    source: 'supabase',
+    source: 'db',
   };
 }
 
@@ -65,7 +65,7 @@ function mapLocalPurchase(
 }
 
 async function fetchExecutedOrders(): Promise<OrderHistoryEntry[]> {
-  const { data, error } = await supabase
+  const { data, error } = await api
     .from('dca_executions')
     .select('*')
     .in('status', ['EXECUTED', 'FILLED'])

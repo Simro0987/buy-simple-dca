@@ -4,9 +4,12 @@ import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { hexToString, type Hex } from 'viem';
 
 const { setSession } = vi.hoisted(() => ({ setSession: vi.fn(async (_s: unknown) => ({ error: null })) }));
-vi.mock('@/integrations/supabase/client', () => ({ supabase: { auth: { setSession } } }));
+vi.mock('@/lib/api/client', () => ({
+  api: { auth: { setSession } },
+  apiBaseUrl: () => `${window.location.origin}${window.__APP_CONFIG__?.VITE_API_URL ?? '/api'}`,
+}));
 
-import { buildSiweMessage, isSiweAuthMode, signInWithEthereum } from './siweAuth';
+import { buildSiweMessage, signInWithEthereum } from './siweAuth';
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -15,12 +18,6 @@ afterEach(() => {
 });
 
 describe('siweAuth', () => {
-  it('auth mode comes from runtime config', () => {
-    expect(isSiweAuthMode()).toBe(false);
-    window.__APP_CONFIG__ = { VITE_AUTH_MODE: 'siwe' };
-    expect(isSiweAuthMode()).toBe(true);
-  });
-
   it('builds an EIP-4361 message bound to this origin', () => {
     const m = parseSiweMessage(buildSiweMessage({ address: '0x5afe5afe5afe5afe5afe5afe5afe5afe5afe5afe', chainId: 42161, nonce: 'abcdef123456' }));
     expect(m.domain).toBe(window.location.host);
@@ -30,8 +27,8 @@ describe('siweAuth', () => {
     expect(m.expirationTime!.getTime()).toBeGreaterThan(Date.now());
   });
 
-  it('signs once with personal_sign and stores the session (relative /sb URL)', async () => {
-    window.__APP_CONFIG__ = { VITE_SUPABASE_URL: '/sb' };
+  it('signs once with personal_sign and stores the session (relative /api URL)', async () => {
+    window.__APP_CONFIG__ = { VITE_API_URL: '/api' };
     const acct = privateKeyToAccount(generatePrivateKey());
     const calls: string[] = [];
     const provider = {
@@ -53,7 +50,7 @@ describe('siweAuth', () => {
     });
     expect(await signInWithEthereum(provider)).toBe(acct.address);
     expect(calls).toEqual(['eth_accounts', 'eth_chainId', 'personal_sign']);
-    expect(urls[0]).toBe(`${window.location.origin}/sb/auth/v1/siwe/nonce`);
+    expect(urls[0]).toBe(`${window.location.origin}/api/auth/v1/siwe/nonce`);
     expect(setSession).toHaveBeenCalledWith({ access_token: 'a', refresh_token: 'r' });
   });
 

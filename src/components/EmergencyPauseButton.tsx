@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { ShieldAlert, Play } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useEmergencyPause } from '@/lib/emergencyPause';
 
 export function EmergencyPauseButton() {
@@ -22,7 +22,7 @@ export function EmergencyPauseButton() {
     setBusy(true);
     setPaused(true);
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('dca_executions')
         .update({ status: 'CANCELLED' })
         .eq('status', 'PENDING');

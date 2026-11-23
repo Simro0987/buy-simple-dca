@@ -55,7 +55,7 @@ export function AgentRunnerStatusCard({ lang }: { lang: 'sk' | 'en' | string }) 
     try {
       const res = await fetch(agentStatusUrl(), { headers: { Accept: 'application/json' }, cache: 'no-store' });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      // On hosts without the runner (e.g. Vercel) the SPA fallback returns index.html.
+      // On hosts without the runner (e.g. a static mirror) the SPA fallback returns index.html.
       if (!(res.headers.get('content-type') ?? '').includes('application/json')) throw new Error('not configured');
       const json = (await res.json()) as RunnerStatus;
       if (!json || !Array.isArray(json.agents)) throw new Error('unexpected response');

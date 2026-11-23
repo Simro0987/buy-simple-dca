@@ -8,7 +8,7 @@
  * Deduplikácia: max. 1 upozornenie na token + typ za kalendárny deň (localStorage).
  */
 import { useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export const OVERHEAT_CRITICAL = 85;
 
@@ -65,7 +65,7 @@ export function usePortfolioTelegramAlerts(candidates: AlertCandidate[]): void {
 
     void (async () => {
       try {
-        const { error } = await supabase.functions.invoke('telegram-portfolio-alert', {
+        const { error } = await api.functions.invoke('telegram-portfolio-alert', {
           body: {
             alerts: alerts.map(a => ({
               symbol: a.symbol,

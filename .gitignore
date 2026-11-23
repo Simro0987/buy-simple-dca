@@ -31,3 +31,9 @@ runner-data/
 # API bundle
 api/dist
 api-data/
+
+# Local env files (never commit; only .env.example is tracked)
+.env
+.env.*
+!.env.example
+secrets.env

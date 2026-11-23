@@ -13,7 +13,7 @@
  */
 import { useEffect, ReactNode } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { hydrateStakingLedger } from '@/lib/stakingLedger';
 import { setEthDebtUser, setEthDebtCache } from '@/lib/ethDebt';
 import { setCyborgUser, setCyborgUsdcDebtCache, setCyborgConfirmedCache, type ConfirmedStepData } from '@/lib/cyborgPortfolio';
@@ -68,7 +68,7 @@ export function CloudSyncProvider({ children }: { children: ReactNode }) {
     }
     void hydrateStakingLedger(userId);
     void (async () => {
-      const { data } = await supabase
+      const { data } = await api
         .from('defi_positions')
         .select('eth_debt,usdc_debt,confirmed_steps')
         .eq('user_id', userId)

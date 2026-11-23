@@ -5,7 +5,7 @@
  * `staking_rewards`, prepočítaný aktuálnou cenou. Zvyšok PnL je rast trhovej ceny.
  */
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export type YieldQtyMap = Record<string, number>;
@@ -20,7 +20,7 @@ export function useStakingYieldQty() {
     staleTime: 5 * 60_000,
     queryFn: async () => {
       const out: YieldQtyMap = {};
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('staking_rewards')
         .select('btc_reward,eth_reward,sol_reward');
       if (error) return out;

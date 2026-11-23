@@ -6,7 +6,7 @@
  * a metric that cannot be fetched is simply `null` and drops out of the
  * weighted average, and the caller is told which legs were available.
  *
- * Mirrored verbatim in `supabase/functions/_shared/fundamentals.ts`.
+ * Mirrored verbatim in `api/functions/_shared/fundamentals.ts`.
  */
 
 const clamp = (n: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, n));

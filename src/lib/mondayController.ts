@@ -729,8 +729,9 @@ export function thisMondayIso(): string {
   const day = d.getDay();
   const diff = (day + 6) % 7;
   d.setDate(d.getDate() - diff);
-  d.setHours(0, 0, 0, 0);
-  return d.toISOString().slice(0, 10);
+  // Local calendar date (toISOString() would shift to the previous day east of UTC).
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
 export function exportHistoryCsv(history: HistoryEntry[]): string {

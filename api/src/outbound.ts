@@ -1,15 +1,15 @@
 /**
- * The edge functions were written against Lovable's hosted gateways:
- *   https://connector-gateway.lovable.dev/telegram/<method>   (Telegram Bot API proxy)
- *   https://ai.gateway.lovable.dev/v1/chat/completions        (OpenAI-compatible AI proxy)
- * Instead of rewriting 30 files, outgoing fetches to those two hosts are redirected to the
- * real providers using keys that live ONLY in the API container:
+ * Server functions call two internal gateway URLs instead of holding provider keys:
+ *   http://telegram-gateway.internal/<method>        (Telegram Bot API)
+ *   http://ai-gateway.internal/v1/chat/completions   (any OpenAI-compatible AI endpoint)
+ * Outgoing fetches to those hosts are redirected to the real providers using keys that live
+ * ONLY in the API container (/appdata/secrets.env):
  *   TELEGRAM_BOT_TOKEN  -> https://api.telegram.org/bot<token>/<method>
  *   AI_BASE_URL + AI_API_KEY (+ optional AI_MODEL override) -> any OpenAI-compatible endpoint
  * Everything else passes through untouched.
  */
-const TG_PREFIX = 'https://connector-gateway.lovable.dev/telegram/';
-const AI_PREFIX = 'https://ai.gateway.lovable.dev/v1/';
+const TG_PREFIX = 'http://telegram-gateway.internal/';
+const AI_PREFIX = 'http://ai-gateway.internal/v1/';
 
 export interface OutboundSecrets {
   TELEGRAM_BOT_TOKEN?: string;

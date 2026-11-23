@@ -106,11 +106,11 @@ export function generateSellReason(fg: number, rsi: number, pnlPct: number, sym:
 const CG_ID_SELL: Record<DcaToken, string> = { BTC: 'bitcoin', ETH: 'ethereum', SOL: 'solana' };
 export async function confirmDcaSell(sym: DcaToken, sellQty: number, currentPrice: number) {
   try {
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { data: userRes } = await supabase.auth.getUser();
+    const { api } = await import('@/lib/api/client');
+    const { data: userRes } = await api.auth.getUser();
     const uid = userRes.user?.id;
     if (uid && sellQty > 0) {
-      await supabase.from('token_transactions').insert({
+      await api.from('token_transactions').insert({
         user_id: uid,
         coingecko_id: CG_ID_SELL[sym],
         symbol: sym,

@@ -2,12 +2,8 @@
  * TerminalDashboard — Domovská stránka (Deep Space Bento Grid)
  */
 import { useState, useEffect } from 'react';
-import {
-  PieChart, Calculator, Shield, Activity, BarChart3, DollarSign,
-  Coins, Settings, Wallet, TrendingUp, TrendingDown, Briefcase,
-  BarChart2, RefreshCw,
-} from 'lucide-react';
-import { TabId } from '@/components/BottomNav';
+import { Briefcase, RefreshCw } from 'lucide-react';
+import { NAV_ITEMS, type TabId } from '@/lib/navItems';
 import { ConfluenceOctagon } from '@/components/ConfluenceOctagon';
 import { MacroNewsTicker } from '@/components/MacroNewsTicker';
 import { LiquidationAlertBanner } from '@/components/LiquidationAlertBanner';
@@ -20,17 +16,7 @@ import { Bento, Label, Money, Chip } from '@/components/deep-space/primitives';
 
 interface Props { onNavigate: (tab: TabId) => void; lang: Lang }
 
-const MODULES: { id: TabId; label: string; icon: typeof PieChart }[] = [
-  { id: 'portfolio', label: 'Portfólio', icon: PieChart   },
-  { id: 'dca',       label: 'DCA',       icon: Calculator },
-  { id: 'risk',      label: 'Riziko',    icon: Shield     },
-  { id: 'analysis',  label: 'Analýza',   icon: Activity   },
-  { id: 'market',    label: 'Trh',       icon: BarChart3  },
-  { id: 'profit',    label: 'Zisky',     icon: DollarSign },
-  { id: 'staking',   label: 'Staking',   icon: Coins      },
-  { id: 'wallets',   label: 'Wallety',   icon: Wallet     },
-  { id: 'settings',  label: 'Nastav.',   icon: Settings   },
-];
+const MODULES = NAV_ITEMS.filter((n) => n.id !== 'home');
 
 function loadInvested(): number {
   try { return parseFloat(localStorage.getItem('total-invested') || '0') || 0; } catch { return 0; }
@@ -50,6 +36,8 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
   const pnlUsd = totalValue - invested;
   const pnlPct = invested > 0 ? (pnlUsd / invested) * 100 : 0;
   const pnlPos = pnlUsd >= 0;
+  const heldAssets = metrics.assets.filter((a) => a.value > 0);
+  const empty = totalValue <= 0;
 
   useEffect(() => {
     try { localStorage.setItem('free-cash', String(freeCash)); } catch { /* quota */ }
@@ -76,11 +64,30 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
           </button>
         </div>
         <Money size="hero">{totalValue > 0 ? formatUsd(totalValue) : '$0.00'}</Money>
-        <p className="text-xs text-white/35 font-mono mt-2">{metrics.assets.length} pozícií</p>
+        {empty ? (
+          <div className="mt-3 space-y-2">
+            <p className="text-xs text-white/50">
+              Zatiaľ žiadne pozície. Pridaj svoje nákupy v Portfóliu alebo pripoj adresy peňaženiek – hodnoty sa potom prepočítajú živými cenami.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => onNavigate('portfolio')} className="px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-xs font-semibold">
+                Pridať nákup
+              </button>
+              <button onClick={() => onNavigate('wallets')} className="px-3 py-1.5 rounded-lg border border-white/15 text-xs text-white/80">
+                Pripojiť peňaženku
+              </button>
+              <button onClick={() => onNavigate('dca')} className="px-3 py-1.5 rounded-lg border border-white/15 text-xs text-white/80">
+                Plán na tento týždeň
+              </button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-xs text-white/35 font-mono mt-2">{heldAssets.length} {heldAssets.length === 1 ? 'pozícia' : heldAssets.length < 5 ? 'pozície' : 'pozícií'}</p>
+        )}
       </Bento>
 
       {/* Stats bento */}
-      <div className="grid grid-cols-2 gap-3">
+      {!empty && <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Bento delay={0.08} className="p-4">
           <Label>Reálny vklad</Label>
           <Money size="md" className="mt-2 block">{invested > 0 ? formatUsd(invested) : '$0.00'}</Money>
@@ -113,7 +120,7 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
             className="mt-2 w-full bg-black/40 border border-white/10 rounded-xl px-3 py-2 font-mono text-sm text-white outline-none focus:border-white/25"
           />
         </Bento>
-      </div>
+      </div>}
 
       {/* Token strip */}
       <div className="grid grid-cols-3 gap-3">
@@ -127,26 +134,30 @@ export function TerminalDashboard({ onNavigate, lang }: Props) {
                 <span className="text-xs font-bold text-white">{t.symbol}</span>
                 <Chip color={pos ? 'green' : 'red'}>{pos ? '▲' : '▼'}{Math.abs(ch).toFixed(1)}%</Chip>
               </div>
-              <p className="font-mono text-sm font-bold text-white">{a ? formatPrice(a.currentPrice) : '—'}</p>
-              <p className="text-[9px] text-white/30 mt-1">{Math.round(t.allocation * 100)}% alok.</p>
+              <p className="font-mono text-sm font-bold text-white">
+                {a?.currentPrice ? formatPrice(a.currentPrice) : prices?.[t.coingeckoId]?.usd ? formatPrice(prices[t.coingeckoId].usd) : '—'}
+              </p>
+              <p className="text-[9px] text-white/30 mt-1">cieľ {Math.round(t.allocation * 100)} %</p>
             </Bento>
           );
         })}
       </div>
 
-      <ConfluenceOctagon activeToken={octagonToken} onTokenChange={setOctagonToken} />
-      <MacroNewsTicker activeToken={octagonToken} />
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ConfluenceOctagon activeToken={octagonToken} onTokenChange={setOctagonToken} />
+        <MacroNewsTicker activeToken={octagonToken} />
+      </div>
 
       {/* Module grid */}
       <div>
         <Label className="mb-3 block">Moduly</Label>
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-3">
           {MODULES.map(mod => {
             const Icon = mod.icon;
             return (
               <button key={mod.id} onClick={() => onNavigate(mod.id)} className="terminal-btn">
                 <Icon size={16} className="text-[#14F195]/80" />
-                <span className="text-[9px] font-semibold">{mod.label}</span>
+                <span className="text-[10px] font-semibold">{lang === 'sk' ? mod.sk : mod.en}</span>
               </button>
             );
           })}

@@ -5,7 +5,7 @@ import { runPortfolioFactoryReset } from '@/lib/portfolioFactoryReset';
 
 /**
  * Runs the Portfolio Factory Reset exactly once per page mount.
- * If mock/legacy data is detected in Supabase or local cache it is wiped
+ * If mock/legacy data is detected in the database or local cache it is wiped
  * and React Query caches are invalidated so the UI re-renders from zero.
  */
 export function usePortfolioFactoryReset() {

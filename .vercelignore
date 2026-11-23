@@ -1,4 +1,0 @@
-# Vercel would treat /api as Serverless Functions. The api/ and db/ folders are the
-# Flux backend components (Docker images) and are not part of the static Vercel build.
-api
-db

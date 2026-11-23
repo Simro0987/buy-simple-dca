@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
-import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing, Bot, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing, Bot } from 'lucide-react';
+import { api } from '@/lib/api/client';
 import { CsvExport } from '@/components/CsvExport';
 import { CronJobsCard } from '@/components/CronJobsCard';
 import { CallbackHistoryCard } from '@/components/CallbackHistoryCard';
@@ -16,7 +16,7 @@ import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } fr
 
 const syncConfigToDb = async (chatId: string, budget: number, alerts: { dcaReminder: boolean; limitProximity: boolean; highImpactNews: boolean }) => {
   try {
-    await supabase.from('telegram_config').update({
+    await api.from('telegram_config').update({
       chat_id: chatId,
       weekly_budget: budget,
       dca_reminder_enabled: alerts.dcaReminder,
@@ -51,22 +51,14 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     highImpactNews: true,
   });
   const [notifPrefs, setNotifPrefs] = useState<NotificationPrefs>(getNotificationPrefs);
-  const [openRouterKey, setOpenRouterKey] = useState<string>(() => localStorage.getItem('openrouter-api-key-v1') ?? '');
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => localStorage.getItem('gemini-api-key-v1') ?? '');
-  const [showKey, setShowKey] = useState(false);
-
-  const saveOpenRouterKey = (v: string) => {
-    setOpenRouterKey(v);
-    try { localStorage.setItem('openrouter-api-key-v1', v); } catch { /* noop */ }
-  };
-
-  const saveGeminiKey = (v: string) => {
-    setGeminiApiKey(v);
-    try {
-      localStorage.setItem('gemini-api-key-v1', v);
-      window.dispatchEvent(new CustomEvent('aegis-website-guardian-changed'));
-    } catch { /* noop */ }
-  };
+  // AI keys live only on the server (api /appdata/secrets.env). Old browser-stored keys are wiped.
+  const [aiConfigured, setAiConfigured] = useState<boolean | null>(null);
+  useEffect(() => {
+    for (const k of ['openrouter-api-key-v1', 'gemini-api-key-v1']) localStorage.removeItem(k);
+    void api.functions
+      .invoke<{ configured: boolean }>('ai-chat', { method: 'GET' })
+      .then(({ data }) => setAiConfigured(data ? Boolean(data.configured) : null));
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('telegram_chat_id');
@@ -130,7 +122,7 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
         body = { chatId: chatId.trim() };
       }
 
-      const { data, error } = await supabase.functions.invoke(fnName, { body });
+      const { data, error } = await api.functions.invoke(fnName, { body });
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || 'Failed');
       toast.success(t('testAlertSuccess', lang));
@@ -173,69 +165,27 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
     <div className="space-y-4">
       <h1 className="text-xl font-bold text-foreground">{t('settings', lang)}</h1>
 
-      {/* Safe Global WalletConnect — always accessible even when signed in via Email */}
       <SafeGlobalConnectCard lang={lang} />
 
-      {/* OpenRouter API key for AI Agent */}
-      <div className="glass-card p-4 space-y-3">
+      {/* AI: server-side only */}
+      <div className="glass-card p-4 space-y-2">
         <div className="flex items-center gap-3">
           <Bot className="w-5 h-5 text-muted-foreground" />
-          <span className="font-medium text-foreground">
-            {lang === 'sk' ? 'AI Agent (OpenRouter)' : 'AI Agent (OpenRouter)'}
+          <span className="font-medium text-foreground">{lang === 'sk' ? 'AI (na serveri)' : 'AI (server-side)'}</span>
+          <span
+            className={`ml-auto text-[11px] px-2 py-0.5 rounded-full ${
+              aiConfigured ? 'bg-emerald-500/15 text-emerald-400' : 'bg-secondary text-muted-foreground'
+            }`}
+          >
+            {aiConfigured === null ? '…' : aiConfigured ? (lang === 'sk' ? 'nastavené' : 'configured') : lang === 'sk' ? 'nenastavené' : 'not configured'}
           </span>
         </div>
-        <div className="space-y-2">
-          <label className="text-sm text-muted-foreground">
-            {lang === 'sk' ? 'Zadajte OpenRouter API Kľúč' : 'Enter OpenRouter API Key'}
-          </label>
-          <div className="relative">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={openRouterKey}
-              onChange={(e) => saveOpenRouterKey(e.target.value)}
-              placeholder="sk-or-v1-…"
-              autoComplete="off"
-              spellCheck={false}
-              className="w-full pr-10 px-3 py-2 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary"
-            />
-            <button
-              type="button"
-              onClick={() => setShowKey(s => !s)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-muted-foreground hover:text-foreground"
-              aria-label={showKey ? 'Hide' : 'Show'}
-            >
-              {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-            </button>
-          </div>
-          <p className="text-[11px] text-muted-foreground">
-            {lang === 'sk'
-              ? 'Kľúč sa ukladá lokálne v prehliadači. Model: openrouter/auto (NotDiamond cost/quality = 0) s web search.'
-              : 'Stored locally in your browser. Model: openrouter/auto (NotDiamond cost/quality = 0) with web search.'}
-          </p>
-        </div>
-
-        <div className="space-y-2 pt-2 border-t border-border/60">
-          <label className="text-sm text-muted-foreground">
-            {lang === 'sk' ? 'Zadajte Google Gemini API Kľúč (pre Aegis Web Guardian & AI Agentov)' : 'Enter Google Gemini API Key (for Aegis Web Guardian & AI Agents)'}
-          </label>
-          <input
-            type={showKey ? 'text' : 'password'}
-            value={geminiApiKey}
-            onChange={(e) => saveGeminiKey(e.target.value)}
-            placeholder="AIzaSy…"
-            autoComplete="off"
-            spellCheck={false}
-            className="w-full px-3 py-2 rounded-lg bg-secondary text-foreground text-sm border border-border focus:outline-none focus:ring-2 focus:ring-primary font-mono"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            {lang === 'sk'
-              ? 'Šifrované cez AES-256-GCM. Používa sa pre Aegis Web Guardian AI (bezpečnosť, záplaty, úpravy dizajnu) s prísnym zákazom výberu z peňaženky.'
-              : 'Encrypted via AES-256-GCM. Powers Aegis Web Guardian AI with strict non-withdrawal protection.'}
-          </p>
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {lang === 'sk'
+            ? 'API kľúče sa nikdy nezadávajú do prehliadača. Nastavujú sa len na serveri: AI_BASE_URL, AI_API_KEY (a voliteľne AI_MODEL) v /appdata/secrets.env komponentu „api“ na Fluxe, potom reštart „api“.'
+            : 'API keys are never entered in the browser. Set them only on the server: AI_BASE_URL, AI_API_KEY (optional AI_MODEL) in /appdata/secrets.env of the "api" component on Flux, then restart "api".'}
+        </p>
       </div>
-
-
 
       {/* Language */}
       <div className="glass-card p-4">

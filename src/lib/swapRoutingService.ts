@@ -1,5 +1,5 @@
 // Swap routing comparator service.
-// Read-only: simulates rate quotes from up to 14 aggregators/bridges using live
+// ESTIMATES ONLY (not live quotes): simulates rate quotes from up to 14 aggregators/bridges using live
 // USD prices as the base, then applies deterministic per-platform variance.
 // Never executes a transaction — only builds deep links for manual execution.
 
@@ -39,8 +39,10 @@ export const CHAINS: Record<ChainId, ChainMeta> = {
   monero:    { id: 'monero',    name: 'Monero Network',           short: 'XMR',   color: '#FF6600', icon: 'ɱ', gasUsd: 0.05, family: 'privacy' },
 };
 
+// Monero / Lightning and the no-KYC deposit-address exchangers were removed: this app is for
+// Safe{Wallet}-held assets; deposit-to-a-custodian routes do not fit and were never verified.
 export const CHAIN_ORDER: ChainId[] = [
-  'bitcoin', 'lightning', 'ethereum', 'base', 'arbitrum', 'polygon', 'avalanche', 'solana', 'monero',
+  'bitcoin', 'ethereum', 'base', 'arbitrum', 'polygon', 'avalanche', 'solana',
 ];
 
 // ============= Tokens =============
@@ -58,7 +60,6 @@ export const TOKENS: TokenMeta[] = [
   // Bitcoin Network
   { symbol: 'BTC',         name: 'Bitcoin',                     chain: 'bitcoin',   priceRef: 'btc', decimals: 8, native: true },
   // Bitcoin Lightning Network
-  { symbol: 'Bitcoin LN',  name: 'Bitcoin Lightning',           chain: 'lightning', priceRef: 'btc', decimals: 8, native: true },
   // Ethereum Mainnet
   { symbol: 'ETH',         name: 'Ether (Native)',              chain: 'ethereum',  priceRef: 'eth', decimals: 18, native: true },
   { symbol: 'stETH',       name: 'Lido Staked ETH',             chain: 'ethereum',  priceRef: 'eth', multiplier: 0.999, decimals: 18 },
@@ -95,8 +96,6 @@ export const TOKENS: TokenMeta[] = [
   { symbol: 'AVAX',        name: 'Avalanche (Native)',          chain: 'avalanche', priceRef: 'avax', decimals: 18, native: true },
   { symbol: 'USDC',        name: 'USD Coin',                    chain: 'avalanche', priceRef: 'usd', decimals: 6 },
   { symbol: 'USDT',        name: 'Tether',                      chain: 'avalanche', priceRef: 'usd', decimals: 6 },
-  // Monero
-  { symbol: 'XMR',         name: 'Monero',                      chain: 'monero',    priceRef: 'xmr', decimals: 12, native: true },
 ];
 
 export function tokenKey(t: TokenMeta) {
@@ -242,7 +241,7 @@ const isPrivacy = (c: ChainId) => PRIVACY_CHAINS.includes(c);
 const L2_CHAINS: ChainId[] = ['base', 'arbitrum', 'polygon'];
 const isL2 = (c: ChainId) => L2_CHAINS.includes(c);
 
-export const PLATFORMS: Platform[] = [
+const ALL_PLATFORMS: Platform[] = [
   // ===== LI.FI universal aggregator =====
   { id: 'jumper', name: 'Jumper.xyz', type: 'aggregator',
     buildUrl: (f, t, a) => `https://jumper.exchange/?fromChain=${chainQuery(f.chain)}&toChain=${chainQuery(t.chain)}&fromToken=${encodeURIComponent(f.symbol)}&toToken=${encodeURIComponent(t.symbol)}&fromAmount=${a}`,
@@ -427,6 +426,9 @@ export const PLATFORMS: Platform[] = [
     supports: (f, t, type) => type === 'cross-chain' && !isPrivacy(f.chain) && !isPrivacy(t.chain) && !involvesBitcoin(f, t),
     customRecipient: true, mevProtected: true, gasRefuel: true },
 ];
+
+/** Only wallet-connected, non-custodial routes (deposit-address 'privacy' exchangers removed). */
+export const PLATFORMS: Platform[] = ALL_PLATFORMS.filter((p) => p.type !== 'privacy' && !p.noWallet);
 
 // ============= Anti-phishing: verified official domains =============
 // Hardcoded mapping of platform id -> verified domain. Always rendered as

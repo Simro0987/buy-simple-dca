@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 # ============================================================================
-# buy-simple-dca API (Flux component "api") - replaces Supabase:
+# buy-simple-dca API (Flux component "api"):
 #   SIWE wallet auth (EOA + Safe EIP-1271) -> JWT sessions, PostgREST (RLS in Postgres),
-#   the 32 original edge functions (Deno shim) and the former pg_cron jobs.
+#   the server functions (api/functions) and the scheduled jobs.
 # Build from the REPO ROOT:  docker buildx build --platform linux/amd64 -f api/Dockerfile .
 # Secrets come only from runtime files/env of THIS container; nothing is baked in.
 # ============================================================================
@@ -12,7 +12,7 @@ ENV CI=1
 COPY package.json package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY api ./api
-COPY supabase/functions ./supabase/functions
+COPY shared ./shared
 RUN npx vitest run --config api/vitest.config.ts && node api/build.mjs
 
 FROM alpine:3.22 AS postgrest

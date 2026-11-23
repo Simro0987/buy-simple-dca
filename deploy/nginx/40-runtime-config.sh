@@ -1,11 +1,12 @@
 #!/bin/sh
-# Writes /tmp/runtime/env-config.js from container env vars so Flux/Akash/Docker
+# Writes /tmp/runtime/env-config.js from container env vars so Flux/Docker
 # "environmentParameters" work at RUNTIME (Vite VITE_* vars are otherwise baked at build time).
 # Only an explicit allow-list of PUBLIC values is exposed to the browser. Never put secrets here.
 set -eu
 mkdir -p /tmp/runtime
 OUT=/tmp/runtime/env-config.js
-KEYS="VITE_SUPABASE_URL VITE_SUPABASE_PUBLISHABLE_KEY VITE_SUPABASE_PROJECT_ID VITE_WALLETCONNECT_PROJECT_ID VITE_SYSTEM_EXECUTION_MODE VITE_DEFAULT_SAFE_CHAIN VITE_AGENT_STATUS_URL VITE_AUTH_MODE"
+# VITE_SUPABASE_URL is a legacy alias of VITE_API_URL (older Flux specs).
+KEYS="VITE_API_URL VITE_PUBLIC_APP_URL VITE_WALLETCONNECT_PROJECT_ID VITE_SYSTEM_EXECUTION_MODE VITE_DEFAULT_SAFE_CHAIN VITE_AGENT_STATUS_URL VITE_SUPABASE_URL"
 {
   printf 'window.__APP_CONFIG__ = {'
   first=1
@@ -53,18 +54,19 @@ NGINX
 fi
 
 # ---------------------------------------------------------------------------
-# Optional proxy to the own API (Flux component "api": SIWE auth + PostgREST + edge functions).
-# API_UPSTREAM=http://fluxapi_<appname>:8070  -> browser uses VITE_SUPABASE_URL=/sb (same origin).
+# Proxy to the own API (Flux component "api": SIWE auth + PostgREST + server functions).
+# API_UPSTREAM=http://fluxapi_<appname>:8070  -> browser uses VITE_API_URL=/api (same origin).
+# /sb/ is kept as a legacy alias for older builds.
 API_PROXY=/tmp/runtime/nginx-api.conf
 rm -f "$API_PROXY"
 AUP="${API_UPSTREAM:-}"
 if [ -n "$AUP" ]; then
   if printf '%s' "$AUP" | grep -Eq '^http://[A-Za-z0-9._-]+:[0-9]{2,5}$'; then
     cat > "$API_PROXY" <<NGINX
-location /sb/ {
+location ~ ^/(api|sb)/ {
     resolver 127.0.0.11 valid=30s ipv6=off;
     set \$api_upstream "$AUP";
-    rewrite ^/sb/(.*)\$ /\$1 break;
+    rewrite ^/(api|sb)/(.*)\$ /\$2 break;
     proxy_pass \$api_upstream;
     proxy_http_version 1.1;
     proxy_set_header Host \$http_host;
@@ -80,7 +82,7 @@ location /sb/ {
     include /etc/nginx/snippets/security-headers.conf;
 }
 NGINX
-    echo "runtime-config: api proxy /sb/ -> $AUP"
+    echo "runtime-config: api proxy /api/ -> $AUP"
   else
     echo "runtime-config: ignoring invalid API_UPSTREAM (expected http://host:port)" >&2
   fi

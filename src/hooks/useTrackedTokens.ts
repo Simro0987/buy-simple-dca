@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export type TokenCategory = 'core' | 'yield' | 'satellite';
 
@@ -17,7 +17,7 @@ export function useTrackedTokens() {
   return useQuery({
     queryKey: ['tracked_tokens'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('tracked_tokens')
         .select('*')
         .order('created_at', { ascending: true });
@@ -34,13 +34,13 @@ export function useAddTrackedToken() {
     mutationFn: async (
       input: { coingecko_id: string; symbol: string; name: string; image_url?: string | null; category: TokenCategory },
     ) => {
-      const { data: userRes } = await supabase.auth.getUser();
+      const { data: userRes } = await api.auth.getUser();
       const uid = userRes.user?.id;
       if (!uid) throw new Error('Nie si prihlásený');
       // DUPLICATE GUARD — token (podľa symbolu alebo CoinGecko id) môže existovať
       // len raz; inak by vznikla druhá DCA karta pre to isté aktívum.
       const sym = input.symbol.toUpperCase();
-      const { data: dupes } = await supabase
+      const { data: dupes } = await api
         .from('tracked_tokens')
         .select('id, symbol, coingecko_id')
         .eq('user_id', uid);
@@ -48,7 +48,7 @@ export function useAddTrackedToken() {
         (r) => String(r.symbol).toUpperCase() === sym || r.coingecko_id === input.coingecko_id,
       );
       if (dupe) throw new Error(`${sym} už existuje v Portfóliu aj v DCA`);
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('tracked_tokens')
         .insert({
           user_id: uid,
@@ -71,7 +71,7 @@ export function useRemoveTrackedToken() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('tracked_tokens').delete().eq('id', id);
+      const { error } = await api.from('tracked_tokens').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['tracked_tokens'] }),

@@ -6,7 +6,7 @@ import { useMarketData } from '@/hooks/useMarketData';
 import { useBtc200wSma } from '@/hooks/useBtc200wSma';
 import { useFearGreed } from '@/hooks/usePrices';
 import type { FactorKey, FactorReading, MarketMode } from '@/lib/coreSatelliteEngine';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { toast } from 'sonner';
 import { useSatelliteAllocation } from '@/hooks/useSatelliteAllocation';
 import { useDynamicSatellites } from '@/hooks/useDynamicSatellites';
@@ -92,7 +92,7 @@ export function CoreSatelliteEngineCard({ weeklyBudgetUsd }: Props) {
     const chatId = localStorage.getItem('telegram_chat_id')?.trim();
     if (!chatId) return;
 
-    void supabase.functions.invoke('telegram-cycle-alert', {
+    void api.functions.invoke('telegram-cycle-alert', {
       body: {
         chatId,
         cycleScore: Math.round(engine.coreWeight),

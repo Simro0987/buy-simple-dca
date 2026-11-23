@@ -2,7 +2,7 @@
 # (on push to main / v*.*.* tags). Pull requests only build + smoke test, nothing is pushed.
 # Images: ghcr.io/simro0987/buy-simple-dca:<tag>  (web)
 #         ghcr.io/simro0987/buy-simple-dca-agent-runner:<tag>  (agent runner)
-#         ghcr.io/simro0987/buy-simple-dca-api:<tag>  (own API replacing Supabase)
+#         ghcr.io/simro0987/buy-simple-dca-api:<tag>  (own API: auth, PostgREST, functions)
 #         ghcr.io/simro0987/buy-simple-dca-db:<tag>   (own Postgres + encrypted backups)
 # IMPORTANT (one-time): GHCR packages are PRIVATE by default and Flux cannot pull private images.
 # After the first run go to github.com/users/Simro0987/packages/container/buy-simple-dca/settings

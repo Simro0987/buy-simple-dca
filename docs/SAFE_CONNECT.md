@@ -11,7 +11,7 @@ V Nastaveniach / na prihlasovacej stránke sú 3 tlačidlá:
 3. Appka sa vo vnútri Safe pripojí **sama** (Safe Apps SDK) – nič nekopíruješ.
 
 Prvýkrát sa Safe môže opýtať, či appke dôveruješ (custom app) – potvrď.
-Funguje len cez **HTTPS** (Flux `https://<name>.app.runonflux.io`, Vercel, vlastná doména).
+Funguje len cez **HTTPS** (Flux `https://<name>.app.runonflux.io` alebo vlastná doména).
 
 ### 2. „WalletConnect“
 Vyžaduje `VITE_WALLETCONNECT_PROJECT_ID` (zadarmo na https://cloud.reown.com). Bez neho je tlačidlo sivé.

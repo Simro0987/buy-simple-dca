@@ -24,6 +24,7 @@
  */
 
 import SafeAppsSDK from '@safe-global/safe-apps-sdk';
+import { publicAppUrl } from '@/lib/runtimeConfig';
 
 export type SupportedChainId =
   | 'ethereum'
@@ -325,9 +326,7 @@ export function buildSafeGlobalPortalUrls(params: {
     SAFE_SUPPORTED_CHAINS.find((c) => c.id === (params.chainId ?? 'arbitrum')) ??
     SAFE_SUPPORTED_CHAINS[0];
   const prefix = chainInfo.safePrefix || 'arb1';
-  const origin =
-    params.appUrl ||
-    (typeof window !== 'undefined' ? window.location.origin : 'https://buy-simple-dca.vercel.app');
+  const origin = params.appUrl || publicAppUrl();
 
   const parsed = params.safeAddress ? parseSafeAddressInput(params.safeAddress) : { valid: false, address: '' };
   const safeParam = parsed.valid ? `${prefix}:${parsed.address}` : '';
