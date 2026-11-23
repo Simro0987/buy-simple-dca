@@ -29,7 +29,7 @@ Tento repozitár spája **Crypto DCA & Portfolio Tracker**, **Zisk Bot (PAPER Op
 
 ---
 
-## 2. Spustenie (Lokálne, Docker/Podman, Flux, Akash Network)
+## 2. Spustenie (Lokálne, Docker/Podman, Flux)
 
 ```bash
 # 1. Lokálny vývoj a testy
@@ -49,15 +49,14 @@ node scripts/backup-restore-state.mjs backup
 
 Nasadenie na **Flux (runonflux.io)**: pozri **[DEPLOY_FLUX.md](DEPLOY_FLUX.md)** a `deploy/flux/flux-app-spec.json`.
 Pripojenie Safe{Wallet}: **[docs/SAFE_CONNECT.md](docs/SAFE_CONNECT.md)**.
-Pre nasadenie na decentralizovanú sieť **Akash Network** použite manifest `deploy/akash-sdl.yaml`.
 
 
 ## Agent runner (autonómne obchodovanie na Flux)
 
 `agent-runner/` je Flux komponent: agenti obchodujú sami, ale **iba** cez `AgentSwapModule` (výsledok vždy späť do Safe). Testnet + DRY_RUN predvolene. Návod: `DEPLOY_FLUX.md` → Časť B.
 
-## Vlastná databáza + API (namiesto Supabase)
+## Vlastná databáza + API
 
 `db/` (Postgres 16 + nočná age-šifrovaná záloha na Storj/S3) a `api/` (prihlásenie peňaženkou/Safe cez SIWE,
-PostgREST s RLS, 32 pôvodných edge funkcií, cron) bežia ako ďalšie komponenty tej istej Flux appky.
-Návod, zálohy, obnova a presun dát zo Supabase: `DEPLOY_FLUX.md` → Časť C. Vývoj: `api/README.md`.
+PostgREST s RLS, serverové funkcie v `api/functions`, cron) bežia ako ďalšie komponenty tej istej Flux appky.
+Nasadenie: `DEPLOY_FLUX.md`. Zálohy, obnova a jednorazový import starých dát: `api/README.md`. Vývoj: `api/README.md`.

@@ -14,7 +14,7 @@ Deno.serve(async (req) => {
 
   // ── Auth guard ─────────────────────────────────────────
   // Accept either the shared edge-function secret (used by pg_cron) or a valid
-  // Supabase user JWT. Blocks unauthenticated public callers.
+  // API user JWT. Blocks unauthenticated public callers.
   {
     const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
     const providedSecret = req.headers.get('x-edge-secret') ?? '';

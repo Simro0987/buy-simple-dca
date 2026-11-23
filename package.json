@@ -16,7 +16,8 @@
     "runner:safe-tx": "tsx agent-runner/scripts/safe-tx-builder.ts",
     "test:api": "vitest run --config api/vitest.config.ts",
     "build:api": "node api/build.mjs",
-    "typecheck:api": "tsc -p api"
+    "typecheck:api": "tsc -p api",
+    "gen:types": "node api/scripts/gen-types.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
@@ -50,7 +51,6 @@
     "@safe-global/safe-apps-provider": "^0.18.6",
     "@safe-global/safe-apps-sdk": "^9.1.0",
     "@solana/web3.js": "^1.98.4",
-    "@supabase/supabase-js": "^2.101.1",
     "@tanstack/react-query": "^5.83.0",
     "@walletconnect/ethereum-provider": "^2.26.0",
     "class-variance-authority": "^0.7.1",
@@ -91,8 +91,6 @@
     "@types/react-dom": "^18.3.7",
     "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.21",
-    "drizzle-kit": "^0.31.11",
-    "drizzle-orm": "^0.45.3",
     "eslint": "^9.32.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.20",

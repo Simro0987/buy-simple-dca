@@ -2,7 +2,7 @@
  * Advanced Dynamic Take-Profit (Harvest) & Portfolio Rotation Engine.
  *
  * Pure math + mapping layer — no React, no fetching.
- * Mirrored (identical formulas) in `supabase/functions/_shared/harvestEngine.ts`
+ * Mirrored (identical formulas) in `api/functions/_shared/harvestEngine.ts`
  * so the Telegram Daily Report and the Portfolio UI never disagree.
  *
  * Scoring: 10 layers → weighted 0–10 conviction score.

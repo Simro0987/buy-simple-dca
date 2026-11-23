@@ -18,12 +18,12 @@ import { cgFetch } from '@/lib/coingecko';
 import { cached, safeJson, TTL } from '@/lib/freeCache';
 import { EMPTY_METRICS, type FundamentalMetrics } from '@/lib/fundamentals';
 import type { HarvestToken } from '@/lib/harvestEngine';
+import { dataProxyUrl } from '@/lib/api/dataProxy';
 
 const LLAMA = 'https://api.llama.fi';
 const LLAMA_STABLES = 'https://stablecoins.llama.fi';
 const BINANCE = 'https://api.binance.com';
 const BINANCE_FUT = 'https://fapi.binance.com';
-const COINGLASS = 'https://open-api-v3.coinglass.com';
 
 interface TokenSpec {
   cgId: string;
@@ -232,14 +232,13 @@ async function loadOiChange7d(pair: string): Promise<number | null> {
 }
 
 /**
- * Coinglass public endpoint attempt (BTC funding/OI aggregate). Requires no key
- * on the open routes; if it 401s or is rate-limited we simply return null and
- * the Binance proxies above carry the leg.
+ * Coinglass BTC funding via our data-proxy (COINGLASS_API_KEY stays on the server). Without a
+ * configured key the proxy answers 503 and the Binance legs above carry the metric.
  */
 async function loadCoinglassBtc(): Promise<{ fundingPct: number | null } | null> {
   return cached<{ fundingPct: number | null }>('coinglass:btc', TTL.onchain, async () => {
     const j = await safeJson<{ code?: string; data?: Array<{ uMarginList?: Array<{ rate?: number }> }> }>(
-      `${COINGLASS}/api/futures/fundingRate/exchange-list?symbol=BTC`, 8000,
+      dataProxyUrl('src=coinglass&symbol=BTC'), 8000,
     );
     const rate = j?.data?.[0]?.uMarginList?.find((r) => Number.isFinite(r?.rate))?.rate;
     return Number.isFinite(rate) ? { fundingPct: rate as number } : null;

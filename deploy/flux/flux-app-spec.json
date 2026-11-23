@@ -31,7 +31,7 @@
     },
     {
       "name": "api",
-      "description": "API replacing Supabase: SIWE wallet login, PostgREST (RLS), edge functions, cron. Not public.",
+      "description": "Own API: SIWE wallet login, PostgREST (RLS), edge functions, cron. Not public.",
       "repotag": "ghcr.io/simro0987/buy-simple-dca-api:latest",
       "ports": [],
       "containerPorts": [],

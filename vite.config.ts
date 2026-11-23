@@ -86,7 +86,6 @@ export default defineConfig(() => ({
           "query-vendor": ["@tanstack/react-query"],
           "ui-vendor": ["@radix-ui/react-dialog", "@radix-ui/react-tooltip", "@radix-ui/react-tabs", "@radix-ui/react-popover", "@radix-ui/react-select"],
           "chart-vendor": ["recharts"],
-          "supabase-vendor": ["@supabase/supabase-js"],
         },
       },
     },

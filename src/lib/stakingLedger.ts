@@ -1,6 +1,6 @@
 // Cloud-backed staking ledger (source of truth: public.staking_positions).
 // Keeps sync API surface via in-memory cache; hydrated by CloudSyncProvider.
-// All writes go to Supabase; localStorage is no longer used.
+// All writes go to our API (Postgres); localStorage is no longer used.
 
 import { api } from '@/lib/api/client';
 

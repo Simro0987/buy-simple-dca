@@ -1,6 +1,6 @@
 import { AlertTriangle, ShieldCheck, Zap } from 'lucide-react';
 import type { BtcIndicators, FeedStatus } from '@/hooks/useBtcIndicators';
-import { boostPlan, boostGate, UNWIND_LADDER, semaforPhase, MACRO_ATH } from '@/lib/btcSmartTurbo';
+import { boostPlan, boostGate, unwindLadder, semaforPhase, MACRO_ATH } from '@/lib/btcSmartTurbo';
 import { fmtQty, fmtInd } from '@/lib/formatNumber';
 import { RecordActionButton } from './RecordActionButton';
 
@@ -86,7 +86,9 @@ const PHASES = [
   { cls: 'border-red-500/60 bg-red-500/15 text-red-200', text: (px: string) => `🚨 KRITICKÁ BUBLINA (OVERRIDE)! Ignoruj statický plán! Zruš robotov v DeFi Savere, okamžite urob manuálny 100 % Repay pri cene ${px} a vyber čistý WBTC do Cold Storage.` },
 ];
 
-export function BtcAutomationLayer4(p: { price?: number | null; fg?: number | null; mvrv?: number | null; mvrvZ?: number | null; debtUsd: number }) {
+export function BtcAutomationLayer4(p: { price?: number | null; ath?: number | null; fg?: number | null; mvrv?: number | null; mvrvZ?: number | null; debtUsd: number }) {
+  const liveAth = p.ath && p.ath > 0 ? p.ath : null;
+  const ladder = unwindLadder(liveAth);
   // Semafor: prahy 1.5 / 2.2 / 3.0 sa vyhodnocujú na MVRV Z-Score (4-ročné okno).
   const phase = semaforPhase(p.fg, p.mvrvZ);
   const ph = PHASES[phase];
@@ -97,8 +99,8 @@ export function BtcAutomationLayer4(p: { price?: number | null; fg?: number | nu
         <p className="text-slate-200 mt-1">Uisti sa, že v DeFi Savere beží Auto-Repay (Trigger HF 1.20 → Target HF 1.50).</p>
       </div>
       <div className="rounded-lg border border-purple-500/30 bg-slate-950/60 p-2.5 space-y-1 font-mono">
-        <p className="text-[10px] font-semibold uppercase text-purple-300 font-sans">Blok B · Statický rebrík z makro ATH {usd(MACRO_ATH)}</p>
-        {UNWIND_LADDER.map((s, i) => (
+        <p className="text-[10px] font-semibold uppercase text-purple-300 font-sans">Blok B · Rebrík z ATH {usd(liveAth ?? MACRO_ATH)} {liveAth ? '(živé ATH)' : '(referenčné ATH 2024, živé nedostupné)'}</p>
+        {ladder.map((s, i) => (
           <div key={s.mult} className="flex justify-between gap-2">
             <span className={p.price != null && p.price >= s.price ? 'text-gain' : 'text-slate-400'}>Cieľ {i + 1} ({s.mult.toFixed(2)}x = {usd(s.price)})</span>
             <span className="text-slate-200 text-right">{s.label}{p.debtUsd > 0 && s.repayPct < 100 ? ` · ${usd(p.debtUsd * s.repayPct / 100, 2)}` : ''}</span>

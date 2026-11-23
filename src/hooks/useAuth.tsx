@@ -62,7 +62,7 @@ function buildSyntheticSessionFromSafe(safe: SafeSession): Session {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [supabaseSession, setSupabaseSession] = useState<Session | null>(null);
+  const [dbSession, setDbSession] = useState<Session | null>(null);
   const [safeSession, setSafeSession] = useState<SafeSession | null>(() => loadSafeSession());
   const [loading, setLoading] = useState(true);
 
@@ -77,11 +77,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     let mounted = true;
 
     const { data: sub } = api.auth.onAuthStateChange((_e, s) => {
-      setSupabaseSession(s);
+      setDbSession(s);
       setLoading(false);
     });
 
-    // Fail-safe so the app never hangs on a black screen even if Supabase is unreachable
+    // Fail-safe so the app never hangs on a black screen even if the API is unreachable
     const failSafe = setTimeout(() => {
       if (mounted) setLoading(false);
     }, 4500);
@@ -106,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const { data: sessionData } = await api.auth.getSession();
         if (!sessionData?.session) {
           if (mounted) {
-            setSupabaseSession(null);
+            setDbSession(null);
             setLoading(false);
           }
           return;
@@ -131,14 +131,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (invalidToken || !userOk) {
           try { await api.auth.signOut(); } catch { /* ignore */ }
           if (mounted) {
-            setSupabaseSession(null);
+            setDbSession(null);
             setLoading(false);
           }
           return;
         }
 
         if (mounted) {
-          setSupabaseSession(sessionData.session);
+          setDbSession(sessionData.session);
           setLoading(false);
         }
       } catch {
@@ -155,7 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
-  const effectiveSession = supabaseSession ?? (safeSession ? buildSyntheticSessionFromSafe(safeSession) : null);
+  const effectiveSession = dbSession ?? (safeSession ? buildSyntheticSessionFromSafe(safeSession) : null);
 
   return (
     <Ctx.Provider

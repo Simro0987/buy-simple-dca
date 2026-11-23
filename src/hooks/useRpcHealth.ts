@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
+import { dataProxyUrl } from '@/lib/api/dataProxy';
 
 const TIMEOUT_MS = 2500;
 
 const ENDPOINTS: Array<{ name: 'solana' | 'base' | 'arbitrum'; url: string; body: unknown }> = [
   {
     name: 'solana',
-    url: 'https://api.mainnet-beta.solana.com',
+    url: '', // resolved lazily: our data-proxy (Solana RPC key stays on the server)
     body: { jsonrpc: '2.0', id: 1, method: 'getHealth' },
   },
   {
@@ -54,7 +55,7 @@ export function useRpcHealth() {
     queryKey: ['rpc-health'],
     queryFn: async () => {
       const results = await Promise.all(
-        ENDPOINTS.map(async e => ({ name: e.name, ...(await pingOne(e.url, e.body)) })),
+        ENDPOINTS.map(async e => ({ name: e.name, ...(await pingOne(e.url || dataProxyUrl('src=solana'), e.body)) })),
       );
       const okCount = results.filter(r => r.ok).length;
       const latencies = results.map(r => r.latencyMs ?? TIMEOUT_MS);

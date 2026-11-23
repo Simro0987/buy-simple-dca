@@ -44,6 +44,7 @@ import { AuditLogPanel } from './AuditLogPanel';
 import { useBtcIndicators } from '@/hooks/useBtcIndicators';
 import { BtcIndicatorBox, BtcTurboLayer3, BtcAutomationLayer4 } from './BtcSmartTurboPanels';
 import { whitelistCollateral, whitelistBorrows, anchoredBorrow, BTC_POOL_PCT } from '@/lib/btcSmartTurbo';
+import { loadTrackedAddresses } from '@/contexts/WalletContext';
 
 // Robo-Advisor background variables (no sliders).
 const ROBO_FEAR_GREED = 40;
@@ -105,7 +106,9 @@ export function FiveLayerBrain({ lang, asset }: { lang: Lang; asset: 'BTC' | 'ET
   const holding = byToken[asset];
   const total = holding ? holding.liquidQty + holding.stakedQty + holding.collateralQty : 0;
   const gasEth = balances?.ETH ?? 0;
-  const lowGas = ethPrice ? gasEth * ethPrice < 25 : gasEth < 0.01;
+  // Only warn when an EVM wallet is actually tracked; with no wallet there is nothing to fund.
+  const hasEvmWallet = !!loadTrackedAddresses().evm;
+  const lowGas = hasEvmWallet && (ethPrice ? gasEth * ethPrice < 25 : gasEth < 0.01);
 
   // Layer 2 — live route comparison
   const scanFresh = scan && Date.now() - scan.updatedAt < 15 * 60 * 1000 && !yieldError;
@@ -319,7 +322,7 @@ export function FiveLayerBrain({ lang, asset }: { lang: Lang; asset: 'BTC' | 'ET
               <div><p className="text-slate-500">{sk ? 'Sieť' : 'Network'}</p><p className="text-slate-100 font-semibold">{route?.chain ?? '…'}</p></div>
               <div><p className="text-slate-500">{sk ? 'Protokol' : 'Protocol'}</p><p className="text-slate-100 font-semibold">{route?.protocol ?? '…'}</p></div>
               <div><p className="text-slate-500">{sk ? 'Kolaterál' : 'Collateral'}</p><p className="text-slate-100 font-semibold">{route?.symbol ?? cfg.collateralSymbol}</p></div>
-              <div><p className="text-muted-foreground">Výnos APY · živé dáta</p><p className="text-gain font-semibold font-mono">{route ? `${route.supplyApy.toFixed(4)}%` : 'Dáta nedostupné'}</p></div>
+              <div><p className="text-muted-foreground">Výnos APY · živé dáta</p><p className="text-gain font-semibold font-mono">{route ? `${route.supplyApy < 0.1 ? route.supplyApy.toFixed(3) : route.supplyApy.toFixed(2)}%` : 'Dáta nedostupné'}</p></div>
               {<div className="col-span-2"><p className="text-slate-500">Najlacnejší borrow</p><p className="text-slate-100 font-semibold font-mono">{borrowRoute ? `${borrowRoute.symbol} · ${borrowRoute.protocol} · ${borrowRoute.chain} : ${borrowRoute.borrowApy!.toFixed(2)}%` : 'Dáta nedostupné'}</p></div>}
             </div>
             {route && <p className="text-[11px] text-amber-200 font-semibold">Víťazná trasa: {route.protocol} na {route.chain} · {route.symbol}{borrowRoute ? ` · borrow ${borrowRoute.symbol}${borrowRoute.chain !== route.chain || borrowRoute.protocol !== route.protocol ? ` (${borrowRoute.protocol} · ${borrowRoute.chain})` : ''}` : ''}</p>}
@@ -705,7 +708,7 @@ export function FiveLayerBrain({ lang, asset }: { lang: Lang; asset: 'BTC' | 'ET
   );
   const auto4 = (
     <Section key="l4" index={4} icon={<ShieldCheck className="w-5 h-5 text-emerald-400" />} title="Automation Engine — DeFi Saver Roboti & Semafor" desc="Ochrana nadol, statický Unwind rebrík a dynamický Override semafor (F&G + MVRV Z-Score).">
-      <BtcAutomationLayer4 price={price} fg={fearGreed?.value} mvrv={btcInd?.mvrv.value} mvrvZ={btcInd?.mvrv.z} debtUsd={existingDebt} />
+      <BtcAutomationLayer4 price={price} ath={btcInd?.price.ath} fg={fearGreed?.value} mvrv={btcInd?.mvrv.value} mvrvZ={btcInd?.mvrv.z} debtUsd={existingDebt} />
     </Section>
   );
   const layers = isBtc

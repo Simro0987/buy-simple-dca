@@ -80,10 +80,10 @@ Deno.serve(async (req) => {
   if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
   const apiUrl = Deno.env.get('API_URL');
   if (!apiUrl) throw new Error('API_URL is not configured');
-  const supabaseServiceKey = Deno.env.get('API_SERVICE_KEY');
-  if (!supabaseServiceKey) throw new Error('API_SERVICE_KEY is not configured');
+  const serviceKey = Deno.env.get('API_SERVICE_KEY');
+  if (!serviceKey) throw new Error('API_SERVICE_KEY is not configured');
 
-  const db = createClient(apiUrl, supabaseServiceKey);
+  const db = createClient(apiUrl, serviceKey);
 
   let totalProcessed = 0;
 

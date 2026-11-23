@@ -1,7 +1,7 @@
 /**
  * Portfolio Factory Reset
  * ------------------------
- * Detects legacy mock / seed data in Supabase and wipes it on mount so the
+ * Detects legacy mock / seed data in the database and wipes it on mount so the
  * Portfolio always renders from a verified "source of truth" zero-state.
  *
  * Detection rules:
@@ -11,7 +11,7 @@
  *     match a known hardcoded fingerprint from prior builds.
  *
  * On reset:
- *  - DELETE matching rows from Supabase.
+ *  - DELETE matching rows from the database.
  *  - PATCH `app_settings` so holdings/cost-basis are zeroed.
  *  - Clear legacy mock localStorage keys.
  */

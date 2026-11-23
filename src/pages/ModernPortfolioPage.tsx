@@ -53,7 +53,7 @@ const DAILY_REPORT_SENT_IDS_KEY = 'telegram_sent_news_ids';
 
 export function ModernPortfolioPage({ lang }: Props) {
   // Auto Factory Reset: wipe any legacy mock/seed data on mount so the
-  // Portfolio always renders from Supabase as the single source of truth.
+  // Portfolio always renders from the database as the single source of truth.
   usePortfolioFactoryReset();
   return (
     <PortfolioProvider>

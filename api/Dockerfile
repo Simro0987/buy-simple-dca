@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # ============================================================================
-# buy-simple-dca API (Flux component "api") - replaces Supabase:
+# buy-simple-dca API (Flux component "api"):
 #   SIWE wallet auth (EOA + Safe EIP-1271) -> JWT sessions, PostgREST (RLS in Postgres),
 #   the server functions (api/functions) and the scheduled jobs.
 # Build from the REPO ROOT:  docker buildx build --platform linux/amd64 -f api/Dockerfile .
