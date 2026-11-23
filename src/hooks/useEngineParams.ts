@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export interface EngineParams {
   id: number;
@@ -38,7 +38,7 @@ export function useEngineParams() {
   return useQuery({
     queryKey: ['engine-params'],
     queryFn: async (): Promise<EngineParams | null> => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('engine_params')
         .select('*')
         .eq('id', 1)
@@ -54,7 +54,7 @@ export function useLearningOutcomes(limit = 10) {
   return useQuery({
     queryKey: ['learning-outcomes', limit],
     queryFn: async (): Promise<LearningOutcome[]> => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('learning_outcomes')
         .select('*')
         .order('week_number', { ascending: false })

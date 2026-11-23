@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Lang, t } from '@/lib/i18n';
 import { Globe, Send, Bell, TrendingDown, Newspaper, Calendar, Sun, Moon, Monitor, Volume2, BellRing, Bot, Eye, EyeOff } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { CsvExport } from '@/components/CsvExport';
 import { CronJobsCard } from '@/components/CronJobsCard';
 import { CallbackHistoryCard } from '@/components/CallbackHistoryCard';
@@ -16,7 +16,7 @@ import { getNotificationPrefs, setNotificationPrefs, type NotificationPrefs } fr
 
 const syncConfigToDb = async (chatId: string, budget: number, alerts: { dcaReminder: boolean; limitProximity: boolean; highImpactNews: boolean }) => {
   try {
-    await supabase.from('telegram_config').update({
+    await api.from('telegram_config').update({
       chat_id: chatId,
       weekly_budget: budget,
       dca_reminder_enabled: alerts.dcaReminder,
@@ -130,7 +130,7 @@ export function SettingsPage({ lang, toggleLang, theme, setTheme }: Props) {
         body = { chatId: chatId.trim() };
       }
 
-      const { data, error } = await supabase.functions.invoke(fnName, { body });
+      const { data, error } = await api.functions.invoke(fnName, { body });
       if (error) throw new Error(error.message);
       if (!data?.success) throw new Error(data?.error || 'Failed');
       toast.success(t('testAlertSuccess', lang));

@@ -13,7 +13,7 @@ import {
   Zap, Target, ArrowDownCircle, Wallet, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 interface Props {
   lang: Lang;
@@ -92,7 +92,7 @@ export function CycleTriggerDashboard({ lang, prices, athData, cycleResult, adva
 
     setSendingAlert(true);
     try {
-      const { data, error } = await supabase.functions.invoke('telegram-cycle-alert', {
+      const { data, error } = await api.functions.invoke('telegram-cycle-alert', {
         body: {
           chatId,
           cyclePhase: cyclePhase ? { phase: cyclePhase.phase, label: cyclePhase.label, confidence: cyclePhase.confidence } : null,

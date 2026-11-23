@@ -13,3 +13,7 @@ runner-data
 **/*.key
 agent-runner/dist
 api/dist
+.env
+.env.*
+!.env.example
+secrets.env

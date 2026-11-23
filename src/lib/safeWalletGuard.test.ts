@@ -83,13 +83,13 @@ describe('100% Non-Custodial Safe{Wallet} Global Guard & Autonomous BTC Agent Ar
     const urls = buildSafeGlobalPortalUrls({
       chainId: 'arbitrum',
       safeAddress: SAFE_ADDR,
-      appUrl: 'https://buy-simple-dca.vercel.app',
+      appUrl: 'https://buysimpledca.app.runonflux.io',
       wcUri: 'wc:abc123@2?relay-protocol=irn&symKey=def456',
     });
 
     expect(urls.openAsSafeAppUrl).toContain('https://app.safe.global/apps/open');
     expect(urls.openAsSafeAppUrl).toContain(encodeURIComponent(`arb1:${SAFE_ADDR}`));
-    expect(urls.openAsSafeAppUrl).toContain(encodeURIComponent('https://buy-simple-dca.vercel.app'));
+    expect(urls.openAsSafeAppUrl).toContain(encodeURIComponent('https://buysimpledca.app.runonflux.io'));
     expect(urls.openSafeDashboardUrl).toContain('https://app.safe.global/home');
     expect(urls.openSafeDashboardUrl).toContain('wc=');
     expect(urls.openSafeWelcomeUrl).toContain('https://app.safe.global/welcome?chain=arb1');

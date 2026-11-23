@@ -19,7 +19,7 @@ import {
   DollarSign, ShieldAlert, ExternalLink, Edit3, Lock, Plus, BarChart3, History, Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { usePortfolioMetrics } from '@/hooks/usePortfolioMetrics';
 import { PerChainPnLSummary } from '@/components/PerChainPnLSummary';
 import { ContextCTAs } from '@/components/decision/ContextCTAs';
@@ -62,7 +62,7 @@ async function sendProfitAlert(params: {
   btcPct: number;
 }): Promise<boolean> {
   try {
-    const { data, error } = await supabase.functions.invoke('telegram-profit-alert', {
+    const { data, error } = await api.functions.invoke('telegram-profit-alert', {
       body: params,
     });
     if (error) throw error;
@@ -288,7 +288,7 @@ export function ProfitTakingPage({ lang, prices: propPrices, athData, cycleResul
 
     const poll = async () => {
       try {
-        const { data, error } = await supabase
+        const { data, error } = await api
           .from('telegram_callback_log')
           .select('id, action_type, token, profit_pct, created_at')
           .in('action_type', ['profit_sell', 'profit_postpone', 'profit_ignore'])

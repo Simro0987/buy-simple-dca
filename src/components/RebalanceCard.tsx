@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Lang } from '@/lib/i18n';
 import { PriceData, TOKENS, formatUsd } from '@/lib/crypto';
 import { Scale, ArrowRight, ArrowUpRight, ArrowDownRight, AlertTriangle, Send, CheckCircle2 } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { toast } from 'sonner';
 import { setPendingRebalance, navigateToTab } from '@/lib/pendingActions';
 import { BentoCard } from '@/components/portfolio/ui/BentoCard';
@@ -150,7 +150,7 @@ export function RebalanceCard({ lang, prices, selected }: Props) {
 
     setSending(true);
     try {
-      const { error } = await supabase.functions.invoke('telegram-rebalance-alert', {
+      const { error } = await api.functions.invoke('telegram-rebalance-alert', {
         body: {
           chatId,
           drifts: drifts.map(d => ({ symbol: d.symbol, current: d.current, target: d.target, diff: d.diff, adjustUsd: d.adjustUsd })),

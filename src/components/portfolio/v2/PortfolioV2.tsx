@@ -18,7 +18,7 @@ import {
 import {
   useAddTrackedToken, type TokenCategory,
 } from '@/hooks/useTrackedTokens';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { BASKET_LABELS, BASKET_ORDER, basketOf, type Basket } from '@/lib/assetBaskets';
 

@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export type ExecutionLeg = 'market' | 'limit';
 
@@ -31,7 +31,7 @@ function chatIdFromStorage(): string | undefined {
  */
 export async function syncExecutionStateToTelegram(p: DcaSyncPayload): Promise<TelegramResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('telegram-dca-sync', {
+    const { data, error } = await api.functions.invoke('telegram-dca-sync', {
       body: { ...p, chatId: chatIdFromStorage() },
     });
     if (error) throw error;
@@ -47,7 +47,7 @@ export async function syncExecutionStateToTelegram(p: DcaSyncPayload): Promise<T
  */
 export async function purgeTelegramHistory(sweep = 100): Promise<TelegramResult> {
   try {
-    const { data, error } = await supabase.functions.invoke('telegram-purge-history', {
+    const { data, error } = await api.functions.invoke('telegram-purge-history', {
       body: { chatId: chatIdFromStorage(), sweep },
     });
     if (error) throw error;

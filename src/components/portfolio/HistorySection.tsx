@@ -6,7 +6,7 @@ import { usePrices } from '@/hooks/usePrices';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { toast } from 'sonner';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 type CoinFilter = 'ALL' | 'BTC' | 'ETH' | 'SOL';
 type SortDir = 'newest' | 'oldest';
@@ -22,7 +22,7 @@ export function HistorySection() {
   const { data: weeklyScores } = useQuery({
     queryKey: ['weekly_scores_history'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('weekly_scores')
         .select('*')
         .order('created_at', { ascending: false })

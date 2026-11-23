@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export interface GasPrices {
   ethPriceUsd: number;
@@ -37,7 +37,7 @@ export function useGasPrices() {
   return useQuery<GasPrices>({
     queryKey: ['gas-prices'],
     queryFn: async () => {
-      const { data, error } = await supabase.functions.invoke('gas-prices');
+      const { data, error } = await api.functions.invoke('gas-prices');
       if (error) throw error;
       return data as GasPrices;
     },

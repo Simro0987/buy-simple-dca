@@ -1,4 +1,4 @@
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { collectActiveExecutions } from '@/lib/sevenDayStates';
 import { computePortfolioPnl, getHoldings, pnlPctMap } from '@/lib/portfolioHoldings';
 import { HARVEST_TOKENS, type HarvestToken } from '@/lib/harvestEngine';
@@ -32,7 +32,7 @@ export async function sendDailyRiskReportToTelegram(
 ): Promise<TelegramSendResult> {
   try {
     const prices = await livePrices().catch(() => ({}));
-    const { data, error } = await supabase.functions.invoke('telegram-daily-risk-report', {
+    const { data, error } = await api.functions.invoke('telegram-daily-risk-report', {
       body: {
         chatId: options?.chatId,
         cleanLiquidityUsd: options?.cleanLiquidityUsd,

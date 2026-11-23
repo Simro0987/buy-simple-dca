@@ -1,10 +1,9 @@
-import { supabase } from '@/integrations/supabase/client';
+import { apiBaseUrl } from '@/lib/api/client';
 
-const SUPABASE_URL = (supabase as unknown as { supabaseUrl: string }).supabaseUrl;
-const PROXY_BASE = `${SUPABASE_URL}/functions/v1/coingecko-proxy`;
+const PROXY_BASE = `${apiBaseUrl()}/functions/v1/coingecko-proxy`;
 
 /**
- * Fetch from CoinGecko via Supabase edge proxy (avoids CORS / rate limits).
+ * Fetch from CoinGecko via the own API proxy (avoids CORS / rate limits).
  * Falls back to direct call if proxy fails.
  * @param path Path after /api/v3, e.g. "/simple/price"
  * @param params Query params

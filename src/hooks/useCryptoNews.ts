@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export interface NewsItem {
@@ -19,18 +19,18 @@ export interface NewsItem {
 }
 
 async function fetchNews(currencies = 'BTC,ETH,SOL', lang = 'sk'): Promise<NewsItem[]> {
-  const { data: sessionData } = await supabase.auth.getSession();
+  const { data: sessionData } = await api.auth.getSession();
   const accessToken = sessionData.session?.access_token;
   if (!accessToken) return [];
 
   // Cache-bust parameter to avoid stale browser/preview cache
-  const { data, error } = await supabase.functions.invoke('crypto-news', {
+  const { data, error } = await api.functions.invoke('crypto-news', {
     body: { currencies, kind: 'news', lang, t: Date.now() },
     headers: { Authorization: `Bearer ${accessToken}` },
   });
 
   if (error?.message?.includes('401') || error?.message?.toLowerCase().includes('unauthorized')) {
-    await supabase.auth.signOut();
+    await api.auth.signOut();
     return [];
   }
   if (error) throw new Error(error.message);
@@ -64,7 +64,7 @@ async function sendHighImpactToTelegram(news: NewsItem[]) {
   if (newItems.length === 0) return;
 
   try {
-    await supabase.functions.invoke('telegram-news-alert', {
+    await api.functions.invoke('telegram-news-alert', {
       body: {
         chatId: chatId.trim(),
         news: newItems.map(n => ({

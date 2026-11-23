@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import type { Session, User } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import type { Session, User } from '@/lib/api/core';
+import { api } from '@/lib/api/client';
 import {
   loadSafeSession,
   saveSafeSession,
@@ -76,7 +76,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+    const { data: sub } = api.auth.onAuthStateChange((_e, s) => {
       setSupabaseSession(s);
       setLoading(false);
     });
@@ -103,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLoading(false);
         }
 
-        const { data: sessionData } = await supabase.auth.getSession();
+        const { data: sessionData } = await api.auth.getSession();
         if (!sessionData?.session) {
           if (mounted) {
             setSupabaseSession(null);
@@ -115,7 +115,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         let userOk = true;
         let invalidToken = false;
         try {
-          const { data: userData, error } = await supabase.auth.getUser();
+          const { data: userData, error } = await api.auth.getUser();
           if (error) {
             const status = (error as { status?: number }).status ?? 0;
             invalidToken = status === 401 || status === 403;
@@ -129,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         if (invalidToken || !userOk) {
-          try { await supabase.auth.signOut(); } catch { /* ignore */ }
+          try { await api.auth.signOut(); } catch { /* ignore */ }
           if (mounted) {
             setSupabaseSession(null);
             setLoading(false);
@@ -173,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           saveSafeSession(null);
           setSafeSession(null);
           try {
-            await supabase.auth.signOut();
+            await api.auth.signOut();
           } catch {
             // ignore offline signOut errors
           }

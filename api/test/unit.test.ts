@@ -53,7 +53,7 @@ describe('secrets file', () => {
   });
 });
 
-describe('outbound shim (Lovable gateways -> real providers)', () => {
+describe('outbound shim (internal gateways -> real providers)', () => {
   const calls: { url: string; init?: RequestInit }[] = [];
   const base = (async (url: RequestInfo | URL, init?: RequestInit) => {
     calls.push({ url: String(url), init });
@@ -63,9 +63,9 @@ describe('outbound shim (Lovable gateways -> real providers)', () => {
   it('routes Telegram gateway to api.telegram.org with the bot token and strips gateway auth', async () => {
     calls.length = 0;
     const f = createOutboundFetch(base, { TELEGRAM_BOT_TOKEN: '42:SECRET' });
-    await f('https://connector-gateway.lovable.dev/telegram/sendMessage', {
+    await f('http://telegram-gateway.internal/sendMessage', {
       method: 'POST',
-      headers: { Authorization: 'Bearer lovable', 'X-Connection-Api-Key': 'k', 'Content-Type': 'application/json' },
+      headers: { Authorization: 'Bearer internal', 'X-Connection-Api-Key': 'k', 'Content-Type': 'application/json' },
       body: '{}',
     });
     expect(calls[0].url).toBe('https://api.telegram.org/bot42:SECRET/sendMessage');
@@ -76,9 +76,9 @@ describe('outbound shim (Lovable gateways -> real providers)', () => {
   it('routes AI gateway to the configured OpenAI-compatible endpoint, optional model override', async () => {
     calls.length = 0;
     const f = createOutboundFetch(base, { AI_API_KEY: 'sk-x', AI_BASE_URL: 'https://openrouter.ai/api/v1/', AI_MODEL: 'openai/gpt-4o-mini' });
-    await f('https://ai.gateway.lovable.dev/v1/chat/completions', {
+    await f('http://ai-gateway.internal/v1/chat/completions', {
       method: 'POST',
-      headers: { Authorization: 'Bearer lovable' },
+      headers: { Authorization: 'Bearer internal' },
       body: JSON.stringify({ model: 'google/gemini-2.5-flash', messages: [] }),
     });
     expect(calls[0].url).toBe('https://openrouter.ai/api/v1/chat/completions');
@@ -88,8 +88,8 @@ describe('outbound shim (Lovable gateways -> real providers)', () => {
   it('returns 503 when keys are missing and passes other URLs through', async () => {
     calls.length = 0;
     const f = createOutboundFetch(base, {});
-    expect((await f('https://connector-gateway.lovable.dev/telegram/sendMessage')).status).toBe(503);
-    expect((await f('https://ai.gateway.lovable.dev/v1/chat/completions')).status).toBe(503);
+    expect((await f('http://telegram-gateway.internal/sendMessage')).status).toBe(503);
+    expect((await f('http://ai-gateway.internal/v1/chat/completions')).status).toBe(503);
     await f('https://api.coingecko.com/api/v3/ping');
     expect(calls.map((c) => c.url)).toEqual(['https://api.coingecko.com/api/v3/ping']);
   });

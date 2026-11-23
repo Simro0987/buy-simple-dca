@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import type { FillRates } from '@/lib/dynamicExecution';
 
 /**
@@ -17,7 +17,7 @@ export function useLimitFillRates() {
     queryKey: ['limit-fill-rates'],
     queryFn: async () => {
       // 1) Skús prečítať týždenné snapshoty (posledných 6 per coin)
-      const { data: snaps } = await supabase
+      const { data: snaps } = await api
         .from('weekly_fill_snapshots')
         .select('coin, fill_rate, total_closed, week_number')
         .in('coin', ['ETH', 'SOL'])
@@ -43,7 +43,7 @@ export function useLimitFillRates() {
       // 2) Fallback na live výpočet z dca_executions (kým neexistujú snapshoty)
       if (eth == null || sol == null) {
         const since = new Date(Date.now() - 6 * 7 * 24 * 60 * 60 * 1000).toISOString();
-        const { data } = await supabase
+        const { data } = await api
           .from('dca_executions')
           .select('coin, status, created_at')
           .eq('kind', 'limit')

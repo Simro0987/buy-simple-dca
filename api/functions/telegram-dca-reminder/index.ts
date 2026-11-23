@@ -1,0 +1,177 @@
+import { createClient } from '../_shared/apiClient.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const GATEWAY_URL = 'http://telegram-gateway.internal';
+
+const TOKENS = [
+  { symbol: 'BTC', allocation: 0.64, limitDiscount: 0.97, coingeckoId: 'bitcoin' },
+  { symbol: 'ETH', allocation: 0.25, limitDiscount: 0.96, coingeckoId: 'ethereum' },
+  { symbol: 'SOL', allocation: 0.11, limitDiscount: 0.95, coingeckoId: 'solana' },
+];
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  // ── Auth guard ─────────────────────────────────────────
+  // Accept either the shared edge-function secret (used by pg_cron) or a valid
+  // Supabase user JWT. Blocks unauthenticated public callers.
+  {
+    const edgeSecret = Deno.env.get('EDGE_FUNCTION_SECRET') ?? '';
+    const providedSecret = req.headers.get('x-edge-secret') ?? '';
+    const secretOk = edgeSecret.length > 0 && providedSecret === edgeSecret;
+    if (!secretOk) {
+      const authHeader = req.headers.get('authorization') ?? '';
+      if (!authHeader.toLowerCase().startsWith('bearer ')) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+      const verify = await fetch(`${Deno.env.get('API_URL')}/auth/v1/user`, {
+        headers: { Authorization: authHeader, apikey: Deno.env.get('API_ANON_KEY') ?? '' },
+      });
+      if (!verify.ok) {
+        return new Response(JSON.stringify({ error: 'Unauthorized' }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+  }
+
+
+  try {
+    const AI_GATEWAY_KEY = Deno.env.get('AI_GATEWAY_KEY');
+    if (!AI_GATEWAY_KEY) throw new Error('AI_GATEWAY_KEY is not configured');
+    const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
+    if (!TELEGRAM_API_KEY) throw new Error('TELEGRAM_API_KEY is not configured');
+
+    let chatId: string | undefined;
+    let weeklyBudget = 100;
+
+    // Try reading body (manual trigger from UI)
+    try {
+      const body = await req.json();
+      chatId = body.chatId;
+      if (body.budget) weeklyBudget = body.budget;
+    } catch {
+      // No body — cron trigger, read from DB
+    }
+
+    // If no chatId from body, read from telegram_config table
+    if (!chatId) {
+      const apiUrl = Deno.env.get('API_URL')!;
+      const apiKey = Deno.env.get('API_SERVICE_KEY')!;
+      const db = createClient(apiUrl, apiKey);
+
+      const { data: config, error: cfgErr } = await db
+        .from('telegram_config')
+        .select('chat_id, weekly_budget, dca_reminder_enabled')
+        .eq('id', 1)
+        .single();
+
+      if (cfgErr || !config) {
+        return new Response(JSON.stringify({ success: false, error: 'No config found' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      if (!config.dca_reminder_enabled) {
+        return new Response(JSON.stringify({ success: true, skipped: true, reason: 'DCA reminder disabled' }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      chatId = config.chat_id;
+      weeklyBudget = Number(config.weekly_budget) || 100;
+    }
+
+    if (!chatId || chatId.trim() === '') {
+      return new Response(JSON.stringify({ success: false, error: 'chatId is required' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Fetch live prices
+    const ids = TOKENS.map(t => t.coingeckoId).join(',');
+    const priceRes = await fetch(
+      `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=usd`
+    );
+    if (!priceRes.ok) throw new Error('Failed to fetch prices');
+    const prices = await priceRes.json();
+
+    const lines = TOKENS.map(token => {
+      const price = prices[token.coingeckoId]?.usd ?? 0;
+      const totalUsd = weeklyBudget * token.allocation;
+      const marketUsd = totalUsd * 0.60;
+      const limitUsd = totalUsd * 0.40;
+      const limitPrice = price * token.limitDiscount;
+      const marketQty = price > 0 ? marketUsd / price : 0;
+      const limitQty = price > 0 ? limitUsd / limitPrice : 0;
+
+      return [
+        `<b>${token.symbol}</b> — $${totalUsd.toFixed(2)}`,
+        `  🟢 Market: $${marketUsd.toFixed(2)} (${formatQty(marketQty, token.symbol)})`,
+        `  🟡 Limit: $${limitUsd.toFixed(2)} @ $${limitPrice.toFixed(4)} (${formatQty(limitQty, token.symbol)})`,
+      ].join('\n');
+    });
+
+    const text = [
+      `📅 <b>Týždenný DCA – $${weeklyBudget}</b>`,
+      '',
+      ...lines,
+      '',
+      `💡 <i>60% market · 40% limit</i>`,
+    ].join('\n');
+
+    const response = await fetch(`${GATEWAY_URL}/sendMessage`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${AI_GATEWAY_KEY}`,
+        'X-Connection-Api-Key': TELEGRAM_API_KEY,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text,
+        parse_mode: 'HTML',
+        disable_web_page_preview: true,
+        reply_markup: {
+          inline_keyboard: [
+            [
+              { text: '✅ Vykonaj DCA', callback_data: 'dca_execute' },
+              { text: '⏸️ Odlož', callback_data: 'dca_postpone' },
+            ],
+            [
+              { text: '❌ Ignoruj tento týždeň', callback_data: 'dca_ignore' },
+            ],
+          ],
+        },
+      }),
+    });
+
+    const data = await response.json();
+    if (!response.ok) throw new Error(`Telegram API failed [${response.status}]: ${JSON.stringify(data)}`);
+
+    return new Response(
+      JSON.stringify({ success: true }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  } catch (error) {
+    console.error('Error sending DCA reminder:', error);
+    const msg = error instanceof Error ? error.message : 'Unknown error';
+    return new Response(
+      JSON.stringify({ success: false, error: msg }),
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    );
+  }
+});
+
+function formatPrice(p: number): string {
+  if (p >= 1000) return p.toFixed(0);
+  if (p >= 1) return p.toFixed(2);
+  return p.toFixed(4);
+}
+
+function formatQty(q: number, symbol: string): string {
+  if (symbol === 'BTC') return q.toFixed(6) + ' BTC';
+  if (symbol === 'ETH') return q.toFixed(5) + ' ETH';
+  return q.toFixed(2) + ' ' + symbol;
+}

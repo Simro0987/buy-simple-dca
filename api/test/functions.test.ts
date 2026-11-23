@@ -3,16 +3,16 @@ import { functionNames, getFunction, installDenoShim, invokeFunction, PUBLIC_FUN
 import { FUNCTION_LOADERS } from '../src/functions.generated';
 
 describe('edge function port (Deno shim)', () => {
-  it('loads all 32 original Supabase functions unchanged and each registers a handler', async () => {
-    installDenoShim({ SUPABASE_URL: 'http://127.0.0.1:1', SUPABASE_SERVICE_ROLE_KEY: 'x', SUPABASE_ANON_KEY: 'y' });
+  it('loads all 34 server functions and each registers a handler', async () => {
+    installDenoShim({ API_URL: 'http://127.0.0.1:1', API_SERVICE_KEY: 'x', API_ANON_KEY: 'y' });
     const names = Object.keys(FUNCTION_LOADERS);
-    expect(names).toHaveLength(32);
+    expect(names).toHaveLength(34);
     for (const n of names) await registerFunction(n, FUNCTION_LOADERS[n]);
     expect(functionNames()).toEqual([...names].sort());
     for (const p of PUBLIC_FUNCTIONS) expect(names).toContain(p);
   }, 60_000);
 
-  it('answers CORS preflight like on Supabase and converts thrown errors to 500', async () => {
+  it('answers CORS preflight and converts thrown errors to 500', async () => {
     const r = await invokeFunction('gas-prices', new Request('http://x/functions/v1/gas-prices', { method: 'OPTIONS' }));
     expect(r.status).toBeLessThan(300);
     await registerFunction('boom-test', async () => {

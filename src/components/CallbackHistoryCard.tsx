@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { History, RefreshCw, CheckCircle2, PauseCircle, XCircle, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { Lang } from '@/lib/i18n';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -90,7 +90,7 @@ export function CallbackHistoryCard({ lang }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: dbError } = await supabase
+      const { data, error: dbError } = await api
         .from('telegram_callback_log')
         .select('id, created_at, callback_data, action_type, token, profit_pct, status')
         .order('created_at', { ascending: false })
@@ -124,7 +124,7 @@ export function CallbackHistoryCard({ lang }: Props) {
     setCleaning(true);
     try {
       const days = parseInt(cleanupDays, 10);
-      const { data, error: fnError } = await supabase.functions.invoke(
+      const { data, error: fnError } = await api.functions.invoke(
         'telegram-callback-cleanup',
         { body: { olderThanDays: days } }
       );
@@ -149,7 +149,7 @@ export function CallbackHistoryCard({ lang }: Props) {
     setConfirmDeleteId(null);
     setDeletingId(id);
     try {
-      const { error: dbError } = await supabase
+      const { error: dbError } = await api
         .from('telegram_callback_log')
         .delete()
         .eq('id', id);

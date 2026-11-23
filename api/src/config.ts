@@ -66,6 +66,8 @@ const FUNCTION_SECRET_KEYS = [
   'AI_BASE_URL',
   'AI_API_KEY',
   'AI_MODEL',
+  'SOLANA_RPC_URL',
+  'COINGLASS_API_KEY',
 ] as const;
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ApiConfig {

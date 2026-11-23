@@ -125,11 +125,11 @@ function Pill({ l, c, bg }: { l: string; c: string; bg: string }) {
 async function confirmSell(sym: DcaT, sellQty: number, currentPrice: number) {
   // A) Record sell as a token_transactions row — single source of truth
   try {
-    const { supabase } = await import('@/integrations/supabase/client');
-    const { data: userRes } = await supabase.auth.getUser();
+    const { api } = await import('@/lib/api/client');
+    const { data: userRes } = await api.auth.getUser();
     const uid = userRes.user?.id;
     if (uid && sellQty > 0) {
-      await supabase.from('token_transactions').insert({
+      await api.from('token_transactions').insert({
         user_id: uid,
         coingecko_id: CG_ID[sym],
         symbol: sym,

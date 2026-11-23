@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useMemo } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { TOKENS, type PriceData } from '@/lib/crypto';
 import { useAppSettings } from './useAppSettings';
 import { useProfitReservoir } from '@/lib/profitReservoir';
@@ -58,7 +58,7 @@ function useDcaPurchases() {
   return useQuery({
     queryKey: ['dca_purchases'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('dca_purchases')
         .select('*')
         .order('created_at', { ascending: true });
@@ -73,7 +73,7 @@ function useCapitalEntries() {
   return useQuery({
     queryKey: ['capital_entries'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('capital_entries')
         .select('*')
         .order('created_at', { ascending: true });

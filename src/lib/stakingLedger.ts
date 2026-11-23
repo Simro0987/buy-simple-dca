@@ -2,7 +2,7 @@
 // Keeps sync API surface via in-memory cache; hydrated by CloudSyncProvider.
 // All writes go to Supabase; localStorage is no longer used.
 
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export type LedgerSymbol = 'BTC' | 'ETH' | 'SOL' | 'LINK' | 'AAVE' | 'HYPE';
 
@@ -36,7 +36,7 @@ function emit(): void {
 export async function hydrateStakingLedger(userId: string | null): Promise<void> {
   currentUserId = userId;
   if (!userId) { cache = []; emit(); return; }
-  const { data, error } = await supabase
+  const { data, error } = await api
     .from('staking_positions')
     .select('symbol,protocol,amount')
     .eq('user_id', userId);
@@ -60,7 +60,7 @@ export function addStake(symbol: LedgerSymbol, protocol: string, amount: number)
   if (idx >= 0) cache[idx] = { ...cache[idx], amount: next };
   else cache.push({ symbol, protocol, amount: next });
   emit();
-  void supabase.from('staking_positions').upsert(
+  void api.from('staking_positions').upsert(
     { user_id: currentUserId, symbol, protocol, amount: next },
     { onConflict: 'user_id,symbol,protocol' },
   );
@@ -75,11 +75,11 @@ export function removeStake(symbol: LedgerSymbol, protocol: string, amount: numb
   const next = current - taken;
   if (next <= 1e-12) {
     cache.splice(idx, 1);
-    void supabase.from('staking_positions').delete()
+    void api.from('staking_positions').delete()
       .eq('user_id', currentUserId).eq('symbol', symbol).eq('protocol', protocol);
   } else {
     cache[idx] = { ...cache[idx], amount: next };
-    void supabase.from('staking_positions').upsert(
+    void api.from('staking_positions').upsert(
       { user_id: currentUserId, symbol, protocol, amount: next },
       { onConflict: 'user_id,symbol,protocol' },
     );
@@ -92,7 +92,7 @@ export function deleteEntry(symbol: LedgerSymbol, protocol: string): void {
   if (!currentUserId) return;
   cache = cache.filter(e => !(e.symbol === symbol && e.protocol === protocol));
   emit();
-  void supabase.from('staking_positions').delete()
+  void api.from('staking_positions').delete()
     .eq('user_id', currentUserId).eq('symbol', symbol).eq('protocol', protocol);
 }
 

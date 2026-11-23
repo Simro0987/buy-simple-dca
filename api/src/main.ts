@@ -68,15 +68,18 @@ async function main() {
   installDenoShim(
     Object.fromEntries(
       Object.entries({
-        SUPABASE_URL: `http://127.0.0.1:${cfg.port}`,
-        SUPABASE_ANON_KEY: anonKey,
-        SUPABASE_SERVICE_ROLE_KEY: serviceKey,
+        API_URL: `http://127.0.0.1:${cfg.port}`,
+        API_ANON_KEY: anonKey,
+        API_SERVICE_KEY: serviceKey,
         EDGE_FUNCTION_SECRET: cfg.edgeSecret,
-        LOVABLE_API_KEY: shim,
+        AI_GATEWAY_KEY: shim,
         TELEGRAM_API_KEY: cfg.secrets.TELEGRAM_BOT_TOKEN ? shim : undefined,
         CRYPTOPANIC_API_KEY: cfg.secrets.CRYPTOPANIC_API_KEY,
         ETHERSCAN_API_KEY: cfg.secrets.ETHERSCAN_API_KEY,
         MOBULA_API_KEY: cfg.secrets.MOBULA_API_KEY,
+        SOLANA_RPC_URL: cfg.secrets.SOLANA_RPC_URL,
+        COINGLASS_API_KEY: cfg.secrets.COINGLASS_API_KEY,
+        AI_CONFIGURED: cfg.secrets.AI_API_KEY ? 'true' : undefined,
       }).filter((e): e is [string, string] => typeof e[1] === 'string' && e[1].length > 0),
     ),
   );

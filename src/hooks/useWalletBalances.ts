@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { WalletEntry, ChainId } from '@/lib/wallets';
 
 export interface OnChainToken {
@@ -28,7 +28,7 @@ export interface OnChainWalletResult {
 
 async function fetchChain(fn: string, addresses: string[]): Promise<OnChainWalletResult[]> {
   if (addresses.length === 0) return [];
-  const { data, error } = await supabase.functions.invoke(fn, { body: { addresses } });
+  const { data, error } = await api.functions.invoke(fn, { body: { addresses } });
   if (error) throw error;
   return (data?.data ?? []) as OnChainWalletResult[];
 }

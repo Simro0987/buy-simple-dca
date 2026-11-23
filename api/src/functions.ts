@@ -1,8 +1,8 @@
 /**
- * Runs the original Supabase Edge Functions (supabase/functions/<name>/index.ts, Deno) inside
+ * Runs the server functions (api/functions/<name>/index.ts, originally Deno edge functions) inside
  * this Node process. They only use `Deno.env.get` and `Deno.serve`, plus `fetch`/Request/Response,
- * which Node 22 provides natively. `@supabase/supabase-js` imports are aliased to the npm package
- * at build time and talk to this API's own PostgREST + auth endpoints.
+ * which Node 22 provides natively, and the own API client (shared/apiClient.ts) that talks to this
+ * API's PostgREST + auth endpoints.
  */
 export type FnHandler = (req: Request) => Response | Promise<Response>;
 
@@ -49,7 +49,7 @@ export function functionNames(): string[] {
 
 /**
  * Functions callable without a session: the ones Supabase exposed with verify_jwt = false
- * (supabase/config.toml) plus two read-only market-data functions the UI calls before login
+ * (the former config.toml) plus two read-only market-data functions the UI calls before login
  * (on Supabase they only needed the public anon key, i.e. were effectively public too).
  * All others need a user session, the service key (function -> function) or the internal
  * edge secret (scheduler) - stricter than Supabase, where the public anon key was enough.
@@ -65,6 +65,7 @@ export const PUBLIC_FUNCTIONS = new Set([
   'btc-indicators',
   'market-data-service',
   'mstr-mnav',
+  'data-proxy',
 ]);
 
 export async function invokeFunction(name: string, req: Request, timeoutMs = 60_000): Promise<Response> {

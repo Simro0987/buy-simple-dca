@@ -2,7 +2,7 @@
  * End-to-end against a running API + Postgres (CI starts them; locally: see api/README).
  * Skipped unless API_TEST_URL is set, e.g. API_TEST_URL=http://localhost:58070
  */
-import { createClient } from '@supabase/supabase-js';
+import { createClient } from '../../shared/apiClient';
 import { describe, expect, it } from 'vitest';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
 import { createSiweMessage } from 'viem/siwe';
@@ -49,11 +49,16 @@ d('API end-to-end (SIWE + PostgREST/RLS + functions)', () => {
   });
 
   it('password/email login is disabled', async () => {
-    const r = await client().auth.signInWithPassword({ email: 'a@b.c', password: 'xxxxxxxx' });
-    expect(r.error).toBeTruthy();
+    const r = await fetch(`${API}/auth/v1/token?grant_type=password`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'a@b.c', password: 'xxxxxxxx' }),
+    });
+    expect(r.status).toBe(400);
+    expect((await fetch(`${API}/auth/v1/signup`, { method: 'POST', body: '{}' })).status).toBe(400);
   });
 
-  it('supabase-js works unchanged: setSession, getUser, RLS isolates users, anon is denied', async () => {
+  it('own client: setSession, getUser, RLS isolates users, anon is denied', async () => {
     const a = (await siweLogin()).body;
     const b = (await siweLogin()).body;
     const ca = client();
@@ -79,6 +84,18 @@ d('API end-to-end (SIWE + PostgREST/RLS + functions)', () => {
 
     const cnt = await ca.from('capital_entries').select('*', { count: 'exact', head: true });
     expect(cnt.count).toBe(1);
+    const inQ = await ca.from('capital_entries').select('id').in('id', [ins.data!.id, '00000000-0000-0000-0000-000000000000']);
+    expect(inQ.data?.length).toBe(1);
+    const maybe = await ca.from('capital_entries').select('id').eq('id', '00000000-0000-0000-0000-000000000000').maybeSingle();
+    expect(maybe.error).toBeNull();
+    expect(maybe.data).toBeNull();
+    const ordered = await ca.from('capital_entries').select('id, amount').order('created_at', { ascending: false }).limit(5);
+    expect(ordered.error).toBeNull();
+    const up = await ca.from('capital_entries').upsert({ id: ins.data!.id, user_id: a.user.id, amount: 222, note: 'it' }, { onConflict: 'id' }).select('amount').single();
+    expect(up.error).toBeNull();
+    expect(Number(up.data?.amount)).toBe(222);
+    const fn = await ca.functions.invoke('dca-execute', { body: {} });
+    expect(fn.error?.status).toBe(400); // reached the function with the session ("Missing fields")
     const del = await ca.from('capital_entries').delete().eq('id', ins.data!.id);
     expect(del.error).toBeNull();
     const rpc = await ca.rpc('get_cron_jobs_status');
@@ -122,5 +139,6 @@ d('API end-to-end (SIWE + PostgREST/RLS + functions)', () => {
     expect((await fetch(`${API}/rest/v1/`)).status).toBe(200);
     expect((await fetch(`${API}/nope`)).status).toBe(404);
     expect((await fetch(`${API}/sb/auth/v1/health`)).status).toBe(200);
+    expect((await fetch(`${API}/api/auth/v1/health`)).status).toBe(200);
   });
 });

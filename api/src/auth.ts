@@ -1,9 +1,9 @@
 /**
- * Sign-In with Ethereum (EIP-4361) replacing Supabase Auth.
+ * Sign-In with Ethereum (EIP-4361): the only login of the app.
  * - EOA wallets: signature recovered locally.
  * - Smart accounts / Safe{Wallet}: EIP-1271 `isValidSignature(bytes32,bytes)` on the account's chain.
- * Sessions are GoTrue-shaped ({ access_token, refresh_token, user, ... }) so the existing
- * supabase-js client in the web app keeps working via `supabase.auth.setSession()`.
+ * Sessions are { access_token, refresh_token, user, ... }; the web app stores them with
+ * `api.auth.setSession()` (shared/apiClient.ts).
  */
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getAddress, hashMessage, isAddress, recoverMessageAddress, type Address, type Hex } from 'viem';

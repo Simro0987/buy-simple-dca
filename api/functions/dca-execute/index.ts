@@ -1,0 +1,123 @@
+import { createClient } from '../_shared/apiClient.ts';
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+};
+
+const CG: Record<string, string> = { btc: 'bitcoin', eth: 'ethereum', sol: 'solana' };
+const GATEWAY_URL = 'http://telegram-gateway.internal';
+
+function getMondayWeek(d = new Date()): number {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil(((date.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+}
+
+async function notifyTelegram(text: string) {
+  const AI_GATEWAY_KEY = Deno.env.get('AI_GATEWAY_KEY');
+  const TELEGRAM_API_KEY = Deno.env.get('TELEGRAM_API_KEY');
+  if (!AI_GATEWAY_KEY || !TELEGRAM_API_KEY) return;
+  const db = createClient(Deno.env.get('API_URL')!, Deno.env.get('API_SERVICE_KEY')!);
+  const { data: cfg } = await db.from('telegram_config').select('chat_id').eq('id', 1).single();
+  if (!cfg?.chat_id) return;
+  await fetch(`${GATEWAY_URL}/sendMessage`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${AI_GATEWAY_KEY}`,
+      'X-Connection-Api-Key': TELEGRAM_API_KEY,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ chat_id: cfg.chat_id, text, parse_mode: 'HTML' }),
+  });
+}
+
+Deno.serve(async (req) => {
+  if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+
+  try {
+    const body = await req.json();
+    const { coin, kind, amount_usd, target_price } = body as {
+      coin: 'btc'|'eth'|'sol'; kind: 'market'|'limit'; amount_usd: number; target_price: number;
+    };
+    if (!coin || !kind || !amount_usd || !target_price) {
+      return new Response(JSON.stringify({ error: 'Missing fields' }), { status: 400, headers: corsHeaders });
+    }
+
+    const db = createClient(Deno.env.get('API_URL')!, Deno.env.get('API_SERVICE_KEY')!);
+    const week = getMondayWeek();
+
+    // Multi-user: resolve owning user (single-user setup uses first app_settings row)
+    // Resolve the calling user from the JWT; fallback = single-user app_settings row.
+    let uid: string | undefined;
+    const authHeader = req.headers.get('Authorization') ?? '';
+    const jwt = authHeader.replace(/^Bearer\s+/i, '');
+    if (jwt) {
+      const { data: u } = await db.auth.getUser(jwt);
+      uid = u?.user?.id;
+    }
+    if (!uid) {
+      const { data: settingsRow } = await db.from('app_settings').select('user_id').limit(1).maybeSingle();
+      uid = settingsRow?.user_id as string | undefined;
+    }
+    if (!uid) {
+      return new Response(JSON.stringify({ error: 'No user configured' }), {
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    if (kind === 'market') {
+      const qty = amount_usd / target_price;
+      const nowIso = new Date().toISOString();
+      const { data: ex, error: exErr } = await db.from('dca_executions').insert({
+        user_id: uid,
+        week_number: week, coin: coin.toUpperCase(), kind, amount_usd,
+        target_price, executed_price: target_price, quantity: qty,
+        status: 'EXECUTED', filled_at: nowIso,
+      }).select('id').single();
+      if (exErr) throw exErr;
+      // History BUY record — the portfolio's single source of truth.
+      const { error: txErr } = await db.from('token_transactions').insert({
+        user_id: uid, coingecko_id: CG[coin], symbol: coin.toUpperCase(), side: 'buy',
+        quantity: qty, price_usd: target_price, executed_at: nowIso,
+        note: `DCA Market (${ex.id})`,
+      });
+      if (txErr) {
+        await db.from('dca_executions').delete().eq('id', ex.id);
+        throw txErr;
+      }
+      await notifyTelegram(
+        `✅ <b>MARKET vykonaný — ${coin.toUpperCase()}</b>\n` +
+        `Suma: $${amount_usd.toFixed(2)}\n` +
+        `Cena: $${target_price.toFixed(4)}\n` +
+        `Množstvo: ${qty.toFixed(6)} ${coin.toUpperCase()}\n` +
+        `📊 Zapísané do portfólia.`
+      );
+      return new Response(JSON.stringify({ ok: true, quantity: qty }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
+    // LIMIT — pending, fill checker will resolve
+    await db.from('dca_executions').insert({
+      user_id: uid,
+      week_number: week, coin: coin.toUpperCase(), kind, amount_usd,
+      target_price, status: 'PENDING',
+    });
+    await notifyTelegram(
+      `🟡 <b>LIMIT zadaný — ${coin.toUpperCase()}</b>\n` +
+      `Suma: $${amount_usd.toFixed(2)} @ $${target_price.toFixed(4)}\n` +
+      `⏳ Sleduje sa cena…`
+    );
+
+    return new Response(JSON.stringify({ ok: true }), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (e) {
+    return new Response(JSON.stringify({ error: (e as Error).message }), {
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});

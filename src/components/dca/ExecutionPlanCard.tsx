@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Copy, ExternalLink, CheckCircle2, Save, Calendar, Activity, Zap, Check, Clock, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatUsd, formatPrice, formatLimitPrice, calculateDCA, type PriceData } from '@/lib/crypto';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { usePerCoinMetrics } from '@/hooks/usePerCoinMetrics';
@@ -77,7 +77,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
   const { data: limitOrders } = useQuery({
     queryKey: ['limit_orders'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('limit_orders')
         .select('*')
         .order('created_at', { ascending: false })
@@ -91,7 +91,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
   const { data: executionsRows } = useQuery({
     queryKey: ['dca_executions', week],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('dca_executions')
         .select('*')
         .eq('week_number', week);
@@ -118,7 +118,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
     const key = `${coin}-${kind}`;
     setBusy(key);
     try {
-      const { error } = await supabase.functions.invoke('dca-execute', {
+      const { error } = await api.functions.invoke('dca-execute', {
         body: { coin: coin.toLowerCase(), kind, amount_usd: amount, target_price: price },
       });
       if (error) throw error;
@@ -136,7 +136,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
     if (!confirm(`Zrušiť limit objednávku ${coin}?`)) return;
     setBusy(`${coin}-limit`);
     try {
-      const { error } = await supabase
+      const { error } = await api
         .from('dca_executions')
         .update({ status: 'CANCELLED' })
         .eq('id', id);
@@ -168,7 +168,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
     }
     setSaving(true);
     try {
-      const { data: userRes } = await supabase.auth.getUser();
+      const { data: userRes } = await api.auth.getUser();
       const uid = userRes.user?.id;
       if (!uid) {
         toast.error('Nie si prihlásený');
@@ -186,7 +186,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       const totalMarket = dca.reduce((s, r) => s + r.marketUsd, 0);
       const totalLimit = dca.reduce((s, r) => s + r.limitUsd, 0);
 
-      const { data: purchase, error: pErr } = await supabase.from('dca_purchases').insert({
+      const { data: purchase, error: pErr } = await api.from('dca_purchases').insert({
         user_id: uid,
         week_number: week,
         total_amount: weeklyCapital,
@@ -207,7 +207,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
       // Save per-coin execution metrics to weekly_scores (best-effort)
       try {
         const btc = executions.btc, eth = executions.eth, sol = executions.sol;
-        await supabase.from('weekly_scores').insert({
+        await api.from('weekly_scores').insert({
           user_id: uid,
           week_number: week,
           score: score ?? 50,
@@ -233,7 +233,7 @@ export function ExecutionPlanCard({ prices, weeklyCapital, regime, score }: Prop
         limit_price: r.limitPrice,
         status: 'PENDING',
       }));
-      await supabase.from('limit_orders').insert(limitInserts as never);
+      await api.from('limit_orders').insert(limitInserts as never);
 
       // Reset checklist
       setChecks({});

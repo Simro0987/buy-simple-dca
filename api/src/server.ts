@@ -1,9 +1,9 @@
 /**
- * HTTP gateway exposing a Supabase-compatible surface for the existing supabase-js client:
+ * HTTP gateway used by the own client (shared/apiClient.ts):
  *   /auth/v1/*      Sign-In with Ethereum sessions (GoTrue-shaped)
  *   /rest/v1/*      proxied to the local PostgREST (RLS enforced by Postgres itself)
  *   /functions/v1/* the ported edge functions
- * Mounted by nginx at /sb/ (the optional /sb prefix is stripped here too).
+ * Mounted by nginx at /api/ (the /api prefix, and the legacy /sb prefix, are stripped here too).
  */
 import { timingSafeEqual } from 'node:crypto';
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
@@ -205,7 +205,8 @@ export function createGateway(d: GatewayDeps): http.Server {
     try {
       const url = new URL(req.url ?? '/', 'http://x');
       let path = url.pathname;
-      if (path === '/sb' || path.startsWith('/sb/')) path = path.slice(3) || '/';
+      if (path === '/api' || path.startsWith('/api/')) path = path.slice(4) || '/';
+      else if (path === '/sb' || path.startsWith('/sb/')) path = path.slice(3) || '/';
       cors(req, res);
       if (req.method === 'OPTIONS') return void res.writeHead(204).end();
       if (path === '/healthz') {

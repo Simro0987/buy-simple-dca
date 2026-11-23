@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { getDcaPurchases } from '@/lib/profitTaking';
 
 export interface OrderHistoryEntry {
@@ -65,7 +65,7 @@ function mapLocalPurchase(
 }
 
 async function fetchExecutedOrders(): Promise<OrderHistoryEntry[]> {
-  const { data, error } = await supabase
+  const { data, error } = await api
     .from('dca_executions')
     .select('*')
     .in('status', ['EXECUTED', 'FILLED'])

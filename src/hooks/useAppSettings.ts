@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 export interface AppSettings {
   id: string;
@@ -29,7 +29,7 @@ export function useAppSettings() {
   return useQuery({
     queryKey: ['app_settings'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('app_settings')
         .select('*')
         .limit(1)
@@ -46,7 +46,7 @@ export function useUpdateAppSettings() {
   return useMutation({
     mutationFn: async (patch: Partial<AppSettings> & { id: string }) => {
       const { id, ...rest } = patch;
-      const { error } = await supabase
+      const { error } = await api
         .from('app_settings')
         .update(rest as any)
         .eq('id', id);

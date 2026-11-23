@@ -1,11 +1,11 @@
 {
-  "name": "Edge Trader Terminal · Sovereign BTC & Safe AI",
-  "short_name": "EdgeTrader",
-  "description": "100% Non-Custodial Crypto DCA, Safe{Wallet} AI Agents & BTC Accumulation Terminal",
+  "name": "Buy Simple DCA",
+  "short_name": "BuySimpleDCA",
+  "description": "Non-custodial weekly DCA planner for Safe{Wallet} (BTC-first, Core-Satellite)",
   "iconPath": "icon-512.png",
   "providedBy": {
-    "name": "Edge Trader Sovereign Stack",
-    "url": "https://buy-simple-dca.vercel.app"
+    "name": "buy-simple-dca (open source)",
+    "url": "https://github.com/Simro0987/buy-simple-dca"
   },
   "start_url": "/",
   "display": "standalone",

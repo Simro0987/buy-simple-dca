@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { Coins } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { usePortfolio } from '@/contexts/PortfolioContext';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
@@ -23,7 +23,7 @@ export function YieldEarnedCard({ lang }: Props) {
   const { data: rewards } = useQuery({
     queryKey: ['staking-rewards-all'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('staking_rewards')
         .select('month, total_usd, btc_reward, eth_reward, sol_reward')
         .order('month', { ascending: false });

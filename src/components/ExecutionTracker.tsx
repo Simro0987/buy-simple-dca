@@ -3,7 +3,7 @@ import { Lang } from '@/lib/i18n';
 import { TOKENS } from '@/lib/crypto';
 import { getEffectiveLimitDiscount } from '@/lib/dynamicLimits';
 import { CheckCircle, AlertTriangle, XCircle, Target, TrendingUp, Send } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { toast } from 'sonner';
 
 interface WeekRecord {
@@ -339,7 +339,7 @@ function MissedOpportunities({ history, prices, lang }: {
 
     notifiedRef.current = key;
 
-    supabase.functions.invoke('telegram-missed-opportunity', {
+    api.functions.invoke('telegram-missed-opportunity', {
       body: { chatId, missedItems: missed },
     }).then(({ error }) => {
       if (error) {

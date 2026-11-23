@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Clock, RefreshCw, CheckCircle2, XCircle, AlertCircle, Play } from 'lucide-react';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { Lang } from '@/lib/i18n';
 
 // Maps cron jobname -> { function name, optional default body }
@@ -70,7 +70,7 @@ export function CronJobsCard({ lang }: Props) {
     setLoading(true);
     setError(null);
     try {
-      const { data, error: rpcError } = await supabase.rpc('get_cron_jobs_status');
+      const { data, error: rpcError } = await api.rpc('get_cron_jobs_status');
       if (rpcError) throw rpcError;
       setJobs((data ?? []) as CronJob[]);
     } catch (e) {
@@ -91,7 +91,7 @@ export function CronJobsCard({ lang }: Props) {
     }
     setRunning(jobname);
     try {
-      const { error: invokeError } = await supabase.functions.invoke(mapping.fn, {
+      const { error: invokeError } = await api.functions.invoke(mapping.fn, {
         body: mapping.body ?? {},
       });
       if (invokeError) throw invokeError;

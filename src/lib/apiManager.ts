@@ -1,5 +1,5 @@
+import { apiBaseUrl } from '@/lib/api/client';
 import { oracleValue, type OracleMetric } from './oracleRegistry';
-import { runtimeEnv } from '@/lib/runtimeConfig';
 // Never-Fail API Manager.
 // Cascading price fetcher: Binance → CoinGecko → hard fallback (Mobula len na serveri).
 // Every fetch is wrapped in a 3s timeout and try/catch. Never throws.
@@ -94,10 +94,9 @@ async function fromCoinGecko(symbol: string): Promise<number | null> {
 async function fromCoinGeckoProxy(symbol: string): Promise<number | null> {
   const id = COINGECKO_ID[symbol];
   if (!id) return null;
-  const base = runtimeEnv('VITE_SUPABASE_URL');
+  const base = apiBaseUrl();
   if (!base) return null;
-  const j = await safeJson(`${base}/functions/v1/coingecko-proxy?path=${encodeURIComponent('/simple/price')}&ids=${id}&vs_currencies=usd`,
-    { headers: { apikey: runtimeEnv('VITE_SUPABASE_PUBLISHABLE_KEY') ?? '' } });
+  const j = await safeJson(`${base}/functions/v1/coingecko-proxy?path=${encodeURIComponent('/simple/price')}&ids=${id}&vs_currencies=usd`);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const price = (j as any)?.[id]?.usd;
   return typeof price === 'number' && price > 0 ? price : null;

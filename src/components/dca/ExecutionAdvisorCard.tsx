@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Activity, Award, RefreshCw, Sparkles, TrendingDown, TrendingUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { useEngineParams, useLearningOutcomes } from '@/hooks/useEngineParams';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
 
@@ -75,7 +75,7 @@ export function ExecutionAdvisorCard() {
         patch.base_market_high = Math.min(95, Number(params.base_market_high) + 5);
         patch.base_market_low = Math.min(90, Number(params.base_market_low) + 5);
       }
-      const { error } = await supabase
+      const { error } = await api
         .from('engine_params')
         .update({ ...patch, last_change_log: [
           ...(Array.isArray(params.last_change_log) ? params.last_change_log : []).slice(-4),

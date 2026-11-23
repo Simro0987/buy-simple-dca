@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { CheckCircle2, Clock } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 import { useAppSettings } from '@/hooks/useAppSettings';
 import { formatUsd } from '@/lib/crypto';
 import { Lang } from '@/lib/i18n';
@@ -42,7 +42,7 @@ export function NextActionBanner({ lang }: Props) {
   const { data: lastDca } = useQuery({
     queryKey: ['last-dca-purchase'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await api
         .from('dca_purchases')
         .select('created_at, total_amount, btc_amount, eth_amount, sol_amount')
         .order('created_at', { ascending: false })

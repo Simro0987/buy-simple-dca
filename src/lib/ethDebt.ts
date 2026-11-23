@@ -1,7 +1,7 @@
 // Cloud-backed ETH debt tracker (source of truth: public.defi_positions.eth_debt).
 // Sync API surface backed by in-memory cache; hydrated by CloudSyncProvider.
 
-import { supabase } from '@/integrations/supabase/client';
+import { api } from '@/lib/api/client';
 
 const EVT = 'eth-borrow-debt-change';
 export const ETH_DEBT_EVENT = EVT;
@@ -22,7 +22,7 @@ function persist(amount: number): void {
   cache = Math.max(0, amount);
   emit();
   if (!currentUserId) return;
-  void supabase.from('defi_positions').upsert(
+  void api.from('defi_positions').upsert(
     { user_id: currentUserId, eth_debt: cache },
     { onConflict: 'user_id' },
   );
