@@ -8,7 +8,9 @@ export interface BtcDominance {
 }
 
 export interface TradingMetrics {
-  fundingRate: number; // avg across exchanges (simulated)
+  /** BTCUSDT perpetual funding in % per 8h (Binance, via the own data proxy); 0 when unavailable. */
+  fundingRate: number;
+  fundingAvailable: boolean;
   openInterestTrend: 'rising' | 'falling' | 'stable';
   spotVolumeTrend: 'rising' | 'falling' | 'stable';
   crowdSignal: 'long_crowded' | 'short_crowded' | 'balanced';
@@ -23,7 +25,8 @@ export interface LiquidationLevel {
 
 export interface WhaleActivity {
   signal: 'accumulating' | 'distributing' | 'neutral';
-  largeTransactions24h: number;
+  /** Not available from a free source — always null (was a random number before). */
+  largeTransactions24h: number | null;
   netFlow: 'inflow' | 'outflow' | 'neutral';
 }
 
@@ -110,17 +113,19 @@ function computeSignal(
 async function fetchAdvancedMarket(): Promise<AdvancedMarketData> {
   // Fetch BTC dominance from CoinGecko global endpoint
   const { cgFetch } = await import('@/lib/coingecko');
-  const [globalRes, priceRes, fgRes] = await Promise.all([
+  const { apiBaseUrl } = await import('@/lib/api/client');
+  const [globalRes, priceRes, fgRes, fundingRes] = await Promise.all([
     cgFetch('/global').catch(() => null),
     cgFetch('/simple/price', { ids: 'bitcoin', vs_currencies: 'usd', include_24hr_change: true }).catch(() => null),
     readFearGreed().catch(() => null),
+    fetch(`${apiBaseUrl()}/functions/v1/data-proxy?src=funding&symbol=BTCUSDT`).catch(() => null),
   ]);
 
-  let dominance = 55;
+  let dominance = 0;
   try {
     if (globalRes?.ok) {
       const gd = await globalRes.json();
-      dominance = gd.data?.market_cap_percentage?.btc ?? 55;
+      dominance = gd.data?.market_cap_percentage?.btc ?? 0;
     }
   } catch { /* fallback */ }
 
@@ -135,51 +140,36 @@ async function fetchAdvancedMarket(): Promise<AdvancedMarketData> {
   const fearGreedValue = fgRes?.value ?? 40;
 
   // Derived heuristics
-  const dominanceTrend: BtcDominance['trend'] = dominance > 58 ? 'rising' : dominance < 50 ? 'falling' : 'stable';
+  const dominanceTrend: BtcDominance['trend'] = dominance <= 0 ? 'stable' : dominance > 58 ? 'rising' : dominance < 50 ? 'falling' : 'stable';
 
-  // Simulated trading metrics (these would need exchange APIs)
-  const fundingRate = (Math.random() - 0.5) * 0.06; // -0.03 to 0.03
+  // Real BTC perpetual funding (Binance premium index), in % per 8h.
+  let fundingRate = 0;
+  let fundingAvailable = false;
+  try {
+    if (fundingRes?.ok) {
+      const fj = (await fundingRes.json()) as { lastFundingRate?: string };
+      const fr = Number(fj.lastFundingRate);
+      if (Number.isFinite(fr)) {
+        fundingRate = fr * 100;
+        fundingAvailable = true;
+      }
+    }
+  } catch { /* unavailable */ }
   const oiTrend = btcChange > 2 ? 'rising' : btcChange < -2 ? 'falling' : 'stable' as const;
   const crowdSignal = fundingRate > 0.02 ? 'long_crowded' : fundingRate < -0.02 ? 'short_crowded' : 'balanced' as const;
   const pressure = fundingRate > 0.01 ? 'bullish' : fundingRate < -0.01 ? 'bearish' : 'neutral' as const;
 
-  // Simulated whale activity
+  // Price-momentum proxy (no on-chain whale data source): labelled as such in the UI.
   const whaleSignal = btcChange > 3 ? 'accumulating' : btcChange < -3 ? 'distributing' : 'neutral' as const;
 
   // Social sentiment from fear/greed
   const socialSentiment = fearGreedValue >= 60 ? 'bullish' : fearGreedValue <= 40 ? 'bearish' : 'neutral' as const;
 
-  // BTC liquidation levels (heuristic based on current price)
-  let btcPrice = 100000;
-  try {
-    if (priceRes) {
-      const pd2 = await priceRes.json().catch(() => null);
-      btcPrice = pd2?.bitcoin?.usd ?? 100000;
-    }
-  } catch { /* fallback */ }
-
-  const liquidationLevels: LiquidationLevel[] = [
-    { price: btcPrice * 0.95, side: 'long', intensity: 'high' },
-    { price: btcPrice * 0.92, side: 'long', intensity: 'medium' },
-    { price: btcPrice * 1.05, side: 'short', intensity: 'high' },
-    { price: btcPrice * 1.08, side: 'short', intensity: 'medium' },
-  ];
-
-  // Upcoming events (static curated list)
-  const events: CryptoEvent[] = [
-    { date: '2026-06-18', title: 'Fed rozhodnutie o úrokoch', importance: 'high', category: 'macro' },
-    { date: '2026-05-15', title: 'Ethereum Pectra upgrade', importance: 'high', category: 'upgrade' },
-    { date: '2026-05-01', title: 'SOL token unlock (5M)', importance: 'medium', category: 'token_unlock' },
-    { date: '2026-04-30', title: 'BTC ETF rebalancing', importance: 'medium', category: 'crypto' },
-  ];
-
-  // Institutional flow (simulated)
-  const msFlow: 'buying' | 'neutral' | 'selling' = btcChange > 0 ? 'buying' : 'neutral';
-  const etfFlow: 'buying' | 'neutral' | 'selling' = btcChange > 1 ? 'buying' : btcChange < -1 ? 'selling' : 'neutral';
-  const institutionalFlow: { label: string; trend: 'buying' | 'selling' | 'neutral' }[] = [
-    { label: 'MicroStrategy', trend: msFlow },
-    { label: 'BTC ETF', trend: etfFlow },
-  ];
+  // No free, reliable source for liquidation heatmaps, event calendars or institutional flows:
+  // these stay empty instead of showing made-up values (they used to be static/simulated).
+  const liquidationLevels: LiquidationLevel[] = [];
+  const events: CryptoEvent[] = [];
+  const institutionalFlow: { label: string; trend: 'buying' | 'selling' | 'neutral' }[] = [];
 
   const { signal, score, explanation } = computeSignal(fearGreedValue, btcChange, dominanceTrend, fundingRate);
 
@@ -187,6 +177,7 @@ async function fetchAdvancedMarket(): Promise<AdvancedMarketData> {
     btcDominance: { dominance, trend: dominanceTrend },
     tradingMetrics: {
       fundingRate,
+      fundingAvailable,
       openInterestTrend: oiTrend,
       spotVolumeTrend: oiTrend,
       crowdSignal,
@@ -195,7 +186,7 @@ async function fetchAdvancedMarket(): Promise<AdvancedMarketData> {
     liquidationLevels,
     whaleActivity: {
       signal: whaleSignal,
-      largeTransactions24h: Math.floor(50 + Math.random() * 100),
+      largeTransactions24h: null,
       netFlow: whaleSignal === 'accumulating' ? 'inflow' : whaleSignal === 'distributing' ? 'outflow' : 'neutral',
     },
     institutionalFlow,

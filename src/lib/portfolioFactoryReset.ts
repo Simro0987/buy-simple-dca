@@ -67,13 +67,14 @@ export async function runPortfolioFactoryReset(): Promise<FactoryResetResult> {
 
   // 1) Scan purchases & capital entries for mock notes
   const [purchases, capitals, settingsRes] = await Promise.all([
-    api.from('dca_purchases').select('id, note'),
+    api.from('dca_purchases').select('id, notes'),
     api.from('capital_entries').select('id, note'),
     api.from('app_settings').select('id, manual_holdings, initial_cost_basis').limit(1).maybeSingle(),
   ]);
 
+  // dca_purchases uses `notes`; capital_entries uses `note` (see api/migrations/0002).
   const mockPurchaseIds = (purchases.data ?? [])
-    .filter((r: any) => r?.note && MOCK_NOTE_REGEX.test(String(r.note)))
+    .filter((r: any) => r?.notes && MOCK_NOTE_REGEX.test(String(r.notes)))
     .map((r: any) => r.id as string);
   const mockCapitalIds = (capitals.data ?? [])
     .filter((r: any) => r?.note && MOCK_NOTE_REGEX.test(String(r.note)))

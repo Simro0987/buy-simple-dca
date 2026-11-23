@@ -166,32 +166,6 @@ export function AdvancedMarketPage({ lang }: Props) {
         </div>
       </div>
 
-      {/* 3. Event Calendar */}
-      <Collapsible>
-        <div className="glass-card overflow-hidden">
-          <CollapsibleTrigger className="w-full p-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Calendar className="w-4 h-4" /> Kalendár udalostí
-            </h2>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="px-4 pb-4 space-y-2">
-            {data.events.map((ev, i) => (
-              <div key={i} className="flex items-center gap-3 py-2 border-b border-border/30 last:border-0">
-                <ImportanceDot level={ev.importance} />
-                <div className="flex-1">
-                  <p className="text-xs font-medium text-foreground">{ev.title}</p>
-                  <p className="text-[10px] text-muted-foreground">{ev.date}</p>
-                </div>
-                <span className="text-[9px] px-1.5 py-0.5 rounded bg-secondary text-muted-foreground">
-                  {ev.category === 'macro' ? 'Makro' : ev.category === 'upgrade' ? 'Upgrade' : ev.category === 'token_unlock' ? 'Unlock' : 'Crypto'}
-                </span>
-              </div>
-            ))}
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
-
       {/* 4. Advanced Trading Metrics */}
       <Collapsible>
         <div className="glass-card overflow-hidden">
@@ -203,21 +177,11 @@ export function AdvancedMarketPage({ lang }: Props) {
           </CollapsibleTrigger>
           <CollapsibleContent className="px-4 pb-4">
             <MetricRow
-              label="Funding Rate"
-              value={`${(data.tradingMetrics.fundingRate * 100).toFixed(3)}%`}
+              label="Funding BTC (8h, Binance)"
+              value={data.tradingMetrics.fundingAvailable ? `${data.tradingMetrics.fundingRate.toFixed(4)}%` : '—'}
               icon={Activity}
               positive={data.tradingMetrics.fundingRate < 0}
               negative={data.tradingMetrics.fundingRate > 0.03}
-            />
-            <MetricRow
-              label="Open Interest"
-              value={data.tradingMetrics.openInterestTrend === 'rising' ? '📈 Rastie' : data.tradingMetrics.openInterestTrend === 'falling' ? '📉 Klesá' : '➡️ Stabilný'}
-              icon={BarChart3}
-            />
-            <MetricRow
-              label="Spot Volume"
-              value={data.tradingMetrics.spotVolumeTrend === 'rising' ? '📈 Rastie' : data.tradingMetrics.spotVolumeTrend === 'falling' ? '📉 Klesá' : '➡️ Stabilný'}
-              icon={BarChart3}
             />
             <MetricRow
               label="Crowd Signal"
@@ -237,95 +201,6 @@ export function AdvancedMarketPage({ lang }: Props) {
         </div>
       </Collapsible>
 
-      {/* 5. Liquidation Heatmap */}
-      <Collapsible>
-        <div className="glass-card overflow-hidden">
-          <CollapsibleTrigger className="w-full p-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4" /> Likvidačné úrovne (BTC)
-            </h2>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="px-4 pb-4 space-y-2">
-            {data.liquidationLevels.map((lv, i) => (
-              <div key={i} className="flex items-center gap-3 py-1.5">
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded ${
-                  lv.side === 'long' ? 'bg-loss/15 text-loss' : 'bg-gain/15 text-gain'
-                }`}>
-                  {lv.side === 'long' ? 'LONG' : 'SHORT'}
-                </span>
-                <span className="text-xs font-bold text-foreground flex-1">{formatPrice(lv.price)}</span>
-                <div className="flex gap-0.5">
-                  {[1, 2, 3].map(j => (
-                    <div key={j} className={`w-2 h-4 rounded-sm ${
-                      (lv.intensity === 'high' || (lv.intensity === 'medium' && j <= 2) || (lv.intensity === 'low' && j <= 1))
-                        ? (lv.side === 'long' ? 'bg-loss/60' : 'bg-gain/60')
-                        : 'bg-secondary'
-                    }`} />
-                  ))}
-                </div>
-              </div>
-            ))}
-            <p className="text-[10px] text-muted-foreground mt-2">
-              ⚠️ Heuristické úrovne na základe aktuálnej ceny. Pre presné dáta použite Coinglass.
-            </p>
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
-
-      {/* 6. Whale Activity */}
-      <Collapsible>
-        <div className="glass-card overflow-hidden">
-          <CollapsibleTrigger className="w-full p-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Fish className="w-4 h-4" /> Aktivita veľrýb
-            </h2>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="px-4 pb-4">
-            <MetricRow
-              label="Signál"
-              value={data.whaleActivity.signal === 'accumulating' ? '🟢 Akumulácia' : data.whaleActivity.signal === 'distributing' ? '🔴 Distribúcia' : '⚪ Neutrálny'}
-              positive={data.whaleActivity.signal === 'accumulating'}
-              negative={data.whaleActivity.signal === 'distributing'}
-            />
-            <MetricRow label="Veľké tx (24h)" value={`${data.whaleActivity.largeTransactions24h}`} />
-            <MetricRow
-              label="Net Flow"
-              value={data.whaleActivity.netFlow === 'inflow' ? '📥 Na burzy' : data.whaleActivity.netFlow === 'outflow' ? '📤 Z búrz' : '➡️ Neutrálny'}
-              positive={data.whaleActivity.netFlow === 'outflow'}
-              negative={data.whaleActivity.netFlow === 'inflow'}
-            />
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
-
-      {/* 7. Institutional Flow */}
-      <Collapsible>
-        <div className="glass-card overflow-hidden">
-          <CollapsibleTrigger className="w-full p-4 flex items-center justify-between">
-            <h2 className="text-sm font-bold text-foreground flex items-center gap-2">
-              <Building2 className="w-4 h-4" /> Inštitucionálne toky
-            </h2>
-            <ChevronDown className="w-4 h-4 text-muted-foreground" />
-          </CollapsibleTrigger>
-          <CollapsibleContent className="px-4 pb-4">
-            {data.institutionalFlow.map((inst, i) => (
-              <MetricRow
-                key={i}
-                label={inst.label}
-                value={inst.trend === 'buying' ? '🟢 Nákup' : inst.trend === 'selling' ? '🔴 Predaj' : '⚪ Neutrálny'}
-                icon={Building2}
-                positive={inst.trend === 'buying'}
-                negative={inst.trend === 'selling'}
-              />
-            ))}
-            <p className="text-[10px] text-muted-foreground mt-2">
-              📊 Dáta sú odvodené z verejne dostupných zdrojov a heuristík.
-            </p>
-          </CollapsibleContent>
-        </div>
-      </Collapsible>
     </div>
   );
 }

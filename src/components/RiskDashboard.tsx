@@ -21,17 +21,6 @@ function getSignal(score: number, sk: boolean): { label: string; color: string; 
   return { label: sk ? '🔴 ZVÁŽ VÝBER' : '🔴 CONSIDER EXIT', color: 'text-loss', icon: TrendingDown };
 }
 
-function getMaxDownside(athPct: number): number {
-  // Estimate max downside based on ATH distance
-  // If already far from ATH, less additional downside expected
-  const dist = Math.abs(athPct);
-  if (dist < 10) return -60; // Near ATH, big risk
-  if (dist < 30) return -40;
-  if (dist < 50) return -25;
-  if (dist < 70) return -15;
-  return -10; // Already very low
-}
-
 export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
   const sk = lang === 'sk';
   const signal = cycleResult ? getSignal(cycleResult.score, sk) : null;
@@ -130,7 +119,6 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
           const athPct = ath?.ath_change_percentage ?? 0;
           const athPrice = ath?.ath ?? 0;
           const change24h = prices?.[token.coingeckoId]?.usd_24h_change ?? 0;
-          const maxDownside = getMaxDownside(athPct);
           const uptoPotential = athPrice > 0 && price > 0 ? ((athPrice / price - 1) * 100) : 0;
           const liq = liqStatusMap.get(token.symbol as LiqSymbol);
           const liqCritical = !!liq?.critical;
@@ -187,10 +175,10 @@ export function RiskDashboard({ lang, prices, athData, cycleResult }: Props) {
                   </p>
                 </div>
                 <div className="bg-secondary/50 rounded-lg p-2">
-                  <p className="text-[9px] text-muted-foreground">{sk ? 'Max pád' : 'Max Drop'}</p>
+                  <p className="text-[9px] text-muted-foreground">{sk ? 'Od ATH' : 'From ATH'}</p>
                   <p className="text-sm font-bold text-loss flex items-center justify-center gap-0.5">
                     <ArrowDown className="w-3 h-3" />
-                    {maxDownside}%
+                    {athPrice > 0 ? `${athPct.toFixed(0)}%` : '—'}
                   </p>
                 </div>
                 <div className="bg-secondary/50 rounded-lg p-2">

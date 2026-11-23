@@ -1,9 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
-import { BottomNav, TabId } from '@/components/BottomNav';
+import { BottomNav } from '@/components/BottomNav';
+import { normalizeTab, type TabId } from '@/lib/navItems';
 import { AppHeader } from '@/components/AppHeader';
 import { AppSidebar } from '@/components/AppSidebar';
 import { GasWatchdogBanner } from '@/components/GasWatchdogBanner';
-import { WebsiteGuardianBar } from '@/components/WebsiteGuardianBar';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useTheme } from '@/hooks/useTheme';
 import { usePrices, useFearGreed, useAthData, useAltSeason } from '@/hooks/usePrices';
@@ -20,7 +20,13 @@ import { TabPanel } from '@/components/deep-space/primitives';
 
 
 const Index = () => {
-  const [tab, setTab] = useState<TabId>('home');
+  // Tab lives in the URL hash (#dca, #portfolio …) so pages can be linked and survive reloads.
+  const [tab, setTabState] = useState<TabId>(() => normalizeTab(window.location.hash.slice(1)) ?? 'home');
+  const setTab = (next: TabId) => {
+    setTabState(next);
+    if (window.location.hash.slice(1) !== next) window.history.replaceState(null, '', `#${next}`);
+    window.scrollTo({ top: 0 });
+  };
   const { lang, toggleLang } = useLanguage();
   const { theme, setTheme } = useTheme();
   const { data: prices, refetch, isFetching } = usePrices();
@@ -43,12 +49,20 @@ const Index = () => {
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const ce = e as CustomEvent<string>;
-      const next = ce.detail as TabId | undefined;
+      const next = normalizeTab((e as CustomEvent<string>).detail);
       if (next) setTab(next);
     };
+    const onHash = () => {
+      const next = normalizeTab(window.location.hash.slice(1));
+      if (next) setTabState(next);
+    };
     window.addEventListener('app-navigate-tab', handler);
-    return () => window.removeEventListener('app-navigate-tab', handler);
+    window.addEventListener('hashchange', onHash);
+    return () => {
+      window.removeEventListener('app-navigate-tab', handler);
+      window.removeEventListener('hashchange', onHash);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const { data: globalBalances } = useGlobalBalances();
@@ -88,13 +102,12 @@ const Index = () => {
 
       <AppSidebar active={tab} onChange={setTab} lang={lang} />
 
-      <div className="md:pl-[52px]">
+      <div className="md:pl-14 lg:pl-48">
         <AppHeader now={now} totalValue={totalValue} isFetching={isFetching} onRefresh={() => refetch()} />
-        <WebsiteGuardianBar />
-        <div className="max-w-lg mx-auto px-4 pt-2">
+        <div className="max-w-6xl mx-auto px-3 sm:px-4 pt-2">
           <GasWatchdogBanner />
         </div>
-        <main className="max-w-lg mx-auto px-4 pt-4 pb-24 md:pb-6">
+        <main className="max-w-6xl mx-auto px-3 sm:px-4 pt-4 pb-24 md:pb-8">
           <TabPanel tabKey={tab}>
             {renderTab({ lang, prices, athData, cycleResult, advancedMarketData, theme, setTheme, toggleLang, setTab })}
           </TabPanel>

@@ -70,7 +70,7 @@ interface RawNewsItem {
 // ── Keyword-based Classification (fallback) ─────────────
 
 const HIGH_IMPACT_KEYWORDS = [
-  'etf', 'sec ', 'regulation', 'ban', 'hack', 'exploit', 'breach', 'stolen',
+  'etf', 'etfs', 'sec', 'regulation', 'ban', 'banned', 'hack', 'hacked', 'exploit', 'exploited', 'breach', 'stolen',
   'lawsuit', 'arrest', 'fraud', 'crash', 'collapse', 'bankrupt', 'insolvent',
   'federal reserve', 'central bank', 'cbdc', 'delist', 'shutdown', 'halving',
   'approval', 'approved', 'rejected', 'sanction', 'investigation', 'subpoena', 'fork',
@@ -88,15 +88,23 @@ const BULLISH_KEYWORDS = [
 const BEARISH_KEYWORDS = [
   'crash', 'drop', 'bearish', 'plunge', 'dump', 'decline', 'loss', 'sell-off',
   'hack', 'exploit', 'stolen', 'fraud', 'ban', 'rejected', 'delist',
-  'bankrupt', 'collapse', 'outflow', 'liquidat',
+  'bankrupt', 'collapse', 'outflow', 'liquidation', 'liquidations', 'liquidated',
 ];
+
+// Whole-word match (substring matching flagged e.g. "bank" as "ban" -> high impact).
+const hasWord = (text: string, k: string) =>
+  new RegExp(`(^|[^a-z0-9])${k.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}($|[^a-z0-9])`, 'i').test(text);
+
+/** Promotional / low-quality items (casino reviews, sponsored price predictions ...). */
+export const SPAM_PATTERN = /\b(casino|casinos|gambling|betting|sportsbook|sponsored|press release|price prediction|presale|pre-sale|best crypto to buy|100x)\b/i;
 
 function classifyByKeywords(title: string): { impact: 'high' | 'medium' | 'low'; sentiment: 'bullish' | 'bearish' | 'neutral' } {
   const lower = title.toLowerCase();
-  const impact = HIGH_IMPACT_KEYWORDS.some(k => lower.includes(k)) ? 'high'
-    : MEDIUM_IMPACT_KEYWORDS.some(k => lower.includes(k)) ? 'medium' : 'low';
-  const bullScore = BULLISH_KEYWORDS.filter(k => lower.includes(k)).length;
-  const bearScore = BEARISH_KEYWORDS.filter(k => lower.includes(k)).length;
+  const impact = SPAM_PATTERN.test(lower) ? 'low'
+    : HIGH_IMPACT_KEYWORDS.some(k => hasWord(lower, k)) ? 'high'
+    : MEDIUM_IMPACT_KEYWORDS.some(k => hasWord(lower, k)) ? 'medium' : 'low';
+  const bullScore = BULLISH_KEYWORDS.filter(k => hasWord(lower, k)).length;
+  const bearScore = BEARISH_KEYWORDS.filter(k => hasWord(lower, k)).length;
   const sentiment = bullScore > bearScore ? 'bullish' : bearScore > bullScore ? 'bearish' : 'neutral';
   return { impact, sentiment };
 }
@@ -312,14 +320,15 @@ const PREMIUM_FEEDS: Array<{ url: string; name: string }> = [
 
 // Flash alert keywords — surface critical, time-sensitive events
 const FLASH_KEYWORDS = [
-  'hack', 'exploit', 'sec approval', 'sec approves', 'fed rate', 'breaking',
+  'hack', 'hacked', 'exploit', 'exploited', 'sec approval', 'sec approves', 'fed rate', 'breaking',
   'black swan', 'liquidation', 'liquidations', 'rugpull', 'rug pull',
   'emergency', 'depeg', 'de-peg', 'halt trading', 'bankrupt', 'insolvent',
 ];
 
 function isFlashAlert(title: string): boolean {
   const lower = (title || '').toLowerCase();
-  return FLASH_KEYWORDS.some(k => lower.includes(k));
+  if (SPAM_PATTERN.test(lower)) return false;
+  return FLASH_KEYWORDS.some(k => hasWord(lower, k));
 }
 
 // ── Main Handler ────────────────────────────────────────
@@ -381,7 +390,7 @@ Deno.serve(async (req) => {
     });
 
     unique.sort((a, b) => new Date(b.publishedAt).getTime() - new Date(a.publishedAt).getTime());
-    const top = unique.slice(0, 24);
+    const top = unique.filter((n) => !SPAM_PATTERN.test(`${n.title} ${n.description ?? ''}`)).slice(0, 24);
 
     // Sanitize HTML entities on titles & descriptions BEFORE translation
     for (const it of top) {

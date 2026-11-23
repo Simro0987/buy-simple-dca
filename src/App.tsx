@@ -11,7 +11,6 @@ import { CloudSyncProvider } from "@/components/CloudSyncProvider";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import Index from "./pages/Index.tsx";
 import NotFound from "./pages/NotFound.tsx";
-import CyborgTerminalPage from "./pages/CyborgTerminalPage.tsx";
 import AuthPage from "./pages/AuthPage.tsx";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { useEffect } from "react";
@@ -51,14 +50,6 @@ const App = () => (
                     element={
                       <ProtectedRoute>
                         <Index />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/cyborg-terminal"
-                    element={
-                      <ProtectedRoute>
-                        <CyborgTerminalPage />
                       </ProtectedRoute>
                     }
                   />
